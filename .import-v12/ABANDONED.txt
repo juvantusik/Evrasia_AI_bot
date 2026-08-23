@@ -1,1 +1,0 @@
-Direct ZIP staging abandoned. Repository source is being rebuilt through Git tree API.
