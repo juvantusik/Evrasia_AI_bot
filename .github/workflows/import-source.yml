@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   issues:
     types: [opened]
+  push:
+    branches: [main]
+    paths:
+      - '.import-v12/run.trigger'
 
 permissions:
   contents: write
