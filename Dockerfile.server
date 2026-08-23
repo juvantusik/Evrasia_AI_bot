@@ -15,7 +15,13 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV BASE_PATH=/
 
-RUN pnpm --filter @workspace/api-server build \
+RUN pnpm typecheck:libs \
+    && pnpm --filter @workspace/api-server typecheck \
+    && pnpm --filter @workspace/api-server exec node \
+        --experimental-transform-types \
+        --experimental-loader ./test-ts-resolver.mjs \
+        --test src/services/bitrix-gateway.test.ts \
+    && pnpm --filter @workspace/api-server build \
     && pnpm --filter @workspace/samzaberu-ops build
 
 FROM node:22-bullseye-slim AS runtime

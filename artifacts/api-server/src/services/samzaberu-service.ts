@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { restaurantDirectory, type RestaurantDirectoryEntry } from "./restaurant-directory";
+import { BitrixHttpGateway, type BitrixGateway } from "./bitrix-gateway";
 import {
   getOperatorAccessOverview,
   isAllowedOperatorId,
@@ -86,20 +87,6 @@ export interface EscalationNotifier {
   notifyManualCompletion(request: SamzaberuRequest): Promise<void>;
 }
 
-class BitrixStubGateway {
-  async applyStop(_restaurant: RestaurantDirectoryEntry, _until: Date, simulateFailure: boolean): Promise<void> {
-    if (simulateFailure) {
-      throw new Error("Заглушка Bitrix не смогла применить правило");
-    }
-  }
-
-  async applyEnable(_restaurant: RestaurantDirectoryEntry, simulateFailure: boolean): Promise<void> {
-    if (simulateFailure) {
-      throw new Error("Заглушка Bitrix не смогла выключить активность правила");
-    }
-  }
-}
-
 class EnvironmentTelegramNotifier implements EscalationNotifier {
   async notify(payload: EscalationPayload): Promise<string[]> {
     const personalChat = process.env.PERSONAL_CHAT_ID;
@@ -138,6 +125,7 @@ const toRule = (record: SamzaberuRule | undefined): Rule | null =>
 const toRestaurantView = (
   restaurant: RestaurantDirectoryEntry,
   rule: Rule | null,
+  serviceLayer: string,
 ): RestaurantView => {
   const stopped = isStopActive(rule);
   return {
@@ -151,7 +139,7 @@ const toRestaurantView = (
     stopUntil: stopped ? rule?.endsAt ?? null : null,
     ruleId: rule?.id ?? null,
     ruleActive: rule?.active ?? false,
-    serviceLayer: "BitrixStubGateway",
+    serviceLayer,
   };
 };
 
@@ -173,8 +161,16 @@ const toRequest = (record: SamzaberuRequestRecord): SamzaberuRequest => ({
 });
 
 export class SamzaberuService {
-  private readonly gateway = new BitrixStubGateway();
-  private readonly notifier = new EnvironmentTelegramNotifier();
+  private readonly gateway: BitrixGateway;
+  private readonly notifier: EscalationNotifier;
+
+  constructor(
+    gateway: BitrixGateway = new BitrixHttpGateway(),
+    notifier: EscalationNotifier = new EnvironmentTelegramNotifier(),
+  ) {
+    this.gateway = gateway;
+    this.notifier = notifier;
+  }
 
   async listRestaurants(operatorId: string): Promise<RestaurantView[]> {
     this.assertAllowed(operatorId);
@@ -187,7 +183,13 @@ export class SamzaberuService {
         (restaurant) =>
           !hasDirectAssignment || restaurant.operatorId === operatorId,
       )
-      .map((restaurant) => toRestaurantView(restaurant, toRule(rules.get(restaurant.id))));
+      .map((restaurant) =>
+        toRestaurantView(
+          restaurant,
+          toRule(rules.get(restaurant.id)),
+          this.gateway.serviceLayer,
+        ),
+      );
   }
 
   async findRestaurantForMatching(value: string): Promise<RestaurantView | undefined> {
@@ -199,7 +201,7 @@ export class SamzaberuService {
     );
     if (!restaurant) return undefined;
     const rule = await this.getRule(restaurant.id);
-    return toRestaurantView(restaurant, rule);
+    return toRestaurantView(restaurant, rule, this.gateway.serviceLayer);
   }
 
   hasDirectRestaurantAssignment(operatorId: string): boolean {
@@ -317,7 +319,7 @@ export class SamzaberuService {
             .where(eq(samzaberuRequestsTable.id, requestId));
           try {
             if (input.action === "STOP" && input.targetUntil) {
-              await this.gateway.applyStop(
+              const bitrixResult = await this.gateway.applyStop(
                 restaurant,
                 input.targetUntil,
                 Boolean(input.simulateFailure),
@@ -328,7 +330,7 @@ export class SamzaberuService {
                 .insert(samzaberuRulesTable)
                 .values({
                   restaurantId: restaurant.id,
-                  ruleId: currentRule?.id ?? `rule-${randomUUID()}`,
+                  ruleId: bitrixResult.ruleId,
                   active: true,
                   startsAt,
                   endsAt: input.targetUntil,
@@ -338,6 +340,7 @@ export class SamzaberuService {
                 .onConflictDoUpdate({
                   target: samzaberuRulesTable.restaurantId,
                   set: {
+                    ruleId: bitrixResult.ruleId,
                     active: true,
                     startsAt,
                     endsAt: input.targetUntil,

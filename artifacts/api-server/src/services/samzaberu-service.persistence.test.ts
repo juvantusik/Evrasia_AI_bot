@@ -1,9 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { BitrixGateway } from "./bitrix-gateway";
 
 const isolatedDatabaseUrl = process.env.SAMZABERU_TEST_DATABASE_URL;
 const restaurantId = "142183";
 const operatorId = "2103479066";
+
+const fakeBitrixGateway: BitrixGateway = {
+  serviceLayer: "FakeBitrixGateway",
+  async applyStop(restaurant, _until, simulateFailure) {
+    if (simulateFailure) throw new Error("Simulated Bitrix failure");
+    return { ruleId: `bitrix-${restaurant.id}` };
+  },
+  async applyEnable(_restaurant, simulateFailure) {
+    if (simulateFailure) throw new Error("Simulated Bitrix failure");
+  },
+};
 
 if (!isolatedDatabaseUrl) {
   test(
@@ -76,7 +88,7 @@ if (!isolatedDatabaseUrl) {
         .delete(samzaberuRulesTable)
         .where(eq(samzaberuRulesTable.restaurantId, restaurantId));
 
-      const firstApiInstance = new SamzaberuService();
+      const firstApiInstance = new SamzaberuService(fakeBitrixGateway);
       const cleanRestaurant = (await firstApiInstance.listRestaurants(operatorId)).find(
         (restaurant) => restaurant.id === restaurantId,
       );
@@ -104,7 +116,7 @@ if (!isolatedDatabaseUrl) {
       assert.ok(createdRule.startsAt.getTime() <= Date.now() + 1000);
       const originalStartsAt = createdRule.startsAt.getTime();
 
-      const secondApiInstance = new SamzaberuService();
+      const secondApiInstance = new SamzaberuService(fakeBitrixGateway);
       const stoppedRestaurant = (await secondApiInstance.listRestaurants(operatorId)).find(
         (restaurant) => restaurant.id === restaurantId,
       );
@@ -115,14 +127,14 @@ if (!isolatedDatabaseUrl) {
       const firstConcurrentUntil = new Date(Date.now() + 90 * 60 * 1000);
       const secondConcurrentUntil = new Date(Date.now() + 120 * 60 * 1000);
       const [firstConcurrentRequest, secondConcurrentRequest] = await Promise.all([
-        new SamzaberuService().processChange({
+        new SamzaberuService(fakeBitrixGateway).processChange({
           action: "STOP",
           restaurantId,
           operatorId,
           targetUntil: firstConcurrentUntil,
           confirmation: true,
         }),
-        new SamzaberuService().processChange({
+        new SamzaberuService(fakeBitrixGateway).processChange({
           action: "STOP",
           restaurantId,
           operatorId,
@@ -133,7 +145,7 @@ if (!isolatedDatabaseUrl) {
       createdRequestIds.push(firstConcurrentRequest.id, secondConcurrentRequest.id);
       assert.equal(firstConcurrentRequest.status, "COMPLETED_AUTO");
       assert.equal(secondConcurrentRequest.status, "COMPLETED_AUTO");
-      const serializedRestaurant = (await new SamzaberuService().listRestaurants(operatorId)).find(
+      const serializedRestaurant = (await new SamzaberuService(fakeBitrixGateway).listRestaurants(operatorId)).find(
         (restaurant) => restaurant.id === restaurantId,
       );
       assert.ok(
@@ -162,7 +174,7 @@ if (!isolatedDatabaseUrl) {
       createdRequestIds.push(enableRequest.id);
       assert.equal(enableRequest.status, "COMPLETED_AUTO");
 
-      const thirdApiInstance = new SamzaberuService();
+      const thirdApiInstance = new SamzaberuService(fakeBitrixGateway);
       const enabledRestaurant = (await thirdApiInstance.listRestaurants(operatorId)).find(
         (restaurant) => restaurant.id === restaurantId,
       );
