@@ -25,6 +25,21 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-bullseye
+        env:
+          POSTGRES_DB: samzaberu
+          POSTGRES_USER: samzaberu
+          POSTGRES_PASSWORD: samzaberu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U samzaberu -d samzaberu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -56,6 +71,7 @@ jobs:
           file: ./Dockerfile.server
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           pull: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -66,3 +82,54 @@ jobs:
           sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke-test API and web interface
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -Eeuo pipefail
+
+          image_tag="$(printf '%s\n' "$IMAGE_TAGS" | head -n 1)"
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            docker pull "$image_tag"
+          fi
+
+          docker run -d \
+            --name samzaberu-smoke \
+            --network host \
+            -e PORT=18080 \
+            -e DATABASE_URL=postgresql://samzaberu:samzaberu@127.0.0.1:5432/samzaberu \
+            -e TELEGRAM_BOT_POLLING=disabled \
+            "$image_tag"
+
+          cleanup() {
+            docker logs --tail 80 samzaberu-smoke || true
+            docker rm -f samzaberu-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          ready=0
+          for _ in {1..60}; do
+            if curl -fsS http://127.0.0.1:18080/api/healthz >/tmp/samzaberu-health.json; then
+              ready=1
+              break
+            fi
+
+            if ! docker ps --filter name=samzaberu-smoke --format '{{.Names}}' | grep -qx samzaberu-smoke; then
+              echo "Smoke-test container exited before becoming ready." >&2
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          if [[ "$ready" -ne 1 ]]; then
+            echo "API did not become ready in time." >&2
+            exit 1
+          fi
+
+          grep -Fq '"status":"ok"' /tmp/samzaberu-health.json
+          curl -fsS http://127.0.0.1:18080/ | grep -Fq 'id="root"'
+          curl -fsS http://127.0.0.1:18080/client-route-check | grep -Fq 'id="root"'
