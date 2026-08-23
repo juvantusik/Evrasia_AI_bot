@@ -107,7 +107,7 @@ h2 { margin-bottom: 0; font-size: 20px; }
 .bot-note ul { display: grid; gap: 11px; margin: 0; padding: 0; list-style: none; color: #596a82; font-size: 11px; line-height: 1.45; }
 .bot-note li { display: flex; gap: 7px; }
 .bot-note li svg { flex: 0 0 auto; color: #2385ef; }
-.testing-banner { display: flex; gap: 8px; margin-top: 23px; padding-top: 15px; color: #c6683b; border-top: 1px solid #dceaf5; font-size: 11px; font-weight: 700; }
+.integration-banner { display: flex; gap: 8px; margin-top: 23px; padding-top: 15px; color: #1f7c4d; border-top: 1px solid #dceaf5; font-size: 11px; font-weight: 700; }
 
 .flow-block { margin-top: 25px; color: #69788e; font-size: 12px; line-height: 1.55; }
 .flow-block p { margin-bottom: 16px; }
@@ -196,7 +196,7 @@ h2 { margin-bottom: 0; font-size: 20px; }
   .main-content { width: calc(100% - 78px); margin-left: 78px; }
   .workspace-grid { grid-template-columns: 1fr; }
   .bot-note { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; }
-  .bot-note-icon { grid-row: span 3; margin-bottom: 0; }.bot-note h2 { margin-bottom: 12px; }.testing-banner { margin-top: 12px; }
+  .bot-note-icon { grid-row: span 3; margin-bottom: 0; }.bot-note h2 { margin-bottom: 12px; }.integration-banner { margin-top: 12px; }
 }
 @media (max-width: 640px) {
   .app-shell { display: block; }
