@@ -265,7 +265,7 @@ function Overview() {
     }
     const [, minutes] = customTime.split(':').map(Number);
     if (![0, 15, 30, 45].includes(minutes)) {
-      setCustomError('Для тестового сценария доступны минуты 00, 15, 30 или 45.');
+      setCustomError('Для остановки доступны минуты 00, 15, 30 или 45.');
       return;
     }
     if (customEndAt.getTime() <= Date.now()) {
@@ -295,11 +295,11 @@ function Overview() {
         },
       });
       if (request.status !== 'COMPLETED_AUTO') {
-        setCustomError(`Тестовая остановка не подтверждена: ${request.status}.`);
+        setCustomError(`Остановка не подтверждена: ${request.status}.`);
         return;
       }
       setTestNotice(
-        `Тестовая остановка сохранена: «${request.restaurantName}» остановлен до ${formatMoscow(request.targetUntil)} МСК. Bitrix не вызывался; состояние доступно всем экземплярам приложения.`,
+        `Остановка применена в Bitrix: «${request.restaurantName}» приостановлен до ${formatMoscow(request.targetUntil)} МСК.`,
       );
       resetFlow();
     } catch (error) {
@@ -320,11 +320,11 @@ function Overview() {
         },
       });
       if (request.status !== 'COMPLETED_AUTO') {
-        setCustomError(`Тестовое включение не подтверждено: ${request.status}.`);
+        setCustomError(`Включение не подтверждено: ${request.status}.`);
         return;
       }
       setTestNotice(
-        `Тестовое включение подтверждено: «${request.restaurantName}». Ресторан снова работает. Bitrix не вызывался.`,
+        `Включение применено в Bitrix: «${request.restaurantName}». Ресторан снова работает.`,
       );
       resetFlow();
     } catch (error) {
@@ -357,7 +357,7 @@ function Overview() {
       <PageHeader
         eyebrow="INSIDE · ОПЕРАЦИИ"
         title="СамЗаберу"
-        subtitle="Управление доступностью ресторанов. Приёмочный доступ временно показывает полный справочник из 59 точек."
+        subtitle="Управление доступностью ресторанов. Полный доступ показывает весь справочник из 59 точек; ОУ видят только назначенные рестораны."
         quickAction={(
           <button className="mobile-quick-action" onClick={startStop} data-testid="button-quick-stop-samzaberu">
             <Power size={16} />
@@ -370,7 +370,7 @@ function Overview() {
         <div className="stat-card" data-testid="status-restaurants-total">
           <span>Доступные рестораны</span>
           <strong>{summary.data?.totalRestaurants ?? restaurants.length}</strong>
-          <small>Полный тестовый справочник</small>
+          <small>Справочник доступных ресторанов</small>
         </div>
         <div className="stat-card success" data-testid="status-restaurants-running">
           <span>СамЗаберу работает</span>
@@ -389,7 +389,7 @@ function Overview() {
           <div className="panel-heading">
             <div>
               <p className="eyebrow">КНОПКИ МЕНЮ</p>
-              <h2>{flow === 'menu' ? 'Что нужно сделать?' : actionMode === 'enable' ? 'Тестовый сценарий включения' : 'Тестовый сценарий остановки'}</h2>
+              <h2>{flow === 'menu' ? 'Что нужно сделать?' : actionMode === 'enable' ? 'Сценарий включения' : 'Сценарий остановки'}</h2>
             </div>
             {flow !== 'menu' ? (
               <button className="text-button" onClick={resetFlow} data-testid="button-reset-test-flow">
@@ -405,7 +405,7 @@ function Overview() {
             <div className="action-stack">
               <button className="action-button stop-action" onClick={startStop} data-testid="button-stop-samzaberu">
                 <span className="action-icon"><Power size={20} /></span>
-                <span><strong>⛔ Остановить СамЗаберу</strong><small>Откроется тестовый выбор ресторана и срока</small></span>
+                <span><strong>⛔ Остановить СамЗаберу</strong><small>Выбор ресторана и срока остановки</small></span>
                 <ChevronRight size={20} />
               </button>
               <button
@@ -414,7 +414,7 @@ function Overview() {
                 data-testid="button-enable-samzaberu"
               >
                 <span className="action-icon"><Play size={20} /></span>
-                <span><strong>✅ Включить СамЗаберу</strong><small>Пока без реального изменения правил</small></span>
+                <span><strong>✅ Включить СамЗаберу</strong><small>Изменение персонального правила в Bitrix</small></span>
                 <ChevronRight size={20} />
               </button>
               <button
@@ -435,7 +435,7 @@ function Overview() {
               <p>
                 {actionMode === 'enable'
                   ? 'Показаны только рестораны с действующей приостановкой.'
-                  : 'После подтверждения будет создана тестовая остановка, общая для web и Telegram.'}
+                  : 'После подтверждения Bitrix создаст новое персональное правило или обновит существующее.'}
               </p>
               {selectableRestaurants.length === 0 ? (
                 <div className="empty-state compact-empty" data-testid="text-no-stopped-restaurants">
@@ -531,7 +531,7 @@ function Overview() {
                 <span>Действие</span>
                 <strong>Включить СамЗаберу</strong>
               </div>
-              <p>В тестовом режиме будет подтверждено включение. Bitrix не вызывается.</p>
+              <p>После подтверждения персональные правила остановки ресторана будут отключены в Bitrix. Групповые правила не изменяются.</p>
               <div className="form-actions">
                 <button className="secondary-button" onClick={editEnable} data-testid="button-edit-test-enable">Изменить</button>
                 <button className="secondary-button" onClick={resetFlow} data-testid="button-cancel-test-enable">Отмена</button>
@@ -552,13 +552,13 @@ function Overview() {
                 <strong>{formatMoscow(confirmationEndAt)} (МСК)</strong>
                 {duration === 'custom' ? <><span>Продолжительность</span><strong>{customDurationText(confirmationEndAt)}</strong></> : null}
               </div>
-              <p>В тестовом режиме будет подтверждён выбранный срок. Bitrix не вызывается.</p>
+              <p>После подтверждения правило остановки будет создано или обновлено в Bitrix.</p>
               {customError ? <p className="form-error" role="alert">{customError}</p> : null}
               <div className="form-actions">
                 <button className="secondary-button" onClick={editStop} data-testid="button-edit-test-stop">Изменить</button>
                 <button className="secondary-button" onClick={resetFlow} data-testid="button-cancel-test-stop">Отмена</button>
                 <button className="primary-button" onClick={confirmTestStop} data-testid="button-confirm-test-stop">
-                  <CheckCircle2 size={18} />Подтвердить тестовый сценарий
+                  <CheckCircle2 size={18} />Подтвердить остановку
                 </button>
               </div>
             </div>
@@ -574,7 +574,7 @@ function Overview() {
             <li><CheckCircle2 size={16} />/id сообщает Telegram user ID</li>
             <li><CheckCircle2 size={16} />Свободный текст направляется к кнопкам</li>
           </ul>
-          <div className="testing-banner"><AlertTriangle size={16} />Пока без реального Bitrix</div>
+          <div className="integration-banner"><ShieldCheck size={16} />Реальный Bitrix API подключён</div>
         </aside>
       </section>
 
@@ -584,7 +584,7 @@ function Overview() {
             <p className="eyebrow">ТЕКУЩИЙ СТАТУС</p>
             <h2>Рестораны операционного управляющего</h2>
           </div>
-          {isLoading ? <span className="loading-label">Обновляем данные…</span> : <span className="source-label">Источник: тестовый сервисный слой</span>}
+          {isLoading ? <span className="loading-label">Обновляем данные…</span> : <span className="source-label">Источник: журнал операций бота</span>}
         </div>
         <div className="restaurant-table">
           {restaurants.map((restaurant) => (
@@ -618,7 +618,7 @@ function Journal() {
           <div className="empty-state journal-empty" data-testid="text-empty-request-journal">
             <ClipboardList size={28} />
             <h3>Запросов ещё нет</h3>
-            <p>После подключения Bitrix здесь появятся REQUESTED, PROCESSING, COMPLETED_AUTO, ESCALATED и COMPLETED_MANUAL.</p>
+            <p>После первого действия здесь появятся REQUESTED, PROCESSING, COMPLETED_AUTO, ESCALATED и COMPLETED_MANUAL.</p>
           </div>
         ) : (
           rows.map((request: SamzaberuRequest) => (
@@ -640,7 +640,7 @@ function Access() {
   const items = restaurants.data ?? fallbackRestaurants;
   return (
     <AppShell>
-      <PageHeader eyebrow="INSIDE · ДОСТУПЫ" title="Закреплённые рестораны" subtitle="В приёмочном режиме ваш Telegram ID видит весь справочник. В рабочем режиме рестораны фильтруются по назначенному ОУ." />
+      <PageHeader eyebrow="INSIDE · ДОСТУПЫ" title="Закреплённые рестораны" subtitle="Полный доступ видит весь справочник; персональный доступ ОУ — только назначенные рестораны." />
       <section className="access-assignments" data-testid="section-configured-access">
         <div className="section-heading">
           <div>
@@ -682,7 +682,7 @@ function Access() {
         </div>
       </section>
       <section className="status-section compact">
-        <div className="section-heading"><div><p className="eyebrow">СПРАВОЧНИК</p><h2>59 ресторанов и назначенные ОУ</h2></div><span className="source-label">Тестовый доступ ко всем точкам</span></div>
+        <div className="section-heading"><div><p className="eyebrow">СПРАВОЧНИК</p><h2>59 ресторанов и назначенные ОУ</h2></div><span className="source-label">Полный доступ ко всем точкам</span></div>
         <div className="restaurant-table">
           {items.map((restaurant) => (
             <article className="restaurant-row" key={restaurant.id} data-testid={`card-access-restaurant-${restaurant.id}`}>
