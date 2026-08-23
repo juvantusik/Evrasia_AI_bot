@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'SamZaberu_GitHub_Ready_v1.2.zip'
+      - 'SamZaberu_GitHub_Ready_v1.4.zip'
 
 permissions:
   contents: write
@@ -23,9 +23,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f SamZaberu_GitHub_Ready_v1.2.zip
-          echo "f86145a62257796508c965a81e5d5450fd6220dcf5c7494af8f43be889570212  SamZaberu_GitHub_Ready_v1.2.zip" | sha256sum -c -
-          unzip -tq SamZaberu_GitHub_Ready_v1.2.zip
+          test -f SamZaberu_GitHub_Ready_v1.4.zip
+          echo "f5c51d70f9bb203859e0d0a2b2e5af3180541aebfc09eec13bb627334b849590  SamZaberu_GitHub_Ready_v1.4.zip" | sha256sum -c -
+          unzip -tq SamZaberu_GitHub_Ready_v1.4.zip
 
       - name: Import source files
         shell: bash
@@ -33,11 +33,11 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/samzaberu-import
           mkdir -p /tmp/samzaberu-import
-          unzip -q SamZaberu_GitHub_Ready_v1.2.zip -d /tmp/samzaberu-import
-          test -d /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.2
-          cp -a /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.2/. .
+          unzip -q SamZaberu_GitHub_Ready_v1.4.zip -d /tmp/samzaberu-import
+          test -d /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.4
+          cp -a /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.4/. .
           rm -rf .import-v12
-          rm -f source-import.zip ABANDONED.txt DIRECT_TREE_PROBE.md DIRECT_TREE_PROBE_2.md SamZaberu_GitHub_Ready_v1.2.zip
+          rm -f source-import.zip ABANDONED.txt DIRECT_TREE_PROBE.md DIRECT_TREE_PROBE_2.md SamZaberu_GitHub_Ready_v1.2.zip SamZaberu_GitHub_Ready_v1.4.zip
 
       - name: Commit imported source
         shell: bash
@@ -46,5 +46,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Import SamZaberu source v1.2"
+          git commit -m "Import SamZaberu source v1.4"
           git push origin main
