@@ -1,0 +1,243 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: samzaberu
+    description: Operations for the SamZaberu stop-control MVP
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /samzaberu/restaurants:
+    get:
+      operationId: listRestaurants
+      tags: [samzaberu]
+      summary: List restaurants available to an operational manager
+      parameters:
+        - name: operatorId
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "100245"
+      responses:
+        "200":
+          description: Available restaurants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Restaurant"
+  /samzaberu/summary:
+    get:
+      operationId: getSamzaberuSummary
+      tags: [samzaberu]
+      summary: Get operational summary and recent request journal
+      parameters:
+        - name: operatorId
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "100245"
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SamzaberuSummary"
+  /samzaberu/access:
+    get:
+      operationId: getSamzaberuAccess
+      tags: [samzaberu]
+      summary: Get configured operational manager access
+      responses:
+        "200":
+          description: Configured access overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SamzaberuAccess"
+  /samzaberu/requests:
+    get:
+      operationId: listSamzaberuRequests
+      tags: [samzaberu]
+      summary: List request journal entries
+      parameters:
+        - name: operatorId
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "100245"
+      responses:
+        "200":
+          description: Request journal
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SamzaberuRequest"
+    post:
+      operationId: createSamzaberuRequest
+      tags: [samzaberu]
+      summary: Execute a stop or enable request through the service layer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SamzaberuRequestInput"
+      responses:
+        "201":
+          description: Request created and processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SamzaberuRequest"
+  /samzaberu/requests/{requestId}/manual:
+    post:
+      operationId: completeSamzaberuRequestManually
+      tags: [samzaberu]
+      summary: Mark an escalated request as completed manually
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualCompletionInput"
+      responses:
+        "200":
+          description: Request manually completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SamzaberuRequest"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Restaurant:
+      type: object
+      required: [id, name, shortName, address, operatorId, isRunning, stopUntil, ruleId]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        shortName: { type: string }
+        address: { type: string }
+        operatorId: { type: string }
+        operatorName: { type: string }
+        isRunning: { type: boolean }
+        stopUntil: { type: ["string", "null"], format: date-time }
+        ruleId: { type: ["string", "null"] }
+        ruleActive: { type: boolean }
+        serviceLayer: { type: string }
+    SamzaberuSummary:
+      type: object
+      required: [operatorId, operatorName, totalRestaurants, runningCount, stoppedCount, pendingCount, restaurants, recentRequests]
+      properties:
+        operatorId: { type: string }
+        operatorName: { type: string }
+        totalRestaurants: { type: number }
+        runningCount: { type: number }
+        stoppedCount: { type: number }
+        pendingCount: { type: number }
+        restaurants:
+          type: array
+          items: { $ref: "#/components/schemas/Restaurant" }
+        recentRequests:
+          type: array
+          items: { $ref: "#/components/schemas/SamzaberuRequest" }
+    SamzaberuAccess:
+      type: object
+      required: [operators]
+      properties:
+        operators:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorAccess"
+    OperatorAccess:
+      type: object
+      required: [operatorId, operatorName, restaurantCount, configured, accessMode]
+      properties:
+        operatorId: { type: string }
+        operatorName: { type: string }
+        restaurantCount: { type: number }
+        configured: { type: boolean }
+        accessMode:
+          type: string
+          enum: [full, assigned]
+    SamzaberuRequest:
+      type: object
+      required: [id, status, action, restaurantId, restaurantName, operatorId, operatorName, requestedAt, targetUntil, message]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [REQUESTED, PROCESSING, COMPLETED_AUTO, ESCALATED, COMPLETED_MANUAL, CANCELLED]
+        action:
+          type: string
+          enum: [STOP, ENABLE]
+        restaurantId: { type: string }
+        restaurantName: { type: string }
+        operatorId: { type: string }
+        operatorName: { type: string }
+        requestedAt: { type: string, format: date-time }
+        targetUntil: { type: ["string", "null"], format: date-time }
+        reason: { type: ["string", "null"] }
+        message: { type: string }
+        retryCount: { type: number }
+        escalatedTo:
+          type: array
+          items: { type: string }
+        canCompleteManually: { type: boolean }
+    SamzaberuRequestInput:
+      type: object
+      required: [action, restaurantId, operatorId, targetUntil, confirmation]
+      properties:
+        action:
+          type: string
+          enum: [STOP, ENABLE]
+        restaurantId: { type: string, minLength: 1 }
+        operatorId: { type: string, minLength: 1 }
+        targetUntil: { type: ["string", "null"], format: date-time }
+        confirmation: { type: boolean }
+        simulateFailure: { type: boolean, default: false }
+    ManualCompletionInput:
+      type: object
+      required: [operatorId]
+      properties:
+        operatorId: { type: string, minLength: 1 }
+
