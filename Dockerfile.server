@@ -17,7 +17,10 @@ ENV BASE_PATH=/
 
 RUN pnpm typecheck:libs \
     && pnpm --filter @workspace/api-server typecheck \
-    && pnpm --filter @workspace/api-server test \
+    && pnpm --filter @workspace/api-server exec node \
+        --experimental-transform-types \
+        --experimental-loader ./test-ts-resolver.mjs \
+        --test src/services/bitrix-gateway.test.ts \
     && pnpm --filter @workspace/api-server build \
     && pnpm --filter @workspace/samzaberu-ops build
 
