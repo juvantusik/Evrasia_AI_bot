@@ -15,7 +15,8 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV BASE_PATH=/
 
-RUN pnpm --filter @workspace/api-server typecheck \
+RUN pnpm typecheck:libs \
+    && pnpm --filter @workspace/api-server typecheck \
     && pnpm --filter @workspace/api-server test \
     && pnpm --filter @workspace/api-server build \
     && pnpm --filter @workspace/samzaberu-ops build
