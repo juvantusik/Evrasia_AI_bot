@@ -155,7 +155,7 @@ function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="rail-note">
           <span className="rail-avatar">ПТ</span>
-          <span><strong>Приёмочный доступ</strong><small>59 ресторанов · тест</small></span>
+          <span><strong>Полный доступ</strong><small>59 ресторанов</small></span>
         </div>
       </aside>
       <main className="main-content">{children}</main>

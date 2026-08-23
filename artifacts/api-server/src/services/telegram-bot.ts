@@ -533,8 +533,8 @@ export class TelegramBot {
       }
       await this.client.sendInlineMessage(
         chatId,
-        `Подтвердите тестовый сценарий:\n\nРесторан: ${restaurant.name}\nОстановить до: ${formatMoscow(endAt)} (МСК)`,
-        [[{ text: "✅ Подтвердить тестовый сценарий", callback_data: `confirm:${restaurant.id}:${duration}` }]],
+        `Подтвердите остановку:\n\nРесторан: ${restaurant.name}\nОстановить до: ${formatMoscow(endAt)} (МСК)`,
+        [[{ text: "✅ Подтвердить остановку", callback_data: `confirm:${restaurant.id}:${duration}` }]],
       );
       return;
     }
@@ -687,7 +687,7 @@ export class TelegramBot {
         return;
       }
       this.sessions.delete(chatId);
-      await this.client.sendMessage(chatId, "Тестовый сценарий отменён. Данные не изменены.", mainMenu);
+      await this.client.sendMessage(chatId, "Остановка отменена. Данные не изменены.", mainMenu);
       return;
     }
 
@@ -720,13 +720,13 @@ export class TelegramBot {
         this.sessions.delete(chatId);
         await this.client.sendMessage(
           chatId,
-          `✅ Тестовое применение завершено.\n\nРесторан: ${request.restaurantName}\nОстановить до: ${formatMoscow(request.targetUntil)} (МСК)\nПродолжительность: ${durationBetween(endAt)}\n\nBitrix не вызывается — использован тестовый сервисный слой. Запрос ${request.id} создан, статус: ${request.status}.`,
+          `✅ Остановка применена в Bitrix.\n\nРесторан: ${request.restaurantName}\nОстановлен до: ${formatMoscow(request.targetUntil)} (МСК)\nПродолжительность: ${durationBetween(endAt)}\n\nПерсональное правило создано или обновлено. Запрос ${request.id}, статус: ${request.status}.`,
           mainMenu,
         );
       } catch (error) {
         await this.client.sendMessage(
           chatId,
-          `Не удалось завершить тестовый сценарий: ${error instanceof Error ? error.message : "ошибка сервисного слоя"}`,
+          `Не удалось завершить остановку: ${error instanceof Error ? error.message : "ошибка Bitrix API"}`,
           mainMenu,
         );
       }
@@ -750,13 +750,13 @@ export class TelegramBot {
         });
         await this.client.sendMessage(
           chatId,
-          `✅ Тестовая остановка сохранена.\n\nРесторан: ${request.restaurantName}\nОстановлен до: ${formatMoscow(request.targetUntil)} (МСК)\n\nBitrix не вызывается — состояние сохранено в общем тестовом сервисе. Запрос ${request.id}, статус: ${request.status}.`,
+          `✅ Остановка применена в Bitrix.\n\nРесторан: ${request.restaurantName}\nОстановлен до: ${formatMoscow(request.targetUntil)} (МСК)\n\nПерсональное правило создано или обновлено. Запрос ${request.id}, статус: ${request.status}.`,
           mainMenu,
         );
       } catch (error) {
         await this.client.sendMessage(
           chatId,
-          `Не удалось остановить ресторан: ${error instanceof Error ? error.message : "ошибка сервисного слоя"}`,
+          `Не удалось остановить ресторан: ${error instanceof Error ? error.message : "ошибка Bitrix API"}`,
           mainMenu,
         );
       }
@@ -771,8 +771,8 @@ export class TelegramBot {
       }
       await this.client.sendInlineMessage(
         chatId,
-        `Подтвердите тестовое включение:\n\nРесторан: ${restaurant.name}\n\nПосле подтверждения тестовый сервис деактивирует действующую остановку.`,
-        [[{ text: "✅ Подтвердить тестовое включение", callback_data: `enable_confirm:${restaurant.id}` }]],
+        `Подтвердите включение:\n\nРесторан: ${restaurant.name}\n\nПосле подтверждения персональные правила остановки будут деактивированы в Bitrix. Групповые правила не изменяются.`,
+        [[{ text: "✅ Подтвердить включение", callback_data: `enable_confirm:${restaurant.id}` }]],
       );
       return;
     }
@@ -794,8 +794,8 @@ export class TelegramBot {
         await this.client.sendMessage(
           chatId,
           request.status === "COMPLETED_AUTO"
-            ? `✅ Тестовое включение завершено.\n\nРесторан: ${request.restaurantName}\nСтатус: Работает\n\nBitrix не вызывается — использован тестовый сервисный слой. Запрос ${request.id} создан, статус: ${request.status}.`
-            : `⚠️ Тестовое включение не подтверждено автоматически.\n\nРесторан: ${request.restaurantName}\nЗапрос ${request.id} создан, статус: ${request.status}.`,
+            ? `✅ Включение применено в Bitrix.\n\nРесторан: ${request.restaurantName}\nСтатус: Работает\n\nПерсональные правила остановки деактивированы. Запрос ${request.id}, статус: ${request.status}.`
+            : `⚠️ Включение не подтверждено автоматически.\n\nРесторан: ${request.restaurantName}\nЗапрос ${request.id}, статус: ${request.status}.`,
           mainMenu,
         );
       } catch (error) {
@@ -855,7 +855,7 @@ export class TelegramBot {
     }
     await this.client.sendInlineMessage(
       chatId,
-      `Проверьте тестовую остановку:\n\nРесторан: ${restaurant.name}\nОстановить до: ${formatMoscow(endAt)} МСК\nПродолжительность: ${durationBetween(endAt)}\n\nПодтверждение создаст тестовый запрос через сервисный слой. Bitrix не вызывается.`,
+      `Проверьте остановку:\n\nРесторан: ${restaurant.name}\nОстановить до: ${formatMoscow(endAt)} МСК\nПродолжительность: ${durationBetween(endAt)}\n\nПосле подтверждения Bitrix создаст новое персональное правило или обновит существующее.`,
       [
         [{ text: "✅ Подтвердить", callback_data: "custom_confirm" }],
         [{ text: "✏️ Изменить дату и время", callback_data: "custom_edit" }],
@@ -865,12 +865,12 @@ export class TelegramBot {
   }
 
   private async sendMenu(chatId: number, operatorId: string): Promise<void> {
-    const testAccessNotice = samzaberuService.hasDirectRestaurantAssignment(operatorId)
+    const fullAccessNotice = samzaberuService.hasDirectRestaurantAssignment(operatorId)
       ? ""
-      : "\n\nТестовый доступ: временно доступен полный справочник из 59 ресторанов.";
+      : "\n\nПолный доступ: доступен весь справочник из 59 ресторанов.";
     await this.client.sendMessage(
       chatId,
-      `СамЗаберу · операционное управление${testAccessNotice}\n\nВыберите действие кнопкой ниже.`,
+      `СамЗаберу · операционное управление${fullAccessNotice}\n\nВыберите действие кнопкой ниже.`,
       mainMenu,
     );
   }
@@ -880,7 +880,7 @@ export class TelegramBot {
     this.sessions.set(chatId, { step: "STOP_RESTAURANT" });
     await this.client.sendInlineMessage(
       chatId,
-      "Тестовый экран выбора ресторана\n\nВыберите ресторан. Никаких изменений в данных не произойдёт.",
+      "Выберите ресторан для остановки.\n\nИзменения будут внесены только после окончательного подтверждения.",
       restaurantMenu(restaurants, "restaurant"),
     );
   }
@@ -895,7 +895,7 @@ export class TelegramBot {
     }
     await this.client.sendInlineMessage(
       chatId,
-      "Выберите ресторан для тестового включения. После подтверждения тестовый сервис деактивирует остановку.",
+      "Выберите ресторан для включения. После подтверждения персональные правила остановки будут деактивированы в Bitrix.",
       restaurantMenu(restaurants, "enable"),
     );
   }
