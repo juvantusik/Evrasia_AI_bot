@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="app-version" content="1.4" />
     <title>СамЗаберу — операционная панель</title>
     <meta name="description" content="СамЗаберу — операционная панель — built on Replit. Update this description to reflect the app." />
     <meta name="robots" content="index, follow" />
@@ -16,9 +17,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      #samzaberu-version {
+        position: fixed;
+        right: 16px;
+        bottom: 10px;
+        z-index: 1000;
+        color: #9aa6b7;
+        font: 600 10px/1.4 Inter, Arial, sans-serif;
+        letter-spacing: .03em;
+        pointer-events: none;
+        user-select: none;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="samzaberu-version" aria-label="Версия приложения">SamZaberu Bot · v1.4</div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
