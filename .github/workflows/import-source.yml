@@ -2,8 +2,6 @@ name: Import source snapshot
 
 on:
   workflow_dispatch:
-  issues:
-    types: [opened]
   push:
     branches: [main]
     paths:
@@ -17,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -25,8 +23,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .import-v12/part-*.txt | tr -d '\r\n' | base64 --decode > /tmp/samzaberu-v12.zip
-          unzip -t /tmp/samzaberu-v12.zip
+          find .import-v12 -maxdepth 1 -type f -name 'part-*.txt' -print0 \
+            | sort -zV \
+            | xargs -0 cat \
+            | tr -d '\r\n' > /tmp/samzaberu-v12.b64
+
+          test "$(wc -c < /tmp/samzaberu-v12.b64)" -eq 392896
+          base64 --decode /tmp/samzaberu-v12.b64 > /tmp/samzaberu-v12.zip
+          echo "f86145a62257796508c965a81e5d5450fd6220dcf5c7494af8f43be889570212  /tmp/samzaberu-v12.zip" | sha256sum -c -
+          unzip -tq /tmp/samzaberu-v12.zip
 
       - name: Import source files
         shell: bash
@@ -38,7 +43,7 @@ jobs:
           test -d /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.2
           cp -a /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.2/. .
           rm -rf .import-v12
-          rm -f DIRECT_TREE_PROBE.md DIRECT_TREE_PROBE_2.md
+          rm -f source-import.zip ABANDONED.txt DIRECT_TREE_PROBE.md DIRECT_TREE_PROBE_2.md
 
       - name: Commit source snapshot
         shell: bash
