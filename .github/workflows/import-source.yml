@@ -1,0 +1,47 @@
+name: Import source snapshot
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild and verify source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .import-v12/part-*.txt | tr -d '\r\n' | base64 --decode > /tmp/samzaberu-v12.zip
+          unzip -t /tmp/samzaberu-v12.zip
+
+      - name: Import source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/samzaberu-import
+          mkdir -p /tmp/samzaberu-import
+          unzip -q /tmp/samzaberu-v12.zip -d /tmp/samzaberu-import
+          test -d /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.2
+          cp -a /tmp/samzaberu-import/SamZaberu_GitHub_Ready_v1.2/. .
+          rm -rf .import-v12
+          rm -f DIRECT_TREE_PROBE.md DIRECT_TREE_PROBE_2.md
+
+      - name: Commit source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import SamZaberu source v1.2"
+          git push origin main
