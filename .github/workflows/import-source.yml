@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find .import-v12 -maxdepth 1 -type f -name 'part-*.txt' -print0 \
+          find .import-v12 -maxdepth 1 -type f -name 'part-*.txt' ! -name 'part-06.txt' -print0 \
             | sort -zV \
             | xargs -0 cat \
             | tr -d '\r\n' > /tmp/samzaberu-v12.b64
