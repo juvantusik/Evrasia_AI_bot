@@ -265,7 +265,7 @@ function Overview() {
     }
     const [, minutes] = customTime.split(':').map(Number);
     if (![0, 15, 30, 45].includes(minutes)) {
-      setCustomError('Для тестового сценария доступны минуты 00, 15, 30 или 45.');
+      setCustomError('Для остановки доступны минуты 00, 15, 30 или 45.');
       return;
     }
     if (customEndAt.getTime() <= Date.now()) {
@@ -682,7 +682,7 @@ function Access() {
         </div>
       </section>
       <section className="status-section compact">
-        <div className="section-heading"><div><p className="eyebrow">СПРАВОЧНИК</p><h2>59 ресторанов и назначенные ОУ</h2></div><span className="source-label">Тестовый доступ ко всем точкам</span></div>
+        <div className="section-heading"><div><p className="eyebrow">СПРАВОЧНИК</p><h2>59 ресторанов и назначенные ОУ</h2></div><span className="source-label">Полный доступ ко всем точкам</span></div>
         <div className="restaurant-table">
           {items.map((restaurant) => (
             <article className="restaurant-row" key={restaurant.id} data-testid={`card-access-restaurant-${restaurant.id}`}>
