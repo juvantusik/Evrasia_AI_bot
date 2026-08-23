@@ -73,6 +73,13 @@ export type ChangeRequest = {
   simulateFailure?: boolean;
 };
 
+export type SamzaberuAccessContext = {
+  source: "inside";
+  operatorId: string;
+  operatorName: string;
+  allowedRestaurantIds: ReadonlySet<string> | null;
+};
+
 export type EscalationPayload = {
   restaurantName: string;
   targetUntil: Date | null;
@@ -172,16 +179,21 @@ export class SamzaberuService {
     this.notifier = notifier;
   }
 
-  async listRestaurants(operatorId: string): Promise<RestaurantView[]> {
-    this.assertAllowed(operatorId);
+  async listRestaurants(
+    operatorId: string,
+    accessContext?: SamzaberuAccessContext,
+  ): Promise<RestaurantView[]> {
+    this.assertAllowed(operatorId, accessContext);
     const rules = await this.getRulesByRestaurantId();
-    const hasDirectAssignment = restaurantDirectory.some(
-      (restaurant) => restaurant.operatorId === operatorId,
-    );
+    const hasDirectAssignment =
+      !accessContext &&
+      restaurantDirectory.some((restaurant) => restaurant.operatorId === operatorId);
     return restaurantDirectory
-      .filter(
-        (restaurant) =>
-          !hasDirectAssignment || restaurant.operatorId === operatorId,
+      .filter((restaurant) =>
+        accessContext
+          ? accessContext.allowedRestaurantIds === null ||
+            accessContext.allowedRestaurantIds.has(restaurant.id)
+          : !hasDirectAssignment || restaurant.operatorId === operatorId,
       )
       .map((restaurant) =>
         toRestaurantView(
@@ -213,7 +225,10 @@ export class SamzaberuService {
     return getOperatorAccessOverview();
   }
 
-  async getSummary(operatorId: string): Promise<{
+  async getSummary(
+    operatorId: string,
+    accessContext?: SamzaberuAccessContext,
+  ): Promise<{
     operatorId: string;
     operatorName: string;
     totalRestaurants: number;
@@ -224,10 +239,13 @@ export class SamzaberuService {
     recentRequests: SamzaberuRequest[];
   }> {
     const [restaurants, requests] = await Promise.all([
-      this.listRestaurants(operatorId),
-      this.listRequests(operatorId),
+      this.listRestaurants(operatorId, accessContext),
+      this.listRequests(operatorId, accessContext),
     ]);
-    const operatorName = restaurants[0]?.operatorName ?? "Операционный управляющий";
+    const operatorName =
+      accessContext?.operatorName ??
+      restaurants[0]?.operatorName ??
+      "Операционный управляющий";
     const recentRequests = requests.slice(0, 5);
 
     return {
@@ -244,8 +262,11 @@ export class SamzaberuService {
     };
   }
 
-  async listRequests(operatorId: string): Promise<SamzaberuRequest[]> {
-    this.assertAllowed(operatorId);
+  async listRequests(
+    operatorId: string,
+    accessContext?: SamzaberuAccessContext,
+  ): Promise<SamzaberuRequest[]> {
+    this.assertAllowed(operatorId, accessContext);
     const requests = await db
       .select()
       .from(samzaberuRequestsTable)
@@ -254,8 +275,11 @@ export class SamzaberuService {
     return requests.map(toRequest);
   }
 
-  async processChange(input: ChangeRequest): Promise<SamzaberuRequest> {
-    this.assertAllowed(input.operatorId);
+  async processChange(
+    input: ChangeRequest,
+    accessContext?: SamzaberuAccessContext,
+  ): Promise<SamzaberuRequest> {
+    this.assertAllowed(input.operatorId, accessContext);
     if (!input.confirmation) {
       throw new Error("Изменение должно быть подтверждено");
     }
@@ -266,7 +290,11 @@ export class SamzaberuService {
       throw new Error("Дата окончания должна быть в будущем");
     }
 
-    const restaurant = this.getAllowedRestaurant(input.operatorId, input.restaurantId);
+    const restaurant = this.getAllowedRestaurant(
+      input.operatorId,
+      input.restaurantId,
+      accessContext,
+    );
     if (!restaurant) {
       throw new Error("Ресторан недоступен этому операционному управляющему");
     }
@@ -280,7 +308,7 @@ export class SamzaberuService {
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
       operatorId: input.operatorId,
-      operatorName: restaurant.operatorName,
+      operatorName: accessContext?.operatorName ?? restaurant.operatorName,
       requestedAt,
       targetUntil: input.action === "STOP" ? input.targetUntil : null,
       message: "Запрос зарегистрирован",
@@ -435,8 +463,12 @@ export class SamzaberuService {
     return this.getRequestOrThrow(requestId);
   }
 
-  async completeManually(requestId: string, operatorId: string): Promise<SamzaberuRequest> {
-    this.assertAllowed(operatorId);
+  async completeManually(
+    requestId: string,
+    operatorId: string,
+    accessContext?: SamzaberuAccessContext,
+  ): Promise<SamzaberuRequest> {
+    this.assertAllowed(operatorId, accessContext);
     const request = await this.getRequestOrThrow(requestId);
     if (request.operatorId !== operatorId) {
       throw new Error("Запрос не найден");
@@ -471,14 +503,18 @@ export class SamzaberuService {
   private getAllowedRestaurant(
     operatorId: string,
     restaurantId: string,
+    accessContext?: SamzaberuAccessContext,
   ): RestaurantDirectoryEntry | undefined {
-    const hasDirectAssignment = restaurantDirectory.some(
-      (restaurant) => restaurant.operatorId === operatorId,
-    );
+    const hasDirectAssignment =
+      !accessContext &&
+      restaurantDirectory.some((restaurant) => restaurant.operatorId === operatorId);
     return restaurantDirectory.find(
       (restaurant) =>
         restaurant.id === restaurantId &&
-        (!hasDirectAssignment || restaurant.operatorId === operatorId),
+        (accessContext
+          ? accessContext.allowedRestaurantIds === null ||
+            accessContext.allowedRestaurantIds.has(restaurant.id)
+          : !hasDirectAssignment || restaurant.operatorId === operatorId),
     );
   }
 
@@ -510,7 +546,17 @@ export class SamzaberuService {
     return toRequest(record);
   }
 
-  private assertAllowed(operatorId: string): void {
+  private assertAllowed(
+    operatorId: string,
+    accessContext?: SamzaberuAccessContext,
+  ): void {
+    if (
+      accessContext?.source === "inside" &&
+      accessContext.operatorId === operatorId &&
+      operatorId.startsWith("inside:")
+    ) {
+      return;
+    }
     if (!isAllowedOperatorId(operatorId)) {
       throw new Error("Доступ разрешён только для назначенных операционных управляющих");
     }
