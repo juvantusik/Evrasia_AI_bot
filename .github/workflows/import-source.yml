@@ -26,6 +26,7 @@ jobs:
           find .import-v12 -maxdepth 1 -type f -name 'part-*.txt' \
             ! -name 'part-06.txt' \
             ! -name 'part-12.txt' \
+            ! -name 'part-16.txt' \
             -print0 \
             | sort -zV \
             | xargs -0 cat \
