@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  EKATERINA_OPERATOR_ID,
   getOperatorAccessOverview,
   isAllowedOperatorId,
   NATALIA_OPERATOR_ID,
@@ -25,5 +26,26 @@ test("Natalia Telegram ID resolves to her assigned operator access", () => {
   } finally {
     if (previousNataliaId === undefined) delete process.env.NATALIA_TELEGRAM_ID;
     else process.env.NATALIA_TELEGRAM_ID = previousNataliaId;
+  }
+});
+
+test("Ekaterina Telegram ID resolves to her 13 assigned restaurants", () => {
+  const previousEkaterinaId = process.env.EKATERINA_TELEGRAM_ID;
+  process.env.EKATERINA_TELEGRAM_ID = "952658667";
+
+  try {
+    assert.equal(resolveTelegramOperatorId("952658667"), EKATERINA_OPERATOR_ID);
+    assert.equal(isAllowedOperatorId(EKATERINA_OPERATOR_ID), true);
+    assert.equal(resolveTelegramOperatorId("952658668"), null);
+
+    const ekaterinaOverview = getOperatorAccessOverview().find(
+      (operator) => operator.operatorId === EKATERINA_OPERATOR_ID,
+    );
+    assert.equal(ekaterinaOverview?.configured, true);
+    assert.equal(ekaterinaOverview?.accessMode, "assigned");
+    assert.equal(ekaterinaOverview?.restaurantCount, 13);
+  } finally {
+    if (previousEkaterinaId === undefined) delete process.env.EKATERINA_TELEGRAM_ID;
+    else process.env.EKATERINA_TELEGRAM_ID = previousEkaterinaId;
   }
 });
