@@ -1,23 +1,19 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { Link, Route, Switch, useLocation } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  AlertTriangle,
-  ArrowLeft,
-  CalendarClock,
+  AlertCircle,
   CheckCircle2,
-  ChevronRight,
   ClipboardList,
   Clock3,
   LockKeyhole,
   MapPin,
-  Menu,
-  MessageSquareText,
-  Play,
-  Power,
+  PauseCircle,
+  PlayCircle,
+  RefreshCw,
+  Search,
   ShieldCheck,
-  SquareTerminal,
-  XCircle,
+  X,
 } from 'lucide-react';
 import {
   useCreateSamzaberuRequest,
@@ -30,21 +26,17 @@ import type { Restaurant, SamzaberuRequest } from '@workspace/api-client-react';
 
 const operatorId = '2103479066';
 const queryClient = new QueryClient();
-
 const fallbackRestaurants: Restaurant[] = [];
 
-type Flow = 'menu' | 'restaurant' | 'duration' | 'confirmation' | 'custom' | 'enableConfirmation';
-type Duration = '30 минут' | '1 час' | '2 часа' | 'До 22:00 (МСК)' | 'custom';
+type PendingAction = { action: 'STOP' | 'ENABLE'; restaurant: Restaurant };
+type Duration = '30 минут' | '1 час' | '2 часа' | 'До конца дня' | 'Своя дата';
+
+const durationOptions: Duration[] = ['30 минут', '1 час', '2 часа', 'До конца дня', 'Своя дата'];
 
 const moscowParts = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   }).formatToParts(date);
   const value = (type: string) => Number(parts.find((item) => item.type === type)?.value);
   return { year: value('year'), month: value('month'), day: value('day'), hour: value('hour'), minute: value('minute') };
@@ -53,6 +45,21 @@ const moscowParts = (date = new Date()) => {
 const moscowDateKey = (date = new Date()): string => {
   const parts = moscowParts(date);
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+};
+
+const tomorrowMoscowDateKey = (): string => {
+  const parts = moscowParts();
+  const tomorrow = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1));
+  return `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, '0')}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
+};
+
+const nextMoscowQuarterHour = (): string | null => {
+  const parts = moscowParts();
+  const nextQuarter = (Math.floor(parts.minute / 15) + 1) * 15;
+  if (parts.hour === 23 && nextQuarter >= 60) return null;
+  const hour = parts.hour + Math.floor(nextQuarter / 60);
+  const minute = nextQuarter % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
 const fromMoscowLocal = (dateValue: string, timeValue: string): Date | null => {
@@ -65,543 +72,197 @@ const fromMoscowLocal = (dateValue: string, timeValue: string): Date | null => {
   return new Date(Date.UTC(year, month - 1, day, hour - 3, minute, 0));
 };
 
-const nextMoscowQuarterHour = (): string | null => {
-  const parts = moscowParts();
-  const nextQuarter = (Math.floor(parts.minute / 15) + 1) * 15;
-  if (parts.hour === 23 && nextQuarter >= 60) return null;
-  const hour = parts.hour + Math.floor(nextQuarter / 60);
-  const minute = nextQuarter % 60;
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-};
-
-const tomorrowMoscowDateKey = (): string => {
-  const parts = moscowParts();
-  const tomorrow = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1));
-  return `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, '0')}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
-};
-
-const customDurationText = (until: Date): string => {
-  const totalMinutes = Math.max(0, Math.floor((until.getTime() - Date.now()) / 60000));
-  const days = Math.floor(totalMinutes / (24 * 60));
-  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
-  const minutes = totalMinutes % 60;
-  const parts: string[] = [];
-  if (days) parts.push(`${days} д.`);
-  if (hours) parts.push(`${hours} ч.`);
-  if (minutes || parts.length === 0) parts.push(`${minutes} мин.`);
-  return parts.join(' ');
+const endFor = (duration: Exclude<Duration, 'Своя дата'>): Date => {
+  const base = new Date();
+  if (duration === '30 минут') return new Date(base.getTime() + 30 * 60 * 1000);
+  if (duration === '1 час') return new Date(base.getTime() + 60 * 60 * 1000);
+  if (duration === '2 часа') return new Date(base.getTime() + 2 * 60 * 60 * 1000);
+  const parts = moscowParts(base);
+  const endOfDay = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 19, 0, 0));
+  if (endOfDay <= base) endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+  return endOfDay;
 };
 
 const formatMoscow = (date: string | Date | null): string => {
   if (!date) return '—';
   return new Intl.DateTimeFormat('ru-RU', {
-    timeZone: 'Europe/Moscow',
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   }).format(new Date(date));
 };
 
-const endFor = (duration: Exclude<Duration, 'custom'>): Date => {
-  const base = new Date();
-  if (duration === '30 минут') return new Date(base.getTime() + 30 * 60 * 1000);
-  if (duration === '1 час') return new Date(base.getTime() + 60 * 60 * 1000);
-  if (duration === '2 часа') return new Date(base.getTime() + 2 * 60 * 60 * 1000);
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(base);
-  const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
-  const candidate = new Date(Date.UTC(part('year'), part('month') - 1, part('day'), 19, 0, 0));
-  if (candidate <= base) candidate.setUTCDate(candidate.getUTCDate() + 1);
-  return candidate;
+const requestStatusLabel = (status: SamzaberuRequest['status']): string => {
+  const labels: Record<string, string> = {
+    REQUESTED: 'Зарегистрирован', PROCESSING: 'Выполняется', COMPLETED_AUTO: 'Выполнен',
+    ESCALATED: 'Передан ответственному', COMPLETED_MANUAL: 'Выполнен вручную', CANCELLED: 'Отменён',
+  };
+  return labels[status] ?? status;
 };
-
-const statusText = (restaurant: Restaurant): string =>
-  restaurant.isRunning ? 'Работает' : `Остановлен до ${formatMoscow(restaurant.stopUntil)}`;
 
 function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const navigation = [
-    { href: '/', label: 'Управление', icon: SquareTerminal },
-    { href: '/journal', label: 'Журнал запросов', icon: ClipboardList },
+    { href: '/', label: 'СамЗаберу', icon: PlayCircle },
+    { href: '/journal', label: 'Журнал', icon: ClipboardList },
     { href: '/access', label: 'Доступы', icon: ShieldCheck },
   ];
-
   return (
     <div className="app-shell">
-      <aside className="side-rail">
-        <Link href="/" className="brand-link" data-testid="link-home-brand">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <strong>Inside</strong>
-        </Link>
-        <nav className="side-nav" aria-label="Навигация">
+      <header className="app-bar">
+        <Link href="/" className="brand-link"><span className="brand-mark"><PlayCircle size={19} /></span><strong>СамЗаберу</strong></Link>
+        <nav className="app-nav" aria-label="Навигация">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const active = location === item.href;
-            return (
-              <Link
-                href={item.href}
-                className={`nav-link ${active ? 'active' : ''}`}
-                data-testid={`link-${item.href === '/' ? 'overview' : item.href.slice(1)}`}
-                key={item.href}
-              >
-                <span className="nav-icon"><Icon size={18} /></span>
-                {item.label}
-              </Link>
-            );
+            return <Link key={item.href} href={item.href} className={location === item.href ? 'active' : ''}><Icon size={18} /><span>{item.label}</span></Link>;
           })}
         </nav>
-        <div className="rail-note">
-          <span className="rail-avatar">ПТ</span>
-          <span><strong>Полный доступ</strong><small>59 ресторанов</small></span>
-        </div>
-      </aside>
+      </header>
       <main className="main-content">{children}</main>
     </div>
-  );
-}
-
-function PageHeader({
-  eyebrow,
-  title,
-  subtitle,
-  quickAction,
-}: {
-  eyebrow: string;
-  title: string;
-  subtitle: string;
-  quickAction?: ReactNode;
-}) {
-  return (
-    <header className="page-header">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="page-subtitle">{subtitle}</p>
-      </div>
-      <div className="header-side">
-        <div className="operator-chip" data-testid="status-operator">
-          <span className="avatar">ПТ</span>
-          <span>
-            <strong>Приёмочный доступ</strong>
-            <small>Telegram ID: {operatorId}</small>
-          </span>
-        </div>
-        {quickAction}
-      </div>
-    </header>
   );
 }
 
 function Overview() {
   const summary = useGetSamzaberuSummary({ operatorId });
   const restaurantsRequest = useListRestaurants({ operatorId });
-  const createRequest = useCreateSamzaberuRequest({
-    mutation: {
-      onSuccess: () => {
-        void queryClient.invalidateQueries();
-      },
-    },
-  });
+  const access = useGetSamzaberuAccess();
+  const createRequest = useCreateSamzaberuRequest();
   const restaurants = summary.data?.restaurants ?? restaurantsRequest.data ?? fallbackRestaurants;
-  const [flow, setFlow] = useState<Flow>('menu');
-  const [actionMode, setActionMode] = useState<'stop' | 'enable'>('stop');
-  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
-  const [duration, setDuration] = useState<Duration | null>(null);
+  const currentAccess = access.data?.operators.find((item) => item.operatorId === operatorId);
+  const [search, setSearch] = useState('');
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [duration, setDuration] = useState<Duration>('До конца дня');
+  const [targetUntil, setTargetUntil] = useState(() => endFor('До конца дня').toISOString());
   const [customDate, setCustomDate] = useState('');
   const [customTime, setCustomTime] = useState('');
-  const [customError, setCustomError] = useState('');
-  const [testNotice, setTestNotice] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [actionError, setActionError] = useState('');
 
-  const resetFlow = () => {
-    setFlow('menu');
-    setSelectedRestaurant(null);
-    setDuration(null);
-    setCustomDate('');
-    setCustomTime('');
-    setCustomError('');
+  const visibleRestaurants = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase('ru-RU');
+    if (!normalized) return restaurants;
+    return restaurants.filter((restaurant) =>
+      [restaurant.name, restaurant.shortName, restaurant.address].some((value) => value.toLocaleLowerCase('ru-RU').includes(normalized)),
+    );
+  }, [restaurants, search]);
+
+  const openAction = (restaurant: Restaurant) => {
+    setPending({ action: restaurant.isRunning ? 'STOP' : 'ENABLE', restaurant });
+    setDuration('До конца дня');
+    setTargetUntil(endFor('До конца дня').toISOString());
+    setCustomDate(nextMoscowQuarterHour() ? moscowDateKey() : tomorrowMoscowDateKey());
+    setCustomTime(''); setConfirmed(false); setActionError(''); setNotice('');
   };
 
-  const startStop = () => {
-    setFlow('restaurant');
-    setActionMode('stop');
-    setDuration(null);
-    setTestNotice('');
-  };
-
-  const startEnable = () => {
-    setFlow('restaurant');
-    setActionMode('enable');
-    setDuration(null);
-    setTestNotice('');
-  };
-
-  const selectRestaurant = (restaurant: Restaurant) => {
-    setSelectedRestaurant(restaurant);
-    setFlow(actionMode === 'enable' ? 'enableConfirmation' : 'duration');
+  const closeAction = () => {
+    if (createRequest.isPending) return;
+    setPending(null); setConfirmed(false); setActionError('');
   };
 
   const selectDuration = (value: Duration) => {
-    setDuration(value);
-    setFlow('confirmation');
-  };
-
-  const openCustomDateTime = () => {
-    setDuration('custom');
-    setCustomDate(nextMoscowQuarterHour() ? moscowDateKey() : tomorrowMoscowDateKey());
-    setCustomTime('');
-    setCustomError('');
-    setFlow('custom');
+    setDuration(value); setActionError('');
+    if (value !== 'Своя дата') setTargetUntil(endFor(value).toISOString());
   };
 
   const customEndAt = fromMoscowLocal(customDate, customTime);
-
-  const continueWithCustomDateTime = () => {
-    if (!customDate || !customTime || !customEndAt) {
-      setCustomError('Выберите дату и время окончания.');
-      return;
-    }
-    const [, minutes] = customTime.split(':').map(Number);
-    if (![0, 15, 30, 45].includes(minutes)) {
-      setCustomError('Для остановки доступны минуты 00, 15, 30 или 45.');
-      return;
-    }
-    if (customEndAt.getTime() <= Date.now()) {
-      setCustomError('Выберите будущую дату и время по Москве.');
-      return;
-    }
-    setCustomError('');
-    setFlow('confirmation');
-  };
-
-  const confirmTestStop = async () => {
-    if (!selectedRestaurant || !duration) return;
-    const endAt = duration === 'custom' ? customEndAt : endFor(duration);
-    if (!endAt || endAt.getTime() <= Date.now()) {
-      setCustomError('Выбранное время уже прошло. Укажите новый срок.');
-      setFlow(duration === 'custom' ? 'custom' : 'duration');
-      return;
-    }
-    try {
-      const request = await createRequest.mutateAsync({
-        data: {
-          action: 'STOP',
-          restaurantId: selectedRestaurant.id,
-          operatorId,
-          targetUntil: endAt.toISOString(),
-          confirmation: true,
-        },
-      });
-      if (request.status !== 'COMPLETED_AUTO') {
-        setCustomError(`Остановка не подтверждена: ${request.status}.`);
-        return;
-      }
-      setTestNotice(
-        `Остановка применена в Bitrix: «${request.restaurantName}» приостановлен до ${formatMoscow(request.targetUntil)} МСК.`,
-      );
-      resetFlow();
-    } catch (error) {
-      setCustomError(error instanceof Error ? error.message : 'Не удалось остановить ресторан.');
-    }
-  };
-
-  const confirmTestEnable = async () => {
-    if (!selectedRestaurant) return;
-    try {
-      const request = await createRequest.mutateAsync({
-        data: {
-          action: 'ENABLE',
-          restaurantId: selectedRestaurant.id,
-          operatorId,
-          targetUntil: null,
-          confirmation: true,
-        },
-      });
-      if (request.status !== 'COMPLETED_AUTO') {
-        setCustomError(`Включение не подтверждено: ${request.status}.`);
-        return;
-      }
-      setTestNotice(
-        `Включение применено в Bitrix: «${request.restaurantName}». Ресторан снова работает.`,
-      );
-      resetFlow();
-    } catch (error) {
-      setCustomError(error instanceof Error ? error.message : 'Не удалось включить ресторан.');
-    }
-  };
-
-  const editEnable = () => {
-    setSelectedRestaurant(null);
-    setFlow('restaurant');
-  };
-
-  const editStop = () => {
-    setCustomError('');
-    setFlow(duration === 'custom' ? 'custom' : 'duration');
-  };
-
-  const confirmationEndAt = duration === 'custom' ? customEndAt : duration ? endFor(duration) : null;
-  const selectableRestaurants =
-    actionMode === 'enable' ? restaurants.filter((restaurant) => !restaurant.isRunning) : restaurants;
+  const selectedEndAt = duration === 'Своя дата' ? customEndAt : new Date(targetUntil);
   const currentMoscowDate = moscowDateKey();
   const minimumTimeToday = nextMoscowQuarterHour();
-  const isTodayUnavailable = customDate === currentMoscowDate && !minimumTimeToday;
+  const refresh = async () => { await queryClient.invalidateQueries(); };
 
-  const stopped = restaurants.filter((restaurant) => !restaurant.isRunning);
+  const submitAction = async () => {
+    if (!pending || !confirmed) return;
+    const stopUntil = pending.action === 'STOP' ? selectedEndAt : null;
+    if (pending.action === 'STOP' && (!stopUntil || stopUntil.getTime() <= Date.now())) {
+      setActionError('Выберите будущую дату и время окончания.'); return;
+    }
+    if (duration === 'Своя дата') {
+      const minute = Number(customTime.split(':')[1]);
+      if (![0, 15, 30, 45].includes(minute)) { setActionError('Доступны минуты 00, 15, 30 или 45.'); return; }
+    }
+    try {
+      const request = await createRequest.mutateAsync({ data: {
+        action: pending.action, restaurantId: pending.restaurant.id, operatorId,
+        targetUntil: stopUntil?.toISOString() ?? null, confirmation: true,
+      } });
+      const prefix = pending.action === 'STOP' ? 'Остановка' : 'Включение';
+      setNotice(request.status === 'COMPLETED_AUTO' ? `${prefix} выполнено: ${request.restaurantName}` : `${prefix} зарегистрировано: ${request.message}`);
+      setPending(null); setConfirmed(false); await refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Не удалось изменить статус ресторана.');
+    }
+  };
+
   const isLoading = summary.isLoading || restaurantsRequest.isLoading;
+  const loadError = summary.error || restaurantsRequest.error;
 
   return (
     <AppShell>
-      <PageHeader
-        eyebrow="INSIDE · ОПЕРАЦИИ"
-        title="СамЗаберу"
-        subtitle="Управление доступностью ресторанов. Полный доступ показывает весь справочник из 59 точек; ОУ видят только назначенные рестораны."
-        quickAction={(
-          <button className="mobile-quick-action" onClick={startStop} data-testid="button-quick-stop-samzaberu">
-            <Power size={16} />
-            <span>Остановить</span>
-          </button>
-        )}
-      />
+      <div className="title-row">
+        <div><h1>СамЗаберу</h1><p>Управление доступностью ресторанов</p></div>
+        <button className="refresh-button" type="button" onClick={() => void refresh()} disabled={isLoading}><RefreshCw size={18} /><span>Обновить</span></button>
+      </div>
+      {loadError ? <div className="alert error" role="alert"><AlertCircle size={20} />Не удалось загрузить данные.</div> : null}
+      {actionError && !pending ? <div className="alert error">{actionError}</div> : null}
+      {notice ? <div className="alert success" role="status"><CheckCircle2 size={20} />{notice}</div> : null}
 
-      <section className="stats-grid" aria-label="Сводка">
-        <div className="stat-card" data-testid="status-restaurants-total">
-          <span>Доступные рестораны</span>
-          <strong>{summary.data?.totalRestaurants ?? restaurants.length}</strong>
-          <small>Справочник доступных ресторанов</small>
-        </div>
-        <div className="stat-card success" data-testid="status-restaurants-running">
-          <span>СамЗаберу работает</span>
-          <strong>{summary.data?.runningCount ?? restaurants.filter((item) => item.isRunning).length}</strong>
-          <small>Без действующего ограничения</small>
-        </div>
-        <div className="stat-card stop" data-testid="status-restaurants-stopped">
-          <span>Приостановлен</span>
-          <strong>{summary.data?.stoppedCount ?? stopped.length}</strong>
-          <small>Есть действующее правило</small>
-        </div>
+      <section className="summary-grid" aria-label="Сводка">
+        <article className="summary-card"><span>Доступно</span><strong>{summary.data?.totalRestaurants ?? restaurants.length}</strong></article>
+        <article className="summary-card running"><span>Работают</span><strong>{summary.data?.runningCount ?? restaurants.filter((item) => item.isRunning).length}</strong></article>
+        <article className="summary-card stopped"><span>Остановлены</span><strong>{summary.data?.stoppedCount ?? restaurants.filter((item) => !item.isRunning).length}</strong></article>
+        <article className="summary-card"><span>В обработке</span><strong>{summary.data?.pendingCount ?? 0}</strong></article>
       </section>
 
-      <section className="workspace-grid">
-        <div className="control-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">КНОПКИ МЕНЮ</p>
-              <h2>{flow === 'menu' ? 'Что нужно сделать?' : actionMode === 'enable' ? 'Сценарий включения' : 'Сценарий остановки'}</h2>
-            </div>
-            {flow !== 'menu' ? (
-              <button className="text-button" onClick={resetFlow} data-testid="button-reset-test-flow">
-                <ArrowLeft size={16} />
-                В меню
-              </button>
-            ) : null}
-          </div>
+      <div className="operator-context"><strong>{summary.data?.operatorName ?? 'Операционный управляющий'}</strong><span>{currentAccess?.accessMode === 'assigned' ? 'Только закреплённые рестораны' : 'Все рестораны'}</span></div>
+      <label className="search-field"><Search size={20} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти ресторан или адрес" /></label>
 
-          {testNotice ? <div className="test-success-banner" data-testid="text-test-stop-complete">{testNotice}</div> : null}
-
-          {flow === 'menu' ? (
-            <div className="action-stack">
-              <button className="action-button stop-action" onClick={startStop} data-testid="button-stop-samzaberu">
-                <span className="action-icon"><Power size={20} /></span>
-                <span><strong>⛔ Остановить СамЗаберу</strong><small>Выбор ресторана и срока остановки</small></span>
-                <ChevronRight size={20} />
-              </button>
-              <button
-                className="action-button start-action"
-                onClick={startEnable}
-                data-testid="button-enable-samzaberu"
-              >
-                <span className="action-icon"><Play size={20} /></span>
-                <span><strong>✅ Включить СамЗаберу</strong><small>Изменение персонального правила в Bitrix</small></span>
-                <ChevronRight size={20} />
-              </button>
-              <button
-                className="action-button neutral-action"
-                onClick={() => document.getElementById('current-status')?.scrollIntoView({ behavior: 'smooth' })}
-                data-testid="button-current-status"
-              >
-                <span className="action-icon"><ClipboardList size={20} /></span>
-                <span><strong>📋 Текущий статус</strong><small>Доступные рестораны и активные ограничения</small></span>
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          ) : null}
-
-          {flow === 'restaurant' ? (
-            <div className="flow-block">
-              <div className="step-label"><span>1</span> {actionMode === 'enable' ? 'Выберите ресторан для включения' : 'Выберите ресторан'}</div>
-              <p>
-                {actionMode === 'enable'
-                  ? 'Показаны только рестораны с действующей приостановкой.'
-                  : 'После подтверждения Bitrix создаст новое персональное правило или обновит существующее.'}
-              </p>
-              {selectableRestaurants.length === 0 ? (
-                <div className="empty-state compact-empty" data-testid="text-no-stopped-restaurants">
-                  <CheckCircle2 size={26} />
-                  <h3>Нет ресторанов для включения</h3>
-                  <p>Сейчас все доступные рестораны работают.</p>
+      <section className="restaurant-section">
+        <div className="section-heading"><h2>Рестораны</h2><span>{visibleRestaurants.length}</span></div>
+        {isLoading && !restaurants.length ? <div className="empty-state">Загружаем рестораны…</div> : null}
+        <div className="restaurant-grid">
+          {visibleRestaurants.map((restaurant) => (
+            <article className="restaurant-card" key={restaurant.id}>
+              <div>
+                <div className={restaurant.isRunning ? 'status-pill running' : 'status-pill stopped'}>
+                  {restaurant.isRunning ? <PlayCircle size={18} /> : <PauseCircle size={18} />}<span>{restaurant.isRunning ? 'Работает' : 'Остановлен'}</span>
                 </div>
-              ) : null}
-              <div className="restaurant-choice-list">
-                {selectableRestaurants.map((restaurant) => (
-                  <button
-                    key={restaurant.id}
-                    className="restaurant-choice"
-                    onClick={() => selectRestaurant(restaurant)}
-                    data-testid={`button-select-restaurant-${restaurant.id}`}
-                  >
-                    <span><strong>{restaurant.shortName}</strong><small>{restaurant.address}</small></span>
-                    <ChevronRight size={18} />
-                  </button>
-                ))}
+                <h3>{restaurant.shortName}</h3><p>{restaurant.address}</p>
+                {!restaurant.isRunning ? <div className="stop-until"><Clock3 size={17} />до {formatMoscow(restaurant.stopUntil)}</div> : null}
               </div>
-            </div>
-          ) : null}
-
-          {flow === 'duration' && selectedRestaurant ? (
-            <div className="flow-block">
-              <div className="step-label"><span>2</span> Выберите срок</div>
-              <p><strong>{selectedRestaurant.shortName}</strong> · {selectedRestaurant.address}</p>
-              <div className="duration-grid">
-                {(['30 минут', '1 час', '2 часа', 'До 22:00 (МСК)'] as Duration[]).map((value) => (
-                  <button key={value} onClick={() => selectDuration(value)} data-testid={`button-duration-${value}`}>
-                    <Clock3 size={18} />{value}
-                  </button>
-                ))}
-                <button className="custom-duration" onClick={openCustomDateTime} data-testid="button-custom-date-time">
-                  <CalendarClock size={18} />Выбрать дату и время
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {flow === 'custom' && selectedRestaurant ? (
-            <div className="flow-block custom-date-time-panel" data-testid="panel-custom-date-time">
-              <div className="step-label"><span>3</span> Дата и время окончания</div>
-              <p><strong>{selectedRestaurant.shortName}</strong> · Укажите срок по часовому поясу Europe/Moscow.</p>
-              <div className="date-time-fields">
-                <label>
-                  <span>Дата</span>
-                  <input
-                    type="date"
-                    min={currentMoscowDate}
-                    value={customDate}
-                    onChange={(event) => {
-                      setCustomDate(event.target.value);
-                      setCustomError('');
-                    }}
-                    data-testid="input-custom-stop-date"
-                  />
-                </label>
-                <label>
-                  <span>Время (МСК)</span>
-                  <input
-                    type="time"
-                    step="900"
-                    min={customDate === currentMoscowDate ? minimumTimeToday ?? undefined : undefined}
-                    disabled={isTodayUnavailable}
-                    value={customTime}
-                    onChange={(event) => {
-                      setCustomTime(event.target.value);
-                      setCustomError('');
-                    }}
-                    data-testid="input-custom-stop-time"
-                  />
-                </label>
-              </div>
-              <p className="form-hint">{isTodayUnavailable ? 'На сегодня подходящих интервалов уже нет — выберите следующий день.' : 'Доступны будущие дата и время; минуты — 00, 15, 30 или 45.'}</p>
-              {customError ? <p className="form-error" role="alert">{customError}</p> : null}
-              <div className="form-actions">
-                <button className="secondary-button" onClick={() => setFlow('duration')} data-testid="button-back-to-durations">Назад</button>
-                <button className="primary-button" onClick={continueWithCustomDateTime} data-testid="button-continue-custom-date-time">
-                  Продолжить <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {flow === 'enableConfirmation' && selectedRestaurant ? (
-            <div className="flow-block confirmation" data-testid="panel-enable-confirmation">
-              <div className="step-label"><span>2</span> Подтверждение включения</div>
-              <div className="confirmation-card">
-                <span>Ресторан</span>
-                <strong>{selectedRestaurant.name}</strong>
-                <span>Действие</span>
-                <strong>Включить СамЗаберу</strong>
-              </div>
-              <p>После подтверждения персональные правила остановки ресторана будут отключены в Bitrix. Групповые правила не изменяются.</p>
-              <div className="form-actions">
-                <button className="secondary-button" onClick={editEnable} data-testid="button-edit-test-enable">Изменить</button>
-                <button className="secondary-button" onClick={resetFlow} data-testid="button-cancel-test-enable">Отмена</button>
-                <button className="primary-button" onClick={() => void confirmTestEnable()} disabled={createRequest.isPending} data-testid="button-confirm-test-enable">
-                  <CheckCircle2 size={18} />Подтвердить включение
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {flow === 'confirmation' && selectedRestaurant && duration && confirmationEndAt ? (
-            <div className="flow-block confirmation" data-testid="panel-confirmation">
-              <div className="step-label"><span>4</span> Подтверждение</div>
-              <div className="confirmation-card">
-                <span>Ресторан</span>
-                <strong>{selectedRestaurant.name}</strong>
-                <span>Окончание остановки</span>
-                <strong>{formatMoscow(confirmationEndAt)} (МСК)</strong>
-                {duration === 'custom' ? <><span>Продолжительность</span><strong>{customDurationText(confirmationEndAt)}</strong></> : null}
-              </div>
-              <p>После подтверждения правило остановки будет создано или обновлено в Bitrix.</p>
-              {customError ? <p className="form-error" role="alert">{customError}</p> : null}
-              <div className="form-actions">
-                <button className="secondary-button" onClick={editStop} data-testid="button-edit-test-stop">Изменить</button>
-                <button className="secondary-button" onClick={resetFlow} data-testid="button-cancel-test-stop">Отмена</button>
-                <button className="primary-button" onClick={confirmTestStop} data-testid="button-confirm-test-stop">
-                  <CheckCircle2 size={18} />Подтвердить остановку
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <aside className="bot-note">
-          <div className="bot-note-icon"><MessageSquareText size={21} /></div>
-          <p className="eyebrow">TELEGRAM BOT</p>
-          <h2>Бот подключён к секрету окружения</h2>
-          <ul>
-            <li><CheckCircle2 size={16} />/start показывает кнопочное меню</li>
-            <li><CheckCircle2 size={16} />/id сообщает Telegram user ID</li>
-            <li><CheckCircle2 size={16} />Свободный текст направляется к кнопкам</li>
-          </ul>
-          <div className="integration-banner"><ShieldCheck size={16} />Реальный Bitrix API подключён</div>
-        </aside>
-      </section>
-
-      {!(flow === 'restaurant' && actionMode === 'enable') ? <section className="status-section" id="current-status">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">ТЕКУЩИЙ СТАТУС</p>
-            <h2>Рестораны операционного управляющего</h2>
-          </div>
-          {isLoading ? <span className="loading-label">Обновляем данные…</span> : <span className="source-label">Источник: журнал операций бота</span>}
-        </div>
-        <div className="restaurant-table">
-          {restaurants.map((restaurant) => (
-            <article className="restaurant-row" key={restaurant.id} data-testid={`card-restaurant-${restaurant.id}`}>
-              <span className={`status-orb ${restaurant.isRunning ? 'running' : 'stopped'}`} />
-              <div className="restaurant-meta">
-                <strong>{restaurant.shortName}</strong>
-                <span><MapPin size={14} />{restaurant.address}</span>
-              </div>
-              <div className={`restaurant-state ${restaurant.isRunning ? 'good' : 'paused'}`} data-testid={`status-restaurant-${restaurant.id}`}>
-                {restaurant.isRunning ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-                {statusText(restaurant)}
-              </div>
+              <button className={restaurant.isRunning ? 'restaurant-action stop' : 'restaurant-action enable'} type="button" onClick={() => openAction(restaurant)}>{restaurant.isRunning ? 'Остановить' : 'Включить'}</button>
             </article>
           ))}
         </div>
-      </section> : null}
+        {!isLoading && visibleRestaurants.length === 0 ? <div className="empty-state">По вашему запросу рестораны не найдены.</div> : null}
+      </section>
+
+      <section className="journal-preview">
+        <div className="section-heading"><h2>Последние действия</h2></div>
+        {summary.data?.recentRequests?.length ? <div className="journal-list">
+          {summary.data.recentRequests.map((request) => <article className="journal-row" key={request.id}><div><strong>{request.restaurantName}</strong><span>{request.action === 'STOP' ? 'Остановка' : 'Включение'} · {formatMoscow(request.requestedAt)}</span></div><span className="request-status">{requestStatusLabel(request.status)}</span></article>)}
+        </div> : <div className="empty-state">Действий пока нет.</div>}
+      </section>
+
+      {pending ? <div className="modal-backdrop" role="presentation" onMouseDown={closeAction}>
+        <section className="action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" type="button" onClick={closeAction} aria-label="Закрыть"><X size={23} /></button>
+          <div className={pending.action === 'STOP' ? 'modal-icon stop' : 'modal-icon enable'}>{pending.action === 'STOP' ? <PauseCircle size={48} /> : <PlayCircle size={48} />}</div>
+          <h2>{pending.action === 'STOP' ? 'Остановить СамЗаберу?' : 'Включить СамЗаберу?'}</h2>
+          <strong className="modal-restaurant">{pending.restaurant.shortName}</strong><p className="modal-address">{pending.restaurant.address}</p>
+          {pending.action === 'STOP' ? <div className="stop-timing">
+            <span className="field-label">Остановить на</span>
+            <div className="duration-grid">{durationOptions.map((value) => <button key={value} className={duration === value ? 'active' : ''} type="button" onClick={() => selectDuration(value)}>{value}</button>)}</div>
+            {duration === 'Своя дата' ? <div className="date-time-fields">
+              <label><span>Дата</span><input type="date" min={currentMoscowDate} value={customDate} onChange={(event) => { setCustomDate(event.target.value); setActionError(''); }} /></label>
+              <label><span>Время (МСК)</span><input type="time" step="900" min={customDate === currentMoscowDate ? minimumTimeToday ?? undefined : undefined} value={customTime} onChange={(event) => { setCustomTime(event.target.value); setActionError(''); }} /></label>
+            </div> : <p className="selected-until">До {formatMoscow(selectedEndAt)}</p>}
+          </div> : null}
+          {actionError ? <p className="modal-error" role="alert">{actionError}</p> : null}
+          <label className="confirmation-box"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>Подтверждаю изменение статуса ресторана</span></label>
+          <div className="modal-actions"><button className="cancel-button" type="button" onClick={closeAction} disabled={createRequest.isPending}>Отмена</button><button className={pending.action === 'STOP' ? 'confirm-button stop' : 'confirm-button enable'} type="button" onClick={() => void submitAction()} disabled={!confirmed || createRequest.isPending || (pending.action === 'STOP' && !selectedEndAt)}>{createRequest.isPending ? 'Выполняем…' : 'Подтвердить'}</button></div>
+        </section>
+      </div> : null}
     </AppShell>
   );
 }
@@ -609,107 +270,17 @@ function Overview() {
 function Journal() {
   const requests = useListSamzaberuRequests({ operatorId });
   const rows = requests.data ?? [];
-  return (
-    <AppShell>
-      <PageHeader eyebrow="АУДИТ" title="Журнал запросов" subtitle="Цепочка состояний и будущие аварийные эскалации." />
-      <section className="journal-card">
-        <div className="journal-head"><ClipboardList size={19} /><span>Запросы текущего операционного управляющего</span></div>
-        {rows.length === 0 ? (
-          <div className="empty-state journal-empty" data-testid="text-empty-request-journal">
-            <ClipboardList size={28} />
-            <h3>Запросов ещё нет</h3>
-            <p>После первого действия здесь появятся REQUESTED, PROCESSING, COMPLETED_AUTO, ESCALATED и COMPLETED_MANUAL.</p>
-          </div>
-        ) : (
-          rows.map((request: SamzaberuRequest) => (
-            <div className="journal-row" key={request.id} data-testid={`row-request-${request.id}`}>
-              <span className={`request-status ${request.status.toLowerCase()}`}>{request.status}</span>
-              <div><strong>{request.restaurantName}</strong><small>{request.message}</small></div>
-              <time>{formatMoscow(request.requestedAt)}</time>
-            </div>
-          ))
-        )}
-      </section>
-    </AppShell>
-  );
+  return <AppShell><div className="title-row"><div><h1>Журнал действий</h1><p>История остановок и включений ресторанов</p></div></div>{rows.length ? <div className="journal-list page-card">{rows.map((request) => <article className="journal-row" key={request.id}><div><strong>{request.restaurantName}</strong><span>{request.message} · {formatMoscow(request.requestedAt)}</span></div><span className="request-status">{requestStatusLabel(request.status)}</span></article>)}</div> : <div className="empty-state">Действий пока нет.</div>}</AppShell>;
 }
 
 function Access() {
   const restaurants = useListRestaurants({ operatorId });
   const access = useGetSamzaberuAccess();
-  const items = restaurants.data ?? fallbackRestaurants;
-  return (
-    <AppShell>
-      <PageHeader eyebrow="INSIDE · ДОСТУПЫ" title="Закреплённые рестораны" subtitle="Полный доступ видит весь справочник; персональный доступ ОУ — только назначенные рестораны." />
-      <section className="access-assignments" data-testid="section-configured-access">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">НАСТРОЙКА ДОСТУПОВ</p>
-            <h2>Операционные управляющие</h2>
-          </div>
-          <span className="source-label">Telegram ID не отображается</span>
-        </div>
-        <div className="access-assignment-list">
-          {(access.data?.operators ?? []).map((entry) => (
-            <article className="access-assignment-row" key={entry.operatorId} data-testid={`access-operator-${entry.operatorId}`}>
-              <div>
-                <strong>{entry.operatorName}</strong>
-                <small>{entry.accessMode === 'full' ? 'Полный приёмочный доступ' : 'Доступ только к назначенным ресторанам'}</small>
-              </div>
-              <span className={entry.configured ? 'access-configured' : 'access-pending'}>
-                {entry.configured ? 'Настроен' : 'Не настроен'}
-              </span>
-              <strong className="access-count">{entry.restaurantCount} ресторанов</strong>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="access-grid">
-        <div className="access-card">
-          <LockKeyhole size={20} />
-          <h2>Только ОУ</h2>
-          <p>Директора не получают доступ к управлению. Бот выдаёт меню только Telegram user ID из разрешённого списка.</p>
-        </div>
-        <div className="access-card">
-          <Menu size={20} />
-          <h2>Кнопочный сценарий</h2>
-          <p>Свободный текст не интерпретируется. Для любых действий используются пункты меню и кнопки выбора.</p>
-        </div>
-        <div className="access-card">
-          <AlertTriangle size={20} />
-          <h2>Аварийный маршрут</h2>
-          <p>При невозможности подтвердить действие запрос будет готов к отправке ответственному и в рабочую группу.</p>
-        </div>
-      </section>
-      <section className="status-section compact">
-        <div className="section-heading"><div><p className="eyebrow">СПРАВОЧНИК</p><h2>59 ресторанов и назначенные ОУ</h2></div><span className="source-label">Полный доступ ко всем точкам</span></div>
-        <div className="restaurant-table">
-          {items.map((restaurant) => (
-            <article className="restaurant-row" key={restaurant.id} data-testid={`card-access-restaurant-${restaurant.id}`}>
-              <span className="status-orb access" />
-              <div className="restaurant-meta"><strong>{restaurant.shortName}</strong><span><MapPin size={14} />{restaurant.address}</span></div>
-              <span className="source-label">{restaurant.operatorName}</span>
-            </article>
-          ))}
-        </div>
-      </section>
-    </AppShell>
-  );
+  return <AppShell><div className="title-row"><div><h1>Доступы</h1><p>Операционные управляющие и закреплённые рестораны</p></div></div><section className="access-grid">{(access.data?.operators ?? []).map((entry) => <article className="access-card" key={entry.operatorId}><LockKeyhole size={22} /><div><strong>{entry.operatorName}</strong><span>{entry.accessMode === 'full' ? 'Все рестораны' : 'Только закреплённые рестораны'}</span></div><b>{entry.restaurantCount}</b></article>)}</section><section className="restaurant-section"><div className="section-heading"><h2>Доступные рестораны</h2><span>{restaurants.data?.length ?? 0}</span></div><div className="restaurant-grid compact">{(restaurants.data ?? []).map((restaurant) => <article className="restaurant-card" key={restaurant.id}><div className="status-pill access"><MapPin size={17} /><span>{restaurant.shortName}</span></div><p>{restaurant.address}</p></article>)}</div></section></AppShell>;
 }
 
 function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <Switch>
-        <Route path="/" component={Overview} />
-        <Route path="/journal" component={Journal} />
-        <Route path="/access" component={Access} />
-        <Route>
-          <Overview />
-        </Route>
-      </Switch>
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={queryClient}><Switch><Route path="/" component={Overview} /><Route path="/journal" component={Journal} /><Route path="/access" component={Access} /><Route><Overview /></Route></Switch></QueryClientProvider>;
 }
 
 export default App;
