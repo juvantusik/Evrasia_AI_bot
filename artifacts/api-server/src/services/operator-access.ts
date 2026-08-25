@@ -6,6 +6,8 @@ export const NATALIA_OPERATOR_ID = "natalia-andreevna";
 export const NATALIA_OPERATOR_NAME = "Наталья Андреевна";
 export const EKATERINA_OPERATOR_ID = "ekaterina-vasilievna";
 export const EKATERINA_OPERATOR_NAME = "Екатерина Васильевна";
+export const MARINA_OPERATOR_ID = "marina-evgenievna";
+export const MARINA_OPERATOR_NAME = "Марина Евгеньевна";
 
 const configuredFullAccessTelegramIds = (): string[] =>
   (process.env.ALLOWED_TELEGRAM_USER_IDS ?? "")
@@ -28,6 +30,11 @@ const configuredEkaterinaTelegramId = (): string | null => {
   return value || null;
 };
 
+const configuredMarinaTelegramId = (): string | null => {
+  const value = process.env.MARINA_TELEGRAM_ID?.trim();
+  return value || null;
+};
+
 export const resolveTelegramOperatorId = (telegramUserId: string): string | null => {
   const normalizedTelegramUserId = telegramUserId.trim();
   if (!normalizedTelegramUserId) return null;
@@ -47,6 +54,11 @@ export const resolveTelegramOperatorId = (telegramUserId: string): string | null
     return EKATERINA_OPERATOR_ID;
   }
 
+  const marinaTelegramId = configuredMarinaTelegramId();
+  if (marinaTelegramId === normalizedTelegramUserId) {
+    return MARINA_OPERATOR_ID;
+  }
+
   return configuredFullAccessTelegramIds().includes(normalizedTelegramUserId)
     ? normalizedTelegramUserId
     : null;
@@ -56,13 +68,15 @@ export const isAllowedOperatorId = (operatorId: string): boolean =>
   configuredFullAccessTelegramIds().includes(operatorId) ||
   (operatorId === VALERIA_OPERATOR_ID && configuredValeriaTelegramId() !== null) ||
   (operatorId === NATALIA_OPERATOR_ID && configuredNataliaTelegramId() !== null) ||
-  (operatorId === EKATERINA_OPERATOR_ID && configuredEkaterinaTelegramId() !== null);
+  (operatorId === EKATERINA_OPERATOR_ID && configuredEkaterinaTelegramId() !== null) ||
+  (operatorId === MARINA_OPERATOR_ID && configuredMarinaTelegramId() !== null);
 
 export const hasConfiguredTelegramAccess = (): boolean =>
   configuredFullAccessTelegramIds().length > 0 ||
   configuredValeriaTelegramId() !== null ||
   configuredNataliaTelegramId() !== null ||
-  configuredEkaterinaTelegramId() !== null;
+  configuredEkaterinaTelegramId() !== null ||
+  configuredMarinaTelegramId() !== null;
 
 export type OperatorAccessView = {
   operatorId: string;
@@ -105,6 +119,15 @@ export const getOperatorAccessOverview = (): OperatorAccessView[] => [
       (restaurant) => restaurant.operatorId === EKATERINA_OPERATOR_ID,
     ).length,
     configured: configuredEkaterinaTelegramId() !== null,
+    accessMode: "assigned",
+  },
+  {
+    operatorId: MARINA_OPERATOR_ID,
+    operatorName: MARINA_OPERATOR_NAME,
+    restaurantCount: restaurantDirectory.filter(
+      (restaurant) => restaurant.operatorId === MARINA_OPERATOR_ID,
+    ).length,
+    configured: configuredMarinaTelegramId() !== null,
     accessMode: "assigned",
   },
 ];

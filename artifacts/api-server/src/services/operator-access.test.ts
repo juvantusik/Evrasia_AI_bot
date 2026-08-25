@@ -4,6 +4,7 @@ import {
   EKATERINA_OPERATOR_ID,
   getOperatorAccessOverview,
   isAllowedOperatorId,
+  MARINA_OPERATOR_ID,
   NATALIA_OPERATOR_ID,
   resolveTelegramOperatorId,
 } from "./operator-access";
@@ -47,5 +48,26 @@ test("Ekaterina Telegram ID resolves to her 13 assigned restaurants", () => {
   } finally {
     if (previousEkaterinaId === undefined) delete process.env.EKATERINA_TELEGRAM_ID;
     else process.env.EKATERINA_TELEGRAM_ID = previousEkaterinaId;
+  }
+});
+
+test("Marina Telegram ID resolves to her 14 assigned restaurants", () => {
+  const previousMarinaId = process.env.MARINA_TELEGRAM_ID;
+  process.env.MARINA_TELEGRAM_ID = "1112785891";
+
+  try {
+    assert.equal(resolveTelegramOperatorId("1112785891"), MARINA_OPERATOR_ID);
+    assert.equal(isAllowedOperatorId(MARINA_OPERATOR_ID), true);
+    assert.equal(resolveTelegramOperatorId("1112785892"), null);
+
+    const marinaOverview = getOperatorAccessOverview().find(
+      (operator) => operator.operatorId === MARINA_OPERATOR_ID,
+    );
+    assert.equal(marinaOverview?.configured, true);
+    assert.equal(marinaOverview?.accessMode, "assigned");
+    assert.equal(marinaOverview?.restaurantCount, 14);
+  } finally {
+    if (previousMarinaId === undefined) delete process.env.MARINA_TELEGRAM_ID;
+    else process.env.MARINA_TELEGRAM_ID = previousMarinaId;
   }
 });
