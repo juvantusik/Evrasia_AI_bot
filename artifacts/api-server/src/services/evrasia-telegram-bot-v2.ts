@@ -101,8 +101,14 @@ type PlatformSession = {
 };
 
 type GroupClarification = {
-  problem: string;
+  problem?: string;
+  phone?: string;
   createdAt: number;
+};
+
+type ExtractedPhone = {
+  normalized: string;
+  raw: string;
 };
 
 const adminMenu: TelegramKeyboard = [
@@ -128,13 +134,22 @@ const parseTelegramId = (value: string): string | null => {
 const escapeHtml = (value: string): string =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const extractRussianPhoneFromText = (text: string): string | null => {
+const extractRussianPhoneFromText = (text: string): ExtractedPhone | null => {
   const candidates = text.match(/\+?\d[\d\s().-]{8,24}\d/g) ?? [];
   for (const candidate of candidates) {
     const normalized = normalizeRussianPhone(candidate);
-    if (normalized) return normalized;
+    if (normalized) return { normalized, raw: candidate };
   }
   return null;
+};
+
+const problemWithoutPhone = (text: string, extracted: ExtractedPhone | null): string => {
+  if (!extracted) return text.trim();
+  return text
+    .replace(extracted.raw, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, "")
+    .trim();
 };
 
 class EvrasiaTelegramClientV2 implements TelegramBotClientPort {
@@ -323,14 +338,17 @@ export class EvrasiaTelegramBotV2 {
 
     const clarificationKey = this.clarificationKey(message.chat.id, message.from.id);
     const pending = this.getPendingClarification(message.chat.id, message.from.id);
-    const normalized = extractRussianPhoneFromText(text);
+    const extracted = extractRussianPhoneFromText(text);
+    const normalized = extracted?.normalized ?? pending?.phone ?? null;
+    const currentProblem = problemWithoutPhone(text, extracted);
+    const currentProblemIsUseful = currentProblem.length >= 3;
+    const problem = pending?.problem ?? (currentProblemIsUseful ? currentProblem : undefined);
+
     if (!normalized) {
-      if (!pending) {
-        this.groupClarifications.set(clarificationKey, {
-          problem: text,
-          createdAt: Date.now(),
-        });
-      }
+      this.groupClarifications.set(clarificationKey, {
+        problem: problem ?? text,
+        createdAt: Date.now(),
+      });
       await this.client.sendReply(
         message.chat.id,
         "Укажите, пожалуйста, номер телефона, по которому возникла проблема. Например: +7 921 123-45-67.",
@@ -341,12 +359,10 @@ export class EvrasiaTelegramBotV2 {
 
     const matches = findCorporatePhones(normalized).filter((record) => record.operator === "MEGAFON");
     if (matches.length === 0) {
-      if (!pending) {
-        this.groupClarifications.set(clarificationKey, {
-          problem: text,
-          createdAt: Date.now(),
-        });
-      }
+      this.groupClarifications.set(clarificationKey, {
+        problem,
+        createdAt: Date.now(),
+      });
       await this.client.sendReply(
         message.chat.id,
         `Номер ${formatPhone(normalized)} не найден в справочнике МегаФона. Проверьте, пожалуйста, номер. Если он указан верно — сообщите администратору, чтобы добавить его в базу.`,
@@ -356,15 +372,28 @@ export class EvrasiaTelegramBotV2 {
     }
 
     if (matches.length > 1) {
+      this.groupClarifications.delete(clarificationKey);
       await this.client.sendReply(
         message.chat.id,
-        `Номер ${formatPhone(normalized)} найден в нескольких записях. Уточните, пожалуйста, юридическое лицо или ИНН, чтобы обращение можно было сформировать однозначно.`,
+        `Номер ${formatPhone(normalized)} найден в нескольких записях справочника. Обратитесь, пожалуйста, к администратору для проверки привязки номера — бот не будет выбирать юридическое лицо автоматически.`,
         message.message_id,
       );
       return;
     }
 
-    const problem = pending?.problem ?? text;
+    if (!problem) {
+      this.groupClarifications.set(clarificationKey, {
+        phone: normalized,
+        createdAt: Date.now(),
+      });
+      await this.client.sendReply(
+        message.chat.id,
+        `Номер ${formatPhone(normalized)} найден. Опишите, пожалуйста, какая проблема возникла с этим номером.`,
+        message.message_id,
+      );
+      return;
+    }
+
     this.groupClarifications.delete(clarificationKey);
     await this.client.sendHtmlMessage(
       message.chat.id,
