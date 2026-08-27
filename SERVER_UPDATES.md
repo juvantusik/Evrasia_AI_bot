@@ -8,8 +8,8 @@ modern builder and publishes it to GitHub Container Registry (GHCR).
 
 Every push to `main` publishes:
 
-- `ghcr.io/juvantusik/samzaberu-bot:latest`
-- `ghcr.io/juvantusik/samzaberu-bot:sha-<short-commit-sha>`
+- `ghcr.io/juvantusik/evrasia_ai_bot:latest`
+- `ghcr.io/juvantusik/evrasia_ai_bot:sha-<short-commit-sha>`
 
 The runtime stage remains based on `node:22-bullseye-slim`, which is compatible
 with the existing production deployment.
@@ -28,10 +28,27 @@ with the existing production deployment.
 3. Set this image in `/home/tech/samzaberu-bot/docker-compose.server.yml`:
 
    ```yaml
-   image: ghcr.io/juvantusik/samzaberu-bot:latest
+   image: ghcr.io/juvantusik/evrasia_ai_bot:latest
    ```
 
+   The application directory and Docker Compose service may keep their existing
+   `samzaberu-bot` / `samzaberu-app` names; only the GHCR image path changed after
+   the GitHub repository was renamed.
+
 4. Install `ops/update-server.sh` as `/home/tech/update-samzaberu.sh` and make it executable.
+
+## Migration after repository rename
+
+If the server was previously configured for
+`ghcr.io/juvantusik/samzaberu-bot:latest`, perform these two changes once before
+the next update:
+
+1. Replace the old image path in `/home/tech/samzaberu-bot/docker-compose.server.yml`
+   with `ghcr.io/juvantusik/evrasia_ai_bot:latest`.
+2. Replace `/home/tech/update-samzaberu.sh` with the current `ops/update-server.sh`.
+
+The updated script checks that Docker Compose references the expected GHCR image
+before changing the running container.
 
 ## Routine update
 
@@ -55,7 +72,7 @@ The script:
 If a rollback is needed after an apparently healthy release:
 
 ```bash
-sudo docker tag samzaberu-app:rollback ghcr.io/juvantusik/samzaberu-bot:latest
+sudo docker tag samzaberu-app:rollback ghcr.io/juvantusik/evrasia_ai_bot:latest
 cd /home/tech/samzaberu-bot
 sudo docker-compose -f docker-compose.server.yml up -d --no-deps --force-recreate samzaberu-app
 ```

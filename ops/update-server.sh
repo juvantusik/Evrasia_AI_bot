@@ -5,11 +5,17 @@ APP_DIR="${SAMZABERU_APP_DIR:-/home/tech/samzaberu-bot}"
 COMPOSE_FILE="${APP_DIR}/docker-compose.server.yml"
 SERVICE="samzaberu-app"
 CONTAINER="samzaberu-app"
-IMAGE="ghcr.io/juvantusik/samzaberu-bot:latest"
+IMAGE="${EVRASIA_AI_BOT_IMAGE:-ghcr.io/juvantusik/evrasia_ai_bot:latest}"
 ROLLBACK_IMAGE="samzaberu-app:rollback"
 
 if [[ ! -f "${COMPOSE_FILE}" ]]; then
   echo "Compose file not found: ${COMPOSE_FILE}" >&2
+  exit 1
+fi
+
+if ! grep -Fq "${IMAGE}" "${COMPOSE_FILE}"; then
+  echo "Compose file does not reference the expected image: ${IMAGE}" >&2
+  echo "Update ${COMPOSE_FILE} before running this script." >&2
   exit 1
 fi
 
@@ -21,7 +27,7 @@ sudo docker pull "${IMAGE}"
 
 new_image_id="$(sudo docker image inspect --format='{{.Id}}' "${IMAGE}")"
 if [[ "${current_image_id}" == "${new_image_id}" ]]; then
-  echo "SamZaberu is already up to date."
+  echo "Evrasia AI Bot is already up to date."
   exit 0
 fi
 
