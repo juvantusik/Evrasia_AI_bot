@@ -21,14 +21,24 @@ export type BotUserAccessView = BotUser & {
   corporateCommunications: boolean;
 };
 
-const superAdminIds = (): string[] =>
+const configuredSuperAdminIds = (): string[] =>
   (process.env.SUPER_ADMIN_TELEGRAM_IDS ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
 
-export const isSuperAdmin = (telegramUserId: string): boolean =>
-  superAdminIds().includes(telegramUserId.trim());
+const bootstrapSuperAdminId = (): string | null =>
+  (process.env.ALLOWED_TELEGRAM_USER_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)[0] ?? null;
+
+export const isSuperAdmin = (telegramUserId: string): boolean => {
+  const normalized = telegramUserId.trim();
+  const explicitAdmins = configuredSuperAdminIds();
+  if (explicitAdmins.length > 0) return explicitAdmins.includes(normalized);
+  return bootstrapSuperAdminId() === normalized;
+};
 
 export const upsertBotUser = async (profile: TelegramUserProfile): Promise<void> => {
   const now = new Date();
