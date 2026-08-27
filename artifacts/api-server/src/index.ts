@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { migrateDatabase } from "@workspace/db/migrate";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { initializeCorporatePhoneDirectory } from "./services/corporate-directory-admin-service";
 import {
   startEvrasiaTelegramBotV2,
   stopEvrasiaTelegramBotV2,
@@ -25,6 +26,7 @@ if (Number.isNaN(port) || port <= 0) {
 await migrateDatabase(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./drizzle"),
 );
+await initializeCorporatePhoneDirectory();
 
 const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
