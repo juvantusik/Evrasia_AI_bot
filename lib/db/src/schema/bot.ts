@@ -41,6 +41,15 @@ export const botAccessAuditTable = pgTable("bot_access_audit", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const botSettingsTable = pgTable("bot_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
 export const corporatePhoneDirectoryTable = pgTable("corporate_phone_directory", {
   phone: text("phone").primaryKey(),
   operator: text("operator").notNull(),
@@ -57,4 +66,5 @@ export const corporatePhoneDirectoryTable = pgTable("corporate_phone_directory",
 
 export type BotUser = typeof botUsersTable.$inferSelect;
 export type BotModuleAccess = typeof botModuleAccessTable.$inferSelect;
+export type BotSetting = typeof botSettingsTable.$inferSelect;
 export type CorporatePhoneDirectoryRecord = typeof corporatePhoneDirectoryTable.$inferSelect;
