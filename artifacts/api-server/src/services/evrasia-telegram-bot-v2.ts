@@ -29,7 +29,7 @@ import {
   type TelegramMessage,
 } from "./telegram-bot";
 
-const BOT_VERSION = "1.5";
+const BOT_VERSION = "1.5.1";
 const BACK_TO_ROOT = "⬅️ Главное меню";
 const SAMZABERU_BUTTON = "🍱 СамЗаберу";
 const CORPORATE_BUTTON = "📱 Корпоративная связь";
@@ -122,6 +122,15 @@ const parseTelegramId = (value: string): string | null => {
 const escapeHtml = (value: string): string =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+const extractRussianPhoneFromText = (text: string): string | null => {
+  const candidates = text.match(/\+?\d[\d\s().-]{8,24}\d/g) ?? [];
+  for (const candidate of candidates) {
+    const normalized = normalizeRussianPhone(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+};
+
 class EvrasiaTelegramClientV2 implements TelegramBotClientPort {
   constructor(private readonly token: string) {}
 
@@ -157,6 +166,17 @@ class EvrasiaTelegramClientV2 implements TelegramBotClientPort {
       reply_markup: resultKeyboard
         ? { keyboard: resultKeyboard, resize_keyboard: true, one_time_keyboard: false }
         : undefined,
+    });
+  }
+
+  sendReply(chatId: number, text: string, replyToMessageId: number): Promise<TelegramMessage> {
+    return this.call<TelegramMessage>("sendMessage", {
+      chat_id: chatId,
+      text,
+      reply_parameters: {
+        message_id: replyToMessageId,
+        allow_sending_without_reply: false,
+      },
     });
   }
 
@@ -235,22 +255,82 @@ export class EvrasiaTelegramBotV2 {
     );
   }
 
+  private buildMegafonGroupMessage(record: CorporatePhoneRecord, problem: string, user: TelegramUser): string {
+    const mention = `<a href="tg://user?id=${MEGAFON_MANAGER_TELEGRAM_ID}">${escapeHtml(MEGAFON_MANAGER_NAME)}</a>`;
+    const author = escapeHtml(displayName(user));
+    return [
+      `${mention}, добрый день.`,
+      "",
+      `ООО: ${escapeHtml(record.legalEntity || "—")}`,
+      `ИНН: ${escapeHtml(record.inn || "—")}`,
+      `Лицевой счёт: ${escapeHtml(record.accountNumber || "—")}`,
+      `Номер телефона: ${escapeHtml(formatPhone(record.phone))}`,
+      "",
+      `Проблема: ${escapeHtml(problem.trim())}`,
+      "",
+      "Прошу проверить причину.",
+      "",
+      `Обращение от: ${author}`,
+    ].join("\n");
+  }
+
   private async handleGroupMessage(message: PlatformMessage): Promise<void> {
     if (!message.from || !message.text) return;
     await this.registerUser(message.from);
     const id = telegramId(message.from);
     const text = message.text.trim();
-    if (!text.startsWith("/bind_megafon_group")) return;
 
-    if (!isSuperAdmin(id)) {
-      await this.client.sendMessage(message.chat.id, "Эту команду может выполнить только Super Admin.");
+    if (text.startsWith("/bind_megafon_group")) {
+      if (!isSuperAdmin(id)) {
+        await this.client.sendMessage(message.chat.id, "Эту команду может выполнить только Super Admin.");
+        return;
+      }
+
+      await setBotSetting(BOT_SETTING_KEYS.megafonGroupChatId, String(message.chat.id));
+      await this.client.sendMessage(
+        message.chat.id,
+        `✅ Группа «${message.chat.title ?? "Евразия Мегафон"}» привязана к модулю корпоративной связи.\n\nСделайте бота администратором группы, чтобы он мог видеть обычные сообщения сотрудников и проверять участие в группе.`,
+      );
       return;
     }
 
-    await setBotSetting(BOT_SETTING_KEYS.megafonGroupChatId, String(message.chat.id));
-    await this.client.sendMessage(
+    const boundGroupId = await getBotSetting(BOT_SETTING_KEYS.megafonGroupChatId);
+    if (!boundGroupId || String(message.chat.id) !== boundGroupId) return;
+    if (message.from.id === MEGAFON_MANAGER_TELEGRAM_ID) return;
+    if (text.startsWith("/")) return;
+
+    const normalized = extractRussianPhoneFromText(text);
+    if (!normalized) {
+      await this.client.sendReply(
+        message.chat.id,
+        "Укажите, пожалуйста, номер телефона, по которому возникла проблема. Например: +7 921 123-45-67.",
+        message.message_id,
+      );
+      return;
+    }
+
+    const matches = findCorporatePhones(normalized).filter((record) => record.operator === "MEGAFON");
+    if (matches.length === 0) {
+      await this.client.sendReply(
+        message.chat.id,
+        `Номер ${formatPhone(normalized)} не найден в справочнике МегаФона. Проверьте, пожалуйста, номер. Если он указан верно — сообщите администратору, чтобы добавить его в базу.`,
+        message.message_id,
+      );
+      return;
+    }
+
+    if (matches.length > 1) {
+      await this.client.sendReply(
+        message.chat.id,
+        `Номер ${formatPhone(normalized)} найден в нескольких записях. Уточните, пожалуйста, юридическое лицо или ИНН, чтобы обращение можно было сформировать однозначно.`,
+        message.message_id,
+      );
+      return;
+    }
+
+    await this.client.sendHtmlMessage(
       message.chat.id,
-      `✅ Группа «${message.chat.title ?? "Евразия Мегафон"}» привязана к модулю корпоративной связи.\n\nДля надёжной проверки участников сделайте бота администратором этой группы.`,
+      this.buildMegafonGroupMessage(matches[0]!, text, message.from),
     );
   }
 
@@ -478,23 +558,7 @@ export class EvrasiaTelegramBotV2 {
       return;
     }
 
-    const mention = `<a href="tg://user?id=${MEGAFON_MANAGER_TELEGRAM_ID}">${escapeHtml(MEGAFON_MANAGER_NAME)}</a>`;
-    const author = escapeHtml(displayName(user));
-    const fields = [
-      `${mention}, добрый день.`,
-      "",
-      `ООО: ${escapeHtml(record.legalEntity || "—")}`,
-      `ИНН: ${escapeHtml(record.inn || "—")}`,
-      `Лицевой счёт: ${escapeHtml(record.accountNumber || "—")}`,
-      `Номер телефона: ${escapeHtml(formatPhone(record.phone))}`,
-      "",
-      `Проблема: ${escapeHtml(problem.trim())}`,
-      "",
-      "Прошу проверить причину.",
-      "",
-      `Обращение от: ${author}`,
-    ];
-    await this.client.sendHtmlMessage(groupChatId, fields.join("\n"));
+    await this.client.sendHtmlMessage(groupChatId, this.buildMegafonGroupMessage(record, problem, user));
     this.sessions.set(chatId, { step: "ROOT" });
     await this.client.sendMessage(chatId, `✅ Обращение отправлено в группу «Евразия Мегафон» и адресовано менеджеру ${MEGAFON_MANAGER_NAME}.`, await this.rootMenu(user));
   }
@@ -543,8 +607,8 @@ export class EvrasiaTelegramBotV2 {
     await this.client.sendMessage(
       chatId,
       groupId
-        ? `📡 Группа МегаФона уже привязана.\nChat ID: ${groupId}\n\nЧтобы перепривязать другую группу, добавьте туда бота и отправьте /bind_megafon_group от имени Super Admin.`
-        : `📡 Группа МегаФона пока не привязана.\n\n1. Добавьте этого бота в группу «Евразия Мегафон».\n2. Сделайте его администратором.\n3. Отправьте в группе команду /bind_megafon_group.\n\nChat ID сохранится автоматически — на сервер заходить не нужно.`,
+        ? `📡 Группа МегаФона уже привязана.\nChat ID: ${groupId}\n\nБот обрабатывает обычные сообщения только в этой группе. Чтобы перепривязать другую группу, добавьте туда бота и отправьте /bind_megafon_group от имени Super Admin.`
+        : `📡 Группа МегаФона пока не привязана.\n\n1. Добавьте этого бота в группу «Евразия Мегафон».\n2. Сделайте его администратором, чтобы он видел обычные сообщения сотрудников.\n3. Отправьте в группе команду /bind_megafon_group.\n\nChat ID сохранится автоматически — на сервер заходить не нужно.`,
       adminMenu,
     );
   }
