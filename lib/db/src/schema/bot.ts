@@ -51,20 +51,49 @@ export const botSettingsTable = pgTable("bot_settings", {
 });
 
 export const corporatePhoneDirectoryTable = pgTable("corporate_phone_directory", {
-  phone: text("phone").primaryKey(),
+  id: text("id").primaryKey(),
+  phone: text("phone").notNull(),
   operator: text("operator").notNull(),
   legalEntity: text("legal_entity").notNull(),
-  inn: text("inn").notNull(),
-  accountNumber: text("account_number").notNull(),
+  inn: text("inn"),
+  accountNumber: text("account_number"),
   restaurantName: text("restaurant_name"),
+  lineType: text("line_type"),
+  subscriberName: text("subscriber_name"),
   active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
 
+export const corporateLegalEntitiesTable = pgTable("corporate_legal_entities", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  inn: text("inn"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const corporatePhoneAuditTable = pgTable("corporate_phone_audit", {
+  id: text("id").primaryKey(),
+  action: text("action").notNull(),
+  adminTelegramUserId: text("admin_telegram_user_id").notNull(),
+  phoneRecordId: text("phone_record_id"),
+  phone: text("phone").notNull(),
+  beforeState: text("before_state"),
+  afterState: text("after_state"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type BotUser = typeof botUsersTable.$inferSelect;
 export type BotModuleAccess = typeof botModuleAccessTable.$inferSelect;
 export type BotSetting = typeof botSettingsTable.$inferSelect;
 export type CorporatePhoneDirectoryRecord = typeof corporatePhoneDirectoryTable.$inferSelect;
+export type CorporateLegalEntity = typeof corporateLegalEntitiesTable.$inferSelect;
+export type CorporatePhoneAudit = typeof corporatePhoneAuditTable.$inferSelect;

@@ -1,14 +1,41 @@
 import {
-  corporatePhoneDirectory,
+  corporatePhoneDirectory as bundledCorporatePhoneDirectory,
   type CorporatePhoneRecord,
 } from "../data/corporate-phone-directory";
 
-const byPhone = new Map<string, CorporatePhoneRecord[]>();
-for (const record of corporatePhoneDirectory) {
-  const bucket = byPhone.get(record.phone) ?? [];
-  bucket.push(record);
-  byPhone.set(record.phone, bucket);
-}
+let currentDirectory: CorporatePhoneRecord[] = [];
+let byPhone = new Map<string, CorporatePhoneRecord[]>();
+
+export const DIRECTORY_STATS = {
+  total: 0,
+  megafon: 0,
+  t2: 0,
+  ambiguousPhones: 0,
+};
+
+const rebuildDirectoryIndex = (records: CorporatePhoneRecord[]): void => {
+  currentDirectory = records.map((record) => ({ ...record }));
+  byPhone = new Map<string, CorporatePhoneRecord[]>();
+  for (const record of currentDirectory) {
+    const bucket = byPhone.get(record.phone) ?? [];
+    bucket.push(record);
+    byPhone.set(record.phone, bucket);
+  }
+
+  DIRECTORY_STATS.total = currentDirectory.length;
+  DIRECTORY_STATS.megafon = currentDirectory.filter((record) => record.operator === "MEGAFON").length;
+  DIRECTORY_STATS.t2 = currentDirectory.filter((record) => record.operator === "T2").length;
+  DIRECTORY_STATS.ambiguousPhones = [...byPhone.values()].filter((recordsForPhone) => recordsForPhone.length > 1).length;
+};
+
+export const replaceCorporatePhoneDirectory = (records: CorporatePhoneRecord[]): void => {
+  rebuildDirectoryIndex(records);
+};
+
+export const getCorporatePhoneDirectorySnapshot = (): CorporatePhoneRecord[] =>
+  currentDirectory.map((record) => ({ ...record }));
+
+rebuildDirectoryIndex(bundledCorporatePhoneDirectory);
 
 export const normalizeRussianPhone = (value: string): string | null => {
   const digits = value.replace(/\D/g, "");
@@ -73,12 +100,5 @@ export const formatProblemMessage = (
     "",
     "Прошу проверить причину и помочь с устранением.",
   ].join("\n");
-
-export const DIRECTORY_STATS = {
-  total: corporatePhoneDirectory.length,
-  megafon: corporatePhoneDirectory.filter((record) => record.operator === "MEGAFON").length,
-  t2: corporatePhoneDirectory.filter((record) => record.operator === "T2").length,
-  ambiguousPhones: [...byPhone.values()].filter((records) => records.length > 1).length,
-};
 
 export type { CorporatePhoneRecord };
