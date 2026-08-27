@@ -9,6 +9,7 @@ import {
 import { desc, eq } from "drizzle-orm";
 
 export const CORPORATE_COMMUNICATIONS_MODULE = "corporate_communications";
+export const DEFAULT_SECONDARY_DIRECTORY_EDITOR_ID = "758415513";
 
 export type TelegramUserProfile = {
   id: string;
@@ -33,11 +34,29 @@ const bootstrapSuperAdminId = (): string | null =>
     .map((value) => value.trim())
     .filter(Boolean)[0] ?? null;
 
+const configuredDirectoryEditorIds = (): string[] =>
+  (process.env.CORPORATE_DIRECTORY_EDITOR_TELEGRAM_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+const defaultDirectoryEditorIds = (): string[] => {
+  const primaryAdminId = configuredSuperAdminIds()[0] ?? bootstrapSuperAdminId();
+  return [...new Set([primaryAdminId, DEFAULT_SECONDARY_DIRECTORY_EDITOR_ID].filter(Boolean) as string[])];
+};
+
 export const isSuperAdmin = (telegramUserId: string): boolean => {
   const normalized = telegramUserId.trim();
   const explicitAdmins = configuredSuperAdminIds();
   if (explicitAdmins.length > 0) return explicitAdmins.includes(normalized);
   return bootstrapSuperAdminId() === normalized;
+};
+
+export const canEditCorporateDirectory = (telegramUserId: string): boolean => {
+  const normalized = telegramUserId.trim();
+  const explicitlyConfigured = configuredDirectoryEditorIds();
+  const allowedIds = explicitlyConfigured.length > 0 ? explicitlyConfigured : defaultDirectoryEditorIds();
+  return allowedIds.includes(normalized);
 };
 
 export const upsertBotUser = async (profile: TelegramUserProfile): Promise<void> => {
