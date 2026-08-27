@@ -3,7 +3,10 @@ import { logger } from "./lib/logger";
 import { migrateDatabase } from "@workspace/db/migrate";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startTelegramBot, stopTelegramBot } from "./services/telegram-bot";
+import {
+  startEvrasiaTelegramBotV2,
+  stopEvrasiaTelegramBotV2,
+} from "./services/evrasia-telegram-bot-v2";
 
 const rawPort = process.env["PORT"];
 
@@ -25,7 +28,7 @@ await migrateDatabase(
 
 const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
-  startTelegramBot();
+  startEvrasiaTelegramBotV2();
 });
 
 server.on("error", (err) => {
@@ -48,7 +51,7 @@ const shutdown = (signal: NodeJS.Signals): void => {
   void (async () => {
     try {
       await Promise.all([
-        stopTelegramBot(),
+        stopEvrasiaTelegramBotV2(),
         new Promise<void>((resolve, reject) => {
           server.close((err) => {
             if (err) reject(err);
