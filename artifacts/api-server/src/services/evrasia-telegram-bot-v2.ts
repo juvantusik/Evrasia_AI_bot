@@ -42,6 +42,7 @@ const ADMIN_MEGAFON_BUTTON = "📡 Группа МегаФона";
 const MEGAFON_MANAGER_TELEGRAM_ID = 254113583;
 const MEGAFON_MANAGER_NAME = "Вячеслав Сперанский";
 const MEGAFON_GROUP_INVITE_URL = "https://t.me/+ZyirzE_Pth0zMmFi";
+const GROUP_CLARIFICATION_TTL_MS = 30 * 60 * 1000;
 
 const T2_MANAGER_NAME = "Ольга Антышева";
 const T2_MANAGER_PHONE = "+79013011016";
@@ -97,6 +98,11 @@ type PlatformSession = {
   step: SessionStep;
   corporateRecord?: CorporatePhoneRecord;
   corporateCandidates?: CorporatePhoneRecord[];
+};
+
+type GroupClarification = {
+  problem: string;
+  createdAt: number;
 };
 
 const adminMenu: TelegramKeyboard = [
@@ -216,6 +222,7 @@ class EvrasiaTelegramClientV2 implements TelegramBotClientPort {
 
 export class EvrasiaTelegramBotV2 {
   private readonly sessions = new Map<number, PlatformSession>();
+  private readonly groupClarifications = new Map<string, GroupClarification>();
   private readonly samzaberuBot: TelegramBot;
   private polling = false;
   private abortController: AbortController | null = null;
@@ -274,6 +281,21 @@ export class EvrasiaTelegramBotV2 {
     ].join("\n");
   }
 
+  private clarificationKey(chatId: number, userId: number): string {
+    return `${chatId}:${userId}`;
+  }
+
+  private getPendingClarification(chatId: number, userId: number): GroupClarification | undefined {
+    const key = this.clarificationKey(chatId, userId);
+    const pending = this.groupClarifications.get(key);
+    if (!pending) return undefined;
+    if (Date.now() - pending.createdAt > GROUP_CLARIFICATION_TTL_MS) {
+      this.groupClarifications.delete(key);
+      return undefined;
+    }
+    return pending;
+  }
+
   private async handleGroupMessage(message: PlatformMessage): Promise<void> {
     if (!message.from || !message.text) return;
     await this.registerUser(message.from);
@@ -299,8 +321,16 @@ export class EvrasiaTelegramBotV2 {
     if (message.from.id === MEGAFON_MANAGER_TELEGRAM_ID) return;
     if (text.startsWith("/")) return;
 
+    const clarificationKey = this.clarificationKey(message.chat.id, message.from.id);
+    const pending = this.getPendingClarification(message.chat.id, message.from.id);
     const normalized = extractRussianPhoneFromText(text);
     if (!normalized) {
+      if (!pending) {
+        this.groupClarifications.set(clarificationKey, {
+          problem: text,
+          createdAt: Date.now(),
+        });
+      }
       await this.client.sendReply(
         message.chat.id,
         "Укажите, пожалуйста, номер телефона, по которому возникла проблема. Например: +7 921 123-45-67.",
@@ -311,6 +341,12 @@ export class EvrasiaTelegramBotV2 {
 
     const matches = findCorporatePhones(normalized).filter((record) => record.operator === "MEGAFON");
     if (matches.length === 0) {
+      if (!pending) {
+        this.groupClarifications.set(clarificationKey, {
+          problem: text,
+          createdAt: Date.now(),
+        });
+      }
       await this.client.sendReply(
         message.chat.id,
         `Номер ${formatPhone(normalized)} не найден в справочнике МегаФона. Проверьте, пожалуйста, номер. Если он указан верно — сообщите администратору, чтобы добавить его в базу.`,
@@ -328,9 +364,11 @@ export class EvrasiaTelegramBotV2 {
       return;
     }
 
+    const problem = pending?.problem ?? text;
+    this.groupClarifications.delete(clarificationKey);
     await this.client.sendHtmlMessage(
       message.chat.id,
-      this.buildMegafonGroupMessage(matches[0]!, text, message.from),
+      this.buildMegafonGroupMessage(matches[0]!, problem, message.from),
     );
   }
 
