@@ -3,6 +3,7 @@ import { pool } from "@workspace/db";
 import { logger } from "../lib/logger";
 import {
   CORPORATE_COMMUNICATIONS_MODULE,
+  canEditCorporateDirectory,
   hasModuleAccess,
   isSuperAdmin,
   listBotUsers,
@@ -10,6 +11,10 @@ import {
   upsertBotUser,
 } from "./bot-access-service";
 import { BOT_SETTING_KEYS, getBotSetting, setBotSetting } from "./bot-settings-service";
+import {
+  CORPORATE_DIRECTORY_ADMIN_BUTTON,
+  CorporateDirectoryTelegramAdmin,
+} from "./corporate-directory-telegram-admin";
 import {
   DIRECTORY_STATS,
   findCorporatePhones,
@@ -29,7 +34,7 @@ import {
   type TelegramMessage,
 } from "./telegram-bot";
 
-const BOT_VERSION = "1.5.1";
+const BOT_VERSION = "1.6.0";
 const BACK_TO_ROOT = "⬅️ Главное меню";
 const SAMZABERU_BUTTON = "🍱 СамЗаберу";
 const CORPORATE_BUTTON = "📱 Корпоративная связь";
@@ -114,7 +119,13 @@ type ExtractedPhone = {
 const adminMenu: TelegramKeyboard = [
   [{ text: ADMIN_USERS_BUTTON }],
   [{ text: ADMIN_GRANT_BUTTON }, { text: ADMIN_REVOKE_BUTTON }],
+  [{ text: CORPORATE_DIRECTORY_ADMIN_BUTTON }],
   [{ text: ADMIN_MEGAFON_BUTTON }],
+  [{ text: BACK_TO_ROOT }],
+];
+
+const directoryEditorAdminMenu: TelegramKeyboard = [
+  [{ text: CORPORATE_DIRECTORY_ADMIN_BUTTON }],
   [{ text: BACK_TO_ROOT }],
 ];
 
@@ -239,11 +250,13 @@ export class EvrasiaTelegramBotV2 {
   private readonly sessions = new Map<number, PlatformSession>();
   private readonly groupClarifications = new Map<string, GroupClarification>();
   private readonly samzaberuBot: TelegramBot;
+  private readonly corporateDirectoryAdmin: CorporateDirectoryTelegramAdmin;
   private polling = false;
   private abortController: AbortController | null = null;
 
   constructor(private readonly client: EvrasiaTelegramClientV2) {
     this.samzaberuBot = new TelegramBot(client);
+    this.corporateDirectoryAdmin = new CorporateDirectoryTelegramAdmin(client);
   }
 
   private async registerUser(user: TelegramUser): Promise<void> {
@@ -260,7 +273,7 @@ export class EvrasiaTelegramBotV2 {
     const menu: TelegramKeyboard = [];
     if (resolveTelegramOperatorId(id)) menu.push([{ text: SAMZABERU_BUTTON }]);
     if (await hasModuleAccess(id, CORPORATE_COMMUNICATIONS_MODULE)) menu.push([{ text: CORPORATE_BUTTON }]);
-    if (isSuperAdmin(id)) menu.push([{ text: ADMIN_BUTTON }]);
+    if (isSuperAdmin(id) || canEditCorporateDirectory(id)) menu.push([{ text: ADMIN_BUTTON }]);
     return menu;
   }
 
@@ -434,6 +447,7 @@ export class EvrasiaTelegramBotV2 {
       return;
     }
     if (text === "/start" || text === BACK_TO_ROOT) {
+      this.corporateDirectoryAdmin.cancel(chatId);
       await this.showRoot(chatId, user);
       return;
     }
@@ -466,16 +480,24 @@ export class EvrasiaTelegramBotV2 {
     }
 
     if (text === ADMIN_BUTTON) {
-      if (!isSuperAdmin(id)) {
-        await this.client.sendMessage(chatId, "Раздел доступен только Super Admin.", await this.rootMenu(user));
+      if (!isSuperAdmin(id) && !canEditCorporateDirectory(id)) {
+        await this.client.sendMessage(chatId, "У вас нет доступа к разделу администрирования.", await this.rootMenu(user));
         return;
       }
       this.sessions.set(chatId, { step: "ADMIN" });
+      const keyboard = isSuperAdmin(id) ? adminMenu : directoryEditorAdminMenu;
       await this.client.sendMessage(
         chatId,
-        `⚙️ Администрирование\n\nСправочник связи: ${DIRECTORY_STATS.megafon} номеров МегаФона + ${DIRECTORY_STATS.t2} записей T2.\nНеоднозначных номеров: ${DIRECTORY_STATS.ambiguousPhones}.\n\nЗдесь можно управлять доступами без редактирования файлов на сервере.`,
-        adminMenu,
+        isSuperAdmin(id)
+          ? `⚙️ Администрирование\n\nСправочник связи: ${DIRECTORY_STATS.megafon} номеров МегаФона + ${DIRECTORY_STATS.t2} записей T2.\nНеоднозначных номеров: ${DIRECTORY_STATS.ambiguousPhones}.\n\nЗдесь можно управлять доступами и корпоративным справочником.`
+          : `⚙️ Администрирование\n\nВам доступно управление корпоративным справочником номеров.\nСправочник: ${DIRECTORY_STATS.total} записей.`,
+        keyboard,
       );
+      return;
+    }
+
+    if (this.corporateDirectoryAdmin.isActive(chatId)) {
+      await this.corporateDirectoryAdmin.handleMessage(chatId, id, text);
       return;
     }
 
@@ -495,6 +517,15 @@ export class EvrasiaTelegramBotV2 {
     }
     if (session.step === "CORPORATE_PROBLEM") {
       await this.handleCorporateProblem(chatId, user, text, session);
+      return;
+    }
+
+    if (canEditCorporateDirectory(id) && text === CORPORATE_DIRECTORY_ADMIN_BUTTON) {
+      await this.corporateDirectoryAdmin.start(
+        chatId,
+        id,
+        isSuperAdmin(id) ? adminMenu : directoryEditorAdminMenu,
+      );
       return;
     }
 
