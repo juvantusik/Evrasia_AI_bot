@@ -26,7 +26,7 @@ app.use("/api", directoryRouter);
 
 const staticRoot = process.env.STATIC_ROOT?.trim();
 if (staticRoot) {
-  const indexFile = path.join(staticRoot, "index.html");
+  const indexFile = path.join(staticRoot, "directory.html");
   app.use(express.static(staticRoot, { index: false }));
   app.use((req, res, next) => {
     if (req.method !== "GET" || req.path.startsWith("/api/")) {
