@@ -22,9 +22,16 @@ import {
   formatCorporateCard,
   formatPhone,
   formatProblemMessage,
+  getCorporatePhoneDirectorySnapshot,
   normalizeRussianPhone,
   type CorporatePhoneRecord,
 } from "./corporate-communications-v2";
+import {
+  findMegafonLegalEntityInText,
+  hasUsefulRequestText,
+  isLegalEntityLevelRequest,
+  isSameLegalEntity,
+} from "./megafon-group-routing";
 import { resolveTelegramOperatorId } from "./operator-access";
 import {
   TelegramApiError,
@@ -34,7 +41,7 @@ import {
   type TelegramMessage,
 } from "./telegram-bot";
 
-const BOT_VERSION = "1.6.0";
+const BOT_VERSION = "1.65";
 const BACK_TO_ROOT = "⬅️ Главное меню";
 const SAMZABERU_BUTTON = "🍱 СамЗаберу";
 const CORPORATE_BUTTON = "📱 Корпоративная связь";
@@ -108,6 +115,7 @@ type PlatformSession = {
 type GroupClarification = {
   problem?: string;
   phone?: string;
+  legalEntity?: string;
   createdAt: number;
 };
 
@@ -301,9 +309,23 @@ export class EvrasiaTelegramBotV2 {
       `Лицевой счёт: ${escapeHtml(record.accountNumber || "—")}`,
       `Номер телефона: ${escapeHtml(formatPhone(record.phone))}`,
       "",
-      `Проблема: ${escapeHtml(problem.trim())}`,
+      `Обращение: ${escapeHtml(problem.trim())}`,
       "",
-      "Прошу проверить причину.",
+      `Обращение от: ${author}`,
+    ].join("\n");
+  }
+
+  private buildMegafonLegalEntityMessage(record: CorporatePhoneRecord, request: string, user: TelegramUser): string {
+    const mention = `<a href="tg://user?id=${MEGAFON_MANAGER_TELEGRAM_ID}">${escapeHtml(MEGAFON_MANAGER_NAME)}</a>`;
+    const author = escapeHtml(displayName(user));
+    return [
+      `${mention}, добрый день.`,
+      "",
+      `ООО: ${escapeHtml(record.legalEntity || "—")}`,
+      `ИНН: ${escapeHtml(record.inn || "—")}`,
+      `Лицевой счёт: ${escapeHtml(record.accountNumber || "—")}`,
+      "",
+      `Обращение: ${escapeHtml(request.trim())}`,
       "",
       `Обращение от: ${author}`,
     ].join("\n");
@@ -356,8 +378,77 @@ export class EvrasiaTelegramBotV2 {
     const currentProblem = problemWithoutPhone(text, extracted);
     const currentProblemIsUseful = currentProblem.length >= 3;
     const problem = pending?.problem ?? (currentProblemIsUseful ? currentProblem : undefined);
+    const megafonDirectory = getCorporatePhoneDirectorySnapshot().filter(
+      (record) => record.operator === "MEGAFON",
+    );
+    const entityMatch = findMegafonLegalEntityInText(
+      pending?.legalEntity ?? text,
+      megafonDirectory,
+    );
 
     if (!normalized) {
+      if (entityMatch.status === "AMBIGUOUS") {
+        this.groupClarifications.set(clarificationKey, {
+          problem: problem ?? text,
+          createdAt: Date.now(),
+        });
+        await this.client.sendReply(
+          message.chat.id,
+          `Нашёл несколько подходящих юридических лиц:\n${entityMatch.legalEntities
+            .slice(0, 5)
+            .map((item) => `• ${item}`)
+            .join("\n")}\n\nУкажите, пожалуйста, точное название ООО.`,
+          message.message_id,
+        );
+        return;
+      }
+
+      if (entityMatch.status === "FOUND") {
+        const usefulRequest = problem
+          ? pending?.problem
+            ? true
+            : hasUsefulRequestText(problem, entityMatch.legalEntity)
+          : false;
+
+        if (!usefulRequest) {
+          this.groupClarifications.set(clarificationKey, {
+            legalEntity: entityMatch.legalEntity,
+            createdAt: Date.now(),
+          });
+          await this.client.sendReply(
+            message.chat.id,
+            `Нашёл ${entityMatch.legalEntity}. Опишите, пожалуйста, что нужно сделать.`,
+            message.message_id,
+          );
+          return;
+        }
+
+        if (problem && isLegalEntityLevelRequest(problem)) {
+          this.groupClarifications.delete(clarificationKey);
+          await this.client.sendHtmlMessage(
+            message.chat.id,
+            this.buildMegafonLegalEntityMessage(
+              entityMatch.record as CorporatePhoneRecord,
+              problem,
+              message.from,
+            ),
+          );
+          return;
+        }
+
+        this.groupClarifications.set(clarificationKey, {
+          problem: problem ?? text,
+          legalEntity: entityMatch.legalEntity,
+          createdAt: Date.now(),
+        });
+        await this.client.sendReply(
+          message.chat.id,
+          `Нашёл ${entityMatch.legalEntity}. Для этого обращения нужен конкретный номер телефона. Укажите его, пожалуйста, например: +7 921 123-45-67.`,
+          message.message_id,
+        );
+        return;
+      }
+
       this.groupClarifications.set(clarificationKey, {
         problem: problem ?? text,
         createdAt: Date.now(),
@@ -374,6 +465,7 @@ export class EvrasiaTelegramBotV2 {
     if (matches.length === 0) {
       this.groupClarifications.set(clarificationKey, {
         problem,
+        legalEntity: entityMatch.status === "FOUND" ? entityMatch.legalEntity : pending?.legalEntity,
         createdAt: Date.now(),
       });
       await this.client.sendReply(
@@ -394,14 +486,29 @@ export class EvrasiaTelegramBotV2 {
       return;
     }
 
-    if (!problem) {
+    if (entityMatch.status === "FOUND" && !isSameLegalEntity(matches[0]!.legalEntity, entityMatch.legalEntity)) {
       this.groupClarifications.set(clarificationKey, {
-        phone: normalized,
+        problem,
+        legalEntity: entityMatch.legalEntity,
         createdAt: Date.now(),
       });
       await this.client.sendReply(
         message.chat.id,
-        `Номер ${formatPhone(normalized)} найден. Опишите, пожалуйста, какая проблема возникла с этим номером.`,
+        `Номер ${formatPhone(normalized)} в справочнике привязан к ${matches[0]!.legalEntity}, а ранее указано ${entityMatch.legalEntity}. Проверьте, пожалуйста, номер или юридическое лицо — бот не будет отправлять обращение с несовпадающими данными.`,
+        message.message_id,
+      );
+      return;
+    }
+
+    if (!problem) {
+      this.groupClarifications.set(clarificationKey, {
+        phone: normalized,
+        legalEntity: entityMatch.status === "FOUND" ? entityMatch.legalEntity : undefined,
+        createdAt: Date.now(),
+      });
+      await this.client.sendReply(
+        message.chat.id,
+        `Номер ${formatPhone(normalized)} найден. Опишите, пожалуйста, какое обращение нужно передать по этому номеру.`,
         message.message_id,
       );
       return;
