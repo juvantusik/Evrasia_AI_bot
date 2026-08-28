@@ -19,11 +19,14 @@ const normalizeText = (value: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+const LEGAL_FORMS = new Set(["ооо", "зао", "пао", "оао", "ао"]);
+
 export const normalizeLegalEntityName = (value: string): string =>
   normalizeText(value)
-    .replace(/\b(?:ооо|зао|пао|оао|ао)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => !LEGAL_FORMS.has(token))
+    .join(" ");
 
 export const isSameLegalEntity = (left: string, right: string): boolean => {
   const a = normalizeLegalEntityName(left);
@@ -97,14 +100,14 @@ export const findMegafonLegalEntityInText = (
 
 export const isLegalEntityLevelRequest = (text: string): boolean => {
   const value = normalizeText(text);
-  const mentionsNumber = /\bномер/.test(value);
+  const mentionsNumber = /номер/.test(value);
   const newOrAdditionalNumber =
     mentionsNumber &&
-    /\b(?:добав|добавлен|дополн|нов|еще|ещё|подключ|оформ)[а-я]*/.test(value);
+    /(?:добав|добавлен|дополн|нов|еще|ещё|подключ|оформ)[а-я]*/.test(value);
   const entityDocuments =
-    /\b(?:договор|реквизит|лицев)[а-я]*/.test(value) ||
-    /\bсписок\s+номер/.test(value) ||
-    /\bакт\s+сверк/.test(value);
+    /(?:договор|реквизит|лицев)[а-я]*/.test(value) ||
+    /список\s+номер/.test(value) ||
+    /акт\s+сверк/.test(value);
   return newOrAdditionalNumber || entityDocuments;
 };
 
