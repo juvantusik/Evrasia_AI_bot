@@ -3,10 +3,7 @@ import { logger } from "./lib/logger";
 import { migrateDatabase } from "@workspace/db/migrate";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  initializeCorporatePhoneDirectory,
-  refreshCorporatePhoneDirectoryCache,
-} from "./services/corporate-directory-admin-service";
+import { initializeCorporatePhoneDirectory } from "./services/corporate-directory-admin-service";
 import {
   startEvrasiaTelegramBotV2,
   stopEvrasiaTelegramBotV2,
@@ -26,22 +23,13 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const previewMode = ["1", "true", "enabled"].includes(
-  (process.env.DIRECTORY_PREVIEW_MODE ?? "").trim().toLowerCase(),
+await migrateDatabase(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./drizzle"),
 );
-
-if (previewMode) {
-  logger.info("Directory preview mode enabled: database migrations and directory seed are skipped");
-  await refreshCorporatePhoneDirectoryCache();
-} else {
-  await migrateDatabase(
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./drizzle"),
-  );
-  await initializeCorporatePhoneDirectory();
-}
+await initializeCorporatePhoneDirectory();
 
 const server = app.listen(port, () => {
-  logger.info({ port, previewMode }, "Server listening");
+  logger.info({ port }, "Server listening");
   startEvrasiaTelegramBotV2();
 });
 
