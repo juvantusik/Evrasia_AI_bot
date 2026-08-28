@@ -76,6 +76,7 @@ jobs:
             --network host \
             -e PORT=18081 \
             -e DATABASE_URL=postgresql://samzaberu:samzaberu@127.0.0.1:5432/samzaberu \
+            -e DIRECTORY_PREVIEW_MODE=enabled \
             -e TELEGRAM_BOT_POLLING=disabled \
             "$image"
 
@@ -95,3 +96,7 @@ jobs:
           grep -Fq '"status":"ok"' /tmp/preview-health.json
           curl -fsS http://127.0.0.1:18081/directory | grep -Fq 'id="root"'
           curl -fsS http://127.0.0.1:18081/api/directory/phones | grep -Fq '"records"'
+          test "$(curl -sS -o /tmp/preview-write.json -w '%{http_code}' -X POST \
+            -H 'content-type: application/json' \
+            -d '{}' \
+            http://127.0.0.1:18081/api/samzaberu/requests)" = "403"
