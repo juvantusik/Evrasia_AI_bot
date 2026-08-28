@@ -47,15 +47,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish preview image
+      - name: Build and publish directory-only preview image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile.server
+          file: ./Dockerfile.directory
           platforms: linux/amd64
           push: true
           pull: true
-          tags: ghcr.io/juvantusik/evrasia_ai_bot:preview-v1.6.9
+          tags: ghcr.io/juvantusik/evrasia_ai_bot:directory-preview-v1.6.9
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=1.6.9-preview
@@ -67,36 +67,69 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke-test preview
+      - name: Smoke-test isolated directory CRUD
         run: |
           set -Eeuo pipefail
-          image=ghcr.io/juvantusik/evrasia_ai_bot:preview-v1.6.9
+          image=ghcr.io/juvantusik/evrasia_ai_bot:directory-preview-v1.6.9
           docker run -d \
             --name evrasia-directory-preview-smoke \
             --network host \
             -e PORT=18081 \
             -e DATABASE_URL=postgresql://samzaberu:samzaberu@127.0.0.1:5432/samzaberu \
-            -e DIRECTORY_PREVIEW_MODE=enabled \
-            -e TELEGRAM_BOT_POLLING=disabled \
+            -e DIRECTORY_WEB_WRITE_TOKEN=preview-secret \
             "$image"
 
           cleanup() {
-            docker logs --tail 80 evrasia-directory-preview-smoke || true
+            docker logs --tail 120 evrasia-directory-preview-smoke || true
             docker rm -f evrasia-directory-preview-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
           for _ in {1..60}; do
-            if curl -fsS http://127.0.0.1:18081/api/healthz >/tmp/preview-health.json; then
+            if curl -fsS http://127.0.0.1:18081/api/healthz >/tmp/directory-health.json; then
               break
             fi
             sleep 2
           done
 
-          grep -Fq '"status":"ok"' /tmp/preview-health.json
+          grep -Fq '"status":"ok"' /tmp/directory-health.json
+          grep -Fq '"service":"directory"' /tmp/directory-health.json
           curl -fsS http://127.0.0.1:18081/directory | grep -Fq 'id="root"'
           curl -fsS http://127.0.0.1:18081/api/directory/phones | grep -Fq '"records"'
-          test "$(curl -sS -o /tmp/preview-write.json -w '%{http_code}' -X POST \
+
+          test "$(curl -sS -o /tmp/no-samz.json -w '%{http_code}' http://127.0.0.1:18081/api/samzaberu/summary)" = "404"
+          test "$(curl -sS -o /tmp/unauthorized.json -w '%{http_code}' -X POST \
             -H 'content-type: application/json' \
-            -d '{}' \
-            http://127.0.0.1:18081/api/samzaberu/requests)" = "403"
+            -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест"}' \
+            http://127.0.0.1:18081/api/directory/phones)" = "401"
+
+          curl -fsS -X POST \
+            -H 'content-type: application/json' \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-1"}' \
+            http://127.0.0.1:18081/api/directory/phones >/tmp/created-phone.json
+          phone_id="$(jq -r '.record.id' /tmp/created-phone.json)"
+          test -n "$phone_id" && test "$phone_id" != "null"
+
+          curl -fsS -X PUT \
+            -H 'content-type: application/json' \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-2"}' \
+            "http://127.0.0.1:18081/api/directory/phones/${phone_id}" | grep -Fq 'TEST-2'
+
+          curl -fsS -X PUT \
+            -H 'content-type: application/json' \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            -d '{"number":1,"ou":"ЕВ","legalEntity":"ООО Тест-ресторан","address":"Тестовая 1","actualDirector":"Тест Тестов","actualPhoneMode":"AUTO","actualPersonalPhone":"","generalDirector":"Тест Генеральный","generalPhoneMode":"NONE","generalPersonalPhone":"","email":"test@evrasia.spb.ru"}' \
+            http://127.0.0.1:18081/api/directory/restaurants/1 | grep -Fq 'Тест-ресторан'
+
+          curl -fsS http://127.0.0.1:18081/api/directory/audit | grep -Fq 'GitHub Actions'
+
+          curl -fsS -X DELETE \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            "http://127.0.0.1:18081/api/directory/phones/${phone_id}" >/tmp/deleted-phone.json
+          grep -Fq '9210000001' /tmp/deleted-phone.json
