@@ -20,7 +20,7 @@ RUN pnpm typecheck:libs \
     && pnpm --filter @workspace/api-server exec node \
         --experimental-transform-types \
         --experimental-loader ./test-ts-resolver.mjs \
-        --test src/services/bitrix-gateway.test.ts \
+        --test src/services/bitrix-gateway.test.ts src/services/megafon-group-routing.test.ts \
     && pnpm --filter @workspace/api-server build \
     && pnpm --filter @workspace/samzaberu-ops build
 
