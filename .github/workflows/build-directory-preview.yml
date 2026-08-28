@@ -96,6 +96,8 @@ jobs:
           grep -Fq '"service":"directory"' /tmp/directory-health.json
           curl -fsS http://127.0.0.1:18081/directory | grep -Fq 'id="root"'
           curl -fsS http://127.0.0.1:18081/api/directory/phones | grep -Fq '"records"'
+          curl -fsS http://127.0.0.1:18081/api/directory/restaurants >/tmp/directory-restaurants.json
+          test "$(jq '.records | length' /tmp/directory-restaurants.json)" = "62"
 
           test "$(curl -sS -o /tmp/no-samz.json -w '%{http_code}' http://127.0.0.1:18081/api/samzaberu/summary)" = "404"
           test "$(curl -sS -o /tmp/unauthorized.json -w '%{http_code}' -X POST \
@@ -133,3 +135,14 @@ jobs:
             -H 'x-directory-actor: GitHub Actions' \
             "http://127.0.0.1:18081/api/directory/phones/${phone_id}" >/tmp/deleted-phone.json
           grep -Fq '9210000001' /tmp/deleted-phone.json
+
+          docker restart evrasia-directory-preview-smoke >/dev/null
+          for _ in {1..60}; do
+            if curl -fsS http://127.0.0.1:18081/api/healthz >/tmp/directory-health-after-restart.json; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18081/api/directory/restaurants >/tmp/directory-restaurants-after-restart.json
+          jq -e '.records[] | select(.id == "1" and .legalEntity == "ООО Тест-ресторан")' /tmp/directory-restaurants-after-restart.json >/dev/null
+          curl -fsS http://127.0.0.1:18081/api/directory/audit | grep -Fq 'GitHub Actions'

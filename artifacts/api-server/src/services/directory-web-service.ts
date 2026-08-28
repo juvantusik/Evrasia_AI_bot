@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
+import { directoryRestaurantSeed } from "../../../samzaberu-ops/src/data/directory-preview-data";
 
 export type DirectoryPhoneRecord = {
   id: string;
@@ -108,6 +109,36 @@ const parseRestaurantInput = (input: Record<string, unknown>): DirectoryRestaura
   };
 };
 
+const seedDirectoryRestaurants = async (): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const restaurant of directoryRestaurantSeed) {
+      await client.query(
+        `INSERT INTO corporate_directory_restaurants
+         (id, number, ou, legal_entity, address, actual_director, general_director, email, active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          restaurant.id,
+          restaurant.number,
+          restaurant.ou,
+          restaurant.legalEntity,
+          restaurant.address,
+          restaurant.actualDirector,
+          restaurant.generalDirector,
+          restaurant.email,
+        ],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
 export const ensureDirectoryWebSchema = async (): Promise<void> => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS corporate_phone_directory (
@@ -156,6 +187,7 @@ export const ensureDirectoryWebSchema = async (): Promise<void> => {
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await seedDirectoryRestaurants();
 };
 
 const phoneSelect = `

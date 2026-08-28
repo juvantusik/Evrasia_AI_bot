@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import {
   DIRECTORY_OU_ORDER,
-  directoryRestaurantSeed,
   type DirectoryRestaurantSeed,
 } from '../data/directory-preview-data';
 
@@ -300,16 +299,7 @@ export function DirectoryPage() {
   const [restaurantEditorId, setRestaurantEditorId] = useState<string | null>(null);
   const [phoneEditor, setPhoneEditor] = useState<CorporatePhone | null>(null);
 
-  const restaurants = useMemo<EditableRestaurant[]>(() => {
-    const persisted = new Map(persistedRestaurants.map((row) => [row.id, row]));
-    return directoryRestaurantSeed.map((seed) => persisted.get(seed.id) ?? {
-      ...seed,
-      actualPhoneMode: 'AUTO',
-      actualPersonalPhone: '',
-      generalPhoneMode: 'AUTO',
-      generalPersonalPhone: '',
-    });
-  }, [persistedRestaurants]);
+  const restaurants = persistedRestaurants;
 
   const loadAll = async () => {
     setLoading(true); setError('');
