@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
+import type { PoolClient } from "pg";
 import { corporatePhoneDirectory } from "../data/corporate-phone-directory";
 import { directoryRestaurantSeed } from "../../../samzaberu-ops/src/data/directory-preview-data";
 
@@ -45,7 +46,7 @@ export type DirectoryAuditRecord = {
   createdAt: Date;
 };
 
-type DirectoryDbClient = Awaited<ReturnType<typeof pool.connect>>;
+type DirectoryDbClient = PoolClient;
 
 type T2SourcePair = {
   cityPhone: string | null;
