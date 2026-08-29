@@ -7,6 +7,7 @@ import {
   initializeCorporatePhoneDirectory,
   refreshCorporatePhoneDirectoryCache,
 } from "./services/corporate-directory-admin-service";
+import { ensureDirectoryWebSchema } from "./services/directory-web-service";
 import {
   startEvrasiaTelegramBotV2,
   stopEvrasiaTelegramBotV2,
@@ -30,6 +31,7 @@ await migrateDatabase(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./drizzle"),
 );
 await initializeCorporatePhoneDirectory();
+await ensureDirectoryWebSchema();
 
 const directoryRefreshTimer = setInterval(() => {
   void refreshCorporatePhoneDirectoryCache().catch((err) => {
