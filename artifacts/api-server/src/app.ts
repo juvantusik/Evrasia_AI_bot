@@ -36,11 +36,17 @@ const staticRoot = process.env["STATIC_ROOT"]?.trim();
 
 if (staticRoot) {
   const indexFile = path.join(staticRoot, "index.html");
+  const directoryIndexFile = path.join(staticRoot, "directory.html");
 
   app.use(express.static(staticRoot, { index: false }));
   app.use((req, res, next) => {
     if (req.method !== "GET" || req.path.startsWith("/api/")) {
       next();
+      return;
+    }
+
+    if (req.path === "/directory" || req.path.startsWith("/directory/")) {
+      res.sendFile(directoryIndexFile);
       return;
     }
 
