@@ -135,7 +135,9 @@ jobs:
           curl -fsS http://127.0.0.1:18080/ | grep -Fq 'id="root"'
           curl -fsS http://127.0.0.1:18080/client-route-check | grep -Fq 'id="root"'
 
-          curl -fsS http://127.0.0.1:18080/directory | grep -Fq 'id="root"'
+          curl -fsS http://127.0.0.1:18080/phonebook | grep -Fq 'id="root"'
+          test "$(curl -sS -o /tmp/old-directory-route.html -w '%{http_code}' http://127.0.0.1:18080/directory)" = "308"
+          grep -Fq '/phonebook' /tmp/old-directory-route.html || true
           curl -fsS http://127.0.0.1:18080/api/directory/phones | grep -Fq '"records"'
           curl -fsS http://127.0.0.1:18080/api/directory/restaurants >/tmp/directory-restaurants.json
           test "$(jq '.records | length' /tmp/directory-restaurants.json)" = "62"
