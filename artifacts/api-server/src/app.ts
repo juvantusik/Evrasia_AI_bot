@@ -36,7 +36,7 @@ const staticRoot = process.env["STATIC_ROOT"]?.trim();
 
 if (staticRoot) {
   const indexFile = path.join(staticRoot, "index.html");
-  const phonebookIndexFile = path.join(staticRoot, "directory.html");
+  const phonebookIndexFile = path.join(staticRoot, "phonebook.html");
 
   app.use(express.static(staticRoot, { index: false }));
   app.use((req, res, next) => {
