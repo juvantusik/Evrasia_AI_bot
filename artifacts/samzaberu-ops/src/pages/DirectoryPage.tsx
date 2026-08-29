@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
+  Columns3,
   History,
   Pencil,
   Plus,
@@ -20,10 +21,14 @@ import {
 type Operator = 'MEGAFON' | 'T2';
 type PhoneMode = 'AUTO' | 'PERSONAL' | 'NONE';
 type Tab = 'restaurants' | 'megafon' | 't2' | 'history';
+type T2Section = 'employees' | 'm2m' | 'city';
+type MegafonColumn = 'cityPhone' | 'federalPhone' | 'legalEntity' | 'inn' | 'accountNumber' | 'restaurantName' | 'lineType' | 'subscriberName';
 
 type CorporatePhone = {
   id: string;
   phone: string;
+  cityPhone: string | null;
+  federalPhone: string | null;
   operator: Operator;
   legalEntity: string;
   inn: string | null;
@@ -59,6 +64,8 @@ type MatchResult =
 const blankPhone = (operator: Operator): CorporatePhone => ({
   id: '',
   phone: '',
+  cityPhone: '',
+  federalPhone: '',
   operator,
   legalEntity: '',
   inn: '',
@@ -90,6 +97,47 @@ const formatPhone = (phone: string): string => {
   if (normalized.length !== 11 || !normalized.startsWith('7')) return phone;
   return `+7 ${normalized.slice(1, 4)} ${normalized.slice(4, 7)}-${normalized.slice(7, 9)}-${normalized.slice(9, 11)}`;
 };
+
+const phoneDigits = (phone: string | null | undefined): string => (phone ?? '').replace(/\D/g, '');
+
+const cityPhoneOf = (record: CorporatePhone): string => {
+  if (record.cityPhone) return record.cityPhone;
+  return phoneDigits(record.phone).startsWith('7812') ? record.phone : '';
+};
+
+const federalPhoneOf = (record: CorporatePhone): string => {
+  if (record.federalPhone) return record.federalPhone;
+  return record.operator === 'MEGAFON' && record.phone && !phoneDigits(record.phone).startsWith('7812')
+    ? record.phone
+    : '';
+};
+
+const phoneForDisplay = (record: CorporatePhone): string =>
+  record.operator === 'MEGAFON'
+    ? cityPhoneOf(record) || federalPhoneOf(record) || record.phone
+    : record.phone;
+
+const t2SectionOf = (record: CorporatePhone): T2Section => {
+  const type = clean(record.lineType);
+  if (type.includes('m2m') || type.includes('м2м') || type.includes('телемат') || type.includes('передач')) return 'm2m';
+  if (type.includes('город') || phoneDigits(record.phone).startsWith('7812')) return 'city';
+  return 'employees';
+};
+
+const MEGAFON_COLUMNS: Array<{ key: MegafonColumn; label: string }> = [
+  { key: 'cityPhone', label: 'Городской номер' },
+  { key: 'federalPhone', label: 'Федеральный номер' },
+  { key: 'legalEntity', label: 'ООО' },
+  { key: 'inn', label: 'ИНН' },
+  { key: 'accountNumber', label: 'Лицевой счёт' },
+  { key: 'restaurantName', label: 'Ресторан / адрес' },
+  { key: 'lineType', label: 'Тип' },
+  { key: 'subscriberName', label: 'Абонент' },
+];
+
+const DEFAULT_MEGAFON_COLUMNS: MegafonColumn[] = [
+  'cityPhone', 'legalEntity', 'inn', 'accountNumber', 'restaurantName', 'lineType', 'subscriberName',
+];
 
 const nameParts = (value: string): string[] => clean(value).split(' ').filter(Boolean);
 const employeeScore = (target: string, candidate: string): number => {
@@ -140,34 +188,38 @@ const addressScore = (address: string, value: string | null): number => {
   return (sameNumber ? 40 : 0) + Math.min(words.filter((word) => b.includes(word)).length * 12, 48);
 };
 
-const findRestaurantPhone = (restaurant: EditableRestaurant, phones: CorporatePhone[]): MatchResult => {
-  const megafon = phones.filter(
-    (item) => item.operator === 'MEGAFON' && sameLegalEntity(item.legalEntity, restaurant.legalEntity),
-  );
-  const preferred = megafon.filter((item) => {
-    const type = clean(item.lineType);
-    return type.includes('входящ') || type.includes('ресторан');
-  });
-  const pool = preferred.length ? preferred : megafon;
+const chooseRestaurantPhone = (restaurant: EditableRestaurant, pool: CorporatePhone[]): MatchResult => {
   const scored = pool
     .map((record) => ({ record, score: addressScore(restaurant.address, record.restaurantName) }))
     .sort((a, b) => b.score - a.score);
   if (scored.length && scored[0]!.score >= 40) {
     const best = scored[0]!.score;
     const rows = scored.filter((item) => item.score === best);
-    if (new Set(rows.map((item) => item.record.phone)).size === 1) return { status: 'FOUND', record: rows[0]!.record };
+    if (new Set(rows.map((item) => phoneForDisplay(item.record))).size === 1) return { status: 'FOUND', record: rows[0]!.record };
     return { status: 'AMBIGUOUS' };
   }
   if (pool.length === 1) return { status: 'FOUND', record: pool[0]! };
   if (pool.length > 1) return { status: 'AMBIGUOUS' };
-  const t2 = phones.filter((item) => {
-    if (item.operator !== 'T2' || !sameLegalEntity(item.legalEntity, restaurant.legalEntity)) return false;
-    const type = clean(item.lineType);
-    return type.includes('город') || type.includes('федерал') || type.includes('ресторан');
-  });
-  if (t2.length === 1) return { status: 'FOUND', record: t2[0]! };
-  if (t2.length > 1) return { status: 'AMBIGUOUS' };
   return { status: 'NONE' };
+};
+
+const findRestaurantPhone = (restaurant: EditableRestaurant, phones: CorporatePhone[]): MatchResult => {
+  const megafon = phones.filter((item) => {
+    if (item.operator !== 'MEGAFON' || !cityPhoneOf(item)) return false;
+    return sameLegalEntity(item.legalEntity, restaurant.legalEntity);
+  });
+  const preferredMegafon = megafon.filter((item) => {
+    const type = clean(item.lineType);
+    return type.includes('входящ') || type.includes('город') || type.includes('ресторан');
+  });
+  const megafonMatch = chooseRestaurantPhone(restaurant, preferredMegafon.length ? preferredMegafon : megafon);
+  if (megafonMatch.status !== 'NONE') return megafonMatch;
+
+  const t2City = phones.filter((item) =>
+    item.operator === 'T2'
+    && t2SectionOf(item) === 'city'
+    && sameLegalEntity(item.legalEntity, restaurant.legalEntity));
+  return chooseRestaurantPhone(restaurant, t2City);
 };
 
 const phonePresentation = (match: MatchResult, mode: PhoneMode, personal: string) => {
@@ -176,6 +228,24 @@ const phonePresentation = (match: MatchResult, mode: PhoneMode, personal: string
   if (match.status === 'FOUND') return { phone: match.record.phone, label: 'Корп.', kind: 'corporate' };
   if (match.status === 'AMBIGUOUS') return { phone: '', label: 'Требуется выбор', kind: 'warning' };
   return { phone: '', label: 'Не указан', kind: 'none' };
+};
+
+const restaurantPhonePresentation = (match: MatchResult) => {
+  if (match.status === 'FOUND') {
+    return {
+      phone: cityPhoneOf(match.record) || phoneForDisplay(match.record),
+      label: match.record.operator === 'MEGAFON' ? 'МегаФон' : 'T2',
+      kind: 'corporate',
+    };
+  }
+  if (match.status === 'AMBIGUOUS') return { phone: '', label: 'Требуется выбор', kind: 'warning' };
+  return { phone: '', label: 'Не указан', kind: 'none' };
+};
+
+const renderMegafonValue = (record: CorporatePhone, column: MegafonColumn): string => {
+  if (column === 'cityPhone') return cityPhoneOf(record) ? formatPhone(cityPhoneOf(record)) : '—';
+  if (column === 'federalPhone') return federalPhoneOf(record) ? formatPhone(federalPhoneOf(record)) : '—';
+  return record[column] || '—';
 };
 
 const readError = async (response: Response): Promise<string> => {
@@ -231,7 +301,10 @@ function PhoneEditor({
         <h2>{record.id ? 'Редактирование номера' : 'Добавление номера'}</h2>
         <div className="directory-form-grid">
           <label><span>Оператор</span><select value={draft.operator} onChange={(e) => update('operator', e.target.value)}><option value="MEGAFON">МегаФон</option><option value="T2">T2</option></select></label>
-          <label><span>Номер телефона</span><input value={draft.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+7 921 123-45-67" /></label>
+          {draft.operator === 'MEGAFON' ? <>
+            <label><span>Городской номер</span><input value={draft.cityPhone ?? ''} onChange={(e) => update('cityPhone', e.target.value)} placeholder="+7 812 900-00-00" /></label>
+            <label><span>Федеральный номер</span><input value={draft.federalPhone ?? ''} onChange={(e) => update('federalPhone', e.target.value)} placeholder="+7 921 123-45-67" /></label>
+          </> : <label><span>Номер телефона</span><input value={draft.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+7 921 123-45-67" /></label>}
           <label className="wide"><span>Юридическое лицо</span><input value={draft.legalEntity} onChange={(e) => update('legalEntity', e.target.value)} /></label>
           <label><span>ИНН</span><input value={draft.inn ?? ''} onChange={(e) => update('inn', e.target.value)} /></label>
           <label><span>Лицевой счёт</span><input value={draft.accountNumber ?? ''} onChange={(e) => update('accountNumber', e.target.value)} /></label>
@@ -289,6 +362,10 @@ function RestaurantEditor({
 
 export function DirectoryPage() {
   const [tab, setTab] = useState<Tab>('restaurants');
+  const [t2Section, setT2Section] = useState<T2Section>('employees');
+  const [megafonColumns, setMegafonColumns] = useState<Set<MegafonColumn>>(
+    () => new Set(DEFAULT_MEGAFON_COLUMNS),
+  );
   const [phones, setPhones] = useState<CorporatePhone[]>([]);
   const [persistedRestaurants, setPersistedRestaurants] = useState<EditableRestaurant[]>([]);
   const [audit, setAudit] = useState<AuditRecord[]>([]);
@@ -340,10 +417,33 @@ export function DirectoryPage() {
   const phoneRows = useMemo(() => {
     const operator: Operator = tab === 'megafon' ? 'MEGAFON' : 'T2';
     const needle = clean(search);
-    return phones.filter((row) => row.operator === operator && (!needle || [
-      row.phone, row.legalEntity, row.inn, row.accountNumber, row.restaurantName, row.lineType, row.subscriberName,
-    ].some((value) => clean(value).includes(needle))));
-  }, [phones, search, tab]);
+    return phones.filter((row) => {
+      if (row.operator !== operator) return false;
+      if (operator === 'T2' && t2SectionOf(row) !== t2Section) return false;
+      return !needle || [
+        row.phone, row.cityPhone, row.federalPhone, row.legalEntity, row.inn, row.accountNumber,
+        row.restaurantName, row.lineType, row.subscriberName,
+      ].some((value) => clean(value).includes(needle));
+    });
+  }, [phones, search, tab, t2Section]);
+
+  const t2Counts = useMemo(() => {
+    const counts: Record<T2Section, number> = { employees: 0, m2m: 0, city: 0 };
+    phones.filter((row) => row.operator === 'T2').forEach((row) => { counts[t2SectionOf(row)] += 1; });
+    return counts;
+  }, [phones]);
+
+  const toggleMegafonColumn = (column: MegafonColumn) => {
+    setMegafonColumns((current) => {
+      const next = new Set(current);
+      if (next.has(column)) {
+        if (next.size > 1) next.delete(column);
+      } else {
+        next.add(column);
+      }
+      return next;
+    });
+  };
 
   const groups = DIRECTORY_OU_ORDER.map((ou) => ({ ou, rows: filteredRestaurants.filter((row) => row.ou === ou) }));
   const activeRestaurant = restaurantEditorId ? restaurants.find((row) => row.id === restaurantEditorId) ?? null : null;
@@ -363,7 +463,7 @@ export function DirectoryPage() {
   };
 
   const deletePhone = async (row: CorporatePhone) => {
-    if (!window.confirm(`Удалить ${formatPhone(row.phone)} из справочника?`)) return;
+    if (!window.confirm(`Удалить ${formatPhone(phoneForDisplay(row))} из справочника?`)) return;
     const headers = editorHeaders();
     if (!headers) return;
     const response = await fetch(`/api/directory/phones/${encodeURIComponent(row.id)}`, { method: 'DELETE', headers });
@@ -408,9 +508,25 @@ export function DirectoryPage() {
           <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}><History size={17} /> История</button>
         </div>
 
+        {tab === 't2' && <div className="directory-subtabs" aria-label="Разделы T2">
+          <button className={t2Section === 'employees' ? 'active' : ''} type="button" onClick={() => setT2Section('employees')}>Телефоны сотрудников <span>{t2Counts.employees}</span></button>
+          <button className={t2Section === 'm2m' ? 'active' : ''} type="button" onClick={() => setT2Section('m2m')}>M2M сим <span>{t2Counts.m2m}</span></button>
+          <button className={t2Section === 'city' ? 'active' : ''} type="button" onClick={() => setT2Section('city')}>Городские номера <span>{t2Counts.city}</span></button>
+        </div>}
+
         <div className="directory-toolbar">
           {tab !== 'history' && <label className="directory-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по номеру, ООО, адресу, ФИО…" /></label>}
           {tab === 'restaurants' && <select value={ouFilter} onChange={(e) => setOuFilter(e.target.value)}><option value="ALL">Все ОУ</option>{DIRECTORY_OU_ORDER.map((ou) => <option key={ou}>{ou}</option>)}</select>}
+          {tab === 'megafon' && <details className="directory-columns">
+            <summary><Columns3 size={17} /> Столбцы</summary>
+            <div className="directory-columns-menu">
+              <strong>Показывать в таблице</strong>
+              {MEGAFON_COLUMNS.map((column) => <label key={column.key}>
+                <input type="checkbox" checked={megafonColumns.has(column.key)} onChange={() => toggleMegafonColumn(column.key)} />
+                <span>{column.label}</span>
+              </label>)}
+            </div>
+          </details>}
           {(tab === 'megafon' || tab === 't2') && <button className="directory-primary-button" type="button" onClick={() => setPhoneEditor(blankPhone(tab === 'megafon' ? 'MEGAFON' : 'T2'))}><Plus size={17} /> Добавить номер</button>}
         </div>
 
@@ -422,14 +538,16 @@ export function DirectoryPage() {
             {groups.filter((group) => group.rows.length).map((group) => (
               <section className="directory-group" key={group.ou}>
                 <div className="directory-group-title"><strong>ОУ {group.ou}</strong><span>{group.rows.length}</span></div>
-                <div className="directory-table-scroll"><table className="directory-table restaurants"><thead><tr><th>№</th><th>ООО / адрес</th><th>Фактический директор</th><th>Телефон директора</th><th>Генеральный директор</th><th>Телефон ген. директора</th><th>Почта</th><th /></tr></thead><tbody>
+                <div className="directory-table-scroll"><table className="directory-table restaurants"><thead><tr><th>№</th><th>ООО / адрес</th><th>Номер ресторана</th><th>Фактический директор</th><th>Телефон директора</th><th>Генеральный директор</th><th>Телефон ген. директора</th><th>Почта</th><th /></tr></thead><tbody>
                   {group.rows.map((row) => {
                     const restaurantPhone = findRestaurantPhone(row, phones);
+                    const restaurantNumber = restaurantPhonePresentation(restaurantPhone);
                     const actual = phonePresentation(findEmployee(row.actualDirector, phones), row.actualPhoneMode, row.actualPersonalPhone);
                     const general = phonePresentation(findEmployee(row.generalDirector, phones), row.generalPhoneMode, row.generalPersonalPhone);
                     return <tr key={row.id}>
                       <td>{row.number}</td>
-                      <td><strong>{row.legalEntity}</strong><small>{row.address}</small>{restaurantPhone.status === 'FOUND' && <small>Ресторан: {formatPhone(restaurantPhone.record.phone)}</small>}</td>
+                      <td><strong>{row.legalEntity}</strong><small>{row.address}</small></td>
+                      <td><PhoneBadge value={restaurantNumber} /></td>
                       <td><UserRound size={15} /> {row.actualDirector || '—'}</td>
                       <td><PhoneBadge value={actual} /></td>
                       <td>{row.generalDirector || '—'}</td>
@@ -446,13 +564,22 @@ export function DirectoryPage() {
 
         {!loading && (tab === 'megafon' || tab === 't2') && (
           <section className="directory-group">
-            <div className="directory-group-title"><strong>{tab === 'megafon' ? 'МегаФон' : 'T2'}</strong><span>{phoneRows.length}</span></div>
-            <div className="directory-table-scroll"><table className="directory-table"><thead><tr><th>Номер</th><th>ООО</th><th>ИНН</th><th>Лицевой счёт</th><th>Ресторан / адрес</th><th>Тип</th><th>Абонент</th><th /></tr></thead><tbody>
-              {phoneRows.map((row) => <tr key={row.id}>
-                <td><strong>{formatPhone(row.phone)}</strong></td><td>{row.legalEntity}</td><td>{row.inn || '—'}</td><td>{row.accountNumber || '—'}</td><td>{row.restaurantName || '—'}</td><td>{row.lineType || '—'}</td><td>{row.subscriberName || '—'}</td>
-                <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
-              </tr>)}
-            </tbody></table></div>
+            <div className="directory-group-title"><strong>{tab === 'megafon' ? 'МегаФон' : `T2 · ${t2Section === 'employees' ? 'Телефоны сотрудников' : t2Section === 'm2m' ? 'M2M сим' : 'Городские номера'}`}</strong><span>{phoneRows.length}</span></div>
+            <div className="directory-table-scroll"><table className="directory-table">
+              {tab === 'megafon' ? <>
+                <thead><tr>{MEGAFON_COLUMNS.filter((column) => megafonColumns.has(column.key)).map((column) => <th key={column.key}>{column.label}</th>)}<th /></tr></thead>
+                <tbody>{phoneRows.map((row) => <tr key={row.id}>
+                  {MEGAFON_COLUMNS.filter((column) => megafonColumns.has(column.key)).map((column) => <td key={column.key}>{column.key === 'cityPhone' || column.key === 'federalPhone' ? <strong>{renderMegafonValue(row, column.key)}</strong> : renderMegafonValue(row, column.key)}</td>)}
+                  <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
+                </tr>)}</tbody>
+              </> : <>
+                <thead><tr><th>Номер</th><th>ООО</th><th>ИНН</th><th>Лицевой счёт</th><th>Ресторан / адрес</th><th>Тип</th><th>Абонент</th><th /></tr></thead>
+                <tbody>{phoneRows.map((row) => <tr key={row.id}>
+                  <td><strong>{formatPhone(row.phone)}</strong></td><td>{row.legalEntity}</td><td>{row.inn || '—'}</td><td>{row.accountNumber || '—'}</td><td>{row.restaurantName || '—'}</td><td>{row.lineType || '—'}</td><td>{row.subscriberName || '—'}</td>
+                  <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
+                </tr>)}</tbody>
+              </>}
+            </table></div>
           </section>
         )}
 
