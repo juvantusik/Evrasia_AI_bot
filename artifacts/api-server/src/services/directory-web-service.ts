@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
+import { corporatePhoneDirectory } from "../data/corporate-phone-directory";
 import { directoryRestaurantSeed } from "../../../samzaberu-ops/src/data/directory-preview-data";
 
 export type DirectoryPhoneRecord = {
@@ -44,6 +45,29 @@ export type DirectoryAuditRecord = {
   createdAt: Date;
 };
 
+type DirectoryDbClient = Awaited<ReturnType<typeof pool.connect>>;
+
+type T2SourcePair = {
+  cityPhone: string | null;
+  federalPhone: string | null;
+};
+
+const T2_CITY_PAIR_MIGRATION = "t2-city-federal-pairs-v1";
+
+const t2SourcePairs: T2SourcePair[] = (() => {
+  const pairs = new Map<string, T2SourcePair>();
+  for (const record of corporatePhoneDirectory) {
+    if (record.operator !== "T2") continue;
+    if (record.lineType !== "Городской номер" && record.lineType !== "Федеральный номер") continue;
+    const key = `${record.legalEntity.trim().toLocaleLowerCase("ru-RU")}\u0000${record.inn ?? ""}`;
+    const pair = pairs.get(key) ?? { cityPhone: null, federalPhone: null };
+    if (record.lineType === "Городской номер") pair.cityPhone = record.phone;
+    if (record.lineType === "Федеральный номер") pair.federalPhone = record.phone;
+    pairs.set(key, pair);
+  }
+  return [...pairs.values()];
+})();
+
 const normalizeNullable = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -69,9 +93,7 @@ const parsePhoneInput = (input: Record<string, unknown>): DirectoryPhoneInput =>
   const cityPhone = normalizeRussianPhone(input.cityPhone);
   const federalPhone = normalizeRussianPhone(input.federalPhone);
   const legacyPhone = normalizeRussianPhone(input.phone);
-  const phone = operator === "MEGAFON"
-    ? cityPhone ?? federalPhone ?? legacyPhone
-    : legacyPhone ?? cityPhone ?? federalPhone;
+  const phone = cityPhone ?? federalPhone ?? legacyPhone;
   if (!phone) throw new Error("Укажите хотя бы один корректный российский номер телефона.");
   const legalEntity = typeof input.legalEntity === "string" ? input.legalEntity.trim() : "";
   if (!legalEntity) throw new Error("Юридическое лицо обязательно.");
@@ -149,6 +171,73 @@ const seedDirectoryRestaurants = async (): Promise<void> => {
     client.release();
   }
 };
+
+const backfillT2CityPairs = async (): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const applied = await client.query(
+      `SELECT 1 FROM corporate_directory_web_migrations WHERE id = $1 LIMIT 1`,
+      [T2_CITY_PAIR_MIGRATION],
+    );
+    if (applied.rowCount) {
+      await client.query("COMMIT");
+      return;
+    }
+
+    const legacy = await client.query(
+      `SELECT 1 FROM corporate_phone_directory
+       WHERE active = true AND operator = 'T2'
+         AND line_type IN ('Городской номер', 'Федеральный номер')
+       LIMIT 1`,
+    );
+    if (!legacy.rowCount) {
+      await client.query("COMMIT");
+      return;
+    }
+
+    for (const pair of t2SourcePairs) {
+      const sourcePhones = [pair.cityPhone, pair.federalPhone].filter((phone): phone is string => Boolean(phone));
+      const existing = await client.query<Pick<DirectoryPhoneRecord, "id" | "phone">>(
+        `SELECT id, phone FROM corporate_phone_directory
+         WHERE active = true AND operator = 'T2' AND phone = ANY($1::text[])`,
+        [sourcePhones],
+      );
+      const cityRecord = pair.cityPhone ? existing.rows.find((record) => record.phone === pair.cityPhone) : undefined;
+      const federalRecord = pair.federalPhone ? existing.rows.find((record) => record.phone === pair.federalPhone) : undefined;
+
+      if (cityRecord) {
+        await client.query(
+          `UPDATE corporate_phone_directory
+           SET city_phone = coalesce(city_phone, $2),
+               federal_phone = coalesce(federal_phone, $3)
+           WHERE id = $1`,
+          [cityRecord.id, pair.cityPhone, federalRecord ? pair.federalPhone : null],
+        );
+      }
+      if (federalRecord) {
+        await client.query(
+          `UPDATE corporate_phone_directory
+           SET federal_phone = coalesce(federal_phone, $2)
+           WHERE id = $1`,
+          [federalRecord.id, pair.federalPhone],
+        );
+      }
+    }
+
+    await client.query(
+      `INSERT INTO corporate_directory_web_migrations (id) VALUES ($1)`,
+      [T2_CITY_PAIR_MIGRATION],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 export const ensureDirectoryWebSchema = async (): Promise<void> => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS corporate_phone_directory (
@@ -169,6 +258,12 @@ export const ensureDirectoryWebSchema = async (): Promise<void> => {
   await pool.query(`ALTER TABLE corporate_phone_directory ADD COLUMN IF NOT EXISTS city_phone text`);
   await pool.query(`ALTER TABLE corporate_phone_directory ADD COLUMN IF NOT EXISTS federal_phone text`);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS corporate_directory_web_migrations (
+      id text PRIMARY KEY,
+      applied_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
     UPDATE corporate_phone_directory
     SET city_phone = phone
     WHERE operator = 'MEGAFON' AND city_phone IS NULL AND phone LIKE '7812%'
@@ -178,6 +273,7 @@ export const ensureDirectoryWebSchema = async (): Promise<void> => {
     SET federal_phone = phone
     WHERE operator = 'MEGAFON' AND federal_phone IS NULL AND phone NOT LIKE '7812%'
   `);
+  await backfillT2CityPairs();
   await pool.query(`
     CREATE TABLE IF NOT EXISTS corporate_directory_restaurants (
       id text PRIMARY KEY,
@@ -224,7 +320,17 @@ export const listDirectoryPhones = async (): Promise<DirectoryPhoneRecord[]> => 
   const result = await pool.query<DirectoryPhoneRecord>(
     `${phoneSelect} WHERE active = true ORDER BY operator, phone, legal_entity`,
   );
-  return result.rows;
+  const pairedFederalPhones = new Set(
+    result.rows
+      .filter((record) => record.operator === "T2" && record.cityPhone && record.federalPhone)
+      .map((record) => record.federalPhone),
+  );
+  return result.rows.filter((record) => !(
+    record.operator === "T2"
+    && record.lineType === "Федеральный номер"
+    && !record.cityPhone
+    && pairedFederalPhones.has(record.phone)
+  ));
 };
 
 const getPhone = async (id: string): Promise<DirectoryPhoneRecord | null> => {
@@ -241,6 +347,60 @@ const writeAudit = async (
       (id, entity_type, entity_id, action, actor, before_state, after_state)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [randomUUID(), input.entityType, input.entityId, input.action, input.actor, input.beforeState, input.afterState],
+  );
+};
+
+const findT2FederalAliasId = async (
+  client: DirectoryDbClient,
+  ownerId: string,
+  federalPhone: string | null,
+): Promise<string | null> => {
+  if (!federalPhone) return null;
+  const result = await client.query<{ id: string }>(
+    `SELECT id FROM corporate_phone_directory
+     WHERE id <> $1 AND active = true AND operator = 'T2' AND phone = $2
+       AND line_type = 'Федеральный номер'
+     LIMIT 1`,
+    [ownerId, federalPhone],
+  );
+  return result.rows[0]?.id ?? null;
+};
+
+const syncT2FederalAlias = async (
+  client: DirectoryDbClient,
+  ownerId: string,
+  before: DirectoryPhoneRecord | null,
+  after: DirectoryPhoneRecord | null,
+): Promise<void> => {
+  let aliasId = before?.operator === "T2"
+    ? await findT2FederalAliasId(client, ownerId, before.federalPhone)
+    : null;
+  const needsAlias = Boolean(
+    after?.operator === "T2"
+    && after.cityPhone
+    && after.federalPhone
+    && after.cityPhone !== after.federalPhone,
+  );
+
+  if (!needsAlias || !after?.federalPhone) {
+    if (aliasId) await client.query(`DELETE FROM corporate_phone_directory WHERE id = $1`, [aliasId]);
+    return;
+  }
+
+  aliasId ??= await findT2FederalAliasId(client, ownerId, after.federalPhone);
+  if (!aliasId) aliasId = randomUUID();
+  await client.query(
+    `INSERT INTO corporate_phone_directory
+     (id, phone, city_phone, federal_phone, operator, legal_entity, inn, account_number,
+      restaurant_name, line_type, subscriber_name, active)
+     VALUES ($1,$2,NULL,$2,'T2',$3,$4,$5,$6,'Федеральный номер',$7,true)
+     ON CONFLICT (id) DO UPDATE SET
+       phone=excluded.phone, city_phone=NULL, federal_phone=excluded.federal_phone,
+       operator='T2', legal_entity=excluded.legal_entity, inn=excluded.inn,
+       account_number=excluded.account_number, restaurant_name=excluded.restaurant_name,
+       line_type='Федеральный номер', subscriber_name=excluded.subscriber_name,
+       active=true, updated_at=now()`,
+    [aliasId, after.federalPhone, after.legalEntity, after.inn, after.accountNumber, after.restaurantName, after.subscriberName],
   );
 };
 
@@ -266,6 +426,7 @@ export const addDirectoryPhone = async (actor: string, raw: Record<string, unkno
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true)`,
       [record.id, record.phone, record.cityPhone, record.federalPhone, record.operator, record.legalEntity, record.inn, record.accountNumber, record.restaurantName, record.lineType, record.subscriberName],
     );
+    await syncT2FederalAlias(client, record.id, null, record);
     await writeAudit(client, {
       entityType: "PHONE", entityId: record.id, action: "ADD", actor,
       beforeState: null, afterState: JSON.stringify(record),
@@ -295,6 +456,7 @@ export const updateDirectoryPhone = async (actor: string, id: string, raw: Recor
        WHERE id=$1`,
       [id, after.phone, after.cityPhone, after.federalPhone, after.operator, after.legalEntity, after.inn, after.accountNumber, after.restaurantName, after.lineType, after.subscriberName],
     );
+    await syncT2FederalAlias(client, id, before, after);
     await writeAudit(client, {
       entityType: "PHONE", entityId: id, action: "UPDATE", actor,
       beforeState: JSON.stringify(before), afterState: JSON.stringify(after),
@@ -315,6 +477,7 @@ export const deleteDirectoryPhone = async (actor: string, id: string): Promise<D
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await syncT2FederalAlias(client, id, before, null);
     await client.query(`DELETE FROM corporate_phone_directory WHERE id=$1`, [id]);
     await writeAudit(client, {
       entityType: "PHONE", entityId: id, action: "DELETE", actor,
