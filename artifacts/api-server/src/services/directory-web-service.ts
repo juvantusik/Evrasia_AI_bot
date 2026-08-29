@@ -5,6 +5,8 @@ import { directoryRestaurantSeed } from "../../../samzaberu-ops/src/data/directo
 export type DirectoryPhoneRecord = {
   id: string;
   phone: string;
+  cityPhone: string | null;
+  federalPhone: string | null;
   operator: "MEGAFON" | "T2";
   legalEntity: string;
   inn: string | null;
@@ -63,13 +65,21 @@ const parseOperator = (value: unknown): "MEGAFON" | "T2" => {
 };
 
 const parsePhoneInput = (input: Record<string, unknown>): DirectoryPhoneInput => {
-  const phone = normalizeRussianPhone(input.phone);
-  if (!phone) throw new Error("Не удалось распознать российский номер телефона.");
+  const operator = parseOperator(input.operator);
+  const cityPhone = normalizeRussianPhone(input.cityPhone);
+  const federalPhone = normalizeRussianPhone(input.federalPhone);
+  const legacyPhone = normalizeRussianPhone(input.phone);
+  const phone = operator === "MEGAFON"
+    ? cityPhone ?? federalPhone ?? legacyPhone
+    : legacyPhone ?? cityPhone ?? federalPhone;
+  if (!phone) throw new Error("Укажите хотя бы один корректный российский номер телефона.");
   const legalEntity = typeof input.legalEntity === "string" ? input.legalEntity.trim() : "";
   if (!legalEntity) throw new Error("Юридическое лицо обязательно.");
   return {
     phone,
-    operator: parseOperator(input.operator),
+    cityPhone,
+    federalPhone,
+    operator,
     legalEntity,
     inn: normalizeNullable(input.inn),
     accountNumber: normalizeNullable(input.accountNumber),
@@ -156,6 +166,18 @@ export const ensureDirectoryWebSchema = async (): Promise<void> => {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await pool.query(`ALTER TABLE corporate_phone_directory ADD COLUMN IF NOT EXISTS city_phone text`);
+  await pool.query(`ALTER TABLE corporate_phone_directory ADD COLUMN IF NOT EXISTS federal_phone text`);
+  await pool.query(`
+    UPDATE corporate_phone_directory
+    SET city_phone = phone
+    WHERE operator = 'MEGAFON' AND city_phone IS NULL AND phone LIKE '7812%'
+  `);
+  await pool.query(`
+    UPDATE corporate_phone_directory
+    SET federal_phone = phone
+    WHERE operator = 'MEGAFON' AND federal_phone IS NULL AND phone NOT LIKE '7812%'
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS corporate_directory_restaurants (
       id text PRIMARY KEY,
@@ -191,7 +213,8 @@ export const ensureDirectoryWebSchema = async (): Promise<void> => {
 };
 
 const phoneSelect = `
-  SELECT id, phone, operator, legal_entity AS "legalEntity", inn,
+  SELECT id, phone, city_phone AS "cityPhone", federal_phone AS "federalPhone",
+         operator, legal_entity AS "legalEntity", inn,
          account_number AS "accountNumber", restaurant_name AS "restaurantName",
          line_type AS "lineType", subscriber_name AS "subscriberName"
   FROM corporate_phone_directory
@@ -239,9 +262,9 @@ export const addDirectoryPhone = async (actor: string, raw: Record<string, unkno
     await client.query("BEGIN");
     await client.query(
       `INSERT INTO corporate_phone_directory
-       (id, phone, operator, legal_entity, inn, account_number, restaurant_name, line_type, subscriber_name, active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true)`,
-      [record.id, record.phone, record.operator, record.legalEntity, record.inn, record.accountNumber, record.restaurantName, record.lineType, record.subscriberName],
+       (id, phone, city_phone, federal_phone, operator, legal_entity, inn, account_number, restaurant_name, line_type, subscriber_name, active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true)`,
+      [record.id, record.phone, record.cityPhone, record.federalPhone, record.operator, record.legalEntity, record.inn, record.accountNumber, record.restaurantName, record.lineType, record.subscriberName],
     );
     await writeAudit(client, {
       entityType: "PHONE", entityId: record.id, action: "ADD", actor,
@@ -267,10 +290,10 @@ export const updateDirectoryPhone = async (actor: string, id: string, raw: Recor
     await client.query("BEGIN");
     await client.query(
       `UPDATE corporate_phone_directory SET
-       phone=$2, operator=$3, legal_entity=$4, inn=$5, account_number=$6,
-       restaurant_name=$7, line_type=$8, subscriber_name=$9, updated_at=now()
+       phone=$2, city_phone=$3, federal_phone=$4, operator=$5, legal_entity=$6, inn=$7, account_number=$8,
+       restaurant_name=$9, line_type=$10, subscriber_name=$11, updated_at=now()
        WHERE id=$1`,
-      [id, after.phone, after.operator, after.legalEntity, after.inn, after.accountNumber, after.restaurantName, after.lineType, after.subscriberName],
+      [id, after.phone, after.cityPhone, after.federalPhone, after.operator, after.legalEntity, after.inn, after.accountNumber, after.restaurantName, after.lineType, after.subscriberName],
     );
     await writeAudit(client, {
       entityType: "PHONE", entityId: id, action: "UPDATE", actor,
