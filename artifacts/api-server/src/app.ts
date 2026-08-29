@@ -45,6 +45,12 @@ if (staticRoot) {
       return;
     }
 
+    if (req.path === "/directory" || req.path.startsWith("/directory/")) {
+      const suffix = req.originalUrl.slice("/directory".length);
+      res.redirect(308, `/phonebook${suffix}`);
+      return;
+    }
+
     if (req.path === "/phonebook" || req.path.startsWith("/phonebook/")) {
       res.sendFile(phonebookIndexFile);
       return;
