@@ -109,16 +109,17 @@ jobs:
             -H 'content-type: application/json' \
             -H 'x-directory-write-token: preview-secret' \
             -H 'x-directory-actor: GitHub Actions' \
-            -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-1"}' \
+            -d '{"cityPhone":"+7 812 900-00-01","federalPhone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-1"}' \
             http://127.0.0.1:18081/api/directory/phones >/tmp/created-phone.json
           phone_id="$(jq -r '.record.id' /tmp/created-phone.json)"
           test -n "$phone_id" && test "$phone_id" != "null"
+          jq -e '.record.cityPhone == "78129000001" and .record.federalPhone == "79210000001"' /tmp/created-phone.json >/dev/null
 
           curl -fsS -X PUT \
             -H 'content-type: application/json' \
             -H 'x-directory-write-token: preview-secret' \
             -H 'x-directory-actor: GitHub Actions' \
-            -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-2"}' \
+            -d '{"cityPhone":"+7 812 900-00-01","federalPhone":"+7 921 000-00-02","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-2"}' \
             "http://127.0.0.1:18081/api/directory/phones/${phone_id}" | grep -Fq 'TEST-2'
 
           curl -fsS -X PUT \
@@ -134,7 +135,7 @@ jobs:
             -H 'x-directory-write-token: preview-secret' \
             -H 'x-directory-actor: GitHub Actions' \
             "http://127.0.0.1:18081/api/directory/phones/${phone_id}" >/tmp/deleted-phone.json
-          grep -Fq '9210000001' /tmp/deleted-phone.json
+          grep -Fq '9210000002' /tmp/deleted-phone.json
 
           docker restart evrasia-directory-preview-smoke >/dev/null
           for _ in {1..60}; do
