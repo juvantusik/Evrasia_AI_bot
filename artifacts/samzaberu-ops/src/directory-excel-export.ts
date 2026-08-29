@@ -16,11 +16,6 @@ type ZipEntry = {
   data: Uint8Array;
 };
 
-type SharedStrings = {
-  xml: string;
-  indexByValue: Map<string, number>;
-};
-
 const EXPORT_BUTTON_ID = 'directory-restaurants-excel-export';
 const encoder = new TextEncoder();
 
@@ -37,6 +32,8 @@ const excelHeaders: Array<{ key: keyof RestaurantExportRow; label: string; width
   { key: 'email', label: 'Почта', width: 34 },
 ];
 
+// Цвета взяты только как визуальный эталон из исходного файла пользователя.
+// Данные, порядок строк и любые другие значения из исходного файла не используются.
 const OU_STYLE_INDEX: Record<string, number> = {
   'ЕВ': 2,
   'МЮ': 3,
@@ -78,7 +75,9 @@ const collectRestaurantRows = (): RestaurantExportRow[] => {
   return rows;
 };
 
-const escapeXml = (value: string): string => value
+const cleanXmlText = (value: string): string => value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
+const escapeXml = (value: string): string => cleanXmlText(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
@@ -96,47 +95,20 @@ const columnName = (index: number): string => {
   return result;
 };
 
-const buildSharedStrings = (rows: RestaurantExportRow[]): SharedStrings => {
-  const values: string[] = [];
-  const indexByValue = new Map<string, number>();
-  let count = 0;
-
-  const add = (value: string) => {
-    count += 1;
-    if (indexByValue.has(value)) return;
-    indexByValue.set(value, values.length);
-    values.push(value);
-  };
-
-  excelHeaders.forEach((column) => add(column.label));
-  rows.forEach((row) => excelHeaders.forEach((column) => {
-    const value = row[column.key] ?? '';
-    if (value) add(value);
-  }));
-
-  const items = values.map((value) => `<si><t xml:space="preserve">${escapeXml(value)}</t></si>`).join('');
-  return {
-    indexByValue,
-    xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${count}" uniqueCount="${values.length}">${items}</sst>`,
-  };
-};
-
-const sharedStringCell = (ref: string, value: string, style: number, strings: SharedStrings): string => {
+const inlineStringCell = (ref: string, value: string, style: number): string => {
   if (!value) return `<c r="${ref}" s="${style}"/>`;
-  const index = strings.indexByValue.get(value);
-  if (index === undefined) throw new Error(`Missing shared string for ${ref}`);
-  return `<c r="${ref}" t="s" s="${style}"><v>${index}</v></c>`;
+  return `<c r="${ref}" t="inlineStr" s="${style}"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
 };
 
-const buildWorksheetXml = (rows: RestaurantExportRow[], strings: SharedStrings): string => {
+const buildWorksheetXml = (rows: RestaurantExportRow[]): string => {
   const headerCells = excelHeaders.map((column, index) =>
-    sharedStringCell(`${columnName(index)}1`, column.label, 1, strings)).join('');
+    inlineStringCell(`${columnName(index)}1`, column.label, 1)).join('');
 
   const dataRows = rows.map((row, rowIndex) => {
     const excelRow = rowIndex + 2;
     const style = OU_STYLE_INDEX[normalizeOu(row.ou)] ?? 8;
     const cells = excelHeaders.map((column, columnIndex) =>
-      sharedStringCell(`${columnName(columnIndex)}${excelRow}`, row[column.key] ?? '', style, strings)).join('');
+      inlineStringCell(`${columnName(columnIndex)}${excelRow}`, row[column.key] ?? '', style)).join('');
     return `<row r="${excelRow}" ht="28" customHeight="1">${cells}</row>`;
   }).join('');
 
@@ -149,7 +121,7 @@ const buildWorksheetXml = (rows: RestaurantExportRow[], strings: SharedStrings):
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <dimension ref="A1:${lastColumn}${lastRow}"/>
   <sheetViews>
-    <sheetView workbookViewId="0">
+    <sheetView tabSelected="1" workbookViewId="0">
       <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
       <selection pane="bottomLeft" activeCell="A2" sqref="A2"/>
     </sheetView>
@@ -165,27 +137,27 @@ const buildWorksheetXml = (rows: RestaurantExportRow[], strings: SharedStrings):
 const buildStylesXml = (): string => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <fonts count="2">
-    <font><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/><family val="2"/></font>
-    <font><b/><sz val="11"/><color rgb="FF0F172A"/><name val="Calibri"/><family val="2"/></font>
+    <font><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>
+    <font><b/><sz val="11"/><color rgb="FF0F172A"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>
   </fonts>
   <fills count="9">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFDBEAFE"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFF66"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFD99694"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF00B0F0"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFC3D69B"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFB1A0C7"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFC4D79B"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFB2A1C7"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFC4BD97"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFDBEEF3"/><bgColor indexed="64"/></patternFill></fill>
   </fills>
   <borders count="2">
     <border><left/><right/><top/><bottom/><diagonal/></border>
     <border>
-      <left style="thin"><color rgb="FF64748B"/></left>
-      <right style="thin"><color rgb="FF64748B"/></right>
-      <top style="thin"><color rgb="FF64748B"/></top>
-      <bottom style="thin"><color rgb="FF64748B"/></bottom>
+      <left style="thin"><color rgb="FF7F7F7F"/></left>
+      <right style="thin"><color rgb="FF7F7F7F"/></right>
+      <top style="thin"><color rgb="FF7F7F7F"/></top>
+      <bottom style="thin"><color rgb="FF7F7F7F"/></bottom>
       <diagonal/>
     </border>
   </borders>
@@ -195,43 +167,71 @@ const buildStylesXml = (): string => `<?xml version="1.0" encoding="UTF-8" stand
   <cellXfs count="9">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="8" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+  <dxfs count="0"/>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
 </styleSheet>`;
 
 const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 </Types>`;
 
 const packageRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
 </Relationships>`;
 
 const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="Рестораны и директора" sheetId="1" r:id="rId1"/></sheets>
+  <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="24816"/>
+  <workbookPr defaultThemeVersion="124226"/>
+  <bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/></bookViews>
+  <sheets><sheet name="Рестораны и директора" sheetId="1" state="visible" r:id="rId1"/></sheets>
+  <calcPr calcId="191029"/>
 </workbook>`;
 
 const workbookRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
 </Relationships>`;
+
+const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Microsoft Excel Compatible Export</Application>
+  <DocSecurity>0</DocSecurity>
+  <ScaleCrop>false</ScaleCrop>
+  <HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>1</vt:i4></vt:variant></vt:vector></HeadingPairs>
+  <TitlesOfParts><vt:vector size="1" baseType="lpstr"><vt:lpstr>Рестораны и директора</vt:lpstr></vt:vector></TitlesOfParts>
+  <Company>Евразия</Company>
+  <LinksUpToDate>false</LinksUpToDate>
+  <SharedDoc>false</SharedDoc>
+  <HyperlinksChanged>false</HyperlinksChanged>
+  <AppVersion>16.0300</AppVersion>
+</Properties>`;
+
+const coreXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>Evrasia AI Bot</dc:creator>
+  <cp:lastModifiedBy>Evrasia AI Bot</cp:lastModifiedBy>
+</cp:coreProperties>`;
 
 const crcTable = (() => {
   const table = new Uint32Array(256);
@@ -262,7 +262,7 @@ const concatBytes = (parts: Uint8Array[]): Uint8Array => {
 const zipTimestamp = (date = new Date()) => {
   const year = Math.max(date.getFullYear(), 1980);
   return {
-    time: ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | ((Math.floor(date.getSeconds() / 2)) & 0x1f),
+    time: ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | (Math.floor(date.getSeconds() / 2) & 0x1f),
     date: (((year - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f),
   };
 };
@@ -272,7 +272,7 @@ const localHeader = (name: Uint8Array, data: Uint8Array, crc: number, time: numb
   const view = new DataView(buffer);
   view.setUint32(0, 0x04034b50, true);
   view.setUint16(4, 20, true);
-  view.setUint16(6, 0x0800, true);
+  view.setUint16(6, 0, true);
   view.setUint16(8, 0, true);
   view.setUint16(10, time, true);
   view.setUint16(12, date, true);
@@ -290,7 +290,7 @@ const centralHeader = (name: Uint8Array, data: Uint8Array, crc: number, time: nu
   view.setUint32(0, 0x02014b50, true);
   view.setUint16(4, 20, true);
   view.setUint16(6, 20, true);
-  view.setUint16(8, 0x0800, true);
+  view.setUint16(8, 0, true);
   view.setUint16(10, 0, true);
   view.setUint16(12, time, true);
   view.setUint16(14, date, true);
@@ -340,18 +340,16 @@ const createZip = (entries: ZipEntry[]): Uint8Array => {
   return concatBytes([...locals, central, endOfCentralDirectory(entries.length, central.length, offset)]);
 };
 
-const createWorkbook = (rows: RestaurantExportRow[]): Uint8Array => {
-  const strings = buildSharedStrings(rows);
-  return createZip([
-    { name: '[Content_Types].xml', data: encoder.encode(contentTypesXml) },
-    { name: '_rels/.rels', data: encoder.encode(packageRelsXml) },
-    { name: 'xl/workbook.xml', data: encoder.encode(workbookXml) },
-    { name: 'xl/_rels/workbook.xml.rels', data: encoder.encode(workbookRelsXml) },
-    { name: 'xl/styles.xml', data: encoder.encode(buildStylesXml()) },
-    { name: 'xl/sharedStrings.xml', data: encoder.encode(strings.xml) },
-    { name: 'xl/worksheets/sheet1.xml', data: encoder.encode(buildWorksheetXml(rows, strings)) },
-  ]);
-};
+const createWorkbook = (rows: RestaurantExportRow[]): Uint8Array => createZip([
+  { name: '[Content_Types].xml', data: encoder.encode(contentTypesXml) },
+  { name: '_rels/.rels', data: encoder.encode(packageRelsXml) },
+  { name: 'docProps/app.xml', data: encoder.encode(appXml) },
+  { name: 'docProps/core.xml', data: encoder.encode(coreXml) },
+  { name: 'xl/workbook.xml', data: encoder.encode(workbookXml) },
+  { name: 'xl/_rels/workbook.xml.rels', data: encoder.encode(workbookRelsXml) },
+  { name: 'xl/styles.xml', data: encoder.encode(buildStylesXml()) },
+  { name: 'xl/worksheets/sheet1.xml', data: encoder.encode(buildWorksheetXml(rows)) },
+]);
 
 const downloadRestaurantExcel = () => {
   const rows = collectRestaurantRows();
