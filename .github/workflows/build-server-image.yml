@@ -102,10 +102,11 @@ jobs:
             -e PORT=18080 \
             -e DATABASE_URL=postgresql://samzaberu:samzaberu@127.0.0.1:5432/samzaberu \
             -e TELEGRAM_BOT_POLLING=disabled \
+            -e DIRECTORY_WEB_WRITE_TOKEN=smoke-secret \
             "$image_tag"
 
           cleanup() {
-            docker logs --tail 80 samzaberu-smoke || true
+            docker logs --tail 100 samzaberu-smoke || true
             docker rm -f samzaberu-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
@@ -133,3 +134,12 @@ jobs:
           grep -Fq '"status":"ok"' /tmp/samzaberu-health.json
           curl -fsS http://127.0.0.1:18080/ | grep -Fq 'id="root"'
           curl -fsS http://127.0.0.1:18080/client-route-check | grep -Fq 'id="root"'
+
+          curl -fsS http://127.0.0.1:18080/directory | grep -Fq 'id="root"'
+          curl -fsS http://127.0.0.1:18080/api/directory/phones | grep -Fq '"records"'
+          curl -fsS http://127.0.0.1:18080/api/directory/restaurants >/tmp/directory-restaurants.json
+          test "$(jq '.records | length' /tmp/directory-restaurants.json)" = "62"
+          test "$(curl -sS -o /tmp/directory-unauthorized.json -w '%{http_code}' -X POST \
+            -H 'content-type: application/json' \
+            -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест"}' \
+            http://127.0.0.1:18080/api/directory/phones)" = "401"

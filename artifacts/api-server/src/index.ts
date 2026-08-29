@@ -3,7 +3,11 @@ import { logger } from "./lib/logger";
 import { migrateDatabase } from "@workspace/db/migrate";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { initializeCorporatePhoneDirectory } from "./services/corporate-directory-admin-service";
+import {
+  initializeCorporatePhoneDirectory,
+  refreshCorporatePhoneDirectoryCache,
+} from "./services/corporate-directory-admin-service";
+import { ensureDirectoryWebSchema } from "./services/directory-web-service";
 import {
   startEvrasiaTelegramBotV2,
   stopEvrasiaTelegramBotV2,
@@ -27,6 +31,14 @@ await migrateDatabase(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./drizzle"),
 );
 await initializeCorporatePhoneDirectory();
+await ensureDirectoryWebSchema();
+
+const directoryRefreshTimer = setInterval(() => {
+  void refreshCorporatePhoneDirectoryCache().catch((err) => {
+    logger.warn({ err }, "Could not refresh corporate phone directory cache");
+  });
+}, 15_000);
+directoryRefreshTimer.unref();
 
 const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
@@ -43,6 +55,7 @@ let shuttingDown = false;
 const shutdown = (signal: NodeJS.Signals): void => {
   if (shuttingDown) return;
   shuttingDown = true;
+  clearInterval(directoryRefreshTimer);
   logger.info({ signal }, "Shutting down API server");
   const forceExit = setTimeout(() => {
     logger.warn({ signal }, "Forced API shutdown after grace period");
