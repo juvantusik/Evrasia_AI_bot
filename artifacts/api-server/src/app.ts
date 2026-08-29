@@ -36,7 +36,7 @@ const staticRoot = process.env["STATIC_ROOT"]?.trim();
 
 if (staticRoot) {
   const indexFile = path.join(staticRoot, "index.html");
-  const directoryIndexFile = path.join(staticRoot, "directory.html");
+  const phonebookIndexFile = path.join(staticRoot, "directory.html");
 
   app.use(express.static(staticRoot, { index: false }));
   app.use((req, res, next) => {
@@ -46,7 +46,13 @@ if (staticRoot) {
     }
 
     if (req.path === "/directory" || req.path.startsWith("/directory/")) {
-      res.sendFile(directoryIndexFile);
+      const suffix = req.originalUrl.slice("/directory".length);
+      res.redirect(308, `/phonebook${suffix}`);
+      return;
+    }
+
+    if (req.path === "/phonebook" || req.path.startsWith("/phonebook/")) {
+      res.sendFile(phonebookIndexFile);
       return;
     }
 
