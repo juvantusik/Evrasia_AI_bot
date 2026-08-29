@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
-import type { PoolClient } from "pg";
 import { corporatePhoneDirectory } from "../data/corporate-phone-directory";
 import { directoryRestaurantSeed } from "../../../samzaberu-ops/src/data/directory-preview-data";
 
@@ -46,7 +45,9 @@ export type DirectoryAuditRecord = {
   createdAt: Date;
 };
 
-type DirectoryDbClient = PoolClient;
+type DirectoryDbClient = {
+  query: (...args: any[]) => Promise<any>;
+};
 
 type T2SourcePair = {
   cityPhone: string | null;
@@ -357,14 +358,14 @@ const findT2FederalAliasId = async (
   federalPhone: string | null,
 ): Promise<string | null> => {
   if (!federalPhone) return null;
-  const result = await client.query<{ id: string }>(
+  const result = await client.query(
     `SELECT id FROM corporate_phone_directory
      WHERE id <> $1 AND active = true AND operator = 'T2' AND phone = $2
        AND line_type = 'Федеральный номер'
      LIMIT 1`,
     [ownerId, federalPhone],
   );
-  return result.rows[0]?.id ?? null;
+  return (result.rows[0] as { id: string } | undefined)?.id ?? null;
 };
 
 const syncT2FederalAlias = async (
