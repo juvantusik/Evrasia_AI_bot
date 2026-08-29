@@ -122,6 +122,24 @@ jobs:
             -d '{"cityPhone":"+7 812 900-00-01","federalPhone":"+7 921 000-00-02","operator":"MEGAFON","legalEntity":"ООО Тест","inn":"1234567890","accountNumber":"TEST-2"}' \
             "http://127.0.0.1:18081/api/directory/phones/${phone_id}" | grep -Fq 'TEST-2'
 
+          curl -fsS -X POST \
+            -H 'content-type: application/json' \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            -d '{"cityPhone":"+7 812 981-16-89","federalPhone":"+7 952 665-92-83","operator":"T2","legalEntity":"ООО Максимус СПБ — тест","inn":"7801418988","lineType":"Городской номер"}' \
+            http://127.0.0.1:18081/api/directory/phones >/tmp/created-t2-pair.json
+          t2_pair_id="$(jq -r '.record.id' /tmp/created-t2-pair.json)"
+          jq -e '.record.phone == "78129811689" and .record.cityPhone == "78129811689" and .record.federalPhone == "79526659283"' /tmp/created-t2-pair.json >/dev/null
+          curl -fsS http://127.0.0.1:18081/api/directory/phones >/tmp/phones-with-t2-pair.json
+          jq -e --arg id "$t2_pair_id" '[.records[] | select(.id == $id and .cityPhone == "78129811689" and .federalPhone == "79526659283")] | length == 1' /tmp/phones-with-t2-pair.json >/dev/null
+
+          curl -fsS -X PUT \
+            -H 'content-type: application/json' \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            -d '{"cityPhone":"+7 812 981-16-89","federalPhone":"+7 952 665-92-84","operator":"T2","legalEntity":"ООО Максимус СПБ — тест","inn":"7801418988","lineType":"Городской номер"}' \
+            "http://127.0.0.1:18081/api/directory/phones/${t2_pair_id}" | grep -Fq '79526659284'
+
           curl -fsS -X PUT \
             -H 'content-type: application/json' \
             -H 'x-directory-write-token: preview-secret' \
@@ -136,6 +154,12 @@ jobs:
             -H 'x-directory-actor: GitHub Actions' \
             "http://127.0.0.1:18081/api/directory/phones/${phone_id}" >/tmp/deleted-phone.json
           grep -Fq '9210000002' /tmp/deleted-phone.json
+
+          curl -fsS -X DELETE \
+            -H 'x-directory-write-token: preview-secret' \
+            -H 'x-directory-actor: GitHub Actions' \
+            "http://127.0.0.1:18081/api/directory/phones/${t2_pair_id}" >/tmp/deleted-t2-pair.json
+          grep -Fq '79526659284' /tmp/deleted-t2-pair.json
 
           docker restart evrasia-directory-preview-smoke >/dev/null
           for _ in {1..60}; do
