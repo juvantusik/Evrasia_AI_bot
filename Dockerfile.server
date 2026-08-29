@@ -23,7 +23,7 @@ RUN pnpm typecheck:libs \
         --test src/services/bitrix-gateway.test.ts src/services/megafon-group-routing.test.ts \
     && pnpm --filter @workspace/api-server build \
     && pnpm --filter @workspace/samzaberu-ops build \
-    && pnpm --filter @workspace/samzaberu-ops exec vite build --config vite.directory.config.ts
+    && pnpm --filter @workspace/samzaberu-ops exec vite build --config vite.phonebook.config.ts
 
 FROM node:22-bullseye-slim AS runtime
 
@@ -42,8 +42,8 @@ WORKDIR /app
 
 COPY --from=builder --chown=node:node /workspace/artifacts/api-server/dist ./dist
 COPY --from=builder --chown=node:node /workspace/artifacts/samzaberu-ops/dist/public ./public
-COPY --from=builder --chown=node:node /workspace/artifacts/samzaberu-ops/dist-directory/public/directory.html ./public/directory.html
-COPY --from=builder --chown=node:node /workspace/artifacts/samzaberu-ops/dist-directory/public/assets ./public/assets
+COPY --from=builder --chown=node:node /workspace/artifacts/samzaberu-ops/dist-phonebook/public/phonebook.html ./public/phonebook.html
+COPY --from=builder --chown=node:node /workspace/artifacts/samzaberu-ops/dist-phonebook/public/assets ./public/assets
 
 USER node
 
