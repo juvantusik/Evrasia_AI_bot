@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { DirectoryPage } from './pages/DirectoryPage';
+import { installRestaurantExcelExport } from './directory-excel-export';
 import './index.css';
 import './pages/directory-web.css';
 
@@ -13,3 +14,5 @@ createRoot(document.getElementById('root')!, {
     <DirectoryPage />
   </ErrorBoundary>,
 );
+
+installRestaurantExcelExport();
