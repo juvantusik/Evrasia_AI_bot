@@ -15,12 +15,12 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   build: {
-    outDir: path.resolve(import.meta.dirname, 'dist-directory/public'),
+    outDir: path.resolve(import.meta.dirname, 'dist-phonebook/public'),
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(import.meta.dirname, 'directory.html'),
+      input: path.resolve(import.meta.dirname, 'phonebook.html'),
       output: {
-        entryFileNames: 'assets/directory-[hash].js',
+        entryFileNames: 'assets/phonebook-[hash].js',
         chunkFileNames: 'assets/chunk-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
       },

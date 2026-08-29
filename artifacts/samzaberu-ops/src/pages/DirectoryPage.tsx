@@ -287,18 +287,18 @@ const readError = async (response: Response): Promise<string> => {
 };
 
 const editorHeaders = (): Record<string, string> | null => {
-  let token = sessionStorage.getItem('directory-write-token') ?? '';
-  let actor = sessionStorage.getItem('directory-actor') ?? '';
+  let token = sessionStorage.getItem('phonebook-write-token') ?? '';
+  let actor = sessionStorage.getItem('phonebook-actor') ?? '';
   if (!token) token = window.prompt('Ключ редактора корпоративного справочника')?.trim() ?? '';
   if (!token) return null;
   if (!actor) actor = window.prompt('Ваше имя для истории изменений')?.trim() ?? '';
   if (!actor) return null;
-  sessionStorage.setItem('directory-write-token', token);
-  sessionStorage.setItem('directory-actor', actor);
+  sessionStorage.setItem('phonebook-write-token', token);
+  sessionStorage.setItem('phonebook-actor', actor);
   return {
     'content-type': 'application/json',
-    'x-directory-write-token': token,
-    'x-directory-actor': actor,
+    'x-phonebook-write-token': token,
+    'x-phonebook-actor': actor,
   };
 };
 
@@ -412,9 +412,9 @@ export function DirectoryPage() {
     setLoading(true); setError('');
     try {
       const [phonesResponse, restaurantsResponse, auditResponse] = await Promise.all([
-        fetch('/api/directory/phones'),
-        fetch('/api/directory/restaurants'),
-        fetch('/api/directory/audit?limit=100'),
+        fetch('/api/phonebook/phones'),
+        fetch('/api/phonebook/restaurants'),
+        fetch('/api/phonebook/audit?limit=100'),
       ]);
       if (!phonesResponse.ok) throw new Error(await readError(phonesResponse));
       if (!restaurantsResponse.ok) throw new Error(await readError(restaurantsResponse));
@@ -482,7 +482,7 @@ export function DirectoryPage() {
     const headers = editorHeaders();
     if (!headers) return;
     const isNew = !draft.id;
-    const response = await fetch(isNew ? '/api/directory/phones' : `/api/directory/phones/${encodeURIComponent(draft.id)}`, {
+    const response = await fetch(isNew ? '/api/phonebook/phones' : `/api/phonebook/phones/${encodeURIComponent(draft.id)}`, {
       method: isNew ? 'POST' : 'PUT',
       headers,
       body: JSON.stringify(draft),
@@ -496,7 +496,7 @@ export function DirectoryPage() {
     if (!window.confirm(`Удалить ${formatPhone(phoneForDisplay(row))} из справочника?`)) return;
     const headers = editorHeaders();
     if (!headers) return;
-    const response = await fetch(`/api/directory/phones/${encodeURIComponent(row.id)}`, { method: 'DELETE', headers });
+    const response = await fetch(`/api/phonebook/phones/${encodeURIComponent(row.id)}`, { method: 'DELETE', headers });
     if (!response.ok) { setError(await readError(response)); return; }
     await loadAll();
   };
@@ -504,7 +504,7 @@ export function DirectoryPage() {
   const saveRestaurant = async (draft: EditableRestaurant) => {
     const headers = editorHeaders();
     if (!headers) return;
-    const response = await fetch(`/api/directory/restaurants/${encodeURIComponent(draft.id)}`, {
+    const response = await fetch(`/api/phonebook/restaurants/${encodeURIComponent(draft.id)}`, {
       method: 'PUT', headers, body: JSON.stringify(draft),
     });
     if (!response.ok) { setError(await readError(response)); return; }
@@ -513,8 +513,8 @@ export function DirectoryPage() {
   };
 
   const activateEditor = () => {
-    sessionStorage.removeItem('directory-write-token');
-    sessionStorage.removeItem('directory-actor');
+    sessionStorage.removeItem('phonebook-write-token');
+    sessionStorage.removeItem('phonebook-actor');
     editorHeaders();
   };
 

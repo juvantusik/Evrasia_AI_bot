@@ -102,7 +102,7 @@ jobs:
             -e PORT=18080 \
             -e DATABASE_URL=postgresql://samzaberu:samzaberu@127.0.0.1:5432/samzaberu \
             -e TELEGRAM_BOT_POLLING=disabled \
-            -e DIRECTORY_WEB_WRITE_TOKEN=smoke-secret \
+            -e PHONEBOOK_WEB_WRITE_TOKEN=smoke-secret \
             "$image_tag"
 
           cleanup() {
@@ -137,11 +137,11 @@ jobs:
 
           curl -fsS http://127.0.0.1:18080/phonebook | grep -Fq 'id="root"'
           test "$(curl -sS -o /tmp/old-directory-route.html -w '%{http_code}' http://127.0.0.1:18080/directory)" = "308"
-          grep -Fq '/phonebook' /tmp/old-directory-route.html || true
-          curl -fsS http://127.0.0.1:18080/api/directory/phones | grep -Fq '"records"'
-          curl -fsS http://127.0.0.1:18080/api/directory/restaurants >/tmp/directory-restaurants.json
-          test "$(jq '.records | length' /tmp/directory-restaurants.json)" = "62"
-          test "$(curl -sS -o /tmp/directory-unauthorized.json -w '%{http_code}' -X POST \
+          test "$(curl -sS -o /tmp/old-directory-api.json -w '%{http_code}' http://127.0.0.1:18080/api/directory/phones)" = "404"
+          curl -fsS http://127.0.0.1:18080/api/phonebook/phones | grep -Fq '"records"'
+          curl -fsS http://127.0.0.1:18080/api/phonebook/restaurants >/tmp/phonebook-restaurants.json
+          test "$(jq '.records | length' /tmp/phonebook-restaurants.json)" = "62"
+          test "$(curl -sS -o /tmp/phonebook-unauthorized.json -w '%{http_code}' -X POST \
             -H 'content-type: application/json' \
             -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест"}' \
-            http://127.0.0.1:18080/api/directory/phones)" = "401"
+            http://127.0.0.1:18080/api/phonebook/phones)" = "401"
