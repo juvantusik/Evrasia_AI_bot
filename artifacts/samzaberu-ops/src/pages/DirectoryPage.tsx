@@ -107,20 +107,34 @@ const cityPhoneOf = (record: CorporatePhone): string => {
 
 const federalPhoneOf = (record: CorporatePhone): string => {
   if (record.federalPhone) return record.federalPhone;
-  return record.operator === 'MEGAFON' && record.phone && !phoneDigits(record.phone).startsWith('7812')
+  const type = clean(record.lineType);
+  return (record.operator === 'MEGAFON' || type.includes('федерал'))
+    && record.phone
+    && !phoneDigits(record.phone).startsWith('7812')
     ? record.phone
     : '';
 };
 
 const phoneForDisplay = (record: CorporatePhone): string =>
-  record.operator === 'MEGAFON'
-    ? cityPhoneOf(record) || federalPhoneOf(record) || record.phone
-    : record.phone;
+  cityPhoneOf(record) || federalPhoneOf(record) || record.phone;
 
 const t2SectionOf = (record: CorporatePhone): T2Section => {
   const type = clean(record.lineType);
-  if (type.includes('m2m') || type.includes('м2м') || type.includes('телемат') || type.includes('передач')) return 'm2m';
-  if (type.includes('город') || phoneDigits(record.phone).startsWith('7812')) return 'city';
+  if (
+    type.includes('pos')
+    || type.includes('интернет sim')
+    || type.includes('m2m')
+    || type.includes('м2м')
+    || type.includes('телемат')
+    || type.includes('передач')
+  ) return 'm2m';
+  if (
+    type.includes('город')
+    || type.includes('федерал')
+    || Boolean(record.cityPhone)
+    || Boolean(record.federalPhone)
+    || phoneDigits(record.phone).startsWith('7812')
+  ) return 'city';
   return 'employees';
 };
 
@@ -156,23 +170,38 @@ const employeeScore = (target: string, candidate: string): number => {
   return 55;
 };
 
-const findEmployee = (name: string, phones: CorporatePhone[]): MatchResult => {
-  const scored = phones
-    .filter((item) => item.operator === 'T2' && item.subscriberName)
-    .map((record) => ({ record, score: employeeScore(name, record.subscriberName ?? '') }))
-    .filter((item) => item.score >= 72)
-    .sort((a, b) => b.score - a.score);
-  if (!scored.length) return { status: 'NONE' };
-  const top = scored[0]!.score;
-  const rows = scored.filter((item) => item.score === top);
-  if (new Set(rows.map((item) => item.record.phone)).size > 1) return { status: 'AMBIGUOUS' };
-  return { status: 'FOUND', record: rows[0]!.record };
-};
-
 const sameLegalEntity = (a: string, b: string): boolean => {
   const left = compactLegalEntity(a);
   const right = compactLegalEntity(b);
   return Boolean(left && right && (left === right || left.includes(right) || right.includes(left)));
+};
+
+const employeeTypePriority = (record: CorporatePhone): number => {
+  const type = clean(record.lineType);
+  if (type === 'сотрудник') return 2;
+  if (type.includes('временн')) return 1;
+  return 0;
+};
+
+const findEmployee = (name: string, legalEntity: string, phones: CorporatePhone[]): MatchResult => {
+  const scored = phones
+    .filter((item) => item.operator === 'T2' && item.subscriberName && employeeTypePriority(item) > 0)
+    .map((record) => ({
+      record,
+      score: employeeScore(name, record.subscriberName ?? ''),
+      typePriority: employeeTypePriority(record),
+      sameEntity: sameLegalEntity(record.legalEntity, legalEntity),
+    }))
+    .filter((item) => item.score >= 72)
+    .sort((a, b) => b.score - a.score || b.typePriority - a.typePriority);
+  if (!scored.length) return { status: 'NONE' };
+  const local = scored.filter((item) => item.sameEntity);
+  const candidates = local.length ? local : scored;
+  const top = candidates[0]!.score;
+  const topType = candidates.filter((item) => item.score === top)[0]!.typePriority;
+  const rows = candidates.filter((item) => item.score === top && item.typePriority === topType);
+  if (new Set(rows.map((item) => phoneForDisplay(item.record))).size > 1) return { status: 'AMBIGUOUS' };
+  return { status: 'FOUND', record: rows[0]!.record };
 };
 
 const addressScore = (address: string, value: string | null): number => {
@@ -294,6 +323,7 @@ function PhoneEditor({
   const [draft, setDraft] = useState(record);
   const [saving, setSaving] = useState(false);
   const update = (key: keyof CorporatePhone, value: string) => setDraft((row) => ({ ...row, [key]: value }));
+  const usesNumberAliases = draft.operator === 'MEGAFON' || t2SectionOf(draft) === 'city';
   return (
     <div className="directory-modal-backdrop" onMouseDown={onClose}>
       <section className="directory-editor" onMouseDown={(event) => event.stopPropagation()}>
@@ -301,9 +331,9 @@ function PhoneEditor({
         <h2>{record.id ? 'Редактирование номера' : 'Добавление номера'}</h2>
         <div className="directory-form-grid">
           <label><span>Оператор</span><select value={draft.operator} onChange={(e) => update('operator', e.target.value)}><option value="MEGAFON">МегаФон</option><option value="T2">T2</option></select></label>
-          {draft.operator === 'MEGAFON' ? <>
+          {usesNumberAliases ? <>
             <label><span>Городской номер</span><input value={draft.cityPhone ?? ''} onChange={(e) => update('cityPhone', e.target.value)} placeholder="+7 812 900-00-00" /></label>
-            <label><span>Федеральный номер</span><input value={draft.federalPhone ?? ''} onChange={(e) => update('federalPhone', e.target.value)} placeholder="+7 921 123-45-67" /></label>
+            <label><span>Федеральный (мобильный) номер</span><input value={draft.federalPhone ?? ''} onChange={(e) => update('federalPhone', e.target.value)} placeholder="+7 952 123-45-67" /></label>
           </> : <label><span>Номер телефона</span><input value={draft.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+7 921 123-45-67" /></label>}
           <label className="wide"><span>Юридическое лицо</span><input value={draft.legalEntity} onChange={(e) => update('legalEntity', e.target.value)} /></label>
           <label><span>ИНН</span><input value={draft.inn ?? ''} onChange={(e) => update('inn', e.target.value)} /></label>
@@ -542,8 +572,13 @@ export function DirectoryPage() {
                   {group.rows.map((row) => {
                     const restaurantPhone = findRestaurantPhone(row, phones);
                     const restaurantNumber = restaurantPhonePresentation(restaurantPhone);
-                    const actual = phonePresentation(findEmployee(row.actualDirector, phones), row.actualPhoneMode, row.actualPersonalPhone);
-                    const general = phonePresentation(findEmployee(row.generalDirector, phones), row.generalPhoneMode, row.generalPersonalPhone);
+                    const actualMatch = findEmployee(row.actualDirector, row.legalEntity, phones);
+                    const sameDirector = Boolean(clean(row.actualDirector) && clean(row.actualDirector) === clean(row.generalDirector));
+                    const generalMatch = sameDirector
+                      ? actualMatch
+                      : findEmployee(row.generalDirector, row.legalEntity, phones);
+                    const actual = phonePresentation(actualMatch, row.actualPhoneMode, row.actualPersonalPhone);
+                    const general = phonePresentation(generalMatch, row.generalPhoneMode, row.generalPersonalPhone);
                     return <tr key={row.id}>
                       <td>{row.number}</td>
                       <td><strong>{row.legalEntity}</strong><small>{row.address}</small></td>
@@ -573,9 +608,15 @@ export function DirectoryPage() {
                   <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
                 </tr>)}</tbody>
               </> : <>
-                <thead><tr><th>Номер</th><th>ООО</th><th>ИНН</th><th>Лицевой счёт</th><th>Ресторан / адрес</th><th>Тип</th><th>Абонент</th><th /></tr></thead>
+                <thead><tr>
+                  {t2Section === 'city' ? <><th>Городской номер</th><th>Федеральный (мобильный) номер</th></> : <th>Номер</th>}
+                  <th>ООО</th><th>ИНН</th><th>Лицевой счёт</th><th>Ресторан / адрес</th><th>Тип</th><th>Абонент</th><th />
+                </tr></thead>
                 <tbody>{phoneRows.map((row) => <tr key={row.id}>
-                  <td><strong>{formatPhone(row.phone)}</strong></td><td>{row.legalEntity}</td><td>{row.inn || '—'}</td><td>{row.accountNumber || '—'}</td><td>{row.restaurantName || '—'}</td><td>{row.lineType || '—'}</td><td>{row.subscriberName || '—'}</td>
+                  {t2Section === 'city'
+                    ? <><td><strong>{cityPhoneOf(row) ? formatPhone(cityPhoneOf(row)) : '—'}</strong></td><td><strong>{federalPhoneOf(row) ? formatPhone(federalPhoneOf(row)) : '—'}</strong></td></>
+                    : <td><strong>{formatPhone(row.phone)}</strong></td>}
+                  <td>{row.legalEntity}</td><td>{row.inn || '—'}</td><td>{row.accountNumber || '—'}</td><td>{row.restaurantName || '—'}</td><td>{row.lineType || '—'}</td><td>{row.subscriberName || '—'}</td>
                   <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
                 </tr>)}</tbody>
               </>}
