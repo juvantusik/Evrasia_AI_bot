@@ -58,7 +58,7 @@ const assertOwnersAreStable = (
     if (!resolved || row.bitrix_user_id === null) continue;
     if (row.bitrix_user_id !== resolved.bitrixUserId) {
       throw new Error(
-        `Bitrix изменил владельца карты ${row.card_number}: ${row.bitrix_user_id} -> ${resolved.bitrixUserId}; синхронизация остановлена`,
+        `Bitrix изменил владельца внутренней карты ID=${row.id}: ${row.bitrix_user_id} -> ${resolved.bitrixUserId}; синхронизация остановлена`,
       );
     }
   }
