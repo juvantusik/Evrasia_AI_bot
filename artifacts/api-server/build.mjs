@@ -28,6 +28,8 @@ async function buildAll() {
       path.resolve(artifactDir, "src/anti-fraud-bitrix-account-cli.ts"),
       // Добавлено 03.09.2026 ИТ Директор Евразии
       path.resolve(artifactDir, "src/anti-fraud-trusted-device-cli.ts"),
+      // Добавлено 03.09.2026 ИТ Директор Евразии
+      path.resolve(artifactDir, "src/anti-fraud-risk-cli.ts"),
     ],
     platform: "node",
     bundle: true,
