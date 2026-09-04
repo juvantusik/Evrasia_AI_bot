@@ -7,7 +7,7 @@ test("Trusted Device snapshot guard allows the first import and normal snapshots
   assert.doesNotThrow(() => assertTrustedDeviceLinkSnapshotSafe(0, 0));
   assert.doesNotThrow(() => assertTrustedDeviceLinkSnapshotSafe(0, 1420));
   assert.doesNotThrow(() => assertTrustedDeviceLinkSnapshotSafe(1420, 1420));
-  assert.doesNotThrow(() => assertTrustedDeviceLinkSnapshotSafe(1420, 700));
+  assert.doesNotThrow(() => assertTrustedDeviceLinkSnapshotSafe(1420, 710));
   assert.doesNotThrow(() => assertTrustedDeviceLinkSnapshotSafe(3, 2));
 });
 
@@ -18,8 +18,8 @@ test("Trusted Device snapshot guard blocks empty and more-than-half shrink", () 
     /existing=1420; fetched=0/,
   );
   assert.throws(
-    () => assertTrustedDeviceLinkSnapshotSafe(1420, 699),
-    /existing=1420; fetched=699/,
+    () => assertTrustedDeviceLinkSnapshotSafe(1420, 709),
+    /existing=1420; fetched=709/,
   );
   assert.throws(
     () => assertTrustedDeviceLinkSnapshotSafe(3, 1),
