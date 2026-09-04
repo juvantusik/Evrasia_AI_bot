@@ -73,6 +73,13 @@ const parsePositiveInteger = (value: unknown, field: string): number => {
   return Number(value);
 };
 
+const parseNonNegativeInteger = (value: unknown, field: string): number => {
+  if (!Number.isInteger(value) || Number(value) < 0) {
+    throw new Error(`Bitrix Anti-Fraud вернул некорректное поле ${field}`);
+  }
+  return Number(value);
+};
+
 const parseCardNumber = (value: unknown, field: string): string => {
   if (typeof value !== "string" || !/^\d{4,32}$/.test(value)) {
     throw new Error(`Bitrix Anti-Fraud вернул некорректное поле ${field}`);
@@ -99,7 +106,11 @@ const parseResponse = (
   if (data.ok !== true) {
     throw new Error("Bitrix Anti-Fraud вернул ответ без ok=true");
   }
-  if (!Array.isArray(data.records) || !Array.isArray(data.unresolved) || !Array.isArray(data.ambiguous)) {
+  if (
+    !Array.isArray(data.records) ||
+    !Array.isArray(data.unresolved) ||
+    !Array.isArray(data.ambiguous)
+  ) {
     throw new Error("Bitrix Anti-Fraud вернул неполный card-map ответ");
   }
 
@@ -160,7 +171,13 @@ const parseResponse = (
     if (!Array.isArray(row.bitrix_user_ids) || row.bitrix_user_ids.length < 2) {
       throw new Error("Bitrix Anti-Fraud вернул некорректный ambiguous.bitrix_user_ids");
     }
-    const bitrixUserIds = [...new Set(row.bitrix_user_ids.map((value) => parsePositiveInteger(value, "ambiguous.bitrix_user_ids")))];
+    const bitrixUserIds = [
+      ...new Set(
+        row.bitrix_user_ids.map((value) =>
+          parsePositiveInteger(value, "ambiguous.bitrix_user_ids"),
+        ),
+      ),
+    ];
     if (bitrixUserIds.length < 2) {
       throw new Error("Bitrix Anti-Fraud вернул неоднозначную карту без нескольких владельцев");
     }
@@ -172,15 +189,14 @@ const parseResponse = (
     throw new Error("Bitrix Anti-Fraud card-map не классифицировал все запрошенные карты");
   }
 
-  const resolved = parsePositiveInteger(data.resolved === 0 ? 1 : data.resolved, "resolved");
-  const normalizedResolved = data.resolved === 0 ? 0 : resolved;
-  if (normalizedResolved !== records.length) {
+  const resolved = parseNonNegativeInteger(data.resolved, "resolved");
+  if (resolved !== records.length) {
     throw new Error("Bitrix Anti-Fraud вернул несовпадающее количество resolved");
   }
 
   return {
     requested,
-    resolved: normalizedResolved,
+    resolved,
     records,
     unresolved,
     ambiguous,
@@ -197,7 +213,11 @@ export class BitrixAntiFraudCardGateway {
 
   async resolveCards(cards: string[]): Promise<BitrixAntiFraudCardMapResult> {
     const normalizedCards = normalizeCards(cards);
-    const apiUrl = (this.options.apiUrl ?? process.env.BITRIX_ANTI_FRAUD_API_URL ?? DEFAULT_API_URL).trim();
+    const apiUrl = (
+      this.options.apiUrl ??
+      process.env.BITRIX_ANTI_FRAUD_API_URL ??
+      DEFAULT_API_URL
+    ).trim();
     let parsedUrl: URL;
     try {
       parsedUrl = new URL(apiUrl);
@@ -210,7 +230,11 @@ export class BitrixAntiFraudCardGateway {
 
     const token = await this.resolveToken();
     const timeoutMs = positiveInteger(
-      Number(this.options.timeoutMs ?? process.env.BITRIX_ANTI_FRAUD_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
+      Number(
+        this.options.timeoutMs ??
+          process.env.BITRIX_ANTI_FRAUD_TIMEOUT_MS ??
+          DEFAULT_TIMEOUT_MS,
+      ),
       DEFAULT_TIMEOUT_MS,
     );
     const controller = new AbortController();
@@ -245,7 +269,11 @@ export class BitrixAntiFraudCardGateway {
     const direct = (this.options.token ?? process.env.BITRIX_ANTI_FRAUD_TOKEN ?? "").trim();
     if (direct) return direct;
 
-    const tokenFile = (this.options.tokenFile ?? process.env.BITRIX_ANTI_FRAUD_TOKEN_FILE ?? "").trim();
+    const tokenFile = (
+      this.options.tokenFile ??
+      process.env.BITRIX_ANTI_FRAUD_TOKEN_FILE ??
+      ""
+    ).trim();
     if (!tokenFile) {
       throw new Error("BITRIX_ANTI_FRAUD_TOKEN или BITRIX_ANTI_FRAUD_TOKEN_FILE не настроен");
     }
