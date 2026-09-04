@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  scoreAntiFraudSignals,
-  type AntiFraudRiskSignals,
-} from "./anti-fraud-risk-engine";
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+// Risk unit tests не обращаются к БД, но production-модуль создаёт pg Pool при импорте.
+// Задаём синтаксически корректный test-only DATABASE_URL до dynamic import, чтобы CI проверял
+// чистую scoring-логику без зависимости от production/runtime окружения.
+process.env.DATABASE_URL ??= "postgresql://test:test@127.0.0.1:5432/test";
+
+const { scoreAntiFraudSignals } = await import("./anti-fraud-risk-engine");
+type AntiFraudRiskSignals = Parameters<typeof scoreAntiFraudSignals>[0];
 
 const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRiskSignals => ({
   bitrixUserId: 1,
