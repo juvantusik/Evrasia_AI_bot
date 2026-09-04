@@ -1,4 +1,4 @@
-import { closeDatabase } from "@workspace/db";
+import { pool } from "@workspace/db";
 import { enrichRestisHistoryForHighRiskUserOnce } from "./services/anti-fraud-restis-history-enricher";
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -40,5 +40,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await closeDatabase();
+    await pool.end();
   });
