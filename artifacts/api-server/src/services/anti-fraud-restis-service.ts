@@ -21,6 +21,13 @@ type RestisCollectorOptions = {
   gateway?: RestisAntiFraudGateway;
 };
 
+type ExistingVisitRow = {
+  restis_id: string;
+  card_number: string;
+  visited_at: Date;
+  restaurant: string;
+};
+
 const safeErrorMessage = (error: unknown): string => {
   const message = error instanceof Error ? error.message : "Неизвестная ошибка RestIS collector";
   return message.slice(0, 2000);
@@ -33,6 +40,33 @@ const newestCursor = (visits: RestisVisitEvent[]): string | null => {
     return timeDiff || b.restisId.localeCompare(a.restisId);
   })[0];
   return `${newest.visitedAt.toISOString()}|${newest.restisId}`;
+};
+
+const assertExistingVisitsAreStable = (
+  visits: RestisVisitEvent[],
+  existingRows: ExistingVisitRow[],
+): Set<string> => {
+  const incoming = new Map(visits.map((visit) => [visit.restisId, visit]));
+  const existingIds = new Set<string>();
+
+  for (const row of existingRows) {
+    const visit = incoming.get(row.restis_id);
+    if (!visit) continue;
+    existingIds.add(row.restis_id);
+
+    const same =
+      row.card_number === visit.cardNumber &&
+      row.visited_at.getTime() === visit.visitedAt.getTime() &&
+      row.restaurant === visit.restaurant;
+
+    if (!same) {
+      throw new Error(
+        `RestIS изменил ранее сохранённое событие ID=${row.restis_id}; синхронизация остановлена`,
+      );
+    }
+  }
+
+  return existingIds;
 };
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -74,6 +108,7 @@ export const collectRestisVisitsOnce = async (
     const batch = await gateway.fetchVipToday(pageSize);
     const cards = [...new Set(batch.visits.map((visit) => visit.cardNumber))];
     const cursor = newestCursor(batch.visits);
+    const incomingIds = batch.visits.map((visit) => visit.restisId);
 
     await client.query("BEGIN");
     transactionOpen = true;
@@ -87,8 +122,21 @@ export const collectRestisVisitsOnce = async (
       );
     }
 
+    let existingIds = new Set<string>();
+    if (incomingIds.length) {
+      const existing = await client.query<ExistingVisitRow>(
+        `SELECT restis_id, card_number, visited_at, restaurant
+         FROM anti_fraud_visits
+         WHERE restis_id = ANY($1::text[])`,
+        [incomingIds],
+      );
+      existingIds = assertExistingVisitsAreStable(batch.visits, existing.rows);
+    }
+
     let writtenEvents = 0;
     for (const visit of batch.visits) {
+      if (existingIds.has(visit.restisId)) continue;
+
       const inserted = await client.query(
         `INSERT INTO anti_fraud_visits
            (restis_id, card_number, bitrix_user_id, visited_at, restaurant, synced_at, resolved_at)
@@ -112,14 +160,17 @@ export const collectRestisVisitsOnce = async (
       if (inserted.rowCount) writtenEvents += 1;
     }
 
-    const resolvedResult = await client.query<{ count: string }>(
-      `SELECT count(*)::text AS count
-       FROM anti_fraud_visits
-       WHERE restis_id = ANY($1::text[])
-         AND bitrix_user_id IS NOT NULL`,
-      [batch.visits.map((visit) => visit.restisId)],
-    );
-    const recordsResolved = Number(resolvedResult.rows[0]?.count ?? 0);
+    let recordsResolved = 0;
+    if (incomingIds.length) {
+      const resolvedResult = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM anti_fraud_visits
+         WHERE restis_id = ANY($1::text[])
+           AND bitrix_user_id IS NOT NULL`,
+        [incomingIds],
+      );
+      recordsResolved = Number(resolvedResult.rows[0]?.count ?? 0);
+    }
 
     await client.query(
       `UPDATE anti_fraud_sync_runs
