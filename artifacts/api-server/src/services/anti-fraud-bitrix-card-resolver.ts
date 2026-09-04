@@ -138,18 +138,20 @@ export const resolveBitrixCardsOnce = async (
         throw new Error("Bitrix card-map вернул карту без внутреннего ID");
       }
 
+      // Добавлено 03.09.2026 ИТ Директор Евразии
+      // card_status_id приходит из Bitrix и не является состоянием RestIS.
       const updated = await client.query(
         `UPDATE anti_fraud_cards
          SET bitrix_user_id = $2,
              card_type = $3,
-             restis_state = $4,
+             bitrix_card_status_id = $4,
              is_active = $5,
              resolved_at = COALESCE(resolved_at, now())
          WHERE id = $1
            AND (
              bitrix_user_id IS DISTINCT FROM $2 OR
              card_type IS DISTINCT FROM $3 OR
-             restis_state IS DISTINCT FROM $4 OR
+             bitrix_card_status_id IS DISTINCT FROM $4 OR
              is_active IS DISTINCT FROM $5 OR
              resolved_at IS NULL
            )
