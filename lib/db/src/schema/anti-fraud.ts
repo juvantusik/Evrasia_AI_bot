@@ -33,7 +33,7 @@ export const antiFraudCardsTable = pgTable(
     cardNumber: text("card_number").primaryKey(),
     bitrixUserId: integer("bitrix_user_id"),
     cardType: integer("card_type"),
-    cardStatus: integer("card_status"),
+    restisState: integer("restis_state"),
     isActive: boolean("is_active").notNull().default(false),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
@@ -110,8 +110,31 @@ export const antiFraudSyncStateTable = pgTable("anti_fraud_sync_state", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Добавлено 03.09.2026 ИТ Директор Евразии
+export const antiFraudSyncRunsTable = pgTable(
+  "anti_fraud_sync_runs",
+  {
+    runId: text("run_id").primaryKey(),
+    source: text("source").notNull(),
+    status: text("status").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    recordsFetched: integer("records_fetched").notNull().default(0),
+    recordsWritten: integer("records_written").notNull().default(0),
+    recordsResolved: integer("records_resolved").notNull().default(0),
+    error: text("error"),
+  },
+  (table) => ({
+    sourceStartedIdx: index("anti_fraud_sync_runs_source_started_idx").on(
+      table.source,
+      table.startedAt,
+    ),
+  }),
+);
+
 export type AntiFraudAccount = typeof antiFraudAccountsTable.$inferSelect;
 export type AntiFraudCard = typeof antiFraudCardsTable.$inferSelect;
 export type AntiFraudVisit = typeof antiFraudVisitsTable.$inferSelect;
 export type AntiFraudDeviceEvent = typeof antiFraudDeviceEventsTable.$inferSelect;
 export type AntiFraudSyncState = typeof antiFraudSyncStateTable.$inferSelect;
+export type AntiFraudSyncRun = typeof antiFraudSyncRunsTable.$inferSelect;
