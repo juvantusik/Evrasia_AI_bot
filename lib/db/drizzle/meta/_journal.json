@@ -29,6 +29,13 @@
       "when": 1787818000000,
       "tag": "0003_corporate_phone_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788504758000,
+      "tag": "0004_anti_fraud_foundation",
+      "breakpoints": true
     }
   ]
 }
