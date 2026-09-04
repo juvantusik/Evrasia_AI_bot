@@ -94,6 +94,11 @@ export const syncBitrixAccountsOnce = async (
          UNION
 
          SELECT bitrix_user_id
+         FROM anti_fraud_device_links
+
+         UNION
+
+         SELECT bitrix_user_id
          FROM anti_fraud_device_events
 
          UNION
