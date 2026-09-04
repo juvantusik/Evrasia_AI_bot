@@ -35,7 +35,8 @@ export const antiFraudCardsTable = pgTable(
     cardNumber: text("card_number").notNull(),
     bitrixUserId: integer("bitrix_user_id"),
     cardType: integer("card_type"),
-    restisState: integer("restis_state"),
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    bitrixCardStatusId: integer("bitrix_card_status_id"),
     isActive: boolean("is_active").notNull().default(false),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),

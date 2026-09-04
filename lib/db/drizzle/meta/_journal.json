@@ -43,6 +43,13 @@
       "when": 1788513000000,
       "tag": "0005_anti_fraud_schema_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788516000000,
+      "tag": "0006_anti_fraud_bitrix_card_status",
+      "breakpoints": true
     }
   ]
 }

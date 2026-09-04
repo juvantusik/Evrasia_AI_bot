@@ -12,6 +12,7 @@
 - История посещений не дублирует raw `CARD_NO`: `anti_fraud_visits` использует внутренний `card_id`.
 - `card_number` запрещено писать в application-логи, тексты ошибок, Telegram и публичные API-ответы Anti-Fraud.
 - `anti_fraud_cards.card_number` имеет проверку формата и уникальный индекс.
+- `anti_fraud_cards.bitrix_card_status_id` хранит raw ID статуса карты из Bitrix card-map; это не состояние RestIS и не должно интерпретироваться как RestIS enum.
 
 ## Bitrix-аккаунты и PII
 
