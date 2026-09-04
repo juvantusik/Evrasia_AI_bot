@@ -22,6 +22,10 @@ export type AntiFraudRiskSignals = {
   duplicatePhoneAccounts: number;
   duplicateEmailAccounts: number;
   nearbyLinkedVisitPairs: number;
+  maxVisitsPerDay60d: number;
+  highVisitDays60d: number;
+  longestHighVisitSequence2d: number;
+  maxDistinctRestaurantsOnHighVisitDay: number;
   activeCardCount: number;
   bitrixActive: boolean;
   historyEnriched: boolean;
@@ -84,6 +88,10 @@ type SignalRow = {
   duplicate_phone_accounts: string | number | null;
   duplicate_email_accounts: string | number | null;
   nearby_linked_visit_pairs: string | number | null;
+  max_visits_per_day_60d: string | number | null;
+  high_visit_days_60d: string | number | null;
+  longest_high_visit_sequence_2d: string | number | null;
+  max_distinct_restaurants_on_high_visit_day: string | number | null;
   active_card_count: string | number | null;
   bitrix_active: boolean | null;
   history_enriched: boolean | null;
@@ -115,7 +123,8 @@ const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 // v1 использует только объяснимые признаки. Наличие двух аккаунтов на одном устройстве само по себе
-// не достигает history gate; быстрые переключения, 3+ аккаунта и повторные связи усиливают риск.
+// не достигает history gate. Посещения считаются по всем ресторанам вместе: одинаковые и разные рестораны
+// одинаково входят в суточную частоту; 3+ посещения за ресторанный день являются самостоятельным risk gate.
 export const scoreAntiFraudSignals = (
   signals: AntiFraudRiskSignals,
   historyThreshold = DEFAULT_HISTORY_THRESHOLD,
@@ -255,6 +264,45 @@ export const scoreAntiFraudSignals = (
       code: "linked_visit_proximity",
       score: visitBehaviorRisk,
       details: `same_restaurant_pairs_under_15m=${signals.nearbyLinkedVisitPairs}`,
+    });
+  }
+
+  // Добавлено 03.09.2026 ИТ Директор Евразии
+  // Суточная частота считается независимо от ресторана. Поэтому 3 посещения одного ресторана и
+  // 3 посещения трёх разных ресторанов одинаково являются первичным сигналом для адресной истории.
+  let dailyFrequencyScore = 0;
+  if (signals.maxVisitsPerDay60d >= 5) dailyFrequencyScore = 70;
+  else if (signals.maxVisitsPerDay60d === 4) dailyFrequencyScore = 60;
+  else if (signals.maxVisitsPerDay60d === 3) dailyFrequencyScore = 50;
+
+  if (dailyFrequencyScore > 0) {
+    visitBehaviorRisk += dailyFrequencyScore;
+    reasons.push({
+      code: "high_daily_visit_frequency",
+      score: dailyFrequencyScore,
+      details:
+        `max_visits_per_day=${signals.maxVisitsPerDay60d}; ` +
+        `high_visit_days_60d=${signals.highVisitDays60d}; ` +
+        `max_distinct_restaurants=${signals.maxDistinctRestaurantsOnHighVisitDay}`,
+    });
+  }
+
+  // Добавлено 03.09.2026 ИТ Директор Евразии
+  // Последовательность считается непрерывной, пока между днями с 3+ посещениями не более двух суток.
+  // Это покрывает бизнес-условие «каждый день или через день».
+  let repeatedFrequencyScore = 0;
+  if (signals.longestHighVisitSequence2d >= 5) repeatedFrequencyScore = 50;
+  else if (signals.longestHighVisitSequence2d >= 3) repeatedFrequencyScore = 35;
+  else if (signals.longestHighVisitSequence2d >= 2) repeatedFrequencyScore = 15;
+
+  if (repeatedFrequencyScore > 0) {
+    visitBehaviorRisk += repeatedFrequencyScore;
+    reasons.push({
+      code: "repeated_high_visit_days",
+      score: repeatedFrequencyScore,
+      details:
+        `sequence_days=${signals.longestHighVisitSequence2d}; ` +
+        `high_visit_days_60d=${signals.highVisitDays60d}; max_gap_days=2`,
     });
   }
 
@@ -442,6 +490,80 @@ near_visit_by_user AS (
   ) x
   GROUP BY bitrix_user_id
 ),
+// Добавлено 03.09.2026 ИТ Директор Евразии
+// Restaurant day фиксируем в Europe/Moscow, потому что RestIS operational timestamps работают в +03.
+daily_visit_counts AS (
+  SELECT
+    bitrix_user_id,
+    (visited_at AT TIME ZONE 'Europe/Moscow')::date AS visit_day,
+    count(*)::int AS visit_count,
+    count(DISTINCT restaurant)::int AS distinct_restaurants
+  FROM active_visits
+  GROUP BY bitrix_user_id, (visited_at AT TIME ZONE 'Europe/Moscow')::date
+),
+high_visit_days AS (
+  SELECT *
+  FROM daily_visit_counts
+  WHERE visit_count >= 3
+),
+high_visit_with_previous AS (
+  SELECT
+    bitrix_user_id,
+    visit_day,
+    visit_count,
+    distinct_restaurants,
+    lag(visit_day) OVER (
+      PARTITION BY bitrix_user_id
+      ORDER BY visit_day
+    ) AS previous_day
+  FROM high_visit_days
+),
+high_visit_marked AS (
+  SELECT
+    *,
+    CASE
+      WHEN previous_day IS NULL OR visit_day - previous_day > 2 THEN 1
+      ELSE 0
+    END AS new_sequence
+  FROM high_visit_with_previous
+),
+high_visit_grouped AS (
+  SELECT
+    *,
+    sum(new_sequence) OVER (
+      PARTITION BY bitrix_user_id
+      ORDER BY visit_day
+      ROWS UNBOUNDED PRECEDING
+    ) AS sequence_id
+  FROM high_visit_marked
+),
+high_visit_sequences AS (
+  SELECT
+    bitrix_user_id,
+    sequence_id,
+    count(*)::int AS sequence_days
+  FROM high_visit_grouped
+  GROUP BY bitrix_user_id, sequence_id
+),
+visit_frequency_agg AS (
+  SELECT
+    bitrix_user_id,
+    max(visit_count)::int AS max_visits_per_day_60d,
+    count(*) FILTER (WHERE visit_count >= 3)::int AS high_visit_days_60d,
+    COALESCE(
+      max(distinct_restaurants) FILTER (WHERE visit_count >= 3),
+      0
+    )::int AS max_distinct_restaurants_on_high_visit_day
+  FROM daily_visit_counts
+  GROUP BY bitrix_user_id
+),
+visit_sequence_agg AS (
+  SELECT
+    bitrix_user_id,
+    max(sequence_days)::int AS longest_high_visit_sequence_2d
+  FROM high_visit_sequences
+  GROUP BY bitrix_user_id
+),
 card_agg AS (
   SELECT
     bitrix_user_id,
@@ -473,6 +595,11 @@ SELECT
   COALESCE(ia.duplicate_phone_accounts, 0) AS duplicate_phone_accounts,
   COALESCE(ia.duplicate_email_accounts, 0) AS duplicate_email_accounts,
   COALESCE(nv.nearby_linked_visit_pairs, 0) AS nearby_linked_visit_pairs,
+  COALESCE(vf.max_visits_per_day_60d, 0) AS max_visits_per_day_60d,
+  COALESCE(vf.high_visit_days_60d, 0) AS high_visit_days_60d,
+  COALESCE(vs.longest_high_visit_sequence_2d, 0) AS longest_high_visit_sequence_2d,
+  COALESCE(vf.max_distinct_restaurants_on_high_visit_day, 0)
+    AS max_distinct_restaurants_on_high_visit_day,
   COALESCE(ca.active_card_count, 0) AS active_card_count,
   COALESCE(a.bitrix_active, false) AS bitrix_active,
   COALESCE(ca.history_enriched, false) AS history_enriched
@@ -483,6 +610,8 @@ LEFT JOIN pair_by_user pu ON pu.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN switch_agg sa ON sa.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN identity_agg ia ON ia.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN near_visit_by_user nv ON nv.bitrix_user_id = c.bitrix_user_id
+LEFT JOIN visit_frequency_agg vf ON vf.bitrix_user_id = c.bitrix_user_id
+LEFT JOIN visit_sequence_agg vs ON vs.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN card_agg ca ON ca.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = c.bitrix_user_id
 WHERE c.bitrix_user_id > 0
@@ -503,6 +632,12 @@ const loadRiskSignals = async (): Promise<AntiFraudRiskSignals[]> => {
     duplicatePhoneAccounts: toCount(row.duplicate_phone_accounts),
     duplicateEmailAccounts: toCount(row.duplicate_email_accounts),
     nearbyLinkedVisitPairs: toCount(row.nearby_linked_visit_pairs),
+    maxVisitsPerDay60d: toCount(row.max_visits_per_day_60d),
+    highVisitDays60d: toCount(row.high_visit_days_60d),
+    longestHighVisitSequence2d: toCount(row.longest_high_visit_sequence_2d),
+    maxDistinctRestaurantsOnHighVisitDay: toCount(
+      row.max_distinct_restaurants_on_high_visit_day,
+    ),
     activeCardCount: toCount(row.active_card_count),
     bitrixActive: row.bitrix_active === true,
     historyEnriched: row.history_enriched === true,
@@ -612,13 +747,21 @@ export const analyzeAntiFraudOnce = async (
   const refreshAccounts = options.refreshAccounts !== false;
   const autoHistory = options.autoHistory === true;
   const historyThreshold = boundedInteger(
-    Number(options.historyThreshold ?? process.env.ANTI_FRAUD_HISTORY_RISK_THRESHOLD ?? DEFAULT_HISTORY_THRESHOLD),
+    Number(
+      options.historyThreshold ??
+        process.env.ANTI_FRAUD_HISTORY_RISK_THRESHOLD ??
+        DEFAULT_HISTORY_THRESHOLD,
+    ),
     DEFAULT_HISTORY_THRESHOLD,
     1,
     100,
   );
   const maxHistoryUsers = boundedInteger(
-    Number(options.maxHistoryUsers ?? process.env.ANTI_FRAUD_MAX_HISTORY_USERS_PER_RUN ?? DEFAULT_MAX_HISTORY_USERS),
+    Number(
+      options.maxHistoryUsers ??
+        process.env.ANTI_FRAUD_MAX_HISTORY_USERS_PER_RUN ??
+        DEFAULT_MAX_HISTORY_USERS,
+    ),
     DEFAULT_MAX_HISTORY_USERS,
     1,
     MAX_HISTORY_USERS,
@@ -723,7 +866,10 @@ export const analyzeAntiFraudOnce = async (
          WHERE run_id=$1`,
         [
           runId,
-          (error instanceof Error ? error.message : "Неизвестная ошибка risk scoring").slice(0, 2000),
+          (error instanceof Error ? error.message : "Неизвестная ошибка risk scoring").slice(
+            0,
+            2000,
+          ),
         ],
       );
     } catch {
