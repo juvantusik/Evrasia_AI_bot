@@ -23,6 +23,8 @@ async function buildAll() {
       path.resolve(artifactDir, "src/index.ts"),
       path.resolve(artifactDir, "src/anti-fraud-restis-cli.ts"),
       path.resolve(artifactDir, "src/anti-fraud-bitrix-resolver-cli.ts"),
+      // Добавлено 03.09.2026 ИТ Директор Евразии
+      path.resolve(artifactDir, "src/anti-fraud-restis-history-cli.ts"),
     ],
     platform: "node",
     bundle: true,
