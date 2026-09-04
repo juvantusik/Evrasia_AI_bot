@@ -16,6 +16,10 @@ const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRi
   duplicatePhoneAccounts: 0,
   duplicateEmailAccounts: 0,
   nearbyLinkedVisitPairs: 0,
+  maxVisitsPerDay60d: 0,
+  highVisitDays60d: 0,
+  longestHighVisitSequence2d: 0,
+  maxDistinctRestaurantsOnHighVisitDay: 0,
   activeCardCount: 1,
   bitrixActive: true,
   historyEnriched: false,
@@ -96,4 +100,67 @@ test("same account cluster repeated across several devices is a strong linked-ac
   assert.equal(score.riskLevel, "critical");
   assert.equal(score.historyGate, true);
   assert.ok(score.reasons.some((reason) => reason.code === "repeated_device_pair"));
+});
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+test("three visits in one day trigger history regardless of restaurant count", () => {
+  const sameRestaurant = scoreAntiFraudSignals(
+    baseSignals({
+      maxVisitsPerDay60d: 3,
+      highVisitDays60d: 1,
+      maxDistinctRestaurantsOnHighVisitDay: 1,
+    }),
+  );
+  const differentRestaurants = scoreAntiFraudSignals(
+    baseSignals({
+      maxVisitsPerDay60d: 3,
+      highVisitDays60d: 1,
+      maxDistinctRestaurantsOnHighVisitDay: 3,
+    }),
+  );
+
+  assert.equal(sameRestaurant.visitBehaviorRisk, 50);
+  assert.equal(differentRestaurants.visitBehaviorRisk, 50);
+  assert.equal(sameRestaurant.historyGate, true);
+  assert.equal(differentRestaurants.historyGate, true);
+
+  const reason = differentRestaurants.reasons.find(
+    (item) => item.code === "high_daily_visit_frequency",
+  );
+  assert.ok(reason);
+  assert.match(reason.details, /max_distinct_restaurants=3/);
+});
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+test("three-plus visits every day or every other day are critical behavior", () => {
+  const score = scoreAntiFraudSignals(
+    baseSignals({
+      maxVisitsPerDay60d: 3,
+      highVisitDays60d: 3,
+      longestHighVisitSequence2d: 3,
+      maxDistinctRestaurantsOnHighVisitDay: 2,
+    }),
+  );
+
+  assert.equal(score.visitBehaviorRisk, 85);
+  assert.equal(score.overallRisk, 85);
+  assert.equal(score.riskLevel, "critical");
+  assert.equal(score.historyGate, true);
+  assert.ok(score.reasons.some((reason) => reason.code === "repeated_high_visit_days"));
+});
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+test("five visits on repeated high-visit days clamp visit risk to 100", () => {
+  const score = scoreAntiFraudSignals(
+    baseSignals({
+      maxVisitsPerDay60d: 5,
+      highVisitDays60d: 5,
+      longestHighVisitSequence2d: 5,
+      maxDistinctRestaurantsOnHighVisitDay: 5,
+    }),
+  );
+
+  assert.equal(score.visitBehaviorRisk, 100);
+  assert.equal(score.overallRisk, 100);
+  assert.equal(score.riskLevel, "critical");
 });
