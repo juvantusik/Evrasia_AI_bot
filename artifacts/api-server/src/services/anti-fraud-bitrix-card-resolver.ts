@@ -171,8 +171,8 @@ export const resolveBitrixCardsOnce = async (
          AND v.bitrix_user_id <> c.bitrix_user_id
        LIMIT 1`,
     );
-    if (visitConflict.rows.length) {
-      const conflict = visitConflict.rows[0];
+    const conflict = visitConflict.rows[0];
+    if (conflict) {
       throw new Error(
         `Конфликт владельца посещения RestIS ${conflict.restis_id}: ${conflict.visit_user_id} != ${conflict.card_user_id}`,
       );
