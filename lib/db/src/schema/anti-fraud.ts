@@ -3,8 +3,10 @@ import {
   index,
   integer,
   pgTable,
+  serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -17,7 +19,6 @@ export const antiFraudAccountsTable = pgTable(
     displayName: text("display_name"),
     registeredAt: timestamp("registered_at", { withTimezone: true }),
     bitrixActive: boolean("bitrix_active").notNull().default(true),
-    currentCardNumber: text("current_card_number"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -30,7 +31,8 @@ export const antiFraudAccountsTable = pgTable(
 export const antiFraudCardsTable = pgTable(
   "anti_fraud_cards",
   {
-    cardNumber: text("card_number").primaryKey(),
+    id: serial("id").primaryKey(),
+    cardNumber: text("card_number").notNull(),
     bitrixUserId: integer("bitrix_user_id"),
     cardType: integer("card_type"),
     restisState: integer("restis_state"),
@@ -40,8 +42,8 @@ export const antiFraudCardsTable = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (table) => ({
+    cardNumberUidx: uniqueIndex("anti_fraud_cards_number_uidx").on(table.cardNumber),
     userIdx: index("anti_fraud_cards_user_idx").on(table.bitrixUserId),
-    activeIdx: index("anti_fraud_cards_active_idx").on(table.isActive),
   }),
 );
 
@@ -50,7 +52,9 @@ export const antiFraudVisitsTable = pgTable(
   "anti_fraud_visits",
   {
     restisId: text("restis_id").primaryKey(),
-    cardNumber: text("card_number").notNull(),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => antiFraudCardsTable.id, { onDelete: "restrict" }),
     bitrixUserId: integer("bitrix_user_id"),
     visitedAt: timestamp("visited_at", { withTimezone: true }).notNull(),
     restaurant: text("restaurant").notNull(),
@@ -59,7 +63,7 @@ export const antiFraudVisitsTable = pgTable(
   },
   (table) => ({
     cardVisitedIdx: index("anti_fraud_visits_card_visited_idx").on(
-      table.cardNumber,
+      table.cardId,
       table.visitedAt,
     ),
     userVisitedIdx: index("anti_fraud_visits_user_visited_idx").on(
@@ -80,8 +84,8 @@ export const antiFraudDeviceEventsTable = pgTable(
     sourceEventId: text("source_event_id").primaryKey(),
     bitrixUserId: integer("bitrix_user_id").notNull(),
     deviceHash: text("device_hash").notNull(),
-    eventType: integer("event_type").notNull(),
-    authMethod: integer("auth_method"),
+    eventType: text("event_type").notNull(),
+    authMethod: text("auth_method"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },

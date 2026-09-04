@@ -16,6 +16,7 @@ type ResolverOptions = {
 };
 
 type ExistingCardRow = {
+  id: number;
   card_number: string;
   bitrix_user_id: number | null;
 };
@@ -57,7 +58,7 @@ const assertOwnersAreStable = (
     if (!resolved || row.bitrix_user_id === null) continue;
     if (row.bitrix_user_id !== resolved.bitrixUserId) {
       throw new Error(
-        `Bitrix изменил владельца карты ${row.card_number}: ${row.bitrix_user_id} -> ${resolved.bitrixUserId}; синхронизация остановлена`,
+        `Bitrix изменил владельца внутренней карты ID=${row.id}: ${row.bitrix_user_id} -> ${resolved.bitrixUserId}; синхронизация остановлена`,
       );
     }
   }
@@ -102,11 +103,14 @@ export const resolveBitrixCardsOnce = async (
     );
 
     const cardsResult = await client.query<ExistingCardRow>(
-      `SELECT card_number, bitrix_user_id
+      `SELECT id, card_number, bitrix_user_id
        FROM anti_fraud_cards
        ORDER BY card_number`,
     );
     const cardNumbers = cardsResult.rows.map((row) => row.card_number);
+    const cardIdsByNumber = new Map(
+      cardsResult.rows.map((row) => [row.card_number, row.id] as const),
+    );
 
     const resolvedByCard = new Map<string, BitrixAntiFraudCardRecord>();
     let unresolvedCards = 0;
@@ -129,6 +133,11 @@ export const resolveBitrixCardsOnce = async (
 
     let updatedCards = 0;
     for (const record of resolvedByCard.values()) {
+      const cardId = cardIdsByNumber.get(record.cardNumber);
+      if (cardId === undefined) {
+        throw new Error("Bitrix card-map вернул карту без внутреннего ID");
+      }
+
       const updated = await client.query(
         `UPDATE anti_fraud_cards
          SET bitrix_user_id = $2,
@@ -136,7 +145,7 @@ export const resolveBitrixCardsOnce = async (
              restis_state = $4,
              is_active = $5,
              resolved_at = COALESCE(resolved_at, now())
-         WHERE card_number = $1
+         WHERE id = $1
            AND (
              bitrix_user_id IS DISTINCT FROM $2 OR
              card_type IS DISTINCT FROM $3 OR
@@ -144,9 +153,9 @@ export const resolveBitrixCardsOnce = async (
              is_active IS DISTINCT FROM $5 OR
              resolved_at IS NULL
            )
-         RETURNING card_number`,
+         RETURNING id`,
         [
-          record.cardNumber,
+          cardId,
           record.bitrixUserId,
           record.cardType,
           record.cardStatusId,
@@ -156,6 +165,8 @@ export const resolveBitrixCardsOnce = async (
       if (updated.rowCount) updatedCards += 1;
     }
 
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    // Посещения связаны с master-картой через card_id и не содержат raw CARD_NO.
     const visitConflict = await client.query<{
       restis_id: string;
       visit_user_id: number;
@@ -165,7 +176,7 @@ export const resolveBitrixCardsOnce = async (
               v.bitrix_user_id AS visit_user_id,
               c.bitrix_user_id AS card_user_id
        FROM anti_fraud_visits v
-       JOIN anti_fraud_cards c ON c.card_number = v.card_number
+       JOIN anti_fraud_cards c ON c.id = v.card_id
        WHERE v.bitrix_user_id IS NOT NULL
          AND c.bitrix_user_id IS NOT NULL
          AND v.bitrix_user_id <> c.bitrix_user_id
@@ -183,7 +194,7 @@ export const resolveBitrixCardsOnce = async (
        SET bitrix_user_id = c.bitrix_user_id,
            resolved_at = COALESCE(v.resolved_at, now())
        FROM anti_fraud_cards c
-       WHERE v.card_number = c.card_number
+       WHERE v.card_id = c.id
          AND c.bitrix_user_id IS NOT NULL
          AND (
            v.bitrix_user_id IS NULL OR

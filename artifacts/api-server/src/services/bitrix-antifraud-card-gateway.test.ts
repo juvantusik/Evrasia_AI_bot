@@ -69,7 +69,7 @@ test("Bitrix Anti-Fraud gateway accepts zero resolved cards", async () => {
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
-test("Bitrix Anti-Fraud gateway rejects duplicate classification", async () => {
+test("Bitrix Anti-Fraud gateway rejects duplicate classification without exposing CARD_NO", async () => {
   const gateway = new BitrixAntiFraudCardGateway({
     token: "x".repeat(64),
     fetchImpl: async () =>
@@ -95,7 +95,15 @@ test("Bitrix Anti-Fraud gateway rejects duplicate classification", async () => {
       ),
   });
 
-  await assert.rejects(gateway.resolveCards(["17888709"]), /повторную карту/);
+  await assert.rejects(
+    gateway.resolveCards(["17888709"]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /повторную карту/);
+      assert.doesNotMatch(error.message, /17888709/);
+      return true;
+    },
+  );
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -111,6 +119,22 @@ test("Bitrix Anti-Fraud gateway does not expose HTTP response body in errors", a
       assert.ok(error instanceof Error);
       assert.match(error.message, /HTTP 401/);
       assert.doesNotMatch(error.message, /secret diagnostic body/);
+      return true;
+    },
+  );
+});
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+test("Bitrix Anti-Fraud gateway does not expose malformed CARD_NO in errors", async () => {
+  const malformed = "123-secret-card";
+  const gateway = new BitrixAntiFraudCardGateway({ token: "x".repeat(64) });
+
+  await assert.rejects(
+    gateway.resolveCards([malformed]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Некорректный номер карты/);
+      assert.doesNotMatch(error.message, new RegExp(malformed));
       return true;
     },
   );
