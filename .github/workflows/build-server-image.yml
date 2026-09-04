@@ -148,4 +148,7 @@ jobs:
 
           # Добавлено 03.09.2026 ИТ Директор Евразии
           curl -fsS http://127.0.0.1:18080/antifraud | grep -Fq 'id="root"'
-          test "$(curl -sS -o /tmp/antifraud-not-ready.json -w '%{http_code}' http://127.0.0.1:18080/api/anti-fraud/summary)" = "503"
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/summary >/tmp/antifraud-summary.json
+          test "$(jq '.scoredAccounts' /tmp/antifraud-summary.json)" = "0"
+          test "$(jq '.sharedDevices' /tmp/antifraud-summary.json)" = "0"
+          test "$(jq '.updatedAt' /tmp/antifraud-summary.json)" = "null"
