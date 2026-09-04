@@ -64,6 +64,13 @@
       "when": 1788526200000,
       "tag": "0008_anti_fraud_trusted_device_import",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788529000000,
+      "tag": "0009_anti_fraud_risk_engine",
+      "breakpoints": true
     }
   ]
 }
