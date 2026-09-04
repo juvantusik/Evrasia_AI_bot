@@ -248,7 +248,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
   }
 
   const devices: AntiFraudCaseDevice[] = deviceResult.rows.map((row: any) => {
-    const userIds = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
+    const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
     union(parents, userIds);
     return {
       devicePrefix: String(row.device_prefix ?? ""),
@@ -257,11 +257,11 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
     };
   });
 
-  const identityMatches = identityResult.rows.map((row: any) => {
-    const userIds = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
+  const identityMatches: AntiFraudCase["identityMatches"] = identityResult.rows.map((row: any) => {
+    const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
     union(parents, userIds);
     return {
-      type: row.match_type === "email" ? ("email" as const) : ("phone" as const),
+      type: row.match_type === "email" ? "email" : "phone",
       userIds,
     };
   });
