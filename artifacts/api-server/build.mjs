@@ -18,7 +18,11 @@ async function buildAll() {
   });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      path.resolve(artifactDir, "src/anti-fraud-restis-cli.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",
