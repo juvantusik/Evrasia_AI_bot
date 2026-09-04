@@ -490,8 +490,8 @@ near_visit_by_user AS (
   ) x
   GROUP BY bitrix_user_id
 ),
-// Добавлено 03.09.2026 ИТ Директор Евразии
-// Restaurant day фиксируем в Europe/Moscow, потому что RestIS operational timestamps работают в +03.
+-- Добавлено 03.09.2026 ИТ Директор Евразии
+-- Restaurant day фиксируем в Europe/Moscow, потому что RestIS operational timestamps работают в +03.
 daily_visit_counts AS (
   SELECT
     bitrix_user_id,
