@@ -23,9 +23,14 @@ type RestisCollectorOptions = {
 
 type ExistingVisitRow = {
   restis_id: string;
-  card_number: string;
+  card_id: number;
   visited_at: Date;
   restaurant: string;
+};
+
+type CardRow = {
+  id: number;
+  card_number: string;
 };
 
 const safeErrorMessage = (error: unknown): string => {
@@ -45,6 +50,7 @@ const newestCursor = (visits: RestisVisitEvent[]): string | null => {
 const assertExistingVisitsAreStable = (
   visits: RestisVisitEvent[],
   existingRows: ExistingVisitRow[],
+  cardIdsByNumber: Map<string, number>,
 ): Set<string> => {
   const incoming = new Map(visits.map((visit) => [visit.restisId, visit]));
   const existingIds = new Set<string>();
@@ -54,8 +60,10 @@ const assertExistingVisitsAreStable = (
     if (!visit) continue;
     existingIds.add(row.restis_id);
 
+    const incomingCardId = cardIdsByNumber.get(visit.cardNumber);
     const same =
-      row.card_number === visit.cardNumber &&
+      incomingCardId !== undefined &&
+      row.card_id === incomingCardId &&
       row.visited_at.getTime() === visit.visitedAt.getTime() &&
       row.restaurant === visit.restaurant;
 
@@ -113,49 +121,67 @@ export const collectRestisVisitsOnce = async (
     await client.query("BEGIN");
     transactionOpen = true;
 
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    // Raw CARD_NO хранится только в master-таблице карт; посещения используют surrogate card_id.
+    const cardIdsByNumber = new Map<string, number>();
     for (const cardNumber of cards) {
-      await client.query(
+      const cardResult = await client.query<CardRow>(
         `INSERT INTO anti_fraud_cards (card_number, first_seen_at, last_seen_at)
          VALUES ($1, now(), now())
-         ON CONFLICT (card_number) DO UPDATE SET last_seen_at = now()`,
+         ON CONFLICT (card_number) DO UPDATE SET last_seen_at = now()
+         RETURNING id, card_number`,
         [cardNumber],
       );
+      const card = cardResult.rows[0];
+      if (!card) {
+        throw new Error("Не удалось получить внутренний ID карты RestIS");
+      }
+      cardIdsByNumber.set(card.card_number, card.id);
     }
 
     let existingIds = new Set<string>();
     if (incomingIds.length) {
       const existing = await client.query<ExistingVisitRow>(
-        `SELECT restis_id, card_number, visited_at, restaurant
+        `SELECT restis_id, card_id, visited_at, restaurant
          FROM anti_fraud_visits
          WHERE restis_id = ANY($1::text[])`,
         [incomingIds],
       );
-      existingIds = assertExistingVisitsAreStable(batch.visits, existing.rows);
+      existingIds = assertExistingVisitsAreStable(
+        batch.visits,
+        existing.rows,
+        cardIdsByNumber,
+      );
     }
 
     let writtenEvents = 0;
     for (const visit of batch.visits) {
       if (existingIds.has(visit.restisId)) continue;
 
+      const cardId = cardIdsByNumber.get(visit.cardNumber);
+      if (cardId === undefined) {
+        throw new Error("Для посещения RestIS не найден внутренний ID карты");
+      }
+
       const inserted = await client.query(
         `INSERT INTO anti_fraud_visits
-           (restis_id, card_number, bitrix_user_id, visited_at, restaurant, synced_at, resolved_at)
+           (restis_id, card_id, bitrix_user_id, visited_at, restaurant, synced_at, resolved_at)
          VALUES (
            $1,
            $2,
-           (SELECT bitrix_user_id FROM anti_fraud_cards WHERE card_number = $2),
+           (SELECT bitrix_user_id FROM anti_fraud_cards WHERE id = $2),
            $3,
            $4,
            now(),
            CASE
-             WHEN (SELECT bitrix_user_id FROM anti_fraud_cards WHERE card_number = $2) IS NULL
+             WHEN (SELECT bitrix_user_id FROM anti_fraud_cards WHERE id = $2) IS NULL
                THEN NULL
              ELSE now()
            END
          )
          ON CONFLICT (restis_id) DO NOTHING
          RETURNING restis_id`,
-        [visit.restisId, visit.cardNumber, visit.visitedAt, visit.restaurant],
+        [visit.restisId, cardId, visit.visitedAt, visit.restaurant],
       );
       if (inserted.rowCount) writtenEvents += 1;
     }
