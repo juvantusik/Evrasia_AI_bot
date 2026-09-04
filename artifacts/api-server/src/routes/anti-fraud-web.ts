@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { listAntiFraudCases } from "../services/anti-fraud-case-service";
 import {
   getAntiFraudWebSummary,
   listAntiFraudWebAccounts,
@@ -17,6 +18,16 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
     res.json(await getAntiFraudWebSummary());
   } catch (error) {
     req.log.error({ error }, "Failed to load Anti-Fraud summary");
+    res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
+  try {
+    res.json({ records: await listAntiFraudCases() });
+  } catch (error) {
+    req.log.error({ error }, "Failed to load Anti-Fraud cases");
     res.status(503).json({ error: errorMessage(error) });
   }
 });
