@@ -145,3 +145,7 @@ jobs:
             -H 'content-type: application/json' \
             -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест"}' \
             http://127.0.0.1:18080/api/phonebook/phones)" = "401"
+
+          # Добавлено 03.09.2026 ИТ Директор Евразии
+          curl -fsS http://127.0.0.1:18080/antifraud | grep -Fq 'id="root"'
+          test "$(curl -sS -o /tmp/antifraud-not-ready.json -w '%{http_code}' http://127.0.0.1:18080/api/anti-fraud/summary)" = "503"
