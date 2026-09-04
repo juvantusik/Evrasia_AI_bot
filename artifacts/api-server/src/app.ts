@@ -37,6 +37,8 @@ const staticRoot = process.env["STATIC_ROOT"]?.trim();
 if (staticRoot) {
   const indexFile = path.join(staticRoot, "index.html");
   const phonebookIndexFile = path.join(staticRoot, "phonebook.html");
+  // Добавлено 03.09.2026 ИТ Директор Евразии
+  const antiFraudIndexFile = path.join(staticRoot, "antifraud.html");
 
   app.use(express.static(staticRoot, { index: false }));
   app.use((req, res, next) => {
@@ -53,6 +55,12 @@ if (staticRoot) {
 
     if (req.path === "/phonebook" || req.path.startsWith("/phonebook/")) {
       res.sendFile(phonebookIndexFile);
+      return;
+    }
+
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    if (req.path === "/antifraud" || req.path.startsWith("/antifraud/")) {
+      res.sendFile(antiFraudIndexFile);
       return;
     }
 
