@@ -46,7 +46,7 @@ const normalizeCards = (cards: string[]): string[] => {
   for (const value of cards) {
     const card = String(value).trim();
     if (!/^\d{4,32}$/.test(card)) {
-      throw new Error(`Некорректный номер карты Bitrix Anti-Fraud: ${card}`);
+      throw new Error("Некорректный номер карты Bitrix Anti-Fraud");
     }
     unique.add(card);
   }
@@ -129,7 +129,7 @@ const parseResponse = (
     const row = raw as Record<string, unknown>;
     const cardNumber = parseCardNumber(row.card_number, "card_number");
     if (!allowed.has(cardNumber) || seen.has(cardNumber)) {
-      throw new Error(`Bitrix Anti-Fraud вернул неожиданную или повторную карту ${cardNumber}`);
+      throw new Error("Bitrix Anti-Fraud вернул неожиданную или повторную карту в records");
     }
     seen.add(cardNumber);
 
@@ -153,7 +153,7 @@ const parseResponse = (
   const unresolved = data.unresolved.map((value) => {
     const cardNumber = parseCardNumber(value, "unresolved");
     if (!allowed.has(cardNumber) || seen.has(cardNumber)) {
-      throw new Error(`Bitrix Anti-Fraud вернул неожиданную или повторную карту ${cardNumber}`);
+      throw new Error("Bitrix Anti-Fraud вернул неожиданную или повторную карту в unresolved");
     }
     seen.add(cardNumber);
     return cardNumber;
@@ -166,7 +166,7 @@ const parseResponse = (
     const row = raw as Record<string, unknown>;
     const cardNumber = parseCardNumber(row.card_number, "ambiguous.card_number");
     if (!allowed.has(cardNumber) || seen.has(cardNumber)) {
-      throw new Error(`Bitrix Anti-Fraud вернул неожиданную или повторную карту ${cardNumber}`);
+      throw new Error("Bitrix Anti-Fraud вернул неожиданную или повторную карту в ambiguous");
     }
     if (!Array.isArray(row.bitrix_user_ids) || row.bitrix_user_ids.length < 2) {
       throw new Error("Bitrix Anti-Fraud вернул некорректный ambiguous.bitrix_user_ids");
