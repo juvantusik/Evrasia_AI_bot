@@ -5,6 +5,7 @@ import {
   type TrustedDeviceEventRecord,
   type TrustedDeviceLinkRecord,
 } from "./bitrix-antifraud-device-gateway";
+import { assertTrustedDeviceLinkSnapshotSafe } from "./trusted-device-snapshot-guard";
 
 const SOURCE = "trusted_device_export";
 const LOCK_NAME = "anti_fraud_trusted_device_export";
@@ -159,6 +160,19 @@ export const syncTrustedDeviceOnce = async (
         throw new Error("Trusted Device links pagination превысила безопасный предел страниц");
       }
     }
+
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    // До destructive reconcile сравниваем полный полученный snapshot с локальным объёмом.
+    // Пустой snapshot или внезапное сокращение более чем вдвое считаем ошибкой источника/пагинации.
+    const existingLinksResult = await client.query<{ link_count: string }>(
+      `SELECT count(*)::bigint AS link_count
+       FROM anti_fraud_device_links`,
+    );
+    const existingLinks = Number(existingLinksResult.rows[0]?.link_count ?? 0);
+    if (!Number.isSafeInteger(existingLinks) || existingLinks < 0) {
+      throw new Error("Не удалось безопасно определить количество текущих Trusted Device links");
+    }
+    assertTrustedDeviceLinkSnapshotSafe(existingLinks, links.size);
 
     const events = new Map<string, TrustedDeviceEventRecord>();
     let eventCursor = initialCursor.events;
