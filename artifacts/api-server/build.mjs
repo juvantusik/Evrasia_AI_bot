@@ -25,6 +25,8 @@ async function buildAll() {
       path.resolve(artifactDir, "src/anti-fraud-bitrix-resolver-cli.ts"),
       // Добавлено 03.09.2026 ИТ Директор Евразии
       path.resolve(artifactDir, "src/anti-fraud-restis-history-cli.ts"),
+      // Добавлено 03.09.2026 ИТ Директор Евразии
+      path.resolve(artifactDir, "src/anti-fraud-bitrix-account-cli.ts"),
     ],
     platform: "node",
     bundle: true,
@@ -79,7 +81,6 @@ async function buildAll() {
       "firebase-admin",
       "@parcel/watcher",
       "@sentry/profiling-node",
-      "@tree-sitter/*",
       "aws-sdk",
       "classic-level",
       "dd-trace",
