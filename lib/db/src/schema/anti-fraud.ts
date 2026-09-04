@@ -41,6 +41,11 @@ export const antiFraudCardsTable = pgTable(
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    // Эти поля описывают только адресно загруженное VIP_HISTORY для активной карты.
+    historyLoadedFrom: timestamp("history_loaded_from", { withTimezone: true }),
+    historyLoadedUntil: timestamp("history_loaded_until", { withTimezone: true }),
+    historyLoadedAt: timestamp("history_loaded_at", { withTimezone: true }),
   },
   (table) => ({
     cardNumberUidx: uniqueIndex("anti_fraud_cards_number_uidx").on(table.cardNumber),
