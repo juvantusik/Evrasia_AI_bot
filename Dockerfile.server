@@ -21,7 +21,7 @@ RUN pnpm typecheck:libs \
     && pnpm --filter @workspace/api-server exec node \
         --experimental-transform-types \
         --experimental-loader ./test-ts-resolver.mjs \
-        --test src/services/bitrix-gateway.test.ts src/services/megafon-group-routing.test.ts src/services/restis-antifraud-gateway.test.ts src/services/bitrix-antifraud-card-gateway.test.ts src/services/bitrix-antifraud-account-gateway.test.ts \
+        --test src/services/bitrix-gateway.test.ts src/services/megafon-group-routing.test.ts src/services/restis-antifraud-gateway.test.ts src/services/bitrix-antifraud-card-gateway.test.ts src/services/bitrix-antifraud-account-gateway.test.ts src/services/bitrix-antifraud-device-gateway.test.ts \
     && pnpm --filter @workspace/api-server build \
     && pnpm --filter @workspace/samzaberu-ops build \
     && pnpm --filter @workspace/samzaberu-ops exec vite build --config vite.phonebook.config.ts
