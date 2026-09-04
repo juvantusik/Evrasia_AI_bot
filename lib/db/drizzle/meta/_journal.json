@@ -36,6 +36,13 @@
       "when": 1788504758000,
       "tag": "0004_anti_fraud_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788513000000,
+      "tag": "0005_anti_fraud_schema_hardening",
+      "breakpoints": true
     }
   ]
 }
