@@ -47,9 +47,13 @@
 ## Trusted Device
 
 - IP-адрес не хранится и не используется как фактор доверия или Anti-Fraud сигнал.
-- `device_hash` используется как технический псевдоним устройства.
-- `event_type` и `auth_method` на уровне foundation хранятся как raw text. Их значения нельзя интерпретировать как фиксированные числовые enum до сверки фактической схемы и значений Trusted Device в MariaDB.
-- До этой сверки production-ingestion Trusted Device не включается.
+- `device_hash` используется как технический псевдоним устройства и должен соответствовать SHA-256 hex-формату `^[a-f0-9]{64}$`.
+- `event_type`, `auth_method`, `client_type` и status текущей связи сохраняются как raw text. Ingestion не интерпретирует их как числовые enum и не присваивает им риск самостоятельно.
+- Текущие user-device связи зеркалируются отдельно в `anti_fraud_device_links`, потому что поток `ev_device_auth_events` может быть неполным и не является достаточным источником текущего состояния связей.
+- `anti_fraud_device_links` синхронизируется полным snapshot с reconcile по `source_link_id`; исчезнувшие из успешного snapshot связи удаляются локально.
+- `anti_fraud_device_events` загружается инкрементально по монотонному source event ID. Повторный `source_event_id` с отличающимися core-полями считается ошибкой источника и не перезаписывается молча.
+- Trusted Device export не передаёт телефон, email, имя пользователя, IP или trust token.
+- До утверждения retention device telemetry collector разрешён для тестового контура, но не включается как production schedule.
 
 ## Ссылочная целостность
 
