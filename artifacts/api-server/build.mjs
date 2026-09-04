@@ -22,6 +22,7 @@ async function buildAll() {
     entryPoints: [
       path.resolve(artifactDir, "src/index.ts"),
       path.resolve(artifactDir, "src/anti-fraud-restis-cli.ts"),
+      path.resolve(artifactDir, "src/anti-fraud-bitrix-resolver-cli.ts"),
     ],
     platform: "node",
     bundle: true,
