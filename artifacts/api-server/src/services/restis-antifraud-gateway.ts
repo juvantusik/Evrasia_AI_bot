@@ -56,9 +56,11 @@ const normalizeTimezoneOffset = (value: string): string => {
   return trimmed;
 };
 
+// Добавлено 03.09.2026 ИТ Директор Евразии
+// VIP_HISTORY иногда возвращает миллисекунды, поэтому принимаем обе формы OPEN_DATE.
 const parseRestisDate = (value: string, timezoneOffset: string): Date => {
   const normalized = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(normalized)) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/.test(normalized)) {
     throw new Error(`RestIS вернул некорректную дату OPEN_DATE: ${normalized}`);
   }
   const date = new Date(`${normalized}${timezoneOffset}`);
@@ -105,6 +107,58 @@ export const parseVipTodayXml = (
         previous.restaurant === event.restaurant;
       if (!same) {
         throw new Error(`RestIS VIP_TODAY вернул конфликтующие строки для ID=${restisId}`);
+      }
+      continue;
+    }
+
+    unique.set(restisId, event);
+  }
+
+  return { rawRows: rows.length, visits: [...unique.values()] };
+};
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+// VIP_HISTORY не возвращает CARD_NO в каждой строке: номер карты известен из самого запроса.
+export const parseVipHistoryXml = (
+  xml: string,
+  cardNumber: string,
+  timezoneOffset = DEFAULT_TIMEZONE_OFFSET,
+): RestisVisitBatch => {
+  const normalizedCardNumber = cardNumber.trim();
+  if (!/^\d{4,32}$/.test(normalizedCardNumber)) {
+    throw new Error("CARD_NO для RestIS VIP_HISTORY имеет некорректный формат");
+  }
+
+  const offset = normalizeTimezoneOffset(timezoneOffset);
+  const rows = [...xml.matchAll(/<HIS\b([^>]*)\/?\s*>/gi)];
+  const unique = new Map<string, RestisVisitEvent>();
+
+  for (const row of rows) {
+    const attributes = parseAttributes(row[1] ?? "");
+    const restisId = (attributes.ID ?? "").trim();
+    const openDate = (attributes.OPEN_DATE ?? "").trim();
+    const restaurant = (attributes.NAME_OBJECT ?? "").trim();
+
+    if (!restisId || !openDate || !restaurant) {
+      throw new Error(
+        "RestIS VIP_HISTORY вернул строку без обязательных ID/OPEN_DATE/NAME_OBJECT",
+      );
+    }
+
+    const event: RestisVisitEvent = {
+      restisId,
+      cardNumber: normalizedCardNumber,
+      visitedAt: parseRestisDate(openDate, offset),
+      restaurant,
+    };
+
+    const previous = unique.get(restisId);
+    if (previous) {
+      const same =
+        previous.visitedAt.getTime() === event.visitedAt.getTime() &&
+        previous.restaurant === event.restaurant;
+      if (!same) {
+        throw new Error(`RestIS VIP_HISTORY вернул конфликтующие строки для ID=${restisId}`);
       }
       continue;
     }
@@ -167,6 +221,67 @@ export class RestisAntiFraudGateway {
       const timezoneOffset =
         this.options.timezoneOffset ?? process.env.RESTIS_TIMEZONE_OFFSET ?? DEFAULT_TIMEZONE_OFFSET;
       return parseVipTodayXml(body, timezoneOffset);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Превышено время ожидания ответа RestIS");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // Добавлено 03.09.2026 ИТ Директор Евразии
+  // История запрашивается только адресно для карты аккаунта с повышенным риском.
+  async fetchVipHistory(cardNumber: string, pageSize = 10_000): Promise<RestisVisitBatch> {
+    const normalizedCardNumber = cardNumber.trim();
+    if (!/^\d{4,32}$/.test(normalizedCardNumber)) {
+      throw new Error("CARD_NO для RestIS VIP_HISTORY имеет некорректный формат");
+    }
+
+    const apiUrl = (this.options.apiUrl ?? process.env.RESTIS_API_URL ?? DEFAULT_API_URL).trim();
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(apiUrl);
+    } catch {
+      throw new Error("RESTIS_API_URL содержит некорректный адрес");
+    }
+    if (parsedUrl.protocol !== "https:") {
+      throw new Error("RESTIS_API_URL должен использовать HTTPS");
+    }
+
+    const username = (this.options.username ?? process.env.RESTIS_API_USERNAME ?? "").trim();
+    if (!username) {
+      throw new Error("RESTIS_API_USERNAME не настроен");
+    }
+    const password = await this.resolvePassword();
+    const timeoutMs = positiveInteger(
+      Number(this.options.timeoutMs ?? process.env.RESTIS_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
+      DEFAULT_TIMEOUT_MS,
+    );
+    const safePageSize = Math.min(10_000, positiveInteger(Number(pageSize), 10_000));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await this.fetchImpl(parsedUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`,
+          "Content-Type": "application/xml",
+        },
+        body: `<VIP_HISTORY pagesize="${safePageSize}" Card="${normalizedCardNumber}" />`,
+        signal: controller.signal,
+      });
+
+      const body = await response.text();
+      if (!response.ok) {
+        throw new Error(`RestIS VIP_HISTORY отклонил запрос: HTTP ${response.status}`);
+      }
+
+      const timezoneOffset =
+        this.options.timezoneOffset ?? process.env.RESTIS_TIMEZONE_OFFSET ?? DEFAULT_TIMEZONE_OFFSET;
+      return parseVipHistoryXml(body, normalizedCardNumber, timezoneOffset);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error("Превышено время ожидания ответа RestIS");
