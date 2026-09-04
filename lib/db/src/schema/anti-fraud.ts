@@ -92,6 +92,8 @@ export const antiFraudDeviceEventsTable = pgTable(
     deviceHash: text("device_hash").notNull(),
     eventType: text("event_type").notNull(),
     authMethod: text("auth_method"),
+    // Добавлено 03.09.2026 ИТ Директор Евразии
+    clientType: text("client_type"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -103,6 +105,83 @@ export const antiFraudDeviceEventsTable = pgTable(
     deviceOccurredIdx: index("anti_fraud_device_events_device_occurred_idx").on(
       table.deviceHash,
       table.occurredAt,
+    ),
+  }),
+);
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+export const antiFraudDeviceLinksTable = pgTable(
+  "anti_fraud_device_links",
+  {
+    sourceLinkId: text("source_link_id").primaryKey(),
+    bitrixUserId: integer("bitrix_user_id").notNull(),
+    deviceHash: text("device_hash").notNull(),
+    status: text("status").notNull(),
+    clientType: text("client_type"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+    seenRunId: text("seen_run_id").notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("anti_fraud_device_links_user_idx").on(table.bitrixUserId),
+    deviceIdx: index("anti_fraud_device_links_device_idx").on(table.deviceHash),
+    deviceUserIdx: index("anti_fraud_device_links_device_user_idx").on(
+      table.deviceHash,
+      table.bitrixUserId,
+    ),
+  }),
+);
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+export const antiFraudRiskScoresTable = pgTable(
+  "anti_fraud_risk_scores",
+  {
+    bitrixUserId: integer("bitrix_user_id").primaryKey(),
+    calculationVersion: text("calculation_version").notNull().default("v1"),
+    deviceRisk: integer("device_risk").notNull().default(0),
+    linkedAccountRisk: integer("linked_account_risk").notNull().default(0),
+    identitySimilarityRisk: integer("identity_similarity_risk").notNull().default(0),
+    visitBehaviorRisk: integer("visit_behavior_risk").notNull().default(0),
+    historicalBehaviorRisk: integer("historical_behavior_risk").notNull().default(0),
+    overallRisk: integer("overall_risk").notNull().default(0),
+    riskLevel: text("risk_level").notNull(),
+    historyGate: boolean("history_gate").notNull().default(false),
+    historyEnriched: boolean("history_enriched").notNull().default(false),
+    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    overallIdx: index("anti_fraud_risk_scores_overall_idx").on(
+      table.overallRisk,
+      table.computedAt,
+    ),
+    historyGateIdx: index("anti_fraud_risk_scores_history_gate_idx").on(
+      table.historyGate,
+      table.overallRisk,
+    ),
+  }),
+);
+
+// Добавлено 03.09.2026 ИТ Директор Евразии
+export const antiFraudRiskReasonsTable = pgTable(
+  "anti_fraud_risk_reasons",
+  {
+    id: serial("id").primaryKey(),
+    bitrixUserId: integer("bitrix_user_id").notNull(),
+    reasonCode: text("reason_code").notNull(),
+    score: integer("score").notNull(),
+    details: text("details").notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userCodeUidx: uniqueIndex("anti_fraud_risk_reasons_user_code_uidx").on(
+      table.bitrixUserId,
+      table.reasonCode,
+    ),
+    codeIdx: index("anti_fraud_risk_reasons_code_idx").on(
+      table.reasonCode,
+      table.score,
     ),
   }),
 );
@@ -146,5 +225,8 @@ export type AntiFraudAccount = typeof antiFraudAccountsTable.$inferSelect;
 export type AntiFraudCard = typeof antiFraudCardsTable.$inferSelect;
 export type AntiFraudVisit = typeof antiFraudVisitsTable.$inferSelect;
 export type AntiFraudDeviceEvent = typeof antiFraudDeviceEventsTable.$inferSelect;
+export type AntiFraudDeviceLink = typeof antiFraudDeviceLinksTable.$inferSelect;
+export type AntiFraudRiskScore = typeof antiFraudRiskScoresTable.$inferSelect;
+export type AntiFraudRiskReason = typeof antiFraudRiskReasonsTable.$inferSelect;
 export type AntiFraudSyncState = typeof antiFraudSyncStateTable.$inferSelect;
 export type AntiFraudSyncRun = typeof antiFraudSyncRunsTable.$inferSelect;
