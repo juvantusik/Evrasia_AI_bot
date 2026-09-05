@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { pool } from "@workspace/db";
 import { listAntiFraudCases } from "../services/anti-fraud-case-service";
 import {
   getAntiFraudWebSummary,
@@ -11,6 +12,69 @@ const router: IRouter = Router();
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Не удалось загрузить данные Anti-Fraud.";
+
+type ContactTarget = {
+  bitrixUserId: number;
+  phoneMasked: string | null;
+  emailMasked: string | null;
+};
+
+type ContactValue = {
+  phone: string | null;
+  email: string | null;
+};
+
+const displayPhone = (value: unknown): string | null => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length >= 7 ? `+${digits}` : null;
+};
+
+const displayEmail = (value: unknown): string | null => {
+  const text = String(value ?? "").trim();
+  return text && text.includes("@") ? text : null;
+};
+
+const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactValue>> => {
+  const ids = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (!ids.length) return new Map();
+
+  const result = await pool.query<{
+    bitrix_user_id: number;
+    phone_normalized: string | null;
+    email_normalized: string | null;
+  }>(`
+    SELECT bitrix_user_id, phone_normalized, email_normalized
+    FROM anti_fraud_accounts
+    WHERE bitrix_user_id = ANY($1::int[])
+  `, [ids]);
+
+  return new Map(
+    result.rows.map((row) => [
+      Number(row.bitrix_user_id),
+      {
+        phone: displayPhone(row.phone_normalized),
+        email: displayEmail(row.email_normalized),
+      },
+    ]),
+  );
+};
+
+// В Anti-Fraud оператор должен видеть полный телефон/email: они нужны для ручной
+// проверки аккаунта в Bitrix и последующей блокировки. Названия полей оставлены
+// прежними для обратной совместимости текущего web-клиента.
+const exposeFullContacts = <T extends ContactTarget>(
+  records: T[],
+  contacts: Map<number, ContactValue>,
+): T[] =>
+  records.map((record) => {
+    const contact = contacts.get(record.bitrixUserId);
+    if (!contact) return record;
+    return {
+      ...record,
+      phoneMasked: contact.phone,
+      emailMasked: contact.email,
+    };
+  });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
@@ -25,7 +89,15 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
 // Добавлено 03.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
   try {
-    res.json({ records: await listAntiFraudCases() });
+    const records = await listAntiFraudCases();
+    const userIds = records.flatMap((item) => item.accounts.map((account) => account.bitrixUserId));
+    const contacts = await loadContactMap(userIds);
+    res.json({
+      records: records.map((item) => ({
+        ...item,
+        accounts: exposeFullContacts(item.accounts, contacts),
+      })),
+    });
   } catch (error) {
     req.log.error({ error }, "Failed to load Anti-Fraud cases");
     res.status(503).json({ error: errorMessage(error) });
@@ -40,7 +112,8 @@ router.get("/anti-fraud/accounts", async (req, res): Promise<void> => {
       level: String(req.query.level ?? ""),
       limit: Number(req.query.limit ?? 200),
     });
-    res.json({ records });
+    const contacts = await loadContactMap(records.map((record) => record.bitrixUserId));
+    res.json({ records: exposeFullContacts(records, contacts) });
   } catch (error) {
     req.log.error({ error }, "Failed to load Anti-Fraud accounts");
     res.status(503).json({ error: errorMessage(error) });
