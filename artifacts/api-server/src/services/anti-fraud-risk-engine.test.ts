@@ -176,7 +176,7 @@ test("five visits on repeated high-visit days clamp visit risk to 100", () => {
 });
 
 // Добавлено 05.09.2026 ИТ Директор Евразии
-test("exactly 40000 bonuses do not trigger the high-balance gate", () => {
+test("exactly 40000.00 bonuses do not trigger the high-balance gate", () => {
   const score = scoreAntiFraudSignals(baseSignals({ bonusBalance: 40_000 }));
 
   assert.equal(score.historicalBehaviorRisk, 0);
@@ -185,9 +185,9 @@ test("exactly 40000 bonuses do not trigger the high-balance gate", () => {
   assert.equal(score.reasons.some((reason) => reason.code === "high_bonus_balance"), false);
 });
 
-// Добавлено 05.09.2026 ИТ Директор Евразии
-test("more than 40000 bonuses add 50 risk and trigger 60-day history gate", () => {
-  const score = scoreAntiFraudSignals(baseSignals({ bonusBalance: 40_001 }));
+// Обновлено 05.09.2026 ИТ Директор Евразии
+test("40000.01 bonuses add 50 risk and trigger 60-day history gate", () => {
+  const score = scoreAntiFraudSignals(baseSignals({ bonusBalance: 40_000.01 }));
 
   assert.equal(score.historicalBehaviorRisk, 50);
   assert.equal(score.overallRisk, 50);
@@ -197,6 +197,7 @@ test("more than 40000 bonuses add 50 risk and trigger 60-day history gate", () =
   const reason = score.reasons.find((item) => item.code === "high_bonus_balance");
   assert.ok(reason);
   assert.equal(reason.score, 50);
-  assert.match(reason.details, /bonus_balance=40001/);
+  assert.match(reason.details, /bonus_balance=40000\.01/);
+  assert.match(reason.details, /threshold=40000\.00/);
   assert.match(reason.details, /history_window_days=60/);
 });
