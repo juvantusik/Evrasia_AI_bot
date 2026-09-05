@@ -1,0 +1,189 @@
+/* Добавлено 05.09.2026 ИТ Директор Евразии
+ * Увеличенный рабочий масштаб Anti-Fraud для desktop.
+ * Мобильная верстка остаётся под контролем базового anti-fraud-web.css.
+ */
+
+@media (min-width: 900px) {
+  .af-header {
+    min-height: 78px;
+    padding: 12px max(28px, calc((100vw - 1480px) / 2));
+  }
+
+  .af-brand-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .af-brand strong { font-size: 23px; }
+  .af-brand span { font-size: 13px; }
+
+  .af-refresh {
+    min-height: 46px;
+    padding: 10px 18px;
+    font-size: 15px;
+  }
+
+  .af-content {
+    width: min(1480px, calc(100% - 64px));
+    padding-top: 38px;
+  }
+
+  .af-title-row { margin-bottom: 30px; }
+  .af-title-row h1 { font-size: clamp(38px, 3.2vw, 50px); }
+  .af-title-row p {
+    max-width: 980px;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .af-updated { font-size: 14px; }
+
+  .af-summary-grid {
+    gap: 18px;
+    margin-bottom: 24px;
+  }
+
+  .af-summary-grid article {
+    min-height: 132px;
+    padding: 22px;
+    border-radius: 20px;
+  }
+
+  .af-summary-grid span { font-size: 16px; }
+  .af-summary-grid strong { font-size: 39px; }
+  .af-summary-grid small { font-size: 13px; }
+
+  .af-tabs {
+    gap: 9px;
+    margin: 26px 0 22px;
+  }
+
+  .af-tabs button {
+    min-height: 46px;
+    padding: 10px 18px;
+    font-size: 15px;
+  }
+
+  .af-tabs button span {
+    min-width: 25px;
+    height: 23px;
+    font-size: 12px;
+  }
+
+  .af-toolbar {
+    grid-template-columns: minmax(380px, 1fr) 190px 290px;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .af-search,
+  .af-toolbar select {
+    min-height: 54px;
+    font-size: 15px;
+  }
+
+  .af-search { padding: 0 19px; }
+  .af-toolbar select { padding: 0 17px; }
+
+  .af-case-list { border-radius: 20px; }
+
+  .af-case-head,
+  .af-case-row {
+    grid-template-columns: 108px minmax(220px, 1fr) minmax(360px, 1.6fr) 110px 145px 30px;
+    gap: 16px;
+  }
+
+  .af-case-head {
+    padding: 14px 20px;
+    font-size: 11px;
+  }
+
+  .af-case-row { padding: 18px 20px; }
+
+  .risk-pill {
+    width: 84px;
+    height: 58px;
+    border-radius: 16px;
+    font-size: 25px;
+  }
+
+  .risk-pill small { font-size: 9px; }
+  .case-title strong { font-size: 16px; }
+  .case-title small { font-size: 13px; }
+
+  .case-tags { gap: 8px; }
+  .case-tags em {
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
+  .case-count { font-size: 14px; }
+  .case-time { font-size: 13px; }
+
+  .af-case-details {
+    grid-template-columns: minmax(0, 1.5fr) minmax(340px, .75fr);
+    gap: 20px;
+    padding: 22px;
+  }
+
+  .detail-column h3 {
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+
+  .account-card {
+    padding: 18px;
+    margin-bottom: 12px;
+    border-radius: 17px;
+  }
+
+  .account-top strong { font-size: 16px; }
+  .account-top span { font-size: 12px; }
+
+  .account-top b {
+    width: 48px;
+    height: 36px;
+    font-size: 15px;
+  }
+
+  .account-contact {
+    gap: 8px 22px;
+    margin: 13px 0;
+    font-size: 14px;
+  }
+
+  .risk-bars {
+    gap: 9px;
+    margin-bottom: 13px;
+  }
+
+  .risk-bars span {
+    padding: 9px 10px;
+    font-size: 11px;
+  }
+
+  .reason-list { gap: 8px; }
+  .reason-list > div {
+    grid-template-columns: minmax(175px, auto) 42px 1fr;
+    gap: 9px;
+    padding-top: 8px;
+  }
+  .reason-list strong { font-size: 12px; }
+  .reason-list span { font-size: 12px; }
+  .reason-list small { font-size: 11px; line-height: 1.45; }
+
+  .link-card {
+    gap: 12px;
+    padding: 15px;
+    margin-bottom: 11px;
+  }
+  .link-card strong { font-size: 13px; }
+  .link-card span { font-size: 12px; }
+  .link-card small { font-size: 11px; }
+
+  .simple-table th { font-size: 11px; }
+  .simple-table td { font-size: 14px; }
+
+  .recommendation-card h3 { font-size: 17px; }
+  .recommendation-card p,
+  .recommendation-card li { font-size: 14px; line-height: 1.55; }
+}
