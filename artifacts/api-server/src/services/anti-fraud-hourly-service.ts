@@ -1,18 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import { logger } from "../lib/logger";
-import { collectRestisVisitsOnce } from "./anti-fraud-restis-service";
-import { resolveBitrixCardsOnce } from "./anti-fraud-bitrix-card-resolver";
 import { syncTrustedDeviceOnce } from "./anti-fraud-trusted-device-collector";
 import { syncBitrixAccountsOnce } from "./anti-fraud-bitrix-account-collector";
-import { refreshStalestLoyaltyBalancesOnce } from "./anti-fraud-loyalty-balance-service";
+import {
+  refreshLoyaltyBalancesForUsersOnce,
+  refreshStalestLoyaltyBalancesOnce,
+} from "./anti-fraud-loyalty-balance-service";
 import { analyzeAntiFraudWithSimilarityOnce } from "./anti-fraud-identity-similarity-service";
 import { captureAntiFraudCaseDynamics } from "./anti-fraud-case-dynamics-service";
 
-const SOURCE = "anti_fraud_hourly_cycle";
-const DEFAULT_INTERVAL_MINUTES = 60;
+const SOURCE = "anti_fraud_protected_cycle";
+const DEFAULT_INTERVAL_MINUTES = 15;
 const MIN_INTERVAL_MINUTES = 15;
 const MAX_INTERVAL_MINUTES = 24 * 60;
+const DEFAULT_LOYALTY_STALE_BATCH = 200;
+const MAX_PRIORITY_LOYALTY_USERS = 200;
 
 type SchedulerStatus = {
   enabled: boolean;
@@ -61,6 +64,11 @@ const boundedInterval = (value: number): number => {
   return Math.max(MIN_INTERVAL_MINUTES, Math.min(MAX_INTERVAL_MINUTES, value));
 };
 
+const boundedLoyaltyBatch = (value: number): number => {
+  if (!Number.isInteger(value) || value <= 0) return DEFAULT_LOYALTY_STALE_BATCH;
+  return Math.min(200, value);
+};
+
 const safeError = (error: unknown): string =>
   (error instanceof Error ? error.message : "Неизвестная ошибка").slice(0, 1000);
 
@@ -70,7 +78,7 @@ const runStage = async (stage: string, action: () => Promise<unknown>): Promise<
     return { stage, ok: true };
   } catch (error) {
     const message = safeError(error);
-    logger.warn({ stage, error: message }, "Anti-Fraud hourly source stage failed");
+    logger.warn({ stage, error: message }, "Anti-Fraud protected source stage failed");
     return { stage, ok: false, error: message };
   }
 };
@@ -145,17 +153,37 @@ const persistCycleFinish = async (
   );
 };
 
+const refreshPriorityLoyaltyOnce = async (): Promise<void> => {
+  const result = await pool.query<{ bitrix_user_id: number }>(
+    `SELECT s.bitrix_user_id
+     FROM anti_fraud_risk_scores s
+     JOIN anti_fraud_accounts a ON a.bitrix_user_id = s.bitrix_user_id
+     WHERE a.bitrix_active IS TRUE
+       AND s.overall_risk > 0
+     ORDER BY s.overall_risk DESC, s.bitrix_user_id
+     LIMIT $1`,
+    [MAX_PRIORITY_LOYALTY_USERS],
+  );
+
+  const userIds = result.rows.map((row) => Number(row.bitrix_user_id));
+  if (!userIds.length) return;
+  await refreshLoyaltyBalancesForUsersOnce({ userIds });
+};
+
 // Обновлено 05.09.2026 ИТ Директор Евразии
-// Один hourly-проход:
-// 1) legacy VIP_TODAY/card-map пока сохраняют текущий visit feed, если RestIS source настроен;
-// 2) Trusted Device даёт USER_ID/device_hash;
-// 3) account-map актуализирует identity;
-// 4) protected loyalty scan адресно обновляет небольшую порцию старейших TotalSum;
-// 5) scoring/history используют USER_ID -> site-side active RESTIS_STATE=113 card.
-// Ошибка одного source-stage не отменяет scoring по последнему валидному snapshot.
+// Защищённый цикл больше НЕ использует прямые RestIS VIP_TODAY/card-map и не требует
+// RestIS credentials в контейнере бота. Каждые 15 минут при включённом scheduler:
+// 1) полный snapshot Trusted Device;
+// 2) account-map по известным USER_ID;
+// 3) свежий loyalty TotalSum/count/issue для уже рискованных аккаунтов;
+// 4) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;
+// 5) explainable risk + адресная history только для history gate;
+// 6) фиксация case dynamics.
+// Rolling loyalty выбран намеренно: полный флот = ~1800 RestIS Balance вызовов за один проход,
+// поэтому без отдельного load-test не запускаем такой burst каждые 15 минут.
 export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
   if (schedulerStatus.running) {
-    logger.warn("Anti-Fraud hourly cycle skipped because previous cycle is still running");
+    logger.warn("Anti-Fraud protected cycle skipped because previous cycle is still running");
     return;
   }
 
@@ -170,26 +198,26 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
   try {
     await persistCycleStart(runId);
 
-    stages.push(await runStage("restis_vip_today", () => collectRestisVisitsOnce()));
-    stages.push(await runStage("bitrix_card_map", () => resolveBitrixCardsOnce()));
     stages.push(await runStage("trusted_device_export", () => syncTrustedDeviceOnce()));
     stages.push(await runStage("bitrix_account_map", () => syncBitrixAccountsOnce()));
+    stages.push(await runStage("loyalty_priority", () => refreshPriorityLoyaltyOnce()));
     stages.push(
-      await runStage("loyalty_balance_scan", async () => {
-        await refreshStalestLoyaltyBalancesOnce();
+      await runStage("loyalty_stale_scan", async () => {
+        const limit = boundedLoyaltyBatch(
+          Number(process.env.ANTI_FRAUD_LOYALTY_SCAN_BATCH_SIZE ?? DEFAULT_LOYALTY_STALE_BATCH),
+        );
+        await refreshStalestLoyaltyBalancesOnce({ limit });
       }),
     );
 
-    // account-map уже выполнен отдельным stage, поэтому повторно его не вызываем.
-    // После итогового gate адресная 60-дневная история идёт через protected loyalty endpoint.
+    // account-map уже выполнен отдельным stage. Auto-history остаётся только адресным:
+    // protected loyalty endpoint вызывается для history-gated USER_ID, а не для всего флота.
     await analyzeAntiFraudWithSimilarityOnce({
       refreshAccounts: false,
       autoHistory: true,
     });
     stages.push({ stage: "risk_scoring", ok: true });
 
-    // После полностью завершённого score фиксируем состояние кейсов. Ошибка этого
-    // вспомогательного слоя делает цикл partial, но не отменяет валидный risk scoring.
     stages.push(await runStage("case_dynamics", () => captureAntiFraudCaseDynamics()));
 
     const partial = stages.some((stage) => !stage.ok);
@@ -209,7 +237,7 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
         status: finalStatus,
         failedStages: stages.filter((stage) => !stage.ok).map((stage) => stage.stage),
       },
-      "Anti-Fraud hourly cycle finished",
+      "Anti-Fraud protected cycle finished",
     );
   } catch (error) {
     const message = safeError(error);
@@ -218,13 +246,13 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
     try {
       await persistCycleFinish(runId, "failed", stages, message);
     } catch (persistError) {
-      logger.warn({ error: safeError(persistError) }, "Could not persist Anti-Fraud hourly failure");
+      logger.warn({ error: safeError(persistError) }, "Could not persist Anti-Fraud protected cycle failure");
     }
 
     schedulerStatus.lastStatus = "failed";
     schedulerStatus.lastFinishedAt = new Date().toISOString();
     schedulerStatus.lastError = message;
-    logger.error({ runId, error: message }, "Anti-Fraud hourly cycle failed");
+    logger.error({ runId, error: message }, "Anti-Fraud protected cycle failed");
   } finally {
     schedulerStatus.running = false;
   }
@@ -252,17 +280,17 @@ export const startAntiFraudHourlyScheduler = (): void => {
   );
 
   if (!schedulerStatus.enabled) {
-    logger.info("Anti-Fraud hourly scheduler is disabled");
+    logger.info("Anti-Fraud protected scheduler is disabled");
     return;
   }
 
-  const runOnStart = envBoolean("ANTI_FRAUD_SCHEDULER_RUN_ON_START", true);
+  const runOnStart = envBoolean("ANTI_FRAUD_SCHEDULER_RUN_ON_START", false);
   logger.info(
     {
       intervalMinutes: schedulerStatus.intervalMinutes,
       runOnStart,
     },
-    "Anti-Fraud hourly scheduler started",
+    "Anti-Fraud protected scheduler started",
   );
 
   if (runOnStart) {
