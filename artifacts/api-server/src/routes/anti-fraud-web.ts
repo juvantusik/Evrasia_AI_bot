@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { pool } from "@workspace/db";
 import { listAntiFraudCases } from "../services/anti-fraud-case-service";
+import { listAntiFraudCaseDynamics } from "../services/anti-fraud-case-dynamics-service";
 import {
   getAntiFraudWebSummary,
   listAntiFraudWebAccounts,
@@ -95,6 +96,16 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
 // Добавлено 05.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/scheduler", async (_req, res): Promise<void> => {
   res.json(getAntiFraudHourlySchedulerStatus());
+});
+
+// Добавлено 05.09.2026 ИТ Директор Евразии
+router.get("/anti-fraud/case-dynamics", async (req, res): Promise<void> => {
+  try {
+    res.json({ records: await listAntiFraudCaseDynamics() });
+  } catch (error) {
+    req.log.error({ error }, "Failed to load Anti-Fraud case dynamics");
+    res.status(503).json({ error: errorMessage(error) });
+  }
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
