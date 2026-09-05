@@ -32,8 +32,8 @@ const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRi
   ...overrides,
 });
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
-test("two accounts on one device without fast switching stay below history gate", () => {
+// Обновлено 05.09.2026 ИТ Директор Евразии
+test("two accounts on one device trigger the 60-day history gate", () => {
   const score = scoreAntiFraudSignals(
     baseSignals({
       maxAccountsOnDevice: 2,
@@ -42,11 +42,15 @@ test("two accounts on one device without fast switching stay below history gate"
     }),
   );
 
-  assert.equal(score.deviceRisk, 20);
+  assert.equal(score.deviceRisk, 40);
   assert.equal(score.linkedAccountRisk, 10);
-  assert.equal(score.overallRisk, 30);
-  assert.equal(score.riskLevel, "medium");
-  assert.equal(score.historyGate, false);
+  assert.equal(score.overallRisk, 50);
+  assert.equal(score.riskLevel, "high");
+  assert.equal(score.historyGate, true);
+
+  const reason = score.reasons.find((item) => item.code === "shared_device_accounts");
+  assert.ok(reason);
+  assert.equal(reason.score, 40);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -70,8 +74,8 @@ test("three accounts with repeated 13-second switching become critical", () => {
   assert.ok(score.reasons.some((reason) => reason.code === "repeated_fast_switches"));
 });
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
-test("77-second switch on a two-account device crosses the history gate", () => {
+// Обновлено 05.09.2026 ИТ Директор Евразии
+test("77-second switch on a two-account device becomes critical", () => {
   const score = scoreAntiFraudSignals(
     baseSignals({
       maxAccountsOnDevice: 2,
@@ -82,10 +86,10 @@ test("77-second switch on a two-account device crosses the history gate", () => 
     }),
   );
 
-  assert.equal(score.deviceRisk, 55);
+  assert.equal(score.deviceRisk, 75);
   assert.equal(score.linkedAccountRisk, 10);
-  assert.equal(score.overallRisk, 65);
-  assert.equal(score.riskLevel, "high");
+  assert.equal(score.overallRisk, 85);
+  assert.equal(score.riskLevel, "critical");
   assert.equal(score.historyGate, true);
 });
 
