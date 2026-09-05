@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  numeric,
   pgTable,
   serial,
   text,
@@ -19,9 +20,13 @@ export const antiFraudAccountsTable = pgTable(
     displayName: text("display_name"),
     registeredAt: timestamp("registered_at", { withTimezone: true }),
     bitrixActive: boolean("bitrix_active").notNull().default(true),
-    // Добавлено 05.09.2026 ИТ Директор Евразии
-    // Текущий остаток бонусов из Bitrix. Значение > 40000 является отдельным risk gate.
-    bonusBalance: integer("bonus_balance"),
+    // Обновлено 05.09.2026 ИТ Директор Евразии
+    // RestIS TotalSum содержит копейки, поэтому используем точный NUMERIC(14,2), а не integer/float.
+    bonusBalance: numeric("bonus_balance", { precision: 14, scale: 2 }),
+    loyaltySyncedAt: timestamp("loyalty_synced_at", { withTimezone: true }),
+    loyaltyHistoryLoadedFrom: timestamp("loyalty_history_loaded_from", { withTimezone: true }),
+    loyaltyHistoryLoadedUntil: timestamp("loyalty_history_loaded_until", { withTimezone: true }),
+    loyaltyHistoryLoadedAt: timestamp("loyalty_history_loaded_at", { withTimezone: true }),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -44,8 +49,7 @@ export const antiFraudCardsTable = pgTable(
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-    // Добавлено 03.09.2026 ИТ Директор Евразии
-    // Эти поля описывают только адресно загруженное VIP_HISTORY для активной карты.
+    // Legacy coverage для старого прямого VIP_HISTORY. Новый loyalty flow хранит coverage на аккаунте.
     historyLoadedFrom: timestamp("history_loaded_from", { withTimezone: true }),
     historyLoadedUntil: timestamp("history_loaded_until", { withTimezone: true }),
     historyLoadedAt: timestamp("history_loaded_at", { withTimezone: true }),
@@ -61,12 +65,16 @@ export const antiFraudVisitsTable = pgTable(
   "anti_fraud_visits",
   {
     restisId: text("restis_id").primaryKey(),
-    cardId: integer("card_id")
-      .notNull()
-      .references(() => antiFraudCardsTable.id, { onDelete: "restrict" }),
+    // Обновлено 05.09.2026: новый защищённый loyalty API не раскрывает номер активной карты,
+    // поэтому card_id может быть NULL для проверенной истории, привязанной напрямую к USER_ID.
+    cardId: integer("card_id").references(() => antiFraudCardsTable.id, { onDelete: "restrict" }),
     bitrixUserId: integer("bitrix_user_id"),
     visitedAt: timestamp("visited_at", { withTimezone: true }).notNull(),
     restaurant: text("restaurant").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }),
+    bonusAdded: numeric("bonus_added", { precision: 14, scale: 2 }),
+    bonusSpent: numeric("bonus_spent", { precision: 14, scale: 2 }),
+    loyaltyVerified: boolean("loyalty_verified").notNull().default(false),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
