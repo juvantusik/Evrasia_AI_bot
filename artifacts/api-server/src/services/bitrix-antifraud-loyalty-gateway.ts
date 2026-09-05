@@ -143,6 +143,26 @@ const parseNullableMoney = (value: unknown, field: string): string | null => {
   return parseMoney(value, field);
 };
 
+// Реальный protected loyalty endpoint может вернуть отрицательный текущий бонусный остаток.
+// Это допустимое состояние баланса, а не ошибка формата. Остальные денежные поля и история
+// сохраняют более строгий неотрицательный контракт.
+const parseSignedMoney = (value: unknown, field: string): string => {
+  if (typeof value !== "string") {
+    throw new Error(`Bitrix Anti-Fraud loyalty вернул некорректное поле ${field}`);
+  }
+  const normalized = value.trim();
+  const match = /^(-?)(\d{1,12})(?:\.(\d{1,2}))?$/.exec(normalized);
+  if (!match) {
+    throw new Error(`Bitrix Anti-Fraud loyalty вернул некорректное поле ${field}`);
+  }
+  return `${match[1]}${match[2]}.${(match[3] ?? "").padEnd(2, "0")}`;
+};
+
+const parseNullableSignedMoney = (value: unknown, field: string): string | null => {
+  if (value === null || value === undefined || value === "") return null;
+  return parseSignedMoney(value, field);
+};
+
 const normalizeUserIds = (userIds: number[], includeHistory: boolean): number[] => {
   const unique = new Set<number>();
   for (const raw of userIds) {
@@ -353,7 +373,7 @@ const parseResponse = (
       cardStatus: parseNullableText(row.card_status, "card_status", 64),
       cardType: parseNullableInteger(row.card_type, "card_type"),
       discountPercent: parseNullableNumber(row.discount_percent, "discount_percent"),
-      bonusBalance: parseNullableMoney(row.bonus_balance, "bonus_balance"),
+      bonusBalance: parseNullableSignedMoney(row.bonus_balance, "bonus_balance"),
       totalSpend: parseNullableMoney(row.total_spend, "total_spend"),
       todaySum: parseNullableMoney(row.today_sum, "today_sum"),
       historySummary,
