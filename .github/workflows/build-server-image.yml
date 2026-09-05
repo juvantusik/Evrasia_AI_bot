@@ -158,30 +158,34 @@ jobs:
           test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
 
           # Регрессия 05.09.2026: реальный RestIS TotalSum может быть отрицательным.
-          # Проверяем не только parser, но и фактически применённую DB migration/constraint.
-          docker exec samzaberu-smoke node --input-type=module -e '
-            import pg from "pg";
-            const { Client } = pg;
-            const client = new Client({ connectionString: process.env.DATABASE_URL });
-            await client.connect();
-            try {
-              await client.query("BEGIN");
-              await client.query(`
-                INSERT INTO anti_fraud_accounts
-                  (bitrix_user_id, bitrix_active, bonus_balance)
-                VALUES
-                  (2147483000, true, -1.25)
-              `);
-              const result = await client.query(`
-                SELECT bonus_balance::text AS bonus_balance
-                FROM anti_fraud_accounts
-                WHERE bitrix_user_id = 2147483000
-              `);
-              if (result.rows[0]?.bonus_balance !== "-1.25") {
-                throw new Error("signed bonus_balance was not persisted exactly");
-              }
-              await client.query("ROLLBACK");
-            } finally {
-              await client.end();
-            }
-          '
+          # Проверяем фактически применённые DB migrations и signed NUMERIC через psql,
+          # не полагаясь на наличие standalone pg package в runtime image.
+          migration_rows="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
+                -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
+          )"
+          test "$migration_rows" = "16"
+
+          signed_balance="$(
+            docker run --rm -i \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu \
+                -v ON_ERROR_STOP=1 -Atq <<'SQL'
+          BEGIN;
+          INSERT INTO anti_fraud_accounts
+            (bitrix_user_id, bitrix_active, bonus_balance)
+          VALUES
+            (2147483000, true, -1.25);
+          SELECT bonus_balance::text
+          FROM anti_fraud_accounts
+          WHERE bitrix_user_id = 2147483000;
+          ROLLBACK;
+          SQL
+          )"
+          test "$signed_balance" = "-1.25"
