@@ -14,9 +14,6 @@ const MAX_LOOKBACK_DAYS = 60;
 const DEFAULT_REFRESH_HOURS = 24;
 const MAX_REFRESH_HOURS = 168;
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
-// Обновлено 05.09.2026: историческое обогащение идёт через защищённый site-side loyalty API.
-// RestIS credentials и реальный номер активной карты не передаются в бот.
 export type RestisHistoryEnrichmentOptions = {
   bitrixUserId: number;
   riskGateConfirmed: true;
@@ -49,9 +46,13 @@ type AccountCoverageRow = {
 
 type ExistingVisitRow = {
   restis_id: string;
+  source_restis_id: string;
   bitrix_user_id: number | null;
   visited_at: Date;
   restaurant: string;
+  amount: string | null;
+  bonus_added: string | null;
+  bonus_spent: string | null;
 };
 
 const boundedInteger = (
@@ -105,8 +106,12 @@ const assertExistingVisitsAreStable = (
 
     existingIds.add(row.restis_id);
     const same =
+      row.source_restis_id === event.restisId &&
       row.visited_at.getTime() === event.occurredAt.getTime() &&
       row.restaurant === event.restaurant &&
+      row.amount === event.amount &&
+      row.bonus_added === event.bonusAdded &&
+      row.bonus_spent === event.bonusSpent &&
       (row.bitrix_user_id === null || row.bitrix_user_id === bitrixUserId);
 
     if (!same) {
@@ -119,9 +124,9 @@ const assertExistingVisitsAreStable = (
   return existingIds;
 };
 
-// Добавлено 05.09.2026 ИТ Директор Евразии
-// Один подозрительный USER_ID -> site-side service сам находит только RESTIS_STATE=113 -> RestIS history.
-// Таким образом history больше не зависит от того, встречалась ли карта пользователя сегодня в VIP_TODAY.
+// Обновлено 05.09.2026 ИТ Директор Евразии
+// История идёт USER_ID -> active RESTIS_STATE=113 -> protected loyalty endpoint.
+// Raw source restis_id может повторяться; уникальность определяется полным денежным событием.
 export const enrichRestisHistoryForHighRiskUserOnce = async (
   options: RestisHistoryEnrichmentOptions,
 ): Promise<RestisHistoryEnrichmentResult> => {
@@ -222,7 +227,6 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
       throw new Error("Protected loyalty endpoint не разрешил запрошенный USER_ID");
     }
 
-    // Всегда обновляем текущий TotalSum тем же достоверным ответом.
     await client.query(
       `UPDATE anti_fraud_accounts
        SET bonus_balance = $2::numeric(14,2), loyalty_synced_at = now()
@@ -261,7 +265,7 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
         event.occurredAt.getTime() <= windowUntil.getTime(),
     );
     const incoming = new Map<string, BitrixAntiFraudLoyaltyHistoryEvent>();
-    for (const event of relevant) incoming.set(event.restisId, event);
+    for (const event of relevant) incoming.set(event.eventId, event);
 
     await client.query("BEGIN");
     transactionOpen = true;
@@ -270,7 +274,8 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
     let existingIds = new Set<string>();
     if (incomingIds.length) {
       const existing = await client.query<ExistingVisitRow>(
-        `SELECT restis_id, bitrix_user_id, visited_at, restaurant
+        `SELECT restis_id, source_restis_id, bitrix_user_id, visited_at, restaurant,
+                amount::text, bonus_added::text, bonus_spent::text
          FROM anti_fraud_visits
          WHERE restis_id = ANY($1::text[])`,
         [incomingIds],
@@ -280,18 +285,31 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
 
     let writtenEvents = 0;
     for (const event of incoming.values()) {
+      // Protected history — более полный источник, чем legacy VIP_TODAY. Удаляем только
+      // совпавшую непроверенную legacy-строку этого же USER_ID, чтобы не считать визит дважды.
+      await client.query(
+        `DELETE FROM anti_fraud_visits
+         WHERE loyalty_verified IS FALSE
+           AND bitrix_user_id = $1
+           AND source_restis_id = $2
+           AND visited_at = $3
+           AND restaurant = $4`,
+        [bitrixUserId, event.restisId, event.occurredAt, event.restaurant],
+      );
+
       const upserted = await client.query(
         `INSERT INTO anti_fraud_visits (
-           restis_id, card_id, bitrix_user_id, visited_at, restaurant,
+           restis_id, source_restis_id, card_id, bitrix_user_id, visited_at, restaurant,
            amount, bonus_added, bonus_spent, loyalty_verified, synced_at, resolved_at
          )
-         VALUES ($1, NULL, $2, $3, $4, $5::numeric(14,2), $6::numeric(14,2),
-                 $7::numeric(14,2), true, now(), now())
+         VALUES ($1, $2, NULL, $3, $4, $5, $6::numeric(14,2), $7::numeric(14,2),
+                 $8::numeric(14,2), true, now(), now())
          ON CONFLICT (restis_id) DO UPDATE SET
            bitrix_user_id = CASE
              WHEN anti_fraud_visits.bitrix_user_id IS NULL THEN EXCLUDED.bitrix_user_id
              ELSE anti_fraud_visits.bitrix_user_id
            END,
+           source_restis_id = EXCLUDED.source_restis_id,
            amount = EXCLUDED.amount,
            bonus_added = EXCLUDED.bonus_added,
            bonus_spent = EXCLUDED.bonus_spent,
@@ -300,6 +318,7 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
            resolved_at = COALESCE(anti_fraud_visits.resolved_at, now())
          RETURNING restis_id`,
         [
+          event.eventId,
           event.restisId,
           bitrixUserId,
           event.occurredAt,
@@ -309,7 +328,7 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
           event.bonusSpent,
         ],
       );
-      if (upserted.rowCount && !existingIds.has(event.restisId)) writtenEvents += 1;
+      if (upserted.rowCount && !existingIds.has(event.eventId)) writtenEvents += 1;
     }
 
     await client.query(
