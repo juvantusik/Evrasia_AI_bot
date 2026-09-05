@@ -28,9 +28,17 @@ type ExistingVisitRow = {
   restaurant: string;
 };
 
+type VerifiedVisitRow = {
+  source_restis_id: string;
+  bitrix_user_id: number;
+  visited_at: Date;
+  restaurant: string;
+};
+
 type CardRow = {
   id: number;
   card_number: string;
+  bitrix_user_id: number | null;
 };
 
 const safeErrorMessage = (error: unknown): string => {
@@ -77,7 +85,16 @@ const assertExistingVisitsAreStable = (
   return existingIds;
 };
 
+const verifiedOverlapKey = (
+  sourceRestisId: string,
+  bitrixUserId: number,
+  visitedAt: Date,
+  restaurant: string,
+): string => `${sourceRestisId}\u0000${bitrixUserId}\u0000${visitedAt.toISOString()}\u0000${restaurant}`;
+
 // Добавлено 03.09.2026 ИТ Директор Евразии
+// Обновлено 05.09.2026: VIP_TODAY остаётся legacy visit/card feed, но не должен
+// повторно добавлять визит, уже подтверждённый protected loyalty history.
 export const collectRestisVisitsOnce = async (
   options: RestisCollectorOptions = {},
 ): Promise<AntiFraudRestisSyncResult> => {
@@ -121,15 +138,14 @@ export const collectRestisVisitsOnce = async (
     await client.query("BEGIN");
     transactionOpen = true;
 
-    // Добавлено 03.09.2026 ИТ Директор Евразии
-    // Raw CARD_NO хранится только в master-таблице карт; посещения используют surrogate card_id.
     const cardIdsByNumber = new Map<string, number>();
+    const cardOwnersByNumber = new Map<string, number | null>();
     for (const cardNumber of cards) {
       const cardResult = await client.query<CardRow>(
         `INSERT INTO anti_fraud_cards (card_number, first_seen_at, last_seen_at)
          VALUES ($1, now(), now())
          ON CONFLICT (card_number) DO UPDATE SET last_seen_at = now()
-         RETURNING id, card_number`,
+         RETURNING id, card_number, bitrix_user_id`,
         [cardNumber],
       );
       const card = cardResult.rows[0];
@@ -137,6 +153,7 @@ export const collectRestisVisitsOnce = async (
         throw new Error("Не удалось получить внутренний ID карты RestIS");
       }
       cardIdsByNumber.set(card.card_number, card.id);
+      cardOwnersByNumber.set(card.card_number, card.bitrix_user_id);
     }
 
     let existingIds = new Set<string>();
@@ -154,6 +171,28 @@ export const collectRestisVisitsOnce = async (
       );
     }
 
+    const verifiedOverlap = new Set<string>();
+    if (incomingIds.length) {
+      const verified = await client.query<VerifiedVisitRow>(
+        `SELECT source_restis_id, bitrix_user_id, visited_at, restaurant
+         FROM anti_fraud_visits
+         WHERE source_restis_id = ANY($1::text[])
+           AND loyalty_verified IS TRUE
+           AND bitrix_user_id IS NOT NULL`,
+        [incomingIds],
+      );
+      for (const row of verified.rows) {
+        verifiedOverlap.add(
+          verifiedOverlapKey(
+            row.source_restis_id,
+            row.bitrix_user_id,
+            row.visited_at,
+            row.restaurant,
+          ),
+        );
+      }
+    }
+
     let writtenEvents = 0;
     for (const visit of batch.visits) {
       if (existingIds.has(visit.restisId)) continue;
@@ -163,10 +202,22 @@ export const collectRestisVisitsOnce = async (
         throw new Error("Для посещения RestIS не найден внутренний ID карты");
       }
 
+      const ownerId = cardOwnersByNumber.get(visit.cardNumber) ?? null;
+      if (
+        ownerId !== null &&
+        verifiedOverlap.has(
+          verifiedOverlapKey(visit.restisId, ownerId, visit.visitedAt, visit.restaurant),
+        )
+      ) {
+        continue;
+      }
+
       const inserted = await client.query(
         `INSERT INTO anti_fraud_visits
-           (restis_id, card_id, bitrix_user_id, visited_at, restaurant, synced_at, resolved_at)
+           (restis_id, source_restis_id, card_id, bitrix_user_id, visited_at, restaurant,
+            synced_at, resolved_at)
          VALUES (
+           $1,
            $1,
            $2,
            (SELECT bitrix_user_id FROM anti_fraud_cards WHERE id = $2),
