@@ -7,6 +7,7 @@ import {
   listAntiFraudWebDevices,
   listAntiFraudWebSimilarAccounts,
 } from "../services/anti-fraud-web-service";
+import { getAntiFraudHourlySchedulerStatus } from "../services/anti-fraud-hourly-service";
 
 const router: IRouter = Router();
 
@@ -89,6 +90,11 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
     req.log.error({ error }, "Failed to load Anti-Fraud summary");
     res.status(503).json({ error: errorMessage(error) });
   }
+});
+
+// Добавлено 05.09.2026 ИТ Директор Евразии
+router.get("/anti-fraud/scheduler", async (_req, res): Promise<void> => {
+  res.json(getAntiFraudHourlySchedulerStatus());
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
