@@ -8,7 +8,10 @@ import {
   listAntiFraudWebDevices,
   listAntiFraudWebSimilarAccounts,
 } from "../services/anti-fraud-web-service";
-import { getAntiFraudHourlySchedulerStatus } from "../services/anti-fraud-hourly-service";
+import {
+  getAntiFraudHourlySchedulerStatus,
+  runAntiFraudHourlyCycleOnce,
+} from "../services/anti-fraud-hourly-service";
 
 const router: IRouter = Router();
 
@@ -20,12 +23,18 @@ type ContactTarget = {
   phoneMasked: string | null;
   emailMasked: string | null;
   bonusBalance?: number | null;
+  loyaltyActiveCardCount?: number | null;
+  loyaltyIssue?: string | null;
+  loyaltySyncedAt?: string | null;
 };
 
 type ContactValue = {
   phone: string | null;
   email: string | null;
   bonusBalance: number | null;
+  loyaltyActiveCardCount: number | null;
+  loyaltyIssue: string | null;
+  loyaltySyncedAt: string | null;
 };
 
 const displayPhone = (value: unknown): string | null => {
@@ -38,6 +47,12 @@ const displayEmail = (value: unknown): string | null => {
   return text && text.includes("@") ? text : null;
 };
 
+const iso = (value: unknown): string | null => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
 const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactValue>> => {
   const ids = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
   if (!ids.length) return new Map();
@@ -46,9 +61,19 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     bitrix_user_id: number;
     phone_normalized: string | null;
     email_normalized: string | null;
-    bonus_balance: number | null;
+    bonus_balance: string | number | null;
+    loyalty_active_card_count: number | null;
+    loyalty_issue: string | null;
+    loyalty_synced_at: Date | null;
   }>(`
-    SELECT bitrix_user_id, phone_normalized, email_normalized, bonus_balance
+    SELECT
+      bitrix_user_id,
+      phone_normalized,
+      email_normalized,
+      bonus_balance,
+      loyalty_active_card_count,
+      loyalty_issue,
+      loyalty_synced_at
     FROM anti_fraud_accounts
     WHERE bitrix_user_id = ANY($1::int[])
   `, [ids]);
@@ -60,6 +85,10 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
         phone: displayPhone(row.phone_normalized),
         email: displayEmail(row.email_normalized),
         bonusBalance: row.bonus_balance === null ? null : Number(row.bonus_balance),
+        loyaltyActiveCardCount:
+          row.loyalty_active_card_count === null ? null : Number(row.loyalty_active_card_count),
+        loyaltyIssue: row.loyalty_issue ?? null,
+        loyaltySyncedAt: iso(row.loyalty_synced_at),
       },
     ]),
   );
@@ -80,6 +109,9 @@ const exposeFullContacts = <T extends ContactTarget>(
       phoneMasked: contact.phone,
       emailMasked: contact.email,
       bonusBalance: contact.bonusBalance,
+      loyaltyActiveCardCount: contact.loyaltyActiveCardCount,
+      loyaltyIssue: contact.loyaltyIssue,
+      loyaltySyncedAt: contact.loyaltySyncedAt,
     };
   });
 
@@ -96,6 +128,36 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
 // Добавлено 05.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/scheduler", async (_req, res): Promise<void> => {
   res.json(getAntiFraudHourlySchedulerStatus());
+});
+
+// Обновлено 05.09.2026 ИТ Директор Евразии
+// Ручной refresh использует тот же single-flight цикл, что и scheduler.
+router.post("/anti-fraud/refresh", async (req, res): Promise<void> => {
+  try {
+    const before = getAntiFraudHourlySchedulerStatus();
+    if (before.running) {
+      res.status(409).json({
+        error: "Обновление Anti-Fraud уже выполняется.",
+        scheduler: before,
+      });
+      return;
+    }
+
+    await runAntiFraudHourlyCycleOnce();
+    const after = getAntiFraudHourlySchedulerStatus();
+    if (after.lastStatus === "failed") {
+      res.status(503).json({
+        error: after.lastError ?? "Обновление Anti-Fraud завершилось ошибкой.",
+        scheduler: after,
+      });
+      return;
+    }
+
+    res.json({ ok: true, scheduler: after });
+  } catch (error) {
+    req.log.error({ error }, "Failed to refresh Anti-Fraud");
+    res.status(503).json({ error: errorMessage(error) });
+  }
 });
 
 // Добавлено 05.09.2026 ИТ Директор Евразии
