@@ -433,6 +433,10 @@ const applySimilarityRiskOverlay = async (historyThreshold: number): Promise<voi
   }
 };
 
+// Обновлено 05.09.2026 ИТ Директор Евразии
+// History eligibility определяется только итоговым risk gate и активностью аккаунта.
+// Наличие карты в anti_fraud_cards не требуется: защищённый loyalty endpoint сам находит
+// текущую карту RESTIS_STATE=113 по USER_ID и безопасно сообщает, если активной карты нет.
 const loadHistoryEligibleUsers = async (): Promise<number[]> => {
   const result = await pool.query<{ bitrix_user_id: number }>(`
     SELECT s.bitrix_user_id
@@ -441,12 +445,6 @@ const loadHistoryEligibleUsers = async (): Promise<number[]> => {
     WHERE s.history_gate IS TRUE
       AND a.bitrix_active IS TRUE
       AND s.history_enriched IS NOT TRUE
-      AND EXISTS (
-        SELECT 1
-        FROM anti_fraud_cards c
-        WHERE c.bitrix_user_id = s.bitrix_user_id
-          AND c.is_active IS TRUE
-      )
     ORDER BY s.overall_risk DESC, s.bitrix_user_id
   `);
   return result.rows.map((row) => Number(row.bitrix_user_id));
@@ -513,7 +511,8 @@ const loadFinalResult = async (
 };
 
 // Полный explainable-анализ: сначала базовый scoring, затем candidate/corroboration
-// похожих email/телефонов. Только после итогового score запускается адресная 60-дневная история.
+// похожих email/телефонов. Только после итогового score запускается адресная 60-дневная
+// история через защищённый loyalty endpoint по USER_ID.
 export const analyzeAntiFraudWithSimilarityOnce = async (
   options: AntiFraudRiskAnalysisOptions = {},
 ): Promise<AntiFraudRiskAnalysisWithSimilarityResult> => {
