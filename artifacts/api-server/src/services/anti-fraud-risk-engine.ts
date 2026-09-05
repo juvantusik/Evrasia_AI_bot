@@ -5,10 +5,12 @@ import { syncBitrixAccountsOnce } from "./anti-fraud-bitrix-account-collector";
 
 const SOURCE = "anti_fraud_risk_scoring";
 const LOCK_NAME = "anti_fraud_risk_scoring";
-const CALCULATION_VERSION = "v1";
+const CALCULATION_VERSION = "v1.1";
 const DEFAULT_HISTORY_THRESHOLD = 50;
 const DEFAULT_MAX_HISTORY_USERS = 10;
 const MAX_HISTORY_USERS = 50;
+const BONUS_BALANCE_THRESHOLD = 40_000;
+const BONUS_BALANCE_RISK = 50;
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export type AntiFraudRiskSignals = {
@@ -29,6 +31,8 @@ export type AntiFraudRiskSignals = {
   activeCardCount: number;
   bitrixActive: boolean;
   historyEnriched: boolean;
+  // Добавлено 05.09.2026 ИТ Директор Евразии
+  bonusBalance: number | null;
 };
 
 export type AntiFraudRiskReason = {
@@ -95,6 +99,7 @@ type SignalRow = {
   active_card_count: string | number | null;
   bitrix_active: boolean | null;
   history_enriched: boolean | null;
+  bonus_balance: string | number | null;
 };
 
 const clamp = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
@@ -114,6 +119,12 @@ const toCount = (value: string | number | null): number => {
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
 };
 
+const toNullableNonNegativeInteger = (value: string | number | null): number | null => {
+  if (value === null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : null;
+};
+
 const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
   if (score >= 75) return "critical";
   if (score >= 50) return "high";
@@ -125,6 +136,7 @@ const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
 // v1 использует только объяснимые признаки. Наличие двух аккаунтов на одном устройстве само по себе
 // не достигает history gate. Посещения считаются по всем ресторанам вместе: одинаковые и разные рестораны
 // одинаково входят в суточную частоту; 3+ посещения за ресторанный день являются самостоятельным risk gate.
+// Добавлено 05.09.2026: остаток более 40000 бонусов даёт +50 и сам по себе запускает 60-дневную проверку истории.
 export const scoreAntiFraudSignals = (
   signals: AntiFraudRiskSignals,
   historyThreshold = DEFAULT_HISTORY_THRESHOLD,
@@ -134,7 +146,7 @@ export const scoreAntiFraudSignals = (
   let linkedAccountRisk = 0;
   let identitySimilarityRisk = 0;
   let visitBehaviorRisk = 0;
-  const historicalBehaviorRisk = 0;
+  let historicalBehaviorRisk = 0;
 
   if (signals.maxAccountsOnDevice >= 4) {
     deviceRisk += 45;
@@ -306,10 +318,22 @@ export const scoreAntiFraudSignals = (
     });
   }
 
+  if (signals.bonusBalance !== null && signals.bonusBalance > BONUS_BALANCE_THRESHOLD) {
+    historicalBehaviorRisk += BONUS_BALANCE_RISK;
+    reasons.push({
+      code: "high_bonus_balance",
+      score: BONUS_BALANCE_RISK,
+      details:
+        `bonus_balance=${signals.bonusBalance}; ` +
+        `threshold=${BONUS_BALANCE_THRESHOLD}; history_window_days=60`,
+    });
+  }
+
   deviceRisk = clamp(deviceRisk);
   linkedAccountRisk = clamp(linkedAccountRisk);
   identitySimilarityRisk = clamp(identitySimilarityRisk);
   visitBehaviorRisk = clamp(visitBehaviorRisk);
+  historicalBehaviorRisk = clamp(historicalBehaviorRisk);
 
   const overallRisk = clamp(
     deviceRisk +
@@ -602,7 +626,8 @@ SELECT
     AS max_distinct_restaurants_on_high_visit_day,
   COALESCE(ca.active_card_count, 0) AS active_card_count,
   COALESCE(a.bitrix_active, false) AS bitrix_active,
-  COALESCE(ca.history_enriched, false) AS history_enriched
+  COALESCE(ca.history_enriched, false) AS history_enriched,
+  a.bonus_balance
 FROM candidates c
 LEFT JOIN user_device ud ON ud.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN linked_accounts la ON la.bitrix_user_id = c.bitrix_user_id
@@ -641,6 +666,7 @@ const loadRiskSignals = async (): Promise<AntiFraudRiskSignals[]> => {
     activeCardCount: toCount(row.active_card_count),
     bitrixActive: row.bitrix_active === true,
     historyEnriched: row.history_enriched === true,
+    bonusBalance: toNullableNonNegativeInteger(row.bonus_balance),
   }));
 };
 
