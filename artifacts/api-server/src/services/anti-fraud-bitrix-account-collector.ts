@@ -44,6 +44,8 @@ const chunk = <T>(values: T[], size: number): T[][] => {
 // Добавлено 03.09.2026 ИТ Директор Евразии
 // В Bitrix запрашиваются только USER_ID, уже попавшие в Anti-Fraud через карты, устройства или ранее известные аккаунты.
 // Массовая выгрузка всей базы пользователей Bitrix этим collector не поддерживается.
+// Обновлено 05.09.2026: bonus_balance здесь больше не читается и не перезаписывается —
+// текущий TotalSum приходит только через защищённый loyalty endpoint.
 export const syncBitrixAccountsOnce = async (
   options: CollectorOptions = {},
 ): Promise<AntiFraudBitrixAccountCollectorResult> => {
@@ -137,25 +139,22 @@ export const syncBitrixAccountsOnce = async (
            display_name,
            registered_at,
            bitrix_active,
-           bonus_balance,
            last_synced_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+         VALUES ($1, $2, $3, $4, $5, $6, now())
          ON CONFLICT (bitrix_user_id) DO UPDATE SET
            phone_normalized = EXCLUDED.phone_normalized,
            email_normalized = EXCLUDED.email_normalized,
            display_name = EXCLUDED.display_name,
            registered_at = EXCLUDED.registered_at,
            bitrix_active = EXCLUDED.bitrix_active,
-           bonus_balance = EXCLUDED.bonus_balance,
            last_synced_at = now()
          WHERE
            anti_fraud_accounts.phone_normalized IS DISTINCT FROM EXCLUDED.phone_normalized OR
            anti_fraud_accounts.email_normalized IS DISTINCT FROM EXCLUDED.email_normalized OR
            anti_fraud_accounts.display_name IS DISTINCT FROM EXCLUDED.display_name OR
            anti_fraud_accounts.registered_at IS DISTINCT FROM EXCLUDED.registered_at OR
-           anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active OR
-           anti_fraud_accounts.bonus_balance IS DISTINCT FROM EXCLUDED.bonus_balance
+           anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active
          RETURNING bitrix_user_id`,
         [
           record.bitrixUserId,
@@ -164,7 +163,6 @@ export const syncBitrixAccountsOnce = async (
           record.displayName,
           record.registeredAt,
           record.bitrixActive,
-          record.bonusBalance,
         ],
       );
 
