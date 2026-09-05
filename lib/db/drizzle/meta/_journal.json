@@ -92,6 +92,13 @@
       "when": 1788590000000,
       "tag": "0012_anti_fraud_case_dynamics",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788594200000,
+      "tag": "0013_anti_fraud_loyalty_decimal",
+      "breakpoints": true
     }
   ]
 }
