@@ -158,6 +158,7 @@ jobs:
           test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
 
           # Регрессия 05.09.2026: реальный RestIS TotalSum может быть отрицательным.
+          # 0016 также хранит active_card_count/issue для loyalty resolution.
           # Проверяем фактически применённые DB migrations и signed NUMERIC через psql,
           # не полагаясь на наличие standalone pg package в runtime image.
           migration_rows="$(
@@ -168,7 +169,17 @@ jobs:
               psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
                 -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
           )"
-          test "$migration_rows" = "16"
+          test "$migration_rows" = "17"
+
+          loyalty_columns="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT count(*) FILTER (WHERE column_name='loyalty_active_card_count'), count(*) FILTER (WHERE column_name='loyalty_issue') FROM information_schema.columns WHERE table_schema='public' AND table_name='anti_fraud_accounts';"
+          )"
+          test "$loyalty_columns" = "1|1"
 
           signed_balance="$(
             docker run --rm -i \
@@ -179,13 +190,13 @@ jobs:
                 -v ON_ERROR_STOP=1 -Atq <<'SQL'
           BEGIN;
           INSERT INTO anti_fraud_accounts
-            (bitrix_user_id, bitrix_active, bonus_balance)
+            (bitrix_user_id, bitrix_active, bonus_balance, loyalty_active_card_count, loyalty_issue)
           VALUES
-            (2147483000, true, -1.25);
-          SELECT bonus_balance::text
+            (2147483000, true, -1.25, 4, 'multiple_active_cards');
+          SELECT bonus_balance::text || '|' || loyalty_active_card_count::text || '|' || loyalty_issue
           FROM anti_fraud_accounts
           WHERE bitrix_user_id = 2147483000;
           ROLLBACK;
           SQL
           )"
-          test "$signed_balance" = "-1.25"
+          test "$signed_balance" = "-1.25|4|multiple_active_cards"
