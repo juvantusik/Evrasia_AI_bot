@@ -176,10 +176,9 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
     });
     stages.push({ stage: "risk_scoring", ok: true });
 
-    // После полностью завершённого score фиксируем состояние кейсов. Так Risk 100
-    // остаётся 100, но рост группы/устройств/reason codes виден как «было → стало».
-    await captureAntiFraudCaseDynamics();
-    stages.push({ stage: "case_dynamics", ok: true });
+    // После полностью завершённого score фиксируем состояние кейсов. Ошибка этого
+    // вспомогательного слоя делает цикл partial, но не отменяет валидный risk scoring.
+    stages.push(await runStage("case_dynamics", () => captureAntiFraudCaseDynamics()));
 
     const partial = stages.some((stage) => !stage.ok);
     const finalStatus = partial ? "partial" : "success";
