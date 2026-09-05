@@ -78,6 +78,13 @@
       "when": 1788580000000,
       "tag": "0010_anti_fraud_bonus_balance",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788583600000,
+      "tag": "0011_anti_fraud_identity_similarity",
+      "breakpoints": true
     }
   ]
 }
