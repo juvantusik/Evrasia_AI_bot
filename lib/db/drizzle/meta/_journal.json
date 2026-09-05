@@ -16,6 +16,7 @@
     {"idx":11,"version":"7","when":1788583600000,"tag":"0011_anti_fraud_identity_similarity","breakpoints":true},
     {"idx":12,"version":"7","when":1788590000000,"tag":"0012_anti_fraud_case_dynamics","breakpoints":true},
     {"idx":13,"version":"7","when":1788594200000,"tag":"0013_anti_fraud_loyalty_decimal","breakpoints":true},
-    {"idx":14,"version":"7","when":1788597600000,"tag":"0014_anti_fraud_restis_event_identity","breakpoints":true}
+    {"idx":14,"version":"7","when":1788597600000,"tag":"0014_anti_fraud_restis_event_identity","breakpoints":true},
+    {"idx":15,"version":"7","when":1788601200000,"tag":"0015_anti_fraud_signed_bonus_balance","breakpoints":true}
   ]
 }
