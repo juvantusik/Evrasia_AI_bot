@@ -175,11 +175,16 @@ const refreshPriorityLoyaltyOnce = async (): Promise<void> => {
 // RestIS credentials в контейнере бота. Каждые 15 минут при включённом scheduler:
 // 1) полный snapshot Trusted Device;
 // 2) account-map по известным USER_ID;
-// 3) свежий loyalty TotalSum/count/issue для уже рискованных аккаунтов;
-// 4) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;
-// 5) explainable risk + адресная history только для history gate;
-// 6) фиксация case dynamics.
-// Rolling loyalty выбран намеренно: полный флот = ~1800 RestIS Balance вызовов за один проход,
+// 3) предварительный risk без history — чтобы новые подозрительные аккаунты сразу попали в priority loyalty;
+// 4) свежий loyalty TotalSum/count/issue для рискованных аккаунтов уже с учётом новых USER_ID;
+// 5) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;
+// 6) финальный explainable risk + адресная history только для history gate;
+// 7) фиксация case dynamics.
+//
+// Двухпроходный risk нужен специально для UX ручного refresh: новый аккаунт, найденный
+// Trusted Device/account-map, не должен сначала появляться в кейсе как «Карты: не загружено»
+// и получать loyalty только на следующем цикле.
+// Rolling loyalty выбран намеренно: полный флот = ~1800+ RestIS Balance вызовов за один проход,
 // поэтому без отдельного load-test не запускаем такой burst каждые 15 минут.
 export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
   if (schedulerStatus.running) {
@@ -200,6 +205,19 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
 
     stages.push(await runStage("trusted_device_export", () => syncTrustedDeviceOnce()));
     stages.push(await runStage("bitrix_account_map", () => syncBitrixAccountsOnce()));
+
+    // Сначала пересчитываем risk без history. Это даёт risk_score новым аккаунтам,
+    // которые только что появились из Trusted Device/account-map, чтобы priority loyalty
+    // смог обновить их баланс уже в текущем цикле, а не на следующем.
+    stages.push(
+      await runStage("risk_scoring_pre_loyalty", () =>
+        analyzeAntiFraudWithSimilarityOnce({
+          refreshAccounts: false,
+          autoHistory: false,
+        }),
+      ),
+    );
+
     stages.push(await runStage("loyalty_priority", () => refreshPriorityLoyaltyOnce()));
     stages.push(
       await runStage("loyalty_stale_scan", async () => {
@@ -210,13 +228,13 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
       }),
     );
 
-    // account-map уже выполнен отдельным stage. Auto-history остаётся только адресным:
-    // protected loyalty endpoint вызывается для history-gated USER_ID, а не для всего флота.
+    // Финальный risk выполняем уже после свежих loyalty данных. Только здесь разрешена
+    // адресная history для history-gated USER_ID.
     await analyzeAntiFraudWithSimilarityOnce({
       refreshAccounts: false,
       autoHistory: true,
     });
-    stages.push({ stage: "risk_scoring", ok: true });
+    stages.push({ stage: "risk_scoring_final", ok: true });
 
     stages.push(await runStage("case_dynamics", () => captureAntiFraudCaseDynamics()));
 
@@ -241,7 +259,7 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
     );
   } catch (error) {
     const message = safeError(error);
-    stages.push({ stage: "risk_scoring", ok: false, error: message });
+    stages.push({ stage: "risk_scoring_final", ok: false, error: message });
 
     try {
       await persistCycleFinish(runId, "failed", stages, message);
