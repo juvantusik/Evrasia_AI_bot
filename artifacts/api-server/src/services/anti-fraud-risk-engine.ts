@@ -5,7 +5,7 @@ import { syncBitrixAccountsOnce } from "./anti-fraud-bitrix-account-collector";
 
 const SOURCE = "anti_fraud_risk_scoring";
 const LOCK_NAME = "anti_fraud_risk_scoring";
-const CALCULATION_VERSION = "v1.1";
+const CALCULATION_VERSION = "v1.2";
 const DEFAULT_HISTORY_THRESHOLD = 50;
 const DEFAULT_MAX_HISTORY_USERS = 10;
 const MAX_HISTORY_USERS = 50;
@@ -133,9 +133,11 @@ const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
 };
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
-// v1 использует только объяснимые признаки. Наличие двух аккаунтов на одном устройстве само по себе
-// не достигает history gate. Посещения считаются по всем ресторанам вместе: одинаковые и разные рестораны
-// одинаково входят в суточную частоту; 3+ посещения за ресторанный день являются самостоятельным risk gate.
+// v1 использует только объяснимые признаки. Уже два аккаунта на одном устройстве считаются
+// достаточным multiaccount-сигналом для history gate: базовый breakdown 40 за общее устройство
+// + 10 за один связанный аккаунт = итоговые 50. Посещения считаются по всем ресторанам вместе:
+// одинаковые и разные рестораны одинаково входят в суточную частоту; 3+ посещения за ресторанный
+// день являются самостоятельным risk gate.
 // Добавлено 05.09.2026: остаток более 40000 бонусов даёт +50 и сам по себе запускает 60-дневную проверку истории.
 export const scoreAntiFraudSignals = (
   signals: AntiFraudRiskSignals,
@@ -163,10 +165,10 @@ export const scoreAntiFraudSignals = (
       details: `max_accounts=3; shared_devices=${signals.sharedDeviceCount}`,
     });
   } else if (signals.maxAccountsOnDevice === 2) {
-    deviceRisk += 20;
+    deviceRisk += 40;
     reasons.push({
       code: "shared_device_accounts",
-      score: 20,
+      score: 40,
       details: `max_accounts=2; shared_devices=${signals.sharedDeviceCount}`,
     });
   }
