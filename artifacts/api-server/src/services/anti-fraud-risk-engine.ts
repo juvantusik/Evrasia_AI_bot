@@ -5,7 +5,7 @@ import { syncBitrixAccountsOnce } from "./anti-fraud-bitrix-account-collector";
 
 const SOURCE = "anti_fraud_risk_scoring";
 const LOCK_NAME = "anti_fraud_risk_scoring";
-const CALCULATION_VERSION = "v1.2";
+const CALCULATION_VERSION = "v1.3";
 const DEFAULT_HISTORY_THRESHOLD = 50;
 const DEFAULT_MAX_HISTORY_USERS = 10;
 const MAX_HISTORY_USERS = 50;
@@ -31,7 +31,8 @@ export type AntiFraudRiskSignals = {
   activeCardCount: number;
   bitrixActive: boolean;
   historyEnriched: boolean;
-  // Добавлено 05.09.2026 ИТ Директор Евразии
+  // Обновлено 05.09.2026 ИТ Директор Евразии
+  // NUMERIC(14,2) из RestIS TotalSum. В JS используется только для сравнения risk threshold.
   bonusBalance: number | null;
 };
 
@@ -119,10 +120,10 @@ const toCount = (value: string | number | null): number => {
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
 };
 
-const toNullableNonNegativeInteger = (value: string | number | null): number | null => {
+const toNullableNonNegativeNumber = (value: string | number | null): number | null => {
   if (value === null) return null;
   const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : null;
+  return Number.isFinite(number) && number >= 0 ? number : null;
 };
 
 const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
@@ -138,7 +139,7 @@ const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
 // + 10 за один связанный аккаунт = итоговые 50. Посещения считаются по всем ресторанам вместе:
 // одинаковые и разные рестораны одинаково входят в суточную частоту; 3+ посещения за ресторанный
 // день являются самостоятельным risk gate.
-// Добавлено 05.09.2026: остаток более 40000 бонусов даёт +50 и сам по себе запускает 60-дневную проверку истории.
+// Обновлено 05.09.2026: остаток RestIS TotalSum строго > 40000.00 даёт +50 и запускает history gate.
 export const scoreAntiFraudSignals = (
   signals: AntiFraudRiskSignals,
   historyThreshold = DEFAULT_HISTORY_THRESHOLD,
@@ -326,8 +327,8 @@ export const scoreAntiFraudSignals = (
       code: "high_bonus_balance",
       score: BONUS_BALANCE_RISK,
       details:
-        `bonus_balance=${signals.bonusBalance}; ` +
-        `threshold=${BONUS_BALANCE_THRESHOLD}; history_window_days=60`,
+        `bonus_balance=${signals.bonusBalance.toFixed(2)}; ` +
+        `threshold=${BONUS_BALANCE_THRESHOLD.toFixed(2)}; history_window_days=60`,
     });
   }
 
@@ -489,10 +490,13 @@ linked_pairs AS (
 active_visits AS (
   SELECT v.restis_id, v.bitrix_user_id, v.visited_at, v.restaurant
   FROM anti_fraud_visits v
-  JOIN anti_fraud_cards c ON c.id = v.card_id
-  WHERE c.is_active IS TRUE
-    AND v.bitrix_user_id IS NOT NULL
+  LEFT JOIN anti_fraud_cards c ON c.id = v.card_id
+  WHERE v.bitrix_user_id IS NOT NULL
     AND v.visited_at >= now() - interval '60 days'
+    AND (
+      v.loyalty_verified IS TRUE
+      OR (v.card_id IS NOT NULL AND c.is_active IS TRUE)
+    )
 ),
 near_visit_pairs AS (
   SELECT
@@ -593,19 +597,7 @@ visit_sequence_agg AS (
 card_agg AS (
   SELECT
     bitrix_user_id,
-    count(*) FILTER (WHERE is_active IS TRUE)::int AS active_card_count,
-    CASE
-      WHEN count(*) FILTER (WHERE is_active IS TRUE) = 0 THEN false
-      ELSE bool_and(
-        CASE
-          WHEN is_active IS NOT TRUE THEN true
-          ELSE history_loaded_from IS NOT NULL
-            AND history_loaded_at IS NOT NULL
-            AND history_loaded_from <= now() - interval '59 days'
-            AND history_loaded_at >= now() - interval '24 hours'
-        END
-      )
-    END AS history_enriched
+    count(*) FILTER (WHERE is_active IS TRUE)::int AS active_card_count
   FROM anti_fraud_cards
   WHERE bitrix_user_id IS NOT NULL
   GROUP BY bitrix_user_id
@@ -628,7 +620,16 @@ SELECT
     AS max_distinct_restaurants_on_high_visit_day,
   COALESCE(ca.active_card_count, 0) AS active_card_count,
   COALESCE(a.bitrix_active, false) AS bitrix_active,
-  COALESCE(ca.history_enriched, false) AS history_enriched,
+  CASE
+    WHEN a.loyalty_history_loaded_from IS NOT NULL
+      AND a.loyalty_history_loaded_until IS NOT NULL
+      AND a.loyalty_history_loaded_at IS NOT NULL
+      AND a.loyalty_history_loaded_from <= now() - interval '59 days'
+      AND a.loyalty_history_loaded_until >= now() - interval '24 hours'
+      AND a.loyalty_history_loaded_at >= now() - interval '24 hours'
+    THEN true
+    ELSE false
+  END AS history_enriched,
   a.bonus_balance
 FROM candidates c
 LEFT JOIN user_device ud ON ud.bitrix_user_id = c.bitrix_user_id
@@ -668,7 +669,7 @@ const loadRiskSignals = async (): Promise<AntiFraudRiskSignals[]> => {
     activeCardCount: toCount(row.active_card_count),
     bitrixActive: row.bitrix_active === true,
     historyEnriched: row.history_enriched === true,
-    bonusBalance: toNullableNonNegativeInteger(row.bonus_balance),
+    bonusBalance: toNullableNonNegativeNumber(row.bonus_balance),
   }));
 };
 
@@ -765,9 +766,10 @@ const calculateAndPersist = async (
   return scores;
 };
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
-// Оркестратор сначала актуализирует только уже известные Anti-Fraud аккаунты Bitrix, затем считает risk gate.
-// VIP_HISTORY вызывается адресно, последовательно и только для high-risk активных аккаунтов с активной картой.
+// Обновлено 05.09.2026 ИТ Директор Евразии
+// Оркестратор обновляет account identity, считает risk gate и при необходимости вызывает
+// защищённую loyalty history по USER_ID. Наличие карты в anti_fraud_cards больше не является
+// обязательным условием: активную RESTIS_STATE=113 карту определяет site-side endpoint.
 // Автоматической блокировки или изменения Bitrix ACTIVE в v1.7 здесь нет.
 export const analyzeAntiFraudOnce = async (
   options: AntiFraudRiskAnalysisOptions = {},
@@ -832,7 +834,6 @@ export const analyzeAntiFraudOnce = async (
         return Boolean(
           score.historyGate &&
             signal?.bitrixActive === true &&
-            (signal?.activeCardCount ?? 0) > 0 &&
             signal?.historyEnriched !== true,
         );
       })
@@ -853,7 +854,7 @@ export const analyzeAntiFraudOnce = async (
           });
           historySuccessfulAccounts += 1;
         } catch {
-          // Один недоступный VIP_HISTORY не должен отменять scoring остальных аккаунтов.
+          // Один недоступный protected loyalty history не должен отменять scoring остальных аккаунтов.
           historyFailedAccounts += 1;
         }
       }
