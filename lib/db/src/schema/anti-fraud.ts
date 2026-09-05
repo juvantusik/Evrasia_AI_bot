@@ -19,6 +19,9 @@ export const antiFraudAccountsTable = pgTable(
     displayName: text("display_name"),
     registeredAt: timestamp("registered_at", { withTimezone: true }),
     bitrixActive: boolean("bitrix_active").notNull().default(true),
+    // Добавлено 05.09.2026 ИТ Директор Евразии
+    // Текущий остаток бонусов из Bitrix. Значение > 40000 является отдельным risk gate.
+    bonusBalance: integer("bonus_balance"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
