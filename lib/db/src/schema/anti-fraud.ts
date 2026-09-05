@@ -43,7 +43,6 @@ export const antiFraudCardsTable = pgTable(
     cardNumber: text("card_number").notNull(),
     bitrixUserId: integer("bitrix_user_id"),
     cardType: integer("card_type"),
-    // Добавлено 03.09.2026 ИТ Директор Евразии
     bitrixCardStatusId: integer("bitrix_card_status_id"),
     isActive: boolean("is_active").notNull().default(false),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
@@ -64,7 +63,10 @@ export const antiFraudCardsTable = pgTable(
 export const antiFraudVisitsTable = pgTable(
   "anti_fraud_visits",
   {
+    // В legacy VIP_TODAY здесь raw RestIS ID. Для protected history — детерминированный
+    // внутренний event key, потому что один source RestIS ID может относиться к разным операциям.
     restisId: text("restis_id").primaryKey(),
+    sourceRestisId: text("source_restis_id").notNull(),
     // Обновлено 05.09.2026: новый защищённый loyalty API не раскрывает номер активной карты,
     // поэтому card_id может быть NULL для проверенной истории, привязанной напрямую к USER_ID.
     cardId: integer("card_id").references(() => antiFraudCardsTable.id, { onDelete: "restrict" }),
@@ -79,6 +81,12 @@ export const antiFraudVisitsTable = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (table) => ({
+    sourceRestisIdx: index("anti_fraud_visits_source_restis_idx").on(table.sourceRestisId),
+    sourceUserTimeIdx: index("anti_fraud_visits_source_user_time_idx").on(
+      table.sourceRestisId,
+      table.bitrixUserId,
+      table.visitedAt,
+    ),
     cardVisitedIdx: index("anti_fraud_visits_card_visited_idx").on(
       table.cardId,
       table.visitedAt,
@@ -103,7 +111,6 @@ export const antiFraudDeviceEventsTable = pgTable(
     deviceHash: text("device_hash").notNull(),
     eventType: text("event_type").notNull(),
     authMethod: text("auth_method"),
-    // Добавлено 03.09.2026 ИТ Директор Евразии
     clientType: text("client_type"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
