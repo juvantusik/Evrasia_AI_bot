@@ -13,7 +13,7 @@
 
 ## 1. Continuation rule
 
-This file is the continuity source for long-running Evrasia AI Bot work. In a new ChatGPT conversation, read it first and then verify the live GitHub PR/HEAD and server state before changing anything.
+This file is the continuity source for long-running Evrasia AI Bot work. In a new ChatGPT conversation, read it first, then verify the live PR/HEAD and the exact test/production server state before changing anything.
 
 Recommended new-chat prompt:
 
@@ -36,16 +36,75 @@ Recommended new-chat prompt:
 1. Production remains untouched during v1.7 test work unless explicitly approved.
 2. Keep PR #32 Draft until visual approval.
 3. Do not copy RestIS credentials into the bot.
-4. Do not expose raw loyalty card numbers to bot/UI/logs.
-5. Do not print tokens, passwords, card numbers, or full diagnostic USER_ID lists.
-6. Keep rollback assets/backups until explicit cleanup approval.
-7. Anti-Fraud scheduler stays disabled until direct legacy `VIP_TODAY` dependency is replaced by a protected site-side current-visit source.
-8. Full phone/email are intentionally visible to the Anti-Fraud operator for manual investigation; do not re-mask without a business requirement change.
-9. Never claim server state changed without pasted server output or direct verification.
+4. Do not expose raw loyalty card numbers to the bot UI/API/logs or persist them in this context document.
+5. A full card number may be printed only as an explicit, temporary operator-only forensic exception requested by the user; do not copy such numbers into persistent project documentation.
+6. Do not print tokens, passwords, full phones, service credentials, or bulk USER_ID lists in diagnostics.
+7. Keep rollback assets/backups until explicit cleanup approval.
+8. Full phone/email are intentionally visible in the authenticated Anti-Fraud operator UI for manual investigation; do not re-mask there without a business requirement change.
+9. Multiple active loyalty cards are an operator-visible anomaly but **do not add automatic Risk points** until the business meaning is approved.
+10. Never claim server state changed without pasted server output or direct verification.
+11. Never replay legacy RestIS activation/write requests during forensics. Static source inspection and known read-only `INFO`/balance queries are allowed.
 
 ---
 
-## 4. Server / infrastructure
+## 4. GitHub / PR / CI — current verified state
+
+### PR #32
+
+Verified from GitHub on 2026-09-05 before this documentation commit:
+
+- state: **open**
+- draft: **true**
+- merged: **false**
+- base: `main`
+- base SHA: `99377cb34a7798f982d0d9e073d13a6a4ef00afc`
+- working branch: `feature/v1.7-antifraud-web`
+- latest **application-code** commit before this docs update: `781834632efc07d0b43af91cf1c67425777926bb`
+- commit message: `fix: refresh loyalty for newly risky accounts in same cycle`
+- parent: `c443ea757627d17d616542b5582aef55b357e27c`.
+
+The branch HEAD becomes a docs commit whenever this file is updated. Do not confuse a documentation-only HEAD with the latest application-code revision.
+
+### Current code delta at `781834...`
+
+The scheduler cycle now does a two-pass risk calculation so a newly discovered risky account receives loyalty data in the **same** manual/scheduled cycle:
+
+1. `trusted_device_export`
+2. `bitrix_account_map`
+3. `risk_scoring_pre_loyalty` with `autoHistory=false`
+4. `loyalty_priority`
+5. `loyalty_stale_scan`
+6. final risk calculation with targeted `autoHistory=true`
+7. `case_dynamics`.
+
+This fixes the UX case where a newly risky account could otherwise first appear as `Карты: не загружено` and receive loyalty only on the next cycle.
+
+### CI / image history
+
+Verified immutable candidate for `c443ea757627d17d616542b5582aef55b357e27c`:
+
+- tag: `ghcr.io/juvantusik/evrasia_ai_bot:sha-c443ea7`
+- manifest digest: `sha256:1f89536030a7a8408a11fd3f2a42bcc5455184a590f7586c411e4b80193ae0d1`
+- image/config ID: `sha256:23ed606d215351404213ad5a01024dd3864e8cf892872957abdf63524adef144`
+- PR build run #231: success
+- manual publication run #232: success
+- 57/57 tests passed
+- migration smoke: 17 migrations
+- signed current balance smoke passed
+- multiple-active-card aggregate-balance regression passed
+- Anti-Fraud API/web smoke passed.
+
+For the newer application-code commit `781834...`:
+
+- manual workflow `Build server image` run **#234** (`workflow_dispatch`) completed successfully on 2026-09-05;
+- before deployment, verify the immutable tag/digest from the run and verify what image the test server actually runs;
+- do **not** infer deployment merely from successful CI/publication.
+
+PR #32 remains Draft.
+
+---
+
+## 5. Server / infrastructure
 
 ### Host
 
@@ -55,97 +114,38 @@ Recommended new-chat prompt:
 - Docker Engine: 26.1.5
 - Docker Compose: 2.26.1-4
 - Docker network: `evrasia-prod-internal`
-- PostgreSQL container: `samzaberu-db`
+- PostgreSQL container: `samzaberu-db`.
 
-### Production — last verified 2026-09-05 after fleet diagnostics
+### Production — last verified state
 
 - container: `evrasia-ai-bot-app`
 - image: `ghcr.io/juvantusik/evrasia_ai_bot:sha-8fd916f`
-- status: running
-- health: healthy
+- status: running / healthy at last verification
 - port: `127.0.0.1:18080 -> 8080`
 - DB: `samzaberu`
 - production Anti-Fraud tables: `0`
-- **production changed during v1.7 work: NO**
+- **production changed during v1.7 work: NO**.
 
-### Test v1.7 web container
+Always re-check this guard before and after any test-server mutation.
 
-- container: `evrasia-ai-bot-v17-test`
-- deployed web image: `ghcr.io/juvantusik/evrasia_ai_bot:sha-55ef0a5`
-- deployed web revision: `55ef0a522bbbcfe552480d3f222bacab46009e95`
-- test DB: `samzaberu_antifraud_test`
+### Test v1.7
+
+- container name: `evrasia-ai-bot-v17-test`
+- DB: `samzaberu_antifraud_test`
 - port: `127.0.0.1:18081 -> 8080`
 - nginx preview: `http://192.168.103.200:8081/antifraud`
 - Telegram polling: disabled
-- `ANTI_FRAUD_SCHEDULER_ENABLED=false`
-- `ANTI_FRAUD_SCHEDULER_RUN_ON_START=false`
-- `ANTI_FRAUD_AUTO_HISTORY=false`
-- `ANTI_FRAUD_REFRESH_ACCOUNTS=false`
-- RestIS credentials in bot: NO
+- RestIS credentials in bot: NO.
 
-### Test DB — current state
+Later server diagnostics after the old version of this file showed that the c443ea7-era candidate was deployed to TEST, migration 0016/17 was applied, fleet loyalty refresh completed, a protected manual cycle succeeded, and the protected scheduler was enabled and ran successfully. **However, the exact current test image/revision and scheduler enabled/disabled state must be re-verified before the next server change.**
 
-After successful fleet current-balance backfill:
+Reason for this caveat: a later scheduler-pause script was proposed during card forensics, but no execution output was returned, so it is not evidence that the scheduler was actually paused. The last known state before that unverified pause attempt was enabled.
 
-- migrations: **16** (through `0015_anti_fraud_signed_bonus_balance`)
-- total `anti_fraud_accounts`: **1785**
-- `bitrix_active=true`: **1784**
-- `bitrix_active=false`: **1**
-- active accounts with `loyalty_synced_at IS NOT NULL`: **1784**
-- active accounts with known non-NULL `bonus_balance`: **1437**
-- active synced accounts with NULL `bonus_balance`: **347**
-- active unsynced accounts: **0**
-- negative current balances: **76**
-- exact zero balances: **43**
-- balances `> 40000.00`: **6**
-- balances `= 40000.00`: **0**
-- max observed current balance: **158444.11**
-- stale DB constraint `anti_fraud_accounts_bonus_balance_chk`: **removed**
-- `bonus_balance` remains `NUMERIC(14,2)`.
+Do not state `scheduler=OFF` or `scheduler=ON` as current fact until the server is rechecked.
 
-Important terminology:
-- **1784 means active Bitrix accounts**, not active loyalty cards.
-- `active_card_found=true` means the protected loyalty response found **exactly one unambiguous active RestIS state-113 card**.
-- The fleet backfill count **1438 active-card accounts** therefore means 1438 accounts with exactly one active state-113 card, not all accounts with any active card.
-- The previous inference that the remaining 346 accounts had no active card was wrong and is superseded by the full read-only fleet classification in section 16.
+### GHCR pull note
 
-### Secret paths — never print values
-
-- Bitrix API token host path: `/opt/evrasia-ai-bot/secrets/bitrix-api-token`
-- Anti-Fraud service token host path: `/opt/evrasia-ai-bot/secrets/anti-fraud-service-token`
-- Anti-Fraud token inside container: `/run/secrets/anti-fraud-service-token`
-- loyalty gateway env: `BITRIX_ANTI_FRAUD_TOKEN_FILE`
-
----
-
-## 5. GitHub / CI / immutable application image
-
-### PR
-
-- PR #32
-- branch: `feature/v1.7-antifraud-web`
-- base: `main`
-- state: open
-- draft: true
-- merged: false
-- keep Draft until visual approval.
-
-### Application-code revision used for migration/backfill/risk work
-
-- application revision: `d76ca1e02042e7830e22cbb2584a17bbca00025d`
-- GHCR tag: `ghcr.io/juvantusik/evrasia_ai_bot:sha-d76ca1e`
-- digest: `sha256:9edb4be6074a50dd9a6c65b8c7a313593dd94db3d12314b44c0b3f641389187d`
-- image/config ID: `sha256:d4e7a67135fb7aa403c794bc961f77b8d53ca34ccd8414a0f443f2592a7ea56c`
-- manual workflow run #218: success
-- 56/56 tests passed
-- API/web smoke passed
-- DB smoke proved 16 migrations and signed `bonus_balance=-1.25`.
-
-The branch HEAD can be newer because documentation-only commits are added after the image build. Never confuse docs-only HEAD with the immutable application revision above.
-
-### GHCR pull on server
-
-Root does not have GHCR auth. User `tech` does. Use:
+Root previously did not have GHCR auth while user `tech` did. Safe pattern:
 
 `runuser -u tech -- env HOME=/home/tech docker pull ...`
 
@@ -153,117 +153,297 @@ Do not copy GitHub tokens into root config.
 
 ---
 
-## 6. Operator/server execution preference
+## 6. Database migrations relevant to v1.7
 
-For server work, provide one complete bash block copied/run as a whole.
+### 0013 — `anti_fraud_loyalty_decimal`
 
-Required style:
-- `clear`
-- `set +e`
-- `set +u`
-- `set +o pipefail 2>/dev/null`
-- variables at top
-- numbered stages
-- production guard before and after
-- test guard
-- backup before DB mutation
-- rollback path
-- explicit RC and PASS/FAIL
-- `/tmp` temporary files and cleanup
-- no outer-shell `exit`; use functions + `return`
-- no secret output
-- finish with `TERMINAL_WILL_STAY_OPEN=YES`.
+- `bonus_balance` -> `NUMERIC(14,2)`
+- loyalty sync/history timestamps
+- nullable visit card link for protected history
+- exact visit monetary fields
+- `loyalty_verified`.
 
-For large scripts, preferred safe delivery:
-1. write script to a temporary `.sh` with a quoted heredoc;
-2. run `bash -n`;
-3. execute only when syntax check passes;
-4. delete the temporary script afterwards.
+### 0014 — `anti_fraud_restis_event_identity`
 
-This avoids partial pasted-function execution in an interactive shell.
+Raw RestIS `restis_id` is not unique per business operation.
 
----
+- raw ID stored as `source_restis_id`
+- intentionally nonunique
+- stable internal event ID hashes source ID + timestamp + restaurant + amount + bonus added + bonus spent
+- exact duplicate event remains deduplicated.
 
-## 7. Anti-Fraud business rules
+### 0015 — `anti_fraud_signed_bonus_balance`
 
-### Risk
+- drops only `anti_fraud_accounts_bonus_balance_chk`
+- keeps `bonus_balance NUMERIC(14,2)`
+- allows signed **current** balances
+- history/amount/bonus-added/bonus-spent contracts remain non-negative
+- negative current balances are real data.
 
-- displayed risk: 0–100
-- calculation version: `v1.3`
-- advisory-only; no automatic blocking.
+### 0016 — `anti_fraud_loyalty_resolution`
 
-### Case dynamics
+Path: `lib/db/drizzle/0016_anti_fraud_loyalty_resolution.sql`.
 
-- Новый
-- Усилился
-- Без изменений
-- Ослаб
+Adds to `anti_fraud_accounts`:
 
-### Device/multiaccount baseline
+- `loyalty_active_card_count INTEGER`
+- `loyalty_issue TEXT`
+- count check `>= 0`
+- issue index.
 
-Known two-account shared-device example:
-- `shared_device_accounts` +40
-- `linked_accounts` +10
-- total 50 -> high -> history gate true.
+Schema exposes:
 
-### Bonus threshold
+- `loyaltyActiveCardCount`
+- `loyaltyIssue`.
 
-- exactly `40000.00`: no high-balance signal
-- `40000.01+`: +50 and history gate
-- no auto-block
-- exact decimal storage
-- negative current balances are valid real data.
+Journal total becomes **17 migrations**.
 
-### Loyalty card state
+Semantics:
 
-Use active RestIS state `113` for current loyalty state/history.
+- `NULL` count — unknown/not loaded
+- `0` — no active state-113 card
+- `1` — exactly one active state-113 card
+- `>1` — multiple active state-113 cards.
 
-- 113 — Активна
-- 114 — Недействительна
-- 115 — Украдена
-- 116 — Изъять
+The balance refresh service atomically persists:
 
-Do not use 114/115/116 for current state. Discount `20` means 20%, not 20 bonus points.
-
-Important ambiguity rule:
-- `active_card_count=0` => no active card
-- `active_card_count=1` => exactly one unambiguous active card
-- `active_card_count>1` => multiple active cards; do not arbitrarily choose one card or one balance.
-
-Do **not** add Risk points for multiple active cards yet. First persist and expose the state in the UI, then decide business significance after review.
+- `bonus_balance`
+- `loyalty_active_card_count`
+- `loyalty_issue`
+- `loyalty_synced_at`.
 
 ---
 
-## 8. Protected site-side Anti-Fraud API
+## 7. Protected site-side Anti-Fraud API / loyalty contract
 
 Protected internal routes on `evrasia.spb.ru` include:
+
 - `POST /api/internal/anti-fraud/card-map`
 - `POST /api/internal/anti-fraud/account-map`
 - `POST /api/internal/anti-fraud/trusted-device-export`
-- `POST /api/internal/anti-fraud/loyalty`
+- `POST /api/internal/anti-fraud/loyalty`.
 
 Target graph:
 
-`BITRIX USER_ID -> identity + Trusted Device hash + active RESTIS_STATE=113 loyalty + current balance/history`
-
-The bot does not need raw card numbers or RestIS credentials for protected loyalty.
+`BITRIX USER_ID -> identity + Trusted Device hash + active RestIS state + account-level balance/history`.
 
 ### Loyalty gateway constraints
 
 - HTTPS required
-- current-state max: 50 USER_ID per protected request
-- history max: 10 USER_ID per request
+- current-state max: 50 USER_ID/request
+- history max: 10 USER_ID/request
 - history max: 60 days
-- raw `card_number` rejected if exposed
-- current `bonus_balance` accepts signed decimal strings
-- `total_spend`, `today_sum`, and history money remain non-negative contracts
-- `active_card_found=true` is valid only with exactly one active card and `card_status_id=113`
-- `active_card_count=0` returns issue `no_active_card`
-- `active_card_count>1` returns issue `multiple_active_cards` and no selected current balance.
+- raw `card_number` must never be returned by protected API
+- current `bonusBalance` parser accepts signed decimals
+- `totalSpend`, `todaySum`, and history money remain non-negative contracts
+- timeout default: 30s via `BITRIX_ANTI_FRAUD_TIMEOUT_MS`
+- HTTP failures must not expose response bodies/secrets.
+
+### Active-card identity vs account-level balance
+
+`active_card_found === (active_card_count === 1)`.
+
+- exactly one active card: card identity is unambiguous
+- zero active cards: issue `no_active_card`
+- multiple active cards: issue `multiple_active_cards`, `active_card_found=false`, no arbitrary card identity selected.
+
+**Important correction:** after the site-side multicard patch, `active_card_count>1` may still return the **account/phone-level current balance** from RestIS `/api/Balance`. This is allowed because `TotalSum` is account-level; it must not be multiplied or summed once per card.
+
+For multiple active cards:
+
+- keep issue `multiple_active_cards`
+- do not expose/select a raw card number
+- show the active-card count
+- show the known account-level balance when available
+- UI text may mark it as aggregate/current account balance (`суммарно`)
+- do not add Risk points solely for this anomaly.
+
+Known live protected smoke after this patch:
+
+- reference one-card account: count 1, balance 2438.89, discount 20
+- 10-card anomaly account: count 10, issue `multiple_active_cards`, account balance 733.75, discount 15
+- another count 2 anomaly: balance 0.00
+- another count 4 anomaly: balance 385.00
+- no-active-card example: count 0, balance NULL.
+
+`0.00` is a known zero and is distinct from `NULL`.
 
 ---
 
-## 9. Trusted Device foundation
+## 8. Fleet loyalty classification
+
+Read-only full-fleet classification over **1784 active Bitrix accounts** on 2026-09-05:
+
+- exactly one active state-113 card: **1438**
+- no active state-113 card: **240**
+- multiple active state-113 cards: **106**
+- total classified: **1784**
+- unresolved: **0**
+- contract mismatches: **0**.
+
+Active-card-count distribution:
+
+- 0: 240
+- 1: 1438
+- 2: 88
+- 3: 12
+- 4: 4
+- 8: 1
+- 10: 1.
+
+Issue distribution:
+
+- none: 1438
+- `no_active_card`: 240
+- `multiple_active_cards`: 106.
+
+Before the multicard account-balance patch, the 347 stored NULL balances decomposed as:
+
+- 240 no active card
+- 106 multiple active cards
+- 1 exactly-one card with balance unavailable.
+
+That NULL decomposition is **historical**, not the target contract after the multicard patch. Multiple-card responses can now carry an account-level balance. Re-check exact DB counts after any refresh instead of reusing the old 347 number as current truth.
+
+Important terminology:
+
+- 1784 = active Bitrix accounts, not active cards
+- 1438 = exactly one active state-113 card, not “at least one”
+- 240 = no active card
+- 106 = multiple active cards.
+
+---
+
+## 9. Current balance / refresh architecture
+
+`account-map` is identity-only and must not overwrite loyalty balance.
+
+Balance refresh service:
+
+- source: protected Bitrix loyalty gateway
+- target refresh: 1..200 USER_ID
+- inner protected chunks: 50
+- advisory lock prevents concurrent refresh
+- fetches all requested state before transactional persistence
+- persists balance + count + issue + sync timestamp
+- no raw card numbers
+- no RestIS credentials in bot.
+
+Refresh result distinguishes:
+
+- exactly-one active-card accounts
+- multiple-active-card accounts
+- no-active-card accounts.
+
+Stale scan is capped at 200 accounts per cycle.
+
+History remains targeted only to history-gated/suspicious accounts. Never fleet-load 60-day history.
+
+Known implementation caveat: history enrichment must not silently reintroduce inconsistent count/issue persistence; if history-only refresh paths are changed later, re-check this contract.
+
+---
+
+## 10. Anti-Fraud scheduler / manual refresh
+
+Legacy direct RestIS `VIP_TODAY` and legacy card-map stages were removed from the protected scheduler cycle. The bot container must not receive RestIS credentials.
+
+Current code default:
+
+- `ANTI_FRAUD_SCHEDULER_ENABLED=false`
+- `ANTI_FRAUD_SCHEDULER_INTERVAL_MINUTES=15`
+- `ANTI_FRAUD_SCHEDULER_RUN_ON_START=false`
+- rolling loyalty scan batch default 200 / clamped to 200.
+
+Manual routes:
+
+- `GET /api/anti-fraud/scheduler`
+- `POST /api/anti-fraud/refresh`
+- manual refresh returns 409 if a cycle is already running.
+
+UI button `Обновить сейчас` runs the real protected Anti-Fraud cycle and then reloads the views; it is not a browser-only refresh.
+
+At application code `781834...`, cycle stages are:
+
+1. Trusted Device full snapshot
+2. Bitrix account-map
+3. preliminary risk scoring without history
+4. priority loyalty for risky accounts, including newly risky accounts discovered in this same cycle
+5. rolling stale loyalty scan up to 200
+6. final risk scoring with targeted history for history gate only
+7. case dynamics.
+
+Do not perform a full ~1784-account loyalty burst every 15 minutes without a separate load test. Risk accounts refresh every cycle; low-risk accounts use rolling scan.
+
+**Server scheduler state is currently marked REVERIFY, not assumed ON/OFF.**
+
+---
+
+## 11. Anti-Fraud business rules / Risk v1.3
+
+Risk is advisory-only, displayed 0–100, no automatic blocking.
+
+Thresholds:
+
+- critical: >=75
+- high: >=50
+- medium: >=25.
+
+Key rules currently include:
+
+- max accounts/device >=4: +45; 3: +35; 2: +40
+- fast switch <=30s: +35; <=120s: +30; <=300s: +15
+- repeated fast switches >=5: +20; >=3: +15; >=1: +5
+- shared device count >=3: +15; 2: +10
+- linked accounts >=3: +30; 2: +20; 1: +10
+- repeated pair devices >=3: +40; 2: +30
+- duplicate phone: +35
+- duplicate email: +25
+- both extra: +15
+- linked visits <15m >=5: +50; >=3: +35; >=1: +20
+- max visits/day >=5: +70; 4: +60; 3: +50
+- repeated high-visit days gap2 >=5 sequence: +50; >=3: +35; >=2: +15
+- current bonus balance strictly `>40000`: +50 and history gate.
+
+Exactly `40000.00` does not trigger the high-balance rule.
+
+Multiple active cards currently add **0 automatic risk points**.
+
+After fleet balance backfill, verified active-account risk rows:
+
+- active rows: 1784
+- high: 13
+- critical: 16
+- history gate: 29
+- non-v1.3 active rows: 0.
+
+The risk SQL may still derive an old active-card count from legacy `anti_fraud_cards`; it is not used in scoring and can be cleaned up later.
+
+---
+
+## 12. Case dynamics / UI semantics
+
+Case dynamics:
+
+- Новый
+- Усилился
+- Без изменений
+- Ослаб.
+
+UI loyalty rendering target:
+
+- count unknown -> `Карты: не загружено`
+- count 0 -> `Активных карт: 0 · Бонусы: —`
+- count 1 -> show current balance, including negative/zero
+- count >1 -> warning, active-card count, and known account-level balance with aggregate wording such as `суммарно`
+- exactly one + NULL -> `Баланс недоступен`.
+
+Raw loyalty card numbers never appear in the Anti-Fraud UI/API.
+
+Cosmetic follow-up: ensure money formatting consistently shows two decimals where desired.
+
+---
+
+## 13. Trusted Device foundation
 
 - permanent opaque `device_id` per app install
 - 32 cryptographically random bytes -> 64 lowercase hex chars
@@ -279,456 +459,352 @@ The bot does not need raw card numbers or RestIS credentials for protected loyal
 
 Protected export endpoint: `/api/internal/anti-fraud/trusted-device-export`.
 
----
-
-## 10. Database migrations relevant to v1.7
-
-### 0013 — `anti_fraud_loyalty_decimal`
-
-- `bonus_balance` -> `NUMERIC(14,2)`
-- loyalty sync/history timestamps
-- nullable visit card link for protected history
-- exact visit monetary fields
-- `loyalty_verified`.
-
-Historical issue: 0013 recreated `bonus_balance >= 0`, which real current balances disproved.
-
-### 0014 — `anti_fraud_restis_event_identity`
-
-Raw RestIS `restis_id` is not unique per business operation.
-
-- raw ID stored as `source_restis_id`
-- intentionally nonunique
-- stable internal event ID hashes source ID + timestamp + restaurant + amount + bonus added + bonus spent
-- exact duplicate event still rejected/deduplicated.
-
-### 0015 — `anti_fraud_signed_bonus_balance`
-
-- drops only `anti_fraud_accounts_bonus_balance_chk`
-- keeps `bonus_balance NUMERIC(14,2)`
-- allows signed current balances
-- does not loosen history/visit money contracts
-- journal index 15 / created_at `1788601200000`.
-
-Current test DB has 16 migrations and 0015 is persistently applied after the successful fleet run.
-
-### Next likely migration
-
-Current `anti_fraud_accounts` persists `bonus_balance` and loyalty sync timestamps but does not yet persist enough information to distinguish a NULL balance caused by:
-- no active card
-- multiple active cards
-- exactly one active card with unavailable balance.
-
-Next schema change should persist the protected loyalty resolution state, at minimum:
-- `loyalty_active_card_count`
-- `loyalty_issue` (or an equivalent normalized status field).
-
-Exact column names are not yet final; implement only after source/tests are updated together.
+Collector supports full link snapshots + incremental events and uses an advisory lock/snapshot guard.
 
 ---
 
-## 11. RestIS event-identity discovery
+## 14. Reference account — Nelli
 
-Nelli 60-day live diagnostic previously proved:
+- display name: Нэлля
+- Bitrix USER_ID: `120445`
+- active account
+- total known card records: 4
+- exactly one active state-113 card, three state-116 cards
+- active card type: 28
+- discount: 20%
+- current balance at last detailed verification: `2438.89`
+- total spend: `997590.83`
+- today: `0.00`
+- never expose full card number.
+
+60-day protected history reference:
+
+- visits: 83
+- amount: `208319.71`
+- bonus added: `48422.60`
+- bonus spent: `50691.48`
+- max single bonus spend: `8620.56`.
+
+Risk v1.3 reference:
+
+- overall 100
+- critical
+- history gate true
+- history enriched true.
+
+Do not claim Nelli exceeded 40k current balance; her risk is device/multiaccount driven.
+
+---
+
+## 15. Paused loyalty-card anomaly investigation — USER_ID 737384
+
+**Status:** investigation deliberately paused by user on 2026-09-05. Do not continue it unless asked.
+
+### What triggered the investigation
+
+Anti-Fraud showed one account with **10 active state-113 loyalty cards** and another example with 0 active cards. The zero-card UI state was valid. The 10-card case required forensic review.
+
+### Current RestIS / Bitrix state for 737384
+
+Read-only RestIS `INFO` and Bitrix inspection confirmed exactly **10 current active cards** for the account phone:
+
+- 1 old card: `CARDTYPE=25`, state 1 / Bitrix enum 113, `TAX_RATE=0`, UI mapping **«Евразия Клубная Красная»**, created in Bitrix 2021-05-28;
+- 9 newer cards: `CARDTYPE=3`, state 1 / Bitrix enum 113, `TAX_RATE=50`, created in Bitrix on 2026-09-03.
+
+The current RestIS card set and Bitrix owner-card set match 10/10. No raw full card numbers are stored in this document. Full card numbers were printed once to the operator on explicit request for external/manual verification only.
+
+### Identification of the nine new cards
+
+Static `activate_card.php` analysis proved:
+
+- request `card_number` is sanitized and used as `$card['number']`;
+- `$save_card_number = $card['number']`, so activation event `ITEM_ID` stores the short input number rather than the final full RestIS `CARD_NO`;
+- `$card_type` is cast to integer;
+- full number is constructed as `$card_full_number = $card_type . $card_number`;
+- UI/input type `18` maps to RestIS `CARDTYPE=3` and the UI label **«Карта Евразия 50%»**;
+- input type `03` also maps to RestIS `CARDTYPE=3` but, after integer cast, produces a different prefix/length corresponding to Super VIP.
+
+For all nine new type-3 cards:
+
+- full card length: 8 digits
+- matched activation input length: 6 digits
+- derived prefix: **18**
+- `TAX_RATE=50`
+- source mapping therefore identifies all nine as **«Евразия 50%»**, not Super VIP.
+
+This was confirmed for all nine: `TYPE3_PREFIX_18_COUNT=9`, `TYPE3_PREFIX_3_COUNT=0`.
+
+### Activation-event correlation
+
+For USER_ID 737384, event log showed extreme traffic through `/local/php_interface/activate_card.php`:
+
+- activation-related event count over 2026-09-02/03: **7567**
+- distinct activation ITEM_ID values: **1843**
+- first observed: 2026-09-02 20:13:50
+- last observed: 2026-09-03 11:21:30.
+
+Each of the nine new RestIS cards has an activation-event ITEM_ID that matches its unique six-digit suffix. The matching events also contain `CARDTYPE=3` in the safe request metadata.
+
+Observed activation windows for the nine cards were approximately 11:07:20 through 11:17:41 on 2026-09-03.
+
+Bitrix creation happened shortly afterward:
+
+- first 2 new cards: `2026-09-03 11:11:48`
+- next 7 new cards: `2026-09-03 11:21:47`.
+
+### Legacy `account.php` evidence
+
+File:
+
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/account.php`
+
+Observed source behavior:
+
+- fetches current RestIS `INFO/CARDS/CARD` for the user's `PERSONAL_PHONE`
+- maps RestIS `CARD_NO` to Bitrix iblock 14 property 34
+- maps `CARDSTATE + 112` to Bitrix state enum
+- maps `CARDTYPE`
+- owner = current user
+- existing card -> Update
+- absent card -> Add
+- no delete/ACTIVE=N reconciliation was found in this path.
+
+Event-log correlation showed `account.php` `USER_EDIT` events at exactly the Bitrix creation timestamps above. Later mass `TIMESTAMP_X` updates also coincided with `account.php` activity.
+
+### Anti-Fraud exclusion
+
+The evidence does **not** implicate Anti-Fraud in creation of these cards:
+
+- no Anti-Fraud path events in the relevant creation/update windows
+- `AntiFraudLoyaltyService.php` has no card `Add`/`Update` writes
+- Bitrix card creation timestamps correlate with legacy `account.php`
+- RestIS itself already currently returns all 10 cards for the account phone.
+
+Operational conclusion: Bitrix is mirroring what RestIS returns; the nine cards exist upstream in RestIS and are not invented by the Anti-Fraud protected read path.
+
+### `activate_card.php` evidence and unresolved root cause
+
+`activate_card.php` builds an activation request and calls `CRestis::request($request)`. The nine new cards correlate directly with activation request events from the authenticated 737384 session by input suffix, type and time.
+
+There is also suspicious variable reuse in the multi-card response branch (`foreach ($cards as $card)` followed by a check involving `$card['number']` and `$card['_a']['CARD_NO']`), but that branch alone is not currently claimed as the cause of the nine upstream RestIS card creations.
+
+**Strong forensic conclusion:**
+
+`authenticated activate_card.php traffic -> RestIS has nine new type-3/prefix-18 50% cards -> legacy account.php later mirrors them into Bitrix`.
+
+**Still unresolved:** what frontend/user/process produced thousands of activation calls and why so many card numbers were submitted/created upstream. Do not claim the exact initiating UI defect or human action until that caller is proven.
+
+If investigation is resumed, next safe steps are:
+
+1. inspect the frontend/JS caller(s) of `activate_card.php`;
+2. inspect available web/access logs around 2026-09-03 11:07–11:22;
+3. correlate request/session behavior without printing full card/phone values;
+4. never replay the activation RestIS request.
+
+### Current commercial/account values for this anomaly
+
+Read-only balance response at investigation time:
+
+- account current discount: **15.00%**
+- current bonus balance: **733.75**
+- total spend: **86134.21**.
+
+The nine cards' nominal `TAX_RATE=50` / «Евразия 50%» identity and the account's **current 15% discount are separate concepts**. Do not infer that the account currently receives 50% merely because those cards exist.
+
+---
+
+## 16. Known source hashes from the paused forensic investigation
+
+Useful only to detect source drift before resuming:
+
+- `activate_card.php`: `739a68f48e42b53750b682b1287dfd8837ac9aeed8bd5515ee69053ca929e863`
+- `account.php`: `19b86306de76e41c31e73bfce7763a2197118fd95a0a737263889b15cd8fe258`
+- `CRestis.php`: `b4dc93ab2173b5d3f291249f4d1541188d995c16c4e7a488e7bb2bdc4bbb0714`
+- `AntiFraudLoyaltyService.php` during later forensics: `44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`.
+
+Re-hash before resuming; do not assume these files are unchanged forever.
+
+---
+
+## 17. RestIS event identity discovery
+
+Nelli 60-day diagnostic proved:
+
 - 83 history rows
 - 72 unique source RestIS IDs
 - 11 repeated source-ID groups
 - 0 exact duplicate groups
 - 83 unique full business signatures.
 
-Conclusion: never treat source `restis_id` as unique event identity.
+Conclusion: never treat raw RestIS `restis_id` as unique event identity.
 
 ---
 
-## 12. Reference account — Nelli
-
-- display name: Нэлля
-- Bitrix USER_ID: `120445`
-- active account
-- total known card records: 4
-- one active state-113 card, three state-116 cards
-- card type 28
-- discount 20%
-- current balance at last detailed verification: `2438.89`
-- total spend: `997590.83`
-- today: `0.00`
-- never expose full card number.
-
-60-day protected history at last detailed verification:
-- visits 83
-- amount `208319.71`
-- bonus added `48422.60`
-- bonus spent `50691.48`
-- max single bonus spend `8620.56`.
-
-Nelli risk reference:
-- v1.3
-- overall 100
-- critical
-- history gate true
-- history enriched true.
-
-Do not claim Nelli exceeded 40k balance; her reference risk is device/multiaccount driven.
-
----
-
-## 13. Negative-balance discovery
-
-Read-only inspection of the first 100 active Bitrix accounts showed:
-- requested 100
-- resolved 100
-- unresolved 0
-- exactly one active loyalty card: 68
-- all remaining responses had no unambiguous single active card
-- negative current `bonus_balance`: 6.
-
-This proved negative current balances are legitimate. Gateway signed parsing and migration 0015 were added accordingly.
-
-Fleet backfill later confirmed **76 active Bitrix accounts currently have negative stored balances**.
-
----
-
-## 14. Current balance architecture
-
-### `account-map`
-
-Identity-only. It must not set or overwrite current loyalty balance.
-
-### Balance refresh service
-
-- source: `bitrix_loyalty_balance`
-- protected inner batch size: 50
-- targeted refresh accepts up to 200 IDs and chunks internally to 50
-- persists `bonus_balance` + `loyalty_synced_at`
-- advisory lock prevents concurrent refresh
-- no raw cards
-- no RestIS credentials in bot.
-
-Current limitation:
-- the service does not persist `active_card_count` / `issue`, so after the refresh the DB cannot distinguish different NULL-balance reasons.
-
-### History policy
-
-- current balance: fleet-wide for active Bitrix accounts
-- detailed 60-day history: only history-gated/suspicious accounts
-- never fleet-load 60-day history.
-
----
-
-## 15. Fleet-wide current-balance backfill history
-
-### Attempt A — old gateway parser
-
-Stopped on negative current balance; rollback succeeded.
-
-### Attempt B — signed gateway but stale DB constraint
-
-Failed on `anti_fraud_accounts_bonus_balance_chk`; rollback succeeded.
-
-### Attempt C — migration valid, transient HTTP 500
-
-- migration 0015 applied successfully
-- first 1700 active Bitrix accounts resolved successfully
-- final outer batch of 84 hit protected API HTTP 500
-- full automatic test DB rollback succeeded
-- production unchanged.
-
-Read-only follow-up on exactly those final 84:
-- 50 users: HTTP 200, resolved 50, unresolved 0
-- 34 users: HTTP 200, resolved 34, unresolved 0
-- control requests: 200
-- classification: `ALL_LAST84_PASS_NOW`.
-
-Conclusion: prior 500 was transient, not a deterministic bad account.
-
-### Attempt D — successful fleet run
-
-Safety wrapper:
-- wrote full script to `/tmp`
-- `bash -n`: PASS
-- execution: PASS
-- wrapper RC: 0
-- temporary script removed.
-
-Backfill policy:
-- 50 active Bitrix accounts per batch
-- max 4 attempts
-- transient retry classes: 429/500/502/503/504/timeouts
-- backoff 8s / 20s / 45s
-- 2s between successful batches
-- current balances only
-- no fleet history.
-
-Observed result:
-- batches: **36**
-- requested: **1784**
-- resolved: **1784**
-- unresolved: **0**
-- DB updated: **1783** (one reference account was already synced before run)
-- exactly-one-active-card responses: **1438**
-- retries: **1**
-- batch 28 first attempt hit transient error and succeeded on attempt 2 after 8s
-- all other batches succeeded on first attempt.
-
-Coverage after backfill:
-- active: 1784
-- synced: 1784
-- known balances: 1437
-- synced NULL balances: 347
-- unsynced: 0
-- negative: 76
-- zero: 43
-- >40000: 6
-- =40000: 0
-- max balance: 158444.11.
-
-This is the first successful fleet-wide current-balance population in v1.7 test.
-
----
-
-## 16. Full fleet loyalty-card classification — read-only, 2026-09-05
-
-A follow-up read-only diagnostic called protected `/api/internal/anti-fraud/loyalty` for all **1784 active Bitrix accounts** with:
-- batch size 50
-- `include_history=false`
-- no DB writes
-- no card-number output
-- no individual USER_ID output
-- production guard before/after.
-
-Execution result:
-- batches: **36**
-- retries: **0**
-- input: **1784**
-- requested: **1784**
-- resolved: **1784**
-- unresolved: **0**
-- contract mismatches: **0**
-- unexpected issue records: **0**
-- test DB fingerprint before/after: identical
-- production unchanged.
-
-### Exact current state classification
-
-- **exactly one active state-113 card: 1438**
-- **no active state-113 card: 240**
-- **multiple active state-113 cards: 106**
-- classified total: **1784**.
-
-This corrects the earlier assumption that all 346 accounts outside the 1438 exactly-one set had no active card. The correct split is **240 no active card + 106 multiple active cards**.
-
-### Distribution by active-card count
-
-- 0 active cards: **240**
-- 1 active card: **1438**
-- 2 active cards: **88**
-- 3 active cards: **12**
-- 4 active cards: **4**
-- 8 active cards: **1**
-- 10 active cards: **1**
-- maximum observed active-card count: **10**.
-
-### Issue distribution from protected API
-
-- `none`: **1438**
-- `no_active_card`: **240**
-- `multiple_active_cards`: **106**.
-
-### Balance availability by card state
-
-For the 1438 accounts with exactly one active card:
-- known current balance: **1437**
-- NULL current balance: **1**.
-
-For ambiguous/non-active states:
-- no-active-card accounts with unexpected balance: **0**
-- multiple-active-card accounts with unexpected balance: **0**.
-
-Therefore the **347 NULL balances** in DB break down exactly as:
-- **240** — no active card
-- **106** — multiple active cards, so API deliberately does not choose one current balance
-- **1** — exactly one active card, but current balance is NULL/unavailable.
-
-### Product/UI implication
-
-A generic `Бонусы: —` is insufficient. The UI should distinguish at least:
-- numeric balance, including negative and zero values
-- `Нет активной карты`
-- `Несколько активных карт (N)` — warning/anomaly state
-- `Баланс недоступен` — exactly one active card but NULL current balance.
-
-`multiple_active_cards` should be visible to the operator as an anomaly, but **must not automatically add Risk points yet** until business meaning is agreed.
-
----
-
-## 17. Risk v1.3 after fleet balance backfill
-
-Risk recalculation ran with:
-- `ANTI_FRAUD_REFRESH_ACCOUNTS=false`
-- `ANTI_FRAUD_AUTO_HISTORY=false`
-- no fleet history import.
-
-Observed CLI result:
-- `scoredAccounts`: **1786**
-- medium: **0**
-- high: **13**
-- critical: **16**
-- history gate: **29**.
-
-DB verification over active account risk rows:
-- active risk rows: **1784**
-- non-v1.3 active rows: **0**
-- medium: 0
-- high: 13
-- critical: 16
-- history gate: 29
-- accounts with `bonus_balance > 40000` but missing history gate: **0**.
-
-Compared with pre-fleet-balance reference (`high=7`, `critical=16`, `history_gate=23`), fleet balances added six high/history-gate signals, consistent with six balances above 40000.00.
-
-Do not interpret `scoredAccounts=1786` as active Bitrix account count; verified active-account count remains 1784.
-
----
-
-## 18. Web verification after successful fleet run
-
-- direct `/antifraud`: HTTP 200
-- nginx preview `/antifraud`: HTTP 200
-- `/api/anti-fraud/summary`: HTTP 200
-- test web container remained on `sha-55ef0a5`
-- test container remained running/healthy
-- DB migrations: 16
-- production remained `sha-8fd916f`, running/healthy, Anti-Fraud tables 0.
-
-Visual review exposed the generic `Бонусы: —` problem, which led to the fleet classification in section 16.
-
----
-
-## 19. Current rollback / backup assets
+## 18. Backup / rollback assets
 
 Keep until explicit cleanup approval.
 
-### Fresh pre-successful-backfill backup
+Known valid test DB backups:
 
-- path: `/opt/evrasia-ai-bot/backups/samzaberu_antifraud_test-pre-balance-20260905_151021.dump`
-- SHA256: `459355958011f9b60133652092bf14a15f44e53b3a6be7d759d4bc0542cf1370`
-- size: 350613 bytes
-
-### Previous transient-500 run backup
-
+- `/opt/evrasia-ai-bot/backups/samzaberu_antifraud_test-pre-balance-20260905_151021.dump`
+  - SHA256 `459355958011f9b60133652092bf14a15f44e53b3a6be7d759d4bc0542cf1370`
 - `/opt/evrasia-ai-bot/backups/samzaberu_antifraud_test-pre-0015-balance-20260905_145132.dump`
-- SHA256: `84dc3459c8adbe731ddbb9fadf4c006822673c0ee4a21cdcb5382329ca0c8589`
-
-### Earlier deploy backup / rollback container
-
+  - SHA256 `84dc3459c8adbe731ddbb9fadf4c006822673c0ee4a21cdcb5382329ca0c8589`
 - `/opt/evrasia-ai-bot/backups/samzaberu_antifraud_test-pre-55ef0a5-20260905_123904.dump`
-- SHA256: `e9bfccc994b09f6a0e40daed34f5906d4ab0195971b98f56241f402a9cc797ce`
-- rollback container: `evrasia-ai-bot-v17-test-pre-55ef0a5-20260905_123904`.
+  - SHA256 `e9bfccc994b09f6a0e40daed34f5906d4ab0195971b98f56241f402a9cc797ce`
+- `/opt/evrasia-ai-bot/backups/samzaberu_antifraud_test-pre-c443ea7-20260905_165200.dump`
+  - SHA256 `7458ebb41d24963d5bdb4e94606bb043e4f59aa9344e7c7ceac9a92f21037330`
+- `/opt/evrasia-ai-bot/backups/samzaberu_antifraud_test-pre-c443ea7-auth-20260905_165444.dump`
+  - SHA256 `fb380b53778941cf8f75bc0d3b963f164fac675ff37edd434b2e7ce881d10c0a`.
+
+Two c443ea7 deployment attempts failed safely before the later successful test deployment. One root cause was GHCR auth; another was a mount parser bug caused by TSV shifting when `.Name` was empty for bind mounts. Corrected deployment logic uses JSON-line mount capture and `--mount`.
 
 ---
 
-## 20. Scheduler caveat
+## 19. Operator/server execution preference
 
-The hourly pipeline still contains legacy direct `RestIS VIP_TODAY` current-visit logic that would require RestIS credentials.
+For server work, provide **one complete bash block**, copied/run as a whole.
 
-Do not solve this by copying RestIS credentials into the bot.
+Required style:
 
-Future direction:
-- protected site-side current-visit endpoint/proxy
-- remove direct bot RestIS dependency.
+- `clear`
+- `set +e`
+- `set +u`
+- `set +o pipefail 2>/dev/null`
+- variables at top
+- numbered stages
+- production guard before and after
+- test guard before mutations
+- backup before DB mutation
+- rollback path
+- explicit RC + PASS/FAIL
+- `/tmp` temp files + cleanup
+- no outer-shell `exit`; use functions + `return`
+- no secret output
+- finish `TERMINAL_WILL_STAY_OPEN=YES`.
 
-Scheduler remains disabled until that is done.
+For long scripts:
+
+1. write a temporary script using a **quoted heredoc**;
+2. `bash -n` it;
+3. execute only when syntax check passes;
+4. remove it afterward.
+
+Use `umask 077` and restrictive temp-file permissions when environment/secrets may be present.
+
+If Docker/PHP stderr is diagnostically useful, capture it to a restrictive temp file and redact sensitive values rather than discarding it.
+
+A previous Node diagnostic failed with `node: -e requires an argument`; if `node -e` is used, the JS argument must be part of the complete executed script.
+
+A previous forensic wrapper falsely reported PASS even though Bitrix emitted its generic HTML error while PHP returned RC=0. Future wrappers should explicitly detect Bitrix's generic error text in stdout in addition to process RC.
+
+Also avoid malformed multiline shell conditions. Write, for example:
+
+`if [ "$RC" -ne 0 ] || [ "$GENERIC_ERROR" -ne 0 ]; then`
+
+on syntactically valid shell lines rather than splitting `[` / operands / `]` incorrectly.
+
+Do not let a diagnostic script close the user's SSH terminal.
 
 ---
 
-## 21. Important mistakes to avoid repeating
+## 20. Important mistakes / stale assumptions to avoid
 
-- Do not confuse active Bitrix accounts with exactly-one active loyalty-card accounts.
-- Do not infer `bonus_balance IS NULL` means `no_active_card`.
-- Do not repeat the superseded `346 no active card` assumption; exact split is 240 no active + 106 multiple active.
-- Do not arbitrarily select a card/balance when `active_card_count > 1`.
-- Do not add automatic Risk points for multiple active cards until business meaning is approved.
-- Do not confuse a reference-user success with fleet completion.
+- Do not confuse active Bitrix accounts with active loyalty cards.
+- Do not say 1438 means “at least one card”; it means exactly one active state-113 card.
+- Do not say all 347 historical NULL balances mean no active card.
+- Do not repeat the superseded 346-no-card assumption; the exact old classification is 240 no active + 106 multiple + 1 one-card balance unavailable.
+- After the multicard site patch, do not force multi-card balance to NULL when account-level `TotalSum` is known.
+- Do not sum `/api/Balance` once per card; it is an account/phone-level value.
+- Do not add automatic Risk points for multiple active cards yet.
 - Do not assume current bonus balance cannot be negative.
-- Do not keep a DB constraint stricter than the gateway contract.
-- Do not treat transient HTTP 500 as permanent bad account without retry/diagnostic.
-- Do not send more than 50 users per protected current-state request.
-- Do not bulk-load 60-day history for all accounts.
-- Do not say Nelli has 7 cards; verified reference has 4 total, one active.
-- Do not confuse discount 20 with balance.
-- Do not claim Nelli exceeded 40k.
-- Do not treat raw source `restis_id` as unique.
-- Do not copy RestIS credentials into bot.
-- Do not enable scheduler yet.
+- Do not confuse `TAX_RATE=50` or a 50%-card identity with the account's current discount.
+- Do not treat raw source `restis_id` as unique event identity.
+- Do not bulk-load 60-day history.
+- Do not copy RestIS credentials into the bot.
+- Do not claim the paused card anomaly was caused by Anti-Fraud.
+- Do not claim the exact reason thousands of `activate_card.php` calls occurred; that initiating cause is still unresolved.
+- Do not persist full loyalty card numbers in this document.
+- Do not assume scheduler current state without rechecking the server.
+- Do not assume a successful GitHub workflow means the corresponding image is deployed.
 - Do not change production without explicit approval.
-- For Node 22 top-level await diagnostics, use explicit ESM; do not mix `require()` with top-level await.
-- For long server scripts, write to a file and run `bash -n` before execution.
 
 ---
 
-## 22. NEXT STEP — current continuation point
+## 21. NEXT STEP — current continuation point
 
-Fleet current balances, full current loyalty-card classification, and Risk v1.3 recalculation are complete. Do **not** rerun fleet backfill/classification unless there is a specific reason.
+The 737384 loyalty-card investigation is **PAUSED by user request**. Do not continue that forensic branch unless explicitly asked. External/manual verification of the temporarily obtained full card numbers may happen separately.
 
-### Immediate next goal: persist loyalty resolution state and make UI truthful
+Return to the main v1.7 acceptance/deployment path.
 
-1. Inspect current schema/service/API/UI paths before modifying them.
-2. Add a migration and schema fields sufficient to persist current loyalty resolution state. Minimum useful data:
-   - active state-113 card count
-   - protected loyalty issue/status (`none`, `no_active_card`, `multiple_active_cards`, and room for future states).
-3. Update balance refresh service so every successful protected response persists both:
-   - `bonus_balance`
-   - card-resolution state/count and `loyalty_synced_at`.
-4. Preserve current contract:
-   - exactly one active card -> use numeric balance when available
-   - no active card -> no balance selected
-   - multiple active cards -> no balance selected
-   - exactly one active card + NULL balance -> `Баланс недоступен`.
-5. Update Anti-Fraud API/UI so `Бонусы` renders distinct states:
-   - numeric value, including negative/zero
-   - `Нет активной карты`
-   - `Несколько активных карт (N)` with warning styling
-   - `Баланс недоступен`.
-6. Add tests for all four states and ensure raw card number is never exposed.
-7. Do not add Risk points for `multiple_active_cards` yet.
-8. After code/CI success, build an immutable candidate image and deploy it to the **test web container** so visual acceptance is performed against the final candidate code. Current test web still runs `sha-55ef0a5`; one-shot migration/backfill/risk work used `sha-d76ca1e`.
-9. Keep full 60-day history targeted only to history-gated accounts.
-10. Keep scheduler disabled.
-11. Keep PR #32 Draft until visual approval.
-12. Production remains untouched until explicit approval.
+### Before any next server mutation
 
-### Important current facts
+1. Verify PR #32 remains open/Draft and determine the current branch HEAD.
+2. Identify the latest immutable image for application-code commit `781834...` (or newer current application code) and its digest from GitHub Actions/GHCR.
+3. Read-only verify on `eur-bot-01`:
+   - production container/image/health and Anti-Fraud-table guard;
+   - test container image/revision/health;
+   - test DB migration count (expected target: 17 through 0016);
+   - exact scheduler state;
+   - manual refresh/scheduler status.
+4. Do not rely on the unverified scheduler-pause attempt from the forensic investigation.
 
-- Active Bitrix accounts: **1784**
-- Exactly one active loyalty card: **1438**
-- No active loyalty card: **240**
-- Multiple active loyalty cards: **106**
-- Exactly one card + known balance: **1437**
-- Exactly one card + NULL balance: **1**
-- Fleet unresolved USER_ID: **0**
-- Fleet current balances: **DONE**
-- Fleet card-state classification: **DONE**
-- Fleet 60-day history: **NOT DONE by design**
-- Risk v1.3 after balances: **DONE**
-- Scheduler: **OFF**
-- Production changes: **NONE**
-- Loyalty status persistence/UI correction: **NEXT**
+### Main v1.7 continuation
+
+Once exact state is known:
+
+1. Ensure TEST runs the intended latest immutable v1.7 candidate, never production.
+2. Verify the `781834...` two-pass scheduler behavior so newly risky accounts receive loyalty in the same refresh cycle.
+3. Run one controlled protected manual refresh if needed and verify all stages without RestIS credentials in the bot.
+4. Verify UI/behavior for at least:
+   - exactly one active card
+   - no active card
+   - multiple active cards with known account-level balance
+   - zero balance
+   - negative balance
+   - exactly-one card with unavailable balance if a reference exists
+   - newly risky account gets loyalty in the same refresh.
+5. Confirm raw loyalty card numbers never appear in protected API/UI/logs.
+6. Keep multiple-active-card state advisory-only with no automatic risk points.
+7. Perform visual acceptance of `/antifraud` against the actual candidate image.
+8. Keep PR #32 Draft until explicit visual/server approval.
+9. Production remains untouched until explicit approval.
+
+### Current important facts to retain
+
+- active Bitrix accounts: **1784**
+- exactly one active loyalty card: **1438**
+- no active loyalty card: **240**
+- multiple active loyalty cards: **106**
+- fleet current-state unresolved USER_ID: **0**
+- fleet 60-day history: **NOT loaded by design**
+- Risk v1.3 after fleet balances: **DONE**
+- loyalty resolution persistence migration 0016: **implemented**
+- multicard account-level balance support: **implemented and live-tested**
+- current application-code commit before this docs update: **781834632efc07d0b43af91cf1c67425777926bb**
+- GitHub run #234 for that commit: **success**
+- exact current TEST deployed revision: **REVERIFY**
+- exact current TEST scheduler state: **REVERIFY**
+- production changes during v1.7: **NONE at last verification**
+- USER_ID 737384 card forensics: **PAUSED**.
 
 ---
 
-## 23. Maintenance rule
+## 22. Maintenance rule
 
 Update this file after every material milestone, especially changes to:
+
 - branch / PR / merge state
-- application/deployed image
-- production image
+- application-code HEAD and immutable image
+- test/production deployed image
 - migration level
-- DB state
+- DB/fleet state
 - protected API behavior
 - loyalty-card resolution semantics
+- scheduler state
 - backup/rollback state
 - business/risk rules
-- known/resolved issues
+- known/resolved forensic issues
 - `NEXT STEP`.
 
-`NEXT STEP` must always describe the actual continuation point.
+`NEXT STEP` must always describe the actual continuation point, and any server fact not directly re-verified should be explicitly marked `REVERIFY` rather than guessed.
