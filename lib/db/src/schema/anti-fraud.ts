@@ -23,6 +23,10 @@ export const antiFraudAccountsTable = pgTable(
     // Обновлено 05.09.2026 ИТ Директор Евразии
     // RestIS TotalSum содержит копейки, поэтому используем точный NUMERIC(14,2), а не integer/float.
     bonusBalance: numeric("bonus_balance", { precision: 14, scale: 2 }),
+    // Protected loyalty resolution: NULL = ещё не загружено; 0 = нет активной карты;
+    // 1 = одна активная карта; >1 = несколько активных RESTIS_STATE=113 карт.
+    loyaltyActiveCardCount: integer("loyalty_active_card_count"),
+    loyaltyIssue: text("loyalty_issue"),
     loyaltySyncedAt: timestamp("loyalty_synced_at", { withTimezone: true }),
     loyaltyHistoryLoadedFrom: timestamp("loyalty_history_loaded_from", { withTimezone: true }),
     loyaltyHistoryLoadedUntil: timestamp("loyalty_history_loaded_until", { withTimezone: true }),
@@ -32,6 +36,7 @@ export const antiFraudAccountsTable = pgTable(
   (table) => ({
     phoneIdx: index("anti_fraud_accounts_phone_idx").on(table.phoneNormalized),
     emailIdx: index("anti_fraud_accounts_email_idx").on(table.emailNormalized),
+    loyaltyIssueIdx: index("anti_fraud_accounts_loyalty_issue_idx").on(table.loyaltyIssue),
   }),
 );
 
