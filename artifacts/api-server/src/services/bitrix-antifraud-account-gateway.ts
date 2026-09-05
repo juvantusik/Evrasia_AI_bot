@@ -12,6 +12,9 @@ export type BitrixAntiFraudAccountRecord = {
   displayName: string | null;
   registeredAt: Date | null;
   bitrixActive: boolean;
+  // Добавлено 05.09.2026 ИТ Директор Евразии
+  // Поле опционально для обратной совместимости со старой версией account-map.
+  bonusBalance: number | null;
 };
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -45,6 +48,17 @@ const parseNonNegativeInteger = (value: unknown, field: string): number => {
     throw new Error(`Bitrix Anti-Fraud account-map вернул некорректное поле ${field}`);
   }
   return Number(value);
+};
+
+const parseOptionalNonNegativeInteger = (value: unknown, field: string): number | null => {
+  if (value === undefined || value === null || value === "") return null;
+  const normalized = typeof value === "string" && /^\d+$/.test(value.trim())
+    ? Number(value.trim())
+    : value;
+  if (!Number.isInteger(normalized) || Number(normalized) < 0) {
+    throw new Error(`Bitrix Anti-Fraud account-map вернул некорректное поле ${field}`);
+  }
+  return Number(normalized);
 };
 
 const normalizeUserIds = (userIds: number[]): number[] => {
@@ -158,6 +172,7 @@ const parseResponse = (
       displayName: parseNullableText(row.display_name, "display_name", 255),
       registeredAt: parseDate(row.registered_at),
       bitrixActive: row.bitrix_active,
+      bonusBalance: parseOptionalNonNegativeInteger(row.bonus_balance, "bonus_balance"),
     };
   });
 
