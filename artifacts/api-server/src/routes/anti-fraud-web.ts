@@ -17,11 +17,13 @@ type ContactTarget = {
   bitrixUserId: number;
   phoneMasked: string | null;
   emailMasked: string | null;
+  bonusBalance?: number | null;
 };
 
 type ContactValue = {
   phone: string | null;
   email: string | null;
+  bonusBalance: number | null;
 };
 
 const displayPhone = (value: unknown): string | null => {
@@ -42,8 +44,9 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     bitrix_user_id: number;
     phone_normalized: string | null;
     email_normalized: string | null;
+    bonus_balance: number | null;
   }>(`
-    SELECT bitrix_user_id, phone_normalized, email_normalized
+    SELECT bitrix_user_id, phone_normalized, email_normalized, bonus_balance
     FROM anti_fraud_accounts
     WHERE bitrix_user_id = ANY($1::int[])
   `, [ids]);
@@ -54,13 +57,14 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       {
         phone: displayPhone(row.phone_normalized),
         email: displayEmail(row.email_normalized),
+        bonusBalance: row.bonus_balance === null ? null : Number(row.bonus_balance),
       },
     ]),
   );
 };
 
 // В Anti-Fraud оператор должен видеть полный телефон/email: они нужны для ручной
-// проверки аккаунта в Bitrix и последующей блокировки. Названия полей оставлены
+// проверки аккаунта в Bitrix и последующей блокировки. Названия contact-полей оставлены
 // прежними для обратной совместимости текущего web-клиента.
 const exposeFullContacts = <T extends ContactTarget>(
   records: T[],
@@ -73,6 +77,7 @@ const exposeFullContacts = <T extends ContactTarget>(
       ...record,
       phoneMasked: contact.phone,
       emailMasked: contact.email,
+      bonusBalance: contact.bonusBalance,
     };
   });
 
