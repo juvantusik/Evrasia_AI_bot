@@ -27,6 +27,9 @@ type Account = {
   phoneMasked: string | null;
   emailMasked: string | null;
   bonusBalance: number | null;
+  loyaltyActiveCardCount: number | null;
+  loyaltyIssue: string | null;
+  loyaltySyncedAt: string | null;
   bitrixActive: boolean;
   overallRisk: number;
   riskLevel: RiskLevel;
@@ -156,6 +159,24 @@ const fetchJson = async <T,>(url: string): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+const postJson = async <T,>(url: string): Promise<T> => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { accept: 'application/json' },
+  });
+  if (!response.ok) {
+    let message = 'Не удалось обновить данные Anti-Fraud.';
+    try {
+      const body = await response.json();
+      if (typeof body?.error === 'string') message = body.error;
+    } catch {
+      // response body is optional
+    }
+    throw new Error(message);
+  }
+  return response.json() as Promise<T>;
+};
+
 const formatDate = (value: string | null) => {
   if (!value) return '—';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -168,7 +189,20 @@ const formatDate = (value: string | null) => {
 };
 
 const formatPoints = (value: number | null) =>
-  value === null ? '—' : new Intl.NumberFormat('ru-RU').format(value);
+  value === null ? '—' : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
+
+const loyaltyText = (account: Account): string => {
+  const count = account.loyaltyActiveCardCount;
+  if (count === null || count === undefined) return 'Карты: не загружено · Бонусы: —';
+  if (count === 0) return 'Активных карт: 0 · Бонусы: —';
+  if (account.bonusBalance === null) {
+    return `Активных карт: ${count} · Бонусы: баланс недоступен`;
+  }
+  if (count > 1) {
+    return `⚠ Активных карт: ${count} · Бонусы: ${formatPoints(account.bonusBalance)} суммарно`;
+  }
+  return `Активных карт: 1 · Бонусы: ${formatPoints(account.bonusBalance)}`;
+};
 
 const levelLabel: Record<RiskLevel, string> = {
   low: 'Низкий',
@@ -214,6 +248,7 @@ export default function AntiFraudPage() {
   const [signal, setSignal] = useState<'all' | CaseSignal>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const load = async () => {
@@ -256,6 +291,19 @@ export default function AntiFraudPage() {
     }
   };
 
+  const refreshNow = async () => {
+    setRefreshing(true);
+    setError('');
+    try {
+      await postJson<{ ok: boolean }>('/api/anti-fraud/refresh');
+      await load();
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : 'Не удалось обновить Anti-Fraud.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => { void load(); }, []);
 
   const filteredCases = useMemo(() => {
@@ -285,6 +333,7 @@ export default function AntiFraudPage() {
   const riskAccounts = accounts.filter((account) => account.overallRisk > 0);
   const similarPhone = similar.filter((group) => group.matchType === 'phone').length;
   const similarEmail = similar.filter((group) => group.matchType === 'email').length;
+  const busy = loading || refreshing;
 
   return (
     <div className="af-page">
@@ -293,8 +342,8 @@ export default function AntiFraudPage() {
           <span className="af-brand-icon"><ShieldAlert size={22} /></span>
           <div><strong>Anti-Fraud</strong><span>Евразия AI Bot</span></div>
         </div>
-        <button className="af-refresh" type="button" onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={17} className={loading ? 'spin' : ''} /> Обновить
+        <button className="af-refresh" type="button" onClick={() => void refreshNow()} disabled={busy}>
+          <RefreshCw size={17} className={busy ? 'spin' : ''} /> {refreshing ? 'Обновляем…' : 'Обновить сейчас'}
         </button>
       </header>
 
@@ -388,7 +437,7 @@ export default function AntiFraudPage() {
                           {item.accounts.map((account) => (
                             <div className="account-card" key={account.bitrixUserId}>
                               <div className="account-top"><div><strong>{account.displayName || 'Без имени'}</strong><span>ID {account.bitrixUserId} · {account.bitrixActive ? 'активен' : 'неактивен'}</span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
-                              <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>Бонусы: {formatPoints(account.bonusBalance)}</span></div>
+                              <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>{loyaltyText(account)}</span></div>
                               <div className="risk-bars">
                                 <span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span>
                               </div>
@@ -431,7 +480,7 @@ export default function AntiFraudPage() {
 
         {tab === 'accounts' ? (
           <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском</h2><p>Текущий explainable score без автоматической блокировки.</p></div></div>
-            <div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · бонусы {formatPoints(account.bonusBalance)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div>
+            <div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div>
           </section>
         ) : null}
 
