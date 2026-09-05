@@ -27,7 +27,10 @@ export type AntiFraudLoyaltyBalanceRefreshResult = {
   resolvedAccounts: number;
   unresolvedAccounts: number;
   updatedAccounts: number;
+  // activeCardAccounts оставляем для обратной совместимости: это строго count === 1.
   activeCardAccounts: number;
+  multipleActiveCardAccounts: number;
+  noActiveCardAccounts: number;
 };
 
 const safeErrorMessage = (error: unknown): string => {
@@ -77,14 +80,18 @@ const persistLoyaltyRecords = async (
       const result = await client.query(
         `UPDATE anti_fraud_accounts
          SET bonus_balance = $2::numeric(14,2),
+             loyalty_active_card_count = $3,
+             loyalty_issue = $4,
              loyalty_synced_at = now()
          WHERE bitrix_user_id = $1
            AND (
              bonus_balance IS DISTINCT FROM $2::numeric(14,2)
+             OR loyalty_active_card_count IS DISTINCT FROM $3
+             OR loyalty_issue IS DISTINCT FROM $4
              OR loyalty_synced_at IS NULL
            )
          RETURNING bitrix_user_id`,
-        [record.bitrixUserId, record.bonusBalance],
+        [record.bitrixUserId, record.bonusBalance, record.activeCardCount, record.issue],
       );
       if (result.rowCount) updatedAccounts += 1;
 
@@ -112,6 +119,8 @@ const persistLoyaltyRecords = async (
 // Добавлено 05.09.2026 ИТ Директор Евразии
 // Адресный refresh использует только защищённый site-side loyalty endpoint.
 // RestIS credentials и номер активной карты в бот не передаются.
+// Обновлено 05.09.2026: сохраняем также active_card_count/issue. Для multiple_active_cards
+// site-side API возвращает TotalSum аккаунта, поэтому bonus_balance остаётся числовым.
 export const refreshLoyaltyBalancesForUsersOnce = async (
   options: AntiFraudLoyaltyBalanceRefreshOptions,
 ): Promise<AntiFraudLoyaltyBalanceRefreshResult> => {
@@ -149,7 +158,9 @@ export const refreshLoyaltyBalancesForUsersOnce = async (
     }
 
     const updatedAccounts = await persistLoyaltyRecords(records);
-    const activeCardAccounts = records.filter((record) => record.activeCardFound).length;
+    const activeCardAccounts = records.filter((record) => record.activeCardCount === 1).length;
+    const multipleActiveCardAccounts = records.filter((record) => record.activeCardCount > 1).length;
+    const noActiveCardAccounts = records.filter((record) => record.activeCardCount === 0).length;
 
     await lockClient.query(
       `UPDATE anti_fraud_sync_runs
@@ -166,6 +177,8 @@ export const refreshLoyaltyBalancesForUsersOnce = async (
       unresolvedAccounts,
       updatedAccounts,
       activeCardAccounts,
+      multipleActiveCardAccounts,
+      noActiveCardAccounts,
     };
   } catch (error) {
     if (runCreated) {
@@ -195,8 +208,7 @@ export const refreshLoyaltyBalancesForUsersOnce = async (
 
 // Добавлено 05.09.2026 ИТ Директор Евразии
 // Фоновый scan обновляет только небольшую порцию самых давно не проверявшихся аккаунтов.
-// При 50 аккаунтах в час ~1800 известных аккаунтов проходят полный цикл примерно за 36 часов,
-// без одномоментных тысяч RestIS Balance-запросов.
+// Максимум 200 USER_ID за проход; protected API сам режет их по 50.
 export const refreshStalestLoyaltyBalancesOnce = async (
   options: AntiFraudLoyaltyBalanceScanOptions = {},
 ): Promise<AntiFraudLoyaltyBalanceRefreshResult | null> => {
