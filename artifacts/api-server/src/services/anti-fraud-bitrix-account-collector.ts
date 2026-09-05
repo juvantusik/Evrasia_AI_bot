@@ -137,22 +137,25 @@ export const syncBitrixAccountsOnce = async (
            display_name,
            registered_at,
            bitrix_active,
+           bonus_balance,
            last_synced_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, now())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
          ON CONFLICT (bitrix_user_id) DO UPDATE SET
            phone_normalized = EXCLUDED.phone_normalized,
            email_normalized = EXCLUDED.email_normalized,
            display_name = EXCLUDED.display_name,
            registered_at = EXCLUDED.registered_at,
            bitrix_active = EXCLUDED.bitrix_active,
+           bonus_balance = EXCLUDED.bonus_balance,
            last_synced_at = now()
          WHERE
            anti_fraud_accounts.phone_normalized IS DISTINCT FROM EXCLUDED.phone_normalized OR
            anti_fraud_accounts.email_normalized IS DISTINCT FROM EXCLUDED.email_normalized OR
            anti_fraud_accounts.display_name IS DISTINCT FROM EXCLUDED.display_name OR
            anti_fraud_accounts.registered_at IS DISTINCT FROM EXCLUDED.registered_at OR
-           anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active
+           anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active OR
+           anti_fraud_accounts.bonus_balance IS DISTINCT FROM EXCLUDED.bonus_balance
          RETURNING bitrix_user_id`,
         [
           record.bitrixUserId,
@@ -161,6 +164,7 @@ export const syncBitrixAccountsOnce = async (
           record.displayName,
           record.registeredAt,
           record.bitrixActive,
+          record.bonusBalance,
         ],
       );
 
