@@ -152,6 +152,7 @@
   }
 
   .risk-bars {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 9px;
     margin-bottom: 13px;
   }
@@ -180,10 +181,33 @@
   .link-card span { font-size: 12px; }
   .link-card small { font-size: 11px; }
 
-  .simple-table th { font-size: 11px; }
-  .simple-table td { font-size: 14px; }
+  .af-panel { padding: 22px; }
+  .panel-title h2 { font-size: 24px; }
+  .panel-title p { font-size: 14px; }
 
-  .recommendation-card h3 { font-size: 17px; }
-  .recommendation-card p,
-  .recommendation-card li { font-size: 14px; line-height: 1.55; }
+  .simple-head,
+  .simple-row {
+    padding: 15px 17px;
+  }
+
+  .simple-head { font-size: 11px; }
+  .simple-row { font-size: 14px; }
+
+  .accounts-table strong small {
+    margin-top: 5px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .score-text {
+    width: 45px;
+    height: 34px;
+    font-size: 14px;
+  }
+
+  .recommendation-grid article { padding: 20px; }
+  .recommendation-grid strong { font-size: 32px; }
+  .recommendation-grid span { font-size: 13px; }
+  .recommendation-note strong { font-size: 14px; }
+  .recommendation-note p { font-size: 13px; line-height: 1.55; }
 }
