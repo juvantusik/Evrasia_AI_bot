@@ -12,6 +12,10 @@ import {
   startEvrasiaTelegramBotV2,
   stopEvrasiaTelegramBotV2,
 } from "./services/evrasia-telegram-bot-v2";
+import {
+  startAntiFraudHourlyScheduler,
+  stopAntiFraudHourlyScheduler,
+} from "./services/anti-fraud-hourly-service";
 
 const rawPort = process.env["PORT"];
 
@@ -43,6 +47,10 @@ directoryRefreshTimer.unref();
 const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
   startEvrasiaTelegramBotV2();
+  // Добавлено 05.09.2026 ИТ Директор Евразии
+  // Scheduler по умолчанию выключен и начинает обращаться к Anti-Fraud источникам
+  // только при явном ANTI_FRAUD_SCHEDULER_ENABLED=true.
+  startAntiFraudHourlyScheduler();
 });
 
 server.on("error", (err) => {
@@ -56,6 +64,7 @@ const shutdown = (signal: NodeJS.Signals): void => {
   if (shuttingDown) return;
   shuttingDown = true;
   clearInterval(directoryRefreshTimer);
+  stopAntiFraudHourlyScheduler();
   logger.info({ signal }, "Shutting down API server");
   const forceExit = setTimeout(() => {
     logger.warn({ signal }, "Forced API shutdown after grace period");
