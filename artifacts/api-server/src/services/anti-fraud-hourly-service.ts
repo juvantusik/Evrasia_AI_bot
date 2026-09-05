@@ -4,6 +4,8 @@ import { logger } from "../lib/logger";
 import { collectRestisVisitsOnce } from "./anti-fraud-restis-service";
 import { resolveBitrixCardsOnce } from "./anti-fraud-bitrix-card-resolver";
 import { syncTrustedDeviceOnce } from "./anti-fraud-trusted-device-collector";
+import { syncBitrixAccountsOnce } from "./anti-fraud-bitrix-account-collector";
+import { refreshStalestLoyaltyBalancesOnce } from "./anti-fraud-loyalty-balance-service";
 import { analyzeAntiFraudWithSimilarityOnce } from "./anti-fraud-identity-similarity-service";
 import { captureAntiFraudCaseDynamics } from "./anti-fraud-case-dynamics-service";
 
@@ -143,9 +145,14 @@ const persistCycleFinish = async (
   );
 };
 
-// Один hourly-проход. Источники читаются последовательно, чтобы card/account-map
-// увидели события, только что полученные из RestIS/Trusted Device. Ошибка одного
-// источника не отменяет расчёт по последнему валидному snapshot остальных источников.
+// Обновлено 05.09.2026 ИТ Директор Евразии
+// Один hourly-проход:
+// 1) legacy VIP_TODAY/card-map пока сохраняют текущий visit feed, если RestIS source настроен;
+// 2) Trusted Device даёт USER_ID/device_hash;
+// 3) account-map актуализирует identity;
+// 4) protected loyalty scan адресно обновляет небольшую порцию старейших TotalSum;
+// 5) scoring/history используют USER_ID -> site-side active RESTIS_STATE=113 card.
+// Ошибка одного source-stage не отменяет scoring по последнему валидному snapshot.
 export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
   if (schedulerStatus.running) {
     logger.warn("Anti-Fraud hourly cycle skipped because previous cycle is still running");
@@ -166,12 +173,17 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
     stages.push(await runStage("restis_vip_today", () => collectRestisVisitsOnce()));
     stages.push(await runStage("bitrix_card_map", () => resolveBitrixCardsOnce()));
     stages.push(await runStage("trusted_device_export", () => syncTrustedDeviceOnce()));
+    stages.push(await runStage("bitrix_account_map", () => syncBitrixAccountsOnce()));
+    stages.push(
+      await runStage("loyalty_balance_scan", async () => {
+        await refreshStalestLoyaltyBalancesOnce();
+      }),
+    );
 
-    // analyzeAntiFraudWithSimilarityOnce внутри сначала обновит уже известные аккаунты Bitrix,
-    // затем построит candidate/corroborated identity-связи, пересчитает score и при gate>=50
-    // адресно загрузит VIP_HISTORY за 60 дней.
+    // account-map уже выполнен отдельным stage, поэтому повторно его не вызываем.
+    // После итогового gate адресная 60-дневная история идёт через protected loyalty endpoint.
     await analyzeAntiFraudWithSimilarityOnce({
-      refreshAccounts: true,
+      refreshAccounts: false,
       autoHistory: true,
     });
     stages.push({ stage: "risk_scoring", ok: true });
