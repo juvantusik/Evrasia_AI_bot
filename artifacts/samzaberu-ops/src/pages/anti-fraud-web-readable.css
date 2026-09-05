@@ -3,6 +3,88 @@
  * Мобильная верстка остаётся под контролем базового anti-fraud-web.css.
  */
 
+.case-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.case-trend {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.case-trend.trend-new,
+.case-dynamics-card.trend-new { color: #2875c7; background: #eaf4ff; }
+.case-trend.trend-strengthened,
+.case-dynamics-card.trend-strengthened { color: #c05249; background: #fff0ed; }
+.case-trend.trend-unchanged,
+.case-dynamics-card.trend-unchanged { color: #6f7785; background: #f2f5f8; }
+.case-trend.trend-weakened,
+.case-dynamics-card.trend-weakened { color: #238d50; background: #e8f8ee; }
+
+.case-dynamics-card {
+  grid-column: 1 / -1;
+  padding: 14px 15px;
+  border: 1px solid rgb(137 154 176 / 18%);
+  border-radius: 15px;
+}
+
+.case-dynamics-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.case-dynamics-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.case-dynamics-head strong { font-size: 13px; }
+.case-dynamics-head span,
+.case-dynamics-head small { color: #727b89; font-size: 10px; line-height: 1.4; }
+.case-dynamics-head small { max-width: 520px; text-align: right; }
+
+.case-dynamics-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.case-dynamics-metrics span {
+  padding: 8px 9px;
+  color: #4e5867;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 75%);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.case-dynamics-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 9px;
+  color: #5f6876;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.case-dynamics-diff b { color: #3f4856; }
+
 @media (min-width: 900px) {
   .af-header {
     min-height: 78px;
@@ -109,6 +191,7 @@
   .risk-pill small { font-size: 9px; }
   .case-title strong { font-size: 16px; }
   .case-title small { font-size: 13px; }
+  .case-trend { min-height: 24px; padding: 4px 9px; font-size: 11px; }
 
   .case-tags { gap: 8px; }
   .case-tags em {
@@ -124,6 +207,14 @@
     gap: 20px;
     padding: 22px;
   }
+
+  .case-dynamics-card { padding: 17px 18px; border-radius: 17px; }
+  .case-dynamics-head strong { font-size: 15px; }
+  .case-dynamics-head span,
+  .case-dynamics-head small { font-size: 12px; }
+  .case-dynamics-metrics { gap: 10px; margin-top: 13px; }
+  .case-dynamics-metrics span { padding: 10px 11px; font-size: 12px; }
+  .case-dynamics-diff { margin-top: 11px; font-size: 12px; }
 
   .detail-column h3 {
     margin-bottom: 14px;
@@ -210,4 +301,12 @@
   .recommendation-grid span { font-size: 13px; }
   .recommendation-note strong { font-size: 14px; }
   .recommendation-note p { font-size: 13px; line-height: 1.55; }
+}
+
+@media (max-width: 640px) {
+  .case-title-line { gap: 5px; }
+  .case-trend { font-size: 8px; }
+  .case-dynamics-head { flex-direction: column; gap: 6px; }
+  .case-dynamics-head small { max-width: none; text-align: left; }
+  .case-dynamics-metrics { grid-template-columns: 1fr 1fr; }
 }
