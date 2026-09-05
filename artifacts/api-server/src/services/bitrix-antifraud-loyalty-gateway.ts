@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const DEFAULT_API_URL = "https://evrasia.rest/api/internal/anti-fraud/loyalty";
@@ -8,6 +9,9 @@ const MAX_HISTORY_DAYS = 60;
 
 // Добавлено 05.09.2026 ИТ Директор Евразии
 export type BitrixAntiFraudLoyaltyHistoryEvent = {
+  // Внутренний стабильный ключ события. RestIS source ID сам по себе не уникален.
+  eventId: string;
+  // Исходный RestIS ID сохраняется отдельно и может повторяться.
   restisId: string;
   occurredAt: Date;
   restaurant: string;
@@ -185,29 +189,74 @@ const parseHistorySummary = (value: unknown): BitrixAntiFraudLoyaltyHistorySumma
   };
 };
 
+const buildEventId = (
+  restisId: string,
+  occurredAt: Date,
+  restaurant: string,
+  amount: string,
+  bonusAdded: string,
+  bonusSpent: string,
+): string => {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        restisId,
+        occurredAt.toISOString(),
+        restaurant,
+        amount,
+        bonusAdded,
+        bonusSpent,
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+  return `loyalty:${digest}`;
+};
+
 const parseHistory = (value: unknown): BitrixAntiFraudLoyaltyHistoryEvent[] | null => {
   if (value === null || value === undefined) return null;
   if (!Array.isArray(value)) {
     throw new Error("Bitrix Anti-Fraud loyalty вернул некорректный history");
   }
-  const seen = new Set<string>();
+
+  const seenEventIds = new Set<string>();
   return value.map((raw) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new Error("Bitrix Anti-Fraud loyalty вернул некорректную запись history");
     }
+
     const row = raw as Record<string, unknown>;
     const restisId = parseText(row.restis_id, "history.restis_id", 128);
-    if (seen.has(restisId)) {
-      throw new Error("Bitrix Anti-Fraud loyalty вернул повторный restis_id");
-    }
-    seen.add(restisId);
-    return {
+    const occurredAt = parseDate(row.occurred_at, "history.occurred_at");
+    const restaurant = parseText(row.restaurant, "history.restaurant", 255);
+    const amount = parseMoney(row.amount, "history.amount");
+    const bonusAdded = parseMoney(row.bonus_added, "history.bonus_added");
+    const bonusSpent = parseMoney(row.bonus_spent, "history.bonus_spent");
+    const eventId = buildEventId(
       restisId,
-      occurredAt: parseDate(row.occurred_at, "history.occurred_at"),
-      restaurant: parseText(row.restaurant, "history.restaurant", 255),
-      amount: parseMoney(row.amount, "history.amount"),
-      bonusAdded: parseMoney(row.bonus_added, "history.bonus_added"),
-      bonusSpent: parseMoney(row.bonus_spent, "history.bonus_spent"),
+      occurredAt,
+      restaurant,
+      amount,
+      bonusAdded,
+      bonusSpent,
+    );
+
+    // Один source restis_id может относиться к нескольким денежным операциям.
+    // Запрещаем только полностью идентичную повторную запись, которую невозможно
+    // отличить от дубля транспорта/выгрузки.
+    if (seenEventIds.has(eventId)) {
+      throw new Error("Bitrix Anti-Fraud loyalty вернул повторное идентичное событие history");
+    }
+    seenEventIds.add(eventId);
+
+    return {
+      eventId,
+      restisId,
+      occurredAt,
+      restaurant,
+      amount,
+      bonusAdded,
+      bonusSpent,
     };
   });
 };
@@ -291,6 +340,9 @@ const parseResponse = (
     }
     if (!includeHistory && (historySummary !== null || history !== null)) {
       throw new Error("Bitrix Anti-Fraud loyalty неожиданно вернул историю");
+    }
+    if (includeHistory && historySummary && history && historySummary.visits !== history.length) {
+      throw new Error("Bitrix Anti-Fraud loyalty вернул несовпадающее число visits и history rows");
     }
 
     return {
