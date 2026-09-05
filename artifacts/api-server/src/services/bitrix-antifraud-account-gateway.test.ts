@@ -23,6 +23,7 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
               display_name: "Тестовый пользователь",
               registered_at: "2025-08-30T10:00:00+03:00",
               bitrix_active: true,
+              // Старое поле может присутствовать в legacy response, но account-map его намеренно игнорирует.
               bonus_balance: 45678,
             },
           ],
@@ -45,12 +46,12 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
   assert.equal(result.records[0]?.phoneNormalized, "79991234567");
   assert.equal(result.records[0]?.emailNormalized, "test@example.com");
   assert.equal(result.records[0]?.bitrixActive, true);
-  assert.equal(result.records[0]?.bonusBalance, 45678);
   assert.deepEqual(result.unresolved, [415307]);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.records[0] ?? {}, "bonusBalance"), false);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
-test("Bitrix Anti-Fraud account gateway accepts nullable PII fields and missing bonus balance", async () => {
+test("Bitrix Anti-Fraud account gateway accepts nullable PII fields", async () => {
   const gateway = new BitrixAntiFraudAccountGateway({
     token: "x".repeat(64),
     fetchImpl: async () =>
@@ -79,7 +80,6 @@ test("Bitrix Anti-Fraud account gateway accepts nullable PII fields and missing 
   assert.equal(result.records[0]?.phoneNormalized, null);
   assert.equal(result.records[0]?.registeredAt, null);
   assert.equal(result.records[0]?.bitrixActive, false);
-  assert.equal(result.records[0]?.bonusBalance, null);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
