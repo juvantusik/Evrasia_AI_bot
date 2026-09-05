@@ -37,7 +37,9 @@ export type AntiFraudCase = {
   riskLevel: "low" | "medium" | "high" | "critical";
   accountCount: number;
   accounts: AntiFraudCaseAccount[];
-  signals: Array<"multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits">;
+  signals: Array<
+    "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance"
+  >;
   devices: AntiFraudCaseDevice[];
   identityMatches: Array<{ type: "phone" | "email"; userIds: number[] }>;
   updatedAt: string;
@@ -295,6 +297,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
     if (reasonCodes.has("high_daily_visit_frequency") || reasonCodes.has("repeated_high_visit_days")) signals.push("visits");
     if (reasonCodes.has("fast_account_switch") || reasonCodes.has("repeated_fast_switches")) signals.push("fast_switch");
     if (reasonCodes.has("linked_visit_proximity")) signals.push("linked_visits");
+    if (reasonCodes.has("high_bonus_balance")) signals.push("bonus_balance");
 
     const overallRisk = Math.max(...caseAccounts.map((account) => account.overallRisk));
     const riskLevel = caseAccounts.reduce<AntiFraudCase["riskLevel"]>(
