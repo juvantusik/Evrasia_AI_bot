@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits';
+type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
 
 type Reason = { code: string; score: number; details: string };
 
@@ -25,6 +25,7 @@ type Account = {
   displayName: string | null;
   phoneMasked: string | null;
   emailMasked: string | null;
+  bonusBalance: number | null;
   bitrixActive: boolean;
   overallRisk: number;
   riskLevel: RiskLevel;
@@ -88,6 +89,7 @@ const signalMeta: Record<CaseSignal, { label: string; className: string }> = {
   visits: { label: 'Высокая частота посещений', className: 'tag-orange' },
   fast_switch: { label: 'Быстрые переключения', className: 'tag-red' },
   linked_visits: { label: 'Связанные посещения', className: 'tag-orange' },
+  bonus_balance: { label: 'Бонусы > 40 000', className: 'tag-orange' },
 };
 
 const reasonLabels: Record<string, string> = {
@@ -102,6 +104,7 @@ const reasonLabels: Record<string, string> = {
   linked_visit_proximity: 'Близкие посещения связанных аккаунтов',
   high_daily_visit_frequency: 'Высокая частота посещений',
   repeated_high_visit_days: 'Регулярный паттерн посещений',
+  high_bonus_balance: 'Высокий остаток бонусов',
 };
 
 const fetchJson = async <T,>(url: string): Promise<T> => {
@@ -130,6 +133,9 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value));
 };
 
+const formatPoints = (value: number | null) =>
+  value === null ? '—' : new Intl.NumberFormat('ru-RU').format(value);
+
 const levelLabel: Record<RiskLevel, string> = {
   low: 'Низкий',
   medium: 'Средний',
@@ -151,7 +157,10 @@ const parseDetails = (details: string) =>
       .replace('max_accounts=', 'аккаунтов на устройстве: ')
       .replace('shared_devices=', 'общих устройств: ')
       .replace('linked_accounts=', 'связанных аккаунтов: ')
-      .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: '));
+      .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ')
+      .replace('bonus_balance=', 'остаток бонусов: ')
+      .replace('threshold=', 'порог: ')
+      .replace('history_window_days=', 'проверка истории, дней: '));
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export default function AntiFraudPage() {
@@ -180,7 +189,13 @@ export default function AntiFraudPage() {
         fetchJson<{ records: SimilarGroup[] }>('/api/anti-fraud/similar-accounts?limit=300'),
       ]);
       setSummary(summaryData);
-      setCases(caseData.records);
+      setCases(caseData.records.map((item) => {
+        const hasBonusSignal = item.accounts.some((account) =>
+          account.reasons.some((reason) => reason.code === 'high_bonus_balance'),
+        );
+        if (!hasBonusSignal || item.signals.includes('bonus_balance')) return item;
+        return { ...item, signals: [...item.signals, 'bonus_balance'] };
+      }));
       setAccounts(accountData.records);
       setDevices(deviceData.records);
       setSimilar(similarData.records);
@@ -237,7 +252,7 @@ export default function AntiFraudPage() {
         <section className="af-title-row">
           <div>
             <h1>Подозрительная активность</h1>
-            <p>Кейсы объединяются по устройствам и совпадающим контактам. Поведенческие сигналы усиливают риск конкретного аккаунта.</p>
+            <p>Кейсы объединяются по устройствам и совпадающим контактам. Поведенческие сигналы и высокий остаток бонусов усиливают риск конкретного аккаунта.</p>
           </div>
           <div className="af-updated"><Clock3 size={16} /> {summary?.updatedAt ? `Расчёт ${formatDate(summary.updatedAt)}` : 'Нет расчёта'}</div>
         </section>
@@ -261,7 +276,7 @@ export default function AntiFraudPage() {
         {tab === 'cases' ? (
           <>
             <section className="af-toolbar">
-              <label className="af-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID, имя или отображаемый контакт" /></label>
+              <label className="af-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID, имя, телефон или email" /></label>
               <select value={level} onChange={(event) => setLevel(event.target.value as typeof level)}>
                 <option value="all">Все уровни</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option>
               </select>
@@ -295,9 +310,9 @@ export default function AntiFraudPage() {
                           {item.accounts.map((account) => (
                             <div className="account-card" key={account.bitrixUserId}>
                               <div className="account-top"><div><strong>{account.displayName || 'Без имени'}</strong><span>ID {account.bitrixUserId} · {account.bitrixActive ? 'активен' : 'неактивен'}</span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
-                              <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span></div>
+                              <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>Бонусы: {formatPoints(account.bonusBalance)}</span></div>
                               <div className="risk-bars">
-                                <span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span>
+                                <span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span>
                               </div>
                               <div className="reason-list">
                                 {account.reasons.map((reason) => (
@@ -317,7 +332,8 @@ export default function AntiFraudPage() {
                             <div className="link-card" key={`${match.type}-${index}`}>{match.type === 'phone' ? <Link2 size={18} /> : <Mail size={18} />}<div><strong>{match.type === 'phone' ? 'Совпадает телефон' : 'Совпадает email'}</strong><span>{match.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span></div></div>
                           ))}
                           {item.accountCount === 1 && item.signals.includes('visits') ? <div className="link-card solo"><Utensils size={18} /><div><strong>Одиночный поведенческий кейс</strong><span>Связующих признаков с другими аккаунтами не найдено.</span></div></div> : null}
-                          {!item.devices.length && !item.identityMatches.length && !item.signals.includes('visits') ? <p className="muted">Связующие признаки не найдены.</p> : null}
+                          {item.accountCount === 1 && item.signals.includes('bonus_balance') ? <div className="link-card solo"><AlertTriangle size={18} /><div><strong>Высокий остаток бонусов</strong><span>Более 40 000 бонусов запускают проверку истории за 60 дней.</span></div></div> : null}
+                          {!item.devices.length && !item.identityMatches.length && !item.signals.includes('visits') && !item.signals.includes('bonus_balance') ? <p className="muted">Связующие признаки не найдены.</p> : null}
                         </div>
                       </div>
                     ) : null}
@@ -337,14 +353,14 @@ export default function AntiFraudPage() {
 
         {tab === 'accounts' ? (
           <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском</h2><p>Текущий explainable score без автоматической блокировки.</p></div></div>
-            <div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div>
+            <div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · бонусы {formatPoints(account.bonusBalance)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div>
           </section>
         ) : null}
 
         {tab === 'recommendations' ? (
           <section className="af-panel recommendation-panel"><div className="panel-title"><ShieldAlert /><div><h2>Рекомендации</h2><p>v1.7 работает в advisory-only режиме: автоматической блокировки аккаунтов нет.</p></div></div>
             <div className="recommendation-grid"><article><strong>{summary?.historyGateAccounts ?? 0}</strong><span>аккаунтов достигли history gate</span></article><article><strong>{summary?.historyEnrichedAccounts ?? 0}</strong><span>уже обогащены 60-дневной историей</span></article><article><strong>{similarPhone}</strong><span>групп с совпадающим телефоном</span></article><article><strong>{similarEmail}</strong><span>групп с совпадающим email</span></article></div>
-            <div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой необходимо открыть кейс, проверить связующие признаки и поведенческие причины. Кнопку блокировки добавим отдельным этапом с подтверждением и аудитом.</p></div></div>
+            <div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой необходимо открыть кейс, проверить связующие признаки, полный телефон/email, остаток бонусов и поведенческие причины. Кнопку блокировки добавим отдельным этапом с подтверждением и аудитом.</p></div></div>
           </section>
         ) : null}
       </main>
