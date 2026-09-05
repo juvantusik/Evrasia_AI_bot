@@ -28,6 +28,7 @@ const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRi
   activeCardCount: 1,
   bitrixActive: true,
   historyEnriched: false,
+  bonusBalance: null,
   ...overrides,
 });
 
@@ -168,4 +169,30 @@ test("five visits on repeated high-visit days clamp visit risk to 100", () => {
   assert.equal(score.visitBehaviorRisk, 100);
   assert.equal(score.overallRisk, 100);
   assert.equal(score.riskLevel, "critical");
+});
+
+// Добавлено 05.09.2026 ИТ Директор Евразии
+test("exactly 40000 bonuses do not trigger the high-balance gate", () => {
+  const score = scoreAntiFraudSignals(baseSignals({ bonusBalance: 40_000 }));
+
+  assert.equal(score.historicalBehaviorRisk, 0);
+  assert.equal(score.overallRisk, 0);
+  assert.equal(score.historyGate, false);
+  assert.equal(score.reasons.some((reason) => reason.code === "high_bonus_balance"), false);
+});
+
+// Добавлено 05.09.2026 ИТ Директор Евразии
+test("more than 40000 bonuses add 50 risk and trigger 60-day history gate", () => {
+  const score = scoreAntiFraudSignals(baseSignals({ bonusBalance: 40_001 }));
+
+  assert.equal(score.historicalBehaviorRisk, 50);
+  assert.equal(score.overallRisk, 50);
+  assert.equal(score.riskLevel, "high");
+  assert.equal(score.historyGate, true);
+
+  const reason = score.reasons.find((item) => item.code === "high_bonus_balance");
+  assert.ok(reason);
+  assert.equal(reason.score, 50);
+  assert.match(reason.details, /bonus_balance=40001/);
+  assert.match(reason.details, /history_window_days=60/);
 });
