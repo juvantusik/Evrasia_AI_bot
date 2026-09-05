@@ -5,6 +5,7 @@ import { collectRestisVisitsOnce } from "./anti-fraud-restis-service";
 import { resolveBitrixCardsOnce } from "./anti-fraud-bitrix-card-resolver";
 import { syncTrustedDeviceOnce } from "./anti-fraud-trusted-device-collector";
 import { analyzeAntiFraudWithSimilarityOnce } from "./anti-fraud-identity-similarity-service";
+import { captureAntiFraudCaseDynamics } from "./anti-fraud-case-dynamics-service";
 
 const SOURCE = "anti_fraud_hourly_cycle";
 const DEFAULT_INTERVAL_MINUTES = 60;
@@ -174,6 +175,11 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
       autoHistory: true,
     });
     stages.push({ stage: "risk_scoring", ok: true });
+
+    // После полностью завершённого score фиксируем состояние кейсов. Так Risk 100
+    // остаётся 100, но рост группы/устройств/reason codes виден как «было → стало».
+    await captureAntiFraudCaseDynamics();
+    stages.push({ stage: "case_dynamics", ok: true });
 
     const partial = stages.some((stage) => !stage.ok);
     const finalStatus = partial ? "partial" : "success";
