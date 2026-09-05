@@ -17,6 +17,7 @@ import {
 
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
+type CaseTrend = 'new' | 'strengthened' | 'unchanged' | 'weakened';
 
 type Reason = { code: string; score: number; details: string };
 
@@ -50,6 +51,30 @@ type Device = {
 type CaseDevice = { devicePrefix: string; userIds: number[]; lastSeenAt: string | null };
 type IdentityMatch = { type: 'phone' | 'email'; userIds: number[] };
 
+type MetricChange = {
+  before: number | null;
+  after: number;
+  delta: number | null;
+};
+
+type CaseDynamics = {
+  caseId: string;
+  trend: CaseTrend;
+  changedAt: string;
+  previousChangedAt: string | null;
+  evidenceScore: number;
+  metrics: {
+    risk: MetricChange;
+    accounts: MetricChange;
+    devices: MetricChange;
+    reasons: MetricChange;
+  };
+  addedAccountIds: number[];
+  removedAccountIds: number[];
+  addedReasonCodes: string[];
+  removedReasonCodes: string[];
+};
+
 type InvestigationCase = {
   caseId: string;
   overallRisk: number;
@@ -60,6 +85,7 @@ type InvestigationCase = {
   devices: CaseDevice[];
   identityMatches: IdentityMatch[];
   updatedAt: string;
+  dynamics?: CaseDynamics;
 };
 
 type Summary = {
@@ -105,6 +131,14 @@ const reasonLabels: Record<string, string> = {
   high_daily_visit_frequency: 'Высокая частота посещений',
   repeated_high_visit_days: 'Регулярный паттерн посещений',
   high_bonus_balance: 'Высокий остаток бонусов',
+  similar_identity_corroborated: 'Подтверждённая похожая идентичность',
+};
+
+const trendMeta: Record<CaseTrend, { label: string; symbol: string }> = {
+  new: { label: 'Новый', symbol: '●' },
+  strengthened: { label: 'Усилился', symbol: '↑' },
+  unchanged: { label: 'Без изменений', symbol: '—' },
+  weakened: { label: 'Ослаб', symbol: '↓' },
 };
 
 const fetchJson = async <T,>(url: string): Promise<T> => {
@@ -142,6 +176,11 @@ const levelLabel: Record<RiskLevel, string> = {
   high: 'Высокий',
   critical: 'Критический',
 };
+
+const metricText = (label: string, change: MetricChange) =>
+  change.before === null
+    ? `${label}: ${change.after}`
+    : `${label}: ${change.before} → ${change.after}`;
 
 const parseDetails = (details: string) =>
   details
@@ -181,21 +220,32 @@ export default function AntiFraudPage() {
     setLoading(true);
     setError('');
     try {
-      const [summaryData, caseData, accountData, deviceData, similarData] = await Promise.all([
+      const [summaryData, caseData, accountData, deviceData, similarData, dynamicsData] = await Promise.all([
         fetchJson<Summary>('/api/anti-fraud/summary'),
         fetchJson<{ records: InvestigationCase[] }>('/api/anti-fraud/cases'),
         fetchJson<{ records: Account[] }>('/api/anti-fraud/accounts?limit=500'),
         fetchJson<{ records: Device[] }>('/api/anti-fraud/devices?limit=500'),
         fetchJson<{ records: SimilarGroup[] }>('/api/anti-fraud/similar-accounts?limit=300'),
+        fetchJson<{ records: CaseDynamics[] }>('/api/anti-fraud/case-dynamics'),
       ]);
-      setSummary(summaryData);
-      setCases(caseData.records.map((item) => {
+      const dynamicsByCase = new Map(dynamicsData.records.map((item) => [item.caseId, item] as const));
+      const normalizedCases = caseData.records.map((item) => {
         const hasBonusSignal = item.accounts.some((account) =>
           account.reasons.some((reason) => reason.code === 'high_bonus_balance'),
         );
-        if (!hasBonusSignal || item.signals.includes('bonus_balance')) return item;
-        return { ...item, signals: [...item.signals, 'bonus_balance'] };
-      }));
+        const signals = hasBonusSignal && !item.signals.includes('bonus_balance')
+          ? [...item.signals, 'bonus_balance' as CaseSignal]
+          : item.signals;
+        return { ...item, signals, dynamics: dynamicsByCase.get(item.caseId) };
+      });
+      normalizedCases.sort((a, b) =>
+        b.overallRisk - a.overallRisk
+        || (b.dynamics?.evidenceScore ?? 0) - (a.dynamics?.evidenceScore ?? 0)
+        || b.accountCount - a.accountCount
+        || a.caseId.localeCompare(b.caseId),
+      );
+      setSummary(summaryData);
+      setCases(normalizedCases);
       setAccounts(accountData.records);
       setDevices(deviceData.records);
       setSimilar(similarData.records);
@@ -292,11 +342,16 @@ export default function AntiFraudPage() {
                 const isExpanded = expanded.has(item.caseId);
                 const primary = item.accounts[0];
                 const title = item.accountCount > 1 ? 'Группа аккаунтов' : (primary?.displayName || `Аккаунт ${primary?.bitrixUserId ?? ''}`);
+                const dynamics = item.dynamics;
+                const trend = dynamics ? trendMeta[dynamics.trend] : null;
                 return (
                   <article className={`af-case ${isExpanded ? 'expanded' : ''}`} key={item.caseId}>
                     <button className="af-case-row" type="button" onClick={() => toggleCase(item.caseId)}>
                       <span className={`risk-pill ${item.riskLevel}`}>{item.overallRisk}<small>{levelLabel[item.riskLevel]}</small></span>
-                      <span className="case-title"><strong>{title}</strong><small>{item.caseId}{item.accountCount === 1 && primary ? ` · ID ${primary.bitrixUserId}` : ''}</small></span>
+                      <span className="case-title">
+                        <span className="case-title-line"><strong>{title}</strong>{trend ? <em className={`case-trend trend-${dynamics?.trend}`}>{trend.symbol} {trend.label}</em> : null}</span>
+                        <small>{item.caseId}{item.accountCount === 1 && primary ? ` · ID ${primary.bitrixUserId}` : ''}</small>
+                      </span>
                       <span className="case-tags">{item.signals.map((itemSignal) => <em className={signalMeta[itemSignal].className} key={itemSignal}>{signalMeta[itemSignal].label}</em>)}</span>
                       <span className="case-count"><Users size={16} />{item.accountCount}</span>
                       <span className="case-time">{formatDate(item.updatedAt)}</span>
@@ -305,6 +360,29 @@ export default function AntiFraudPage() {
 
                     {isExpanded ? (
                       <div className="af-case-details">
+                        {dynamics ? (
+                          <div className={`case-dynamics-card trend-${dynamics.trend}`}>
+                            <div className="case-dynamics-head">
+                              <div><strong>{trend?.symbol} {trend?.label}</strong><span>{dynamics.trend === 'new' ? `Первое наблюдение: ${formatDate(dynamics.changedAt)}` : `Последнее изменение: ${formatDate(dynamics.changedAt)}`}</span></div>
+                              <small>Risk остаётся в шкале 0–100; здесь показано, что изменилось в самом кейсе.</small>
+                            </div>
+                            <div className="case-dynamics-metrics">
+                              <span>{metricText('Risk', dynamics.metrics.risk)}</span>
+                              <span>{metricText('Аккаунты', dynamics.metrics.accounts)}</span>
+                              <span>{metricText('Устройства', dynamics.metrics.devices)}</span>
+                              <span>{metricText('Признаки', dynamics.metrics.reasons)}</span>
+                            </div>
+                            {dynamics.addedAccountIds.length || dynamics.removedAccountIds.length || dynamics.addedReasonCodes.length || dynamics.removedReasonCodes.length ? (
+                              <div className="case-dynamics-diff">
+                                {dynamics.addedAccountIds.length ? <span><b>Добавлены аккаунты:</b> {dynamics.addedAccountIds.map((id) => `ID ${id}`).join(', ')}</span> : null}
+                                {dynamics.removedAccountIds.length ? <span><b>Ушли аккаунты:</b> {dynamics.removedAccountIds.map((id) => `ID ${id}`).join(', ')}</span> : null}
+                                {dynamics.addedReasonCodes.length ? <span><b>Добавлены признаки:</b> {dynamics.addedReasonCodes.map((code) => reasonLabels[code] ?? code).join(', ')}</span> : null}
+                                {dynamics.removedReasonCodes.length ? <span><b>Исчезли признаки:</b> {dynamics.removedReasonCodes.map((code) => reasonLabels[code] ?? code).join(', ')}</span> : null}
+                              </div>
+                            ) : <div className="case-dynamics-diff"><span>{dynamics.trend === 'new' ? 'Сравнение появится после следующего расчёта Anti-Fraud.' : 'С момента последнего изменившегося состояния новых признаков не обнаружено.'}</span></div>}
+                          </div>
+                        ) : null}
+
                         <div className="detail-column account-column">
                           <h3>Аккаунты кейса</h3>
                           {item.accounts.map((account) => (
