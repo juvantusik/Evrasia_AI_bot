@@ -16,7 +16,7 @@ ENV PORT=8080
 ENV BASE_PATH=/
 
 # Добавлено 03.09.2026 ИТ Директор Евразии
-# Обновлено 05.09.2026: protected loyalty gateway, multi-card balance и identity-corroboration входят в обязательные CI tests.
+# Обновлено 06.09.2026: Evrasia AI Bot ops package + protected loyalty/identity regression tests.
 RUN pnpm typecheck:libs \
     && pnpm --filter @workspace/api-server typecheck \
     && pnpm --filter @workspace/api-server exec node \
@@ -24,9 +24,9 @@ RUN pnpm typecheck:libs \
         --experimental-loader ./test-ts-resolver.mjs \
         --test src/services/bitrix-gateway.test.ts src/services/megafon-group-routing.test.ts src/services/restis-antifraud-gateway.test.ts src/services/bitrix-antifraud-card-gateway.test.ts src/services/bitrix-antifraud-account-gateway.test.ts src/services/bitrix-antifraud-loyalty-gateway.test.ts src/services/bitrix-antifraud-loyalty-gateway.multicard.test.ts src/services/bitrix-antifraud-loyalty-negative-balance.test.ts src/services/bitrix-antifraud-device-gateway.test.ts src/services/trusted-device-snapshot-guard.test.ts src/services/anti-fraud-identity-similarity-service.test.ts src/services/anti-fraud-risk-engine.test.ts \
     && pnpm --filter @workspace/api-server build \
-    && pnpm --filter @workspace/samzaberu-ops build \
-    && pnpm --filter @workspace/samzaberu-ops exec vite build --config vite.phonebook.config.ts \
-    && pnpm --filter @workspace/samzaberu-ops exec vite build --config vite.antifraud.config.ts
+    && pnpm --filter @workspace/evrasia-ai-bot-ops build \
+    && pnpm --filter @workspace/evrasia-ai-bot-ops exec vite build --config vite.phonebook.config.ts \
+    && pnpm --filter @workspace/evrasia-ai-bot-ops exec vite build --config vite.antifraud.config.ts
 
 FROM node:22-bullseye-slim AS runtime
 
