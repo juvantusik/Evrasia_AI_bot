@@ -46,6 +46,8 @@ const chunk = <T>(values: T[], size: number): T[][] => {
 // Массовая выгрузка всей базы пользователей Bitrix этим collector не поддерживается.
 // Обновлено 05.09.2026: bonus_balance здесь больше не читается и не перезаписывается —
 // текущий TotalSum приходит только через защищённый loyalty endpoint.
+// Обновлено 07.09.2026: ACTIVE/BLOCKED/основание каждый refresh перечитываются из Bitrix;
+// Bitrix является master/source of truth для фактического статуса пользователя.
 export const syncBitrixAccountsOnce = async (
   options: CollectorOptions = {},
 ): Promise<AntiFraudBitrixAccountCollectorResult> => {
@@ -139,22 +141,28 @@ export const syncBitrixAccountsOnce = async (
            display_name,
            registered_at,
            bitrix_active,
+           bitrix_blocked,
+           bitrix_block_reason,
            last_synced_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, now())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
          ON CONFLICT (bitrix_user_id) DO UPDATE SET
            phone_normalized = EXCLUDED.phone_normalized,
            email_normalized = EXCLUDED.email_normalized,
            display_name = EXCLUDED.display_name,
            registered_at = EXCLUDED.registered_at,
            bitrix_active = EXCLUDED.bitrix_active,
+           bitrix_blocked = EXCLUDED.bitrix_blocked,
+           bitrix_block_reason = EXCLUDED.bitrix_block_reason,
            last_synced_at = now()
          WHERE
            anti_fraud_accounts.phone_normalized IS DISTINCT FROM EXCLUDED.phone_normalized OR
            anti_fraud_accounts.email_normalized IS DISTINCT FROM EXCLUDED.email_normalized OR
            anti_fraud_accounts.display_name IS DISTINCT FROM EXCLUDED.display_name OR
            anti_fraud_accounts.registered_at IS DISTINCT FROM EXCLUDED.registered_at OR
-           anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active
+           anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active OR
+           anti_fraud_accounts.bitrix_blocked IS DISTINCT FROM EXCLUDED.bitrix_blocked OR
+           anti_fraud_accounts.bitrix_block_reason IS DISTINCT FROM EXCLUDED.bitrix_block_reason
          RETURNING bitrix_user_id`,
         [
           record.bitrixUserId,
@@ -163,6 +171,8 @@ export const syncBitrixAccountsOnce = async (
           record.displayName,
           record.registeredAt,
           record.bitrixActive,
+          record.bitrixBlocked,
+          record.bitrixBlockReason,
         ],
       );
 
