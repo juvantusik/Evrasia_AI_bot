@@ -3,10 +3,10 @@
 > Operational source of truth for continuing Evrasia AI Bot work across ChatGPT chats.
 >
 > **Last updated:** 2026-09-07
-> **Current production:** Evrasia AI Bot v1.7
+> **Current production:** Evrasia AI Bot v1.7, `/directory` removed
 > **Repository:** `juvantusik/Evrasia_AI_bot`
 > **Current source branch:** `main`
-> **Merged release PR:** #32 — `Evrasia AI Bot v1.7 — Anti-Fraud investigation web UI`
+> **Merged release PRs:** #32 v1.7 Anti-Fraud, #33 remove obsolete `/directory`
 
 ---
 
@@ -20,11 +20,11 @@ Recommended new-chat prompt:
 
 ---
 
-## 2. Current milestone — PRODUCTION v1.7 VERIFIED
+## 2. Current milestone — PRODUCTION VERIFIED
 
-Evrasia AI Bot v1.7 is deployed to production and independently post-audited on 2026-09-07.
+Evrasia AI Bot v1.7 is deployed to production and verified.
 
-Final post-production audit:
+Base v1.7 post-production audit on 2026-09-07:
 
 - `PASS_COUNT=34`
 - `WARN_COUNT=0`
@@ -34,18 +34,28 @@ Final post-production audit:
 - `FINAL_STATUS=PASS`
 - `FINAL_RC=0`.
 
-This supersedes all older statements that production is still on v1.6.x or that v1.7 exists only on TEST.
+After that audit, obsolete `/directory` compatibility routing was removed in PR #33 and deployed app-only to production.
 
-Exact deployed application:
+Final `/directory` cleanup deployment result:
 
-- application revision: `109ac7a2a05c0289336b3b332cb09ca102253396`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
-- image/config ID: `sha256:ee94f6b17d4dc9f727266675d05fd3dd1ec992f30850b351d96dbca29a37e628`
+- `PASS_COUNT=37`
+- `FAIL_COUNT=0`
+- `ROLLBACK_FAIL_COUNT=0`
+- `DIRECTORY_REMOVAL_PRODUCTION=VERIFIED`
+- `CUTOVER_STARTED=YES`
+- `FINAL_STATUS=PASS`
+- `FINAL_RC=0`.
+
+Exact current deployed application:
+
+- application revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
+- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
 - app container: `evrasia-ai-bot-app`
-- app status at audit: running / healthy
+- status after deployment: running / healthy
 - direct app port: `127.0.0.1:18080 -> 8080`.
 
-Do not confuse later Git/documentation commits with the deployed application revision above.
+Later documentation-only commits may advance `main`; do not confuse them with the deployed application revision above.
 
 ---
 
@@ -53,23 +63,26 @@ Do not confuse later Git/documentation commits with the deployed application rev
 
 Evrasia AI Bot is **one production application** with several business modules. Do not describe the current system as only “Phonebook + Anti-Fraud”, and do not describe SamZaberu/MegaFon as separate Docker bots unless the live topology is changed later.
 
-The production container `evrasia-ai-bot-app` currently contains four working directions:
+The production container `evrasia-ai-bot-app` contains four working directions:
 
-1. **Phonebook** — canonical web interface at `/phonebook`.
+1. **Phonebook** — canonical and only web interface at `/phonebook`.
 2. **Anti-Fraud** — web interface at `/antifraud` plus protected scheduler/data pipeline.
 3. **SamZaberu** — Telegram scenario inside `EvrasiaTelegramBotV2`, with STOP/ENABLE operations through the Bitrix service layer.
 4. **Corporate communications / MegaFon** — Telegram personal-chat and bound-group workflow using Phonebook data and MegaFon routing logic.
 
 ### Canonical route naming
 
-`/phonebook` is the actual working Phonebook route.
+`/phonebook` is the only current Phonebook web route.
 
-`/directory` is **not a separate product/module**. It is legacy compatibility only:
+`/directory` is **removed**:
 
-- `/directory` -> HTTP 308 -> `/phonebook`
-- `/directory/` -> HTTP 308 -> `/phonebook/`.
+- `/directory` = HTTP 404
+- `/directory/...` = HTTP 404
+- `/api/directory/phones` = HTTP 404.
 
-Do not put `/directory` on current architecture diagrams as a separate service or feature.
+Do not describe `/directory` as an alias, redirect, product or compatibility route.
+
+Historical internal names containing `directory` may remain where they refer to a corporate-directory data structure or stable implementation identifier; they do not create a web route.
 
 ### Telegram topology
 
@@ -88,9 +101,7 @@ See `docs/CURRENT_ARCHITECTURE.md` for the compact current diagram.
 
 ## 4. GitHub current state
 
-PR #32 was explicitly approved by the user, moved from Draft to Ready, and merged into `main` on 2026-09-07.
-
-Final PR state:
+### PR #32 — v1.7 Anti-Fraud release
 
 - state: closed
 - draft: false
@@ -98,9 +109,25 @@ Final PR state:
 - source branch: `feature/v1.7-antifraud-web`
 - merge commit: `33e3548ab014e927e1e00074e27f3a11ef252bbc`.
 
-At the time of this context update, `main` pointed to merge commit `33e3548ab014e927e1e00074e27f3a11ef252bbc` before this documentation-fix commit.
+### PR #33 — remove obsolete `/directory` route
 
-The deployed production application is still revision `109ac7a2...`; merging documentation/release history into `main` did not redeploy production.
+- state: closed
+- draft: false
+- merged: true
+- source branch: `cleanup/remove-directory-route`
+- source head before merge: `a9f017676f69f0d1594fbfe5b06bcfc448c628c2`
+- merge commit: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+
+GitHub Actions build #252 for merge commit `0fcebb1e...` completed successfully.
+
+Published image:
+
+- tag: `ghcr.io/juvantusik/evrasia_ai_bot:sha-0fcebb1`
+- digest: `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
+- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
+- OCI revision label: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+
+That exact immutable image is current production.
 
 For future work, start from current `main` unless a new feature branch is explicitly created.
 
@@ -146,26 +173,34 @@ Active legacy infrastructure names are absent:
 
 `public.samzaberu_requests`, SamZaberu API/service names and SamZaberu business semantics are intentional current business functionality.
 
-At post-production audit:
+After the `/directory` cleanup deployment:
 
 - `public.samzaberu_requests` rows: 31
-- continuity: PASS.
+- continuity: PASS
+- DB container ID/start timestamp unchanged
+- DB schema unchanged.
 
-Do not rename/delete them merely because the old infrastructure once used the name `samzaberu`.
+Do not rename/delete SamZaberu business data merely because the old infrastructure once used the name `samzaberu`.
 
 ---
 
 ## 6. Phonebook web
 
-Canonical working UI:
+Canonical and only working UI:
 
 - `/phonebook`.
 
-Nginx routes the normal application web traffic to production `127.0.0.1:18080`.
+Current production verification:
 
-The legacy `/directory` URL exists only as an application redirect to `/phonebook` for compatibility. Product, documentation and architecture wording should say **Phonebook**, not Directory, unless discussing legacy code/file names or the redirect itself.
+- direct `/phonebook` = 200
+- routed `/phonebook` = 200
+- direct `/api/phonebook/phones` = 200
+- `/directory` = 404 direct/routed
+- `/api/directory/phones` = 404.
 
-The codebase still contains some historical `directory-*` file/service names; those are implementation/history names and do not mean a separate current `/directory` product.
+Product, documentation and architecture wording must say **Phonebook**, not Directory.
+
+The codebase may still contain historical `directory-*` file/service/schema identifiers where they refer to corporate-directory implementation details; those identifiers do not mean a separate current `/directory` product.
 
 ---
 
@@ -174,8 +209,6 @@ The codebase still contains some historical `directory-*` file/service names; th
 SamZaberu is active business functionality inside `EvrasiaTelegramBotV2`.
 
 Telegram root menu exposes `🍱 СамЗаберу` to allowed operational managers.
-
-The internal SamZaberu flow delegates to the existing Telegram SamZaberu handler and backend service.
 
 Backend routes include `/api/samzaberu/...` for restaurants, access, summary, requests and manual completion.
 
@@ -190,7 +223,7 @@ Backend routes include `/api/samzaberu/...` for restaurants, access, summary, re
 - records success/cancel/escalation states;
 - preserves manual-completion path for escalated requests.
 
-This module is not a TEST artifact and must be included in any description of the current production bot.
+This module is production functionality, not a TEST artifact.
 
 ---
 
@@ -215,7 +248,7 @@ Bound-group flow:
 - refuses ambiguous/mismatched phone-to-legal-entity routing;
 - prepares/addressses the structured request to the configured MegaFon manager.
 
-The group-routing logic is implemented in `megafon-group-routing.ts`; the group chat binding is stored as bot setting.
+The group-routing logic is implemented in `megafon-group-routing.ts`; group chat binding is stored as bot setting.
 
 For T2 records, Corporate communications produces a prepared contact/request flow rather than using the MegaFon bound-group path.
 
@@ -238,39 +271,38 @@ Required secret mounts are present/readable/non-empty:
 
 Never print their values.
 
-Post-audit scheduler state:
+After app-only cleanup deployment:
 
-- enabled: true
-- running: false at check time
-- interval: 15 minutes
-- last status: success
-- last error: none
-- next run scheduled.
-
-Latest protected DB cycle at audit:
-
-- source: `anti_fraud_protected_cycle`
-- status: `success`.
-
-Telegram polling conflict count at audit: 0.
+- scheduler endpoint = 200
+- enabled = true
+- running = false at check time
+- interval = 15 minutes
+- immediate post-restart scheduler status = `idle`
+- latest protected DB cycle = `success`
+- Telegram polling = true
+- Telegram 409 conflicts observed after deployment = 0.
 
 ---
 
 ## 10. Nginx / current routes
 
-Verified active Anti-Fraud routing:
+Verified active routing:
 
 - `/antifraud` -> production 18080
 - `/antifraud/` -> production 18080
 - `/api/anti-fraud/` -> production 18080
 - `/assets/antifraud-` -> production 18080
 - normal Phonebook/default traffic -> production 18080
-- TEST port `18081` references: 0
-- `nginx -t`: PASS.
+- TEST port `18081` references: 0.
 
-HTTP checks passed for direct/routed health, Phonebook and Anti-Fraud.
+The `/directory` cleanup deployment did **not** modify nginx; nginx checksum remained unchanged.
 
-Again: `/directory` is only a legacy 308 redirect to `/phonebook`; do not treat it as a current interface.
+Current route contract:
+
+- `/phonebook` = 200
+- `/antifraud` = 200
+- `/directory` = 404
+- `/api/directory/...` = 404.
 
 ---
 
@@ -311,7 +343,15 @@ Phase 2 directory:
 - `postgres-globals-pre-dbrename.sql`
 - pre-change Compose/env/inspect assets.
 
-Audit verified dump hashes and `pg_restore -l` readability.
+App-only `/directory` removal backup:
+
+`/opt/evrasia-ai-bot/backups/app-only-remove-directory-20260907-090654`
+
+Previous production rollback image retained:
+
+`ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
+
+Do not remove any of these until explicit cleanup approval.
 
 ---
 
@@ -400,6 +440,8 @@ Important late migrations:
 
 Production audit verified the `partial` constraint.
 
+The `/directory` cleanup deployment added no DB migration and left migration count at 18.
+
 ---
 
 ## 16. Trusted Device foundation
@@ -443,17 +485,19 @@ Do not repeat these failures:
 
 1. YAML accidentally executed as Python; generated-file path must be passed to `python3 - ...`.
 2. PostgreSQL boolean display mismatch caused false rollback; map booleans explicitly to stable values.
-3. Strict 200 check treated expected `/directory` 308 redirect as regression.
+3. Old deployment logic treated the former `/directory` 308 redirect as a regression; that route is now removed and expected to return 404.
 4. Nginx first-request race produced transient 502 when old worker still pointed at stopped TEST; keep old upstream alive through reload/retry.
 5. Renaming a Compose-managed container is not a reliable rollback artifact because Compose labels remain.
 6. One rollback restored DBs but not app; dedicated app recovery completed and was verified.
+7. During `/directory` cleanup, a first app-only attempt stopped **before cutover** because a staged Compose file copied to `/tmp` resolved relative `prod-app.env` / `prod-db.env` paths under `/tmp`. Production stayed unchanged. Correct fix: stage the temporary Compose file inside `/opt/evrasia-ai-bot/prod` or stage all referenced relative files consistently.
 
-Final release was safely split:
+Successful release history:
 
 - Phase 1: application v1.7 + migrations 4->18 + nginx + scheduler + protected control cycle.
 - Phase 2: PostgreSQL/Docker infrastructure rename only.
+- App-only cleanup: remove `/directory`, no DB migration/restart and no nginx change.
 
-Both completed successfully.
+All completed successfully.
 
 ---
 
@@ -478,11 +522,13 @@ Operator preference:
 
 Do not omit `clear`; the operator explicitly requires each new server script to visually clear previous output.
 
+For Compose staging, preserve the directory context of relative `env_file` and mount paths.
+
 ---
 
 ## 20. Product roadmap
 
-- **v1.7** — current production baseline; Phonebook + Anti-Fraud + Telegram SamZaberu + Corporate communications/MegaFon all remain part of the unified production application.
+- **v1.7** — current production baseline; Phonebook + Anti-Fraud + Telegram SamZaberu + Corporate communications/MegaFon all remain part of the unified production application; `/directory` removed.
 - **v1.8** — document generation (Jira KAN-66, KAN-77).
 - **v1.9** — document sending through Exchange (Jira KAN-67, KAN-78).
 
@@ -500,23 +546,28 @@ Current legal package in the project includes offer, PD policy, optional additio
 
 ## 22. NEXT STEP — current continuation point
 
-No production deployment or PR action is pending for v1.7.
+No v1.7 production deployment, PR action or `/directory` cleanup is pending.
 
-Current continuation rules:
+Current baseline:
 
-1. Treat production v1.7 as the active baseline.
-2. Treat `/phonebook` as canonical; `/directory` only as legacy redirect compatibility.
-3. Include all four current directions when discussing architecture: Phonebook, Anti-Fraud, SamZaberu Telegram, Corporate communications/MegaFon Telegram.
-4. Keep backups and archival TEST assets until explicit cleanup approval.
-5. Do not restart archival TEST blindly.
-6. For a new feature, verify current `main` and production, then create the next branch/PR as needed.
-7. Do not repeat v1.7 migration/deployment work without a new factual reason.
+1. Production application revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+2. Immutable production digest `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`.
+3. `/phonebook` is the only Phonebook route.
+4. `/directory` and `/api/directory/...` are absent and return 404.
+5. Four current directions remain: Phonebook, Anti-Fraud, SamZaberu Telegram, Corporate communications/MegaFon Telegram.
+6. Anti-Fraud scheduler remains enabled every 15 minutes; latest protected cycle verified `success`.
+7. Telegram polling remains enabled; deployment verification observed 0 Telegram 409 conflicts.
+8. DB remains `evrasia_ai_bot`, migrations 18, Anti-Fraud tables 11, SamZaberu rows 31.
+9. DB container and nginx were unchanged by the `/directory` cleanup deployment.
+10. Keep backups and archival TEST assets until explicit cleanup approval.
+
+For a new feature/fix, verify current `main` and production, then create the next branch/PR as needed. Do not reintroduce `/directory`.
 
 ---
 
 ## 23. Maintenance rule
 
-Update this file and `docs/CURRENT_ARCHITECTURE.md` after every material milestone affecting:
+Update this file, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `SERVER_UPDATES.md` and, when relevant, `docs/SERVER_SCRIPT_RULES.md` after every material milestone affecting:
 
 - branch / PR / merge state
 - deployed revision/image
