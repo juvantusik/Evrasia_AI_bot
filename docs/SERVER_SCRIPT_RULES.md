@@ -76,10 +76,12 @@ when that statement is true.
 
 ## Current production invariants
 
-As of the verified v1.7 production baseline:
+As of the verified v1.7 production baseline after `/directory` removal:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
+- deployed application revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
+- deployed immutable digest: `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
@@ -88,6 +90,9 @@ As of the verified v1.7 production baseline:
 - volume: `evrasia-postgres-prod-data`
 - production migrations: 18
 - Anti-Fraud scheduler: enabled, interval 15 minutes, run-on-start false
+- Phonebook canonical route: `/phonebook`
+- `/directory`: removed, expected HTTP 404
+- `/api/directory/...`: absent, expected HTTP 404
 - TEST container `evrasia-ai-bot-v17-test`: exited/archival; do not restart blindly.
 
 These are current documented invariants, not substitutes for guards before a future mutation.
@@ -98,7 +103,7 @@ These are current documented invariants, not substitutes for guards before a fut
 - Never expose raw loyalty-card numbers in bot UI/API/logs.
 - Preserve both secret mounts when recreating production.
 - Detailed 60-day history remains targeted; do not bulk-load the full fleet each scheduler cycle.
-- `/directory` returning `308` to `/phonebook` is expected if the redirected final response is `200`.
+- `/directory` is no longer a compatibility redirect. Current production contract requires HTTP 404.
 
 ## Known pitfalls to avoid
 
@@ -107,9 +112,11 @@ These are current documented invariants, not substitutes for guards before a fut
 - A previous Docker mount recreation bug came from TSV parsing losing an empty `.Name` bind-mount field and shifting columns. Prefer structured JSON and explicit `--mount` handling.
 - A previous staging script accidentally invoked a YAML file as Python. When a Python heredoc needs file arguments, use `python3 - "$FILE" ... <<'PY'`, never `python3 "$FILE" ... <<'PY'`.
 - PostgreSQL boolean textual output can differ (`t`, `true`, etc.). Normalize explicitly to stable strings such as `YES/NO` in guards.
-- Do not reject an expected HTTP redirect simply because the direct status is not 200; validate the exact allowed redirect target and final status.
+- Do not reject an expected HTTP redirect simply because the direct status is not 200; validate the exact allowed redirect target and final status. This is a general rule only; `/directory` specifically is now expected to return 404.
 - After nginx reload, do not immediately assume every worker is using the new upstream. Keep the old upstream alive during transition and use bounded retry before removing it.
 - Renaming a Compose-managed container retains Compose labels; do not rely on the renamed container as a standalone rollback artifact.
+- **Compose relative-path staging pitfall:** if `compose.yml` uses relative `env_file`, bind-mount or other file paths, copying only the Compose file to `/tmp` changes how those paths resolve. Do not validate/deploy such a staged Compose file from a different directory unless all referenced relative files are staged consistently. For the current production topology, keep a temporary staged Compose file inside `/opt/evrasia-ai-bot/prod` so `prod-app.env` / `prod-db.env` resolve correctly.
+- If a deployment attempt fails before `CUTOVER_STARTED=YES`, do not perform rollback or repeat already-passed image pull/backup steps unless state changed; first confirm production remained untouched, then continue from the failed stage.
 
 ## Operator preference
 
