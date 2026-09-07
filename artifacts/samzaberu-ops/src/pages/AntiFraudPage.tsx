@@ -52,7 +52,7 @@ type Device = {
 };
 
 type CaseDevice = { devicePrefix: string; userIds: number[]; lastSeenAt: string | null };
-type IdentityMatch = { type: 'phone' | 'email'; userIds: number[] };
+type IdentityMatch = { type: 'phone' | 'email' | 'similar_phone' | 'similar_email'; userIds: number[] };
 
 type MetricChange = {
   before: number | null;
@@ -105,6 +105,18 @@ type Summary = {
   updatedAt: string | null;
 };
 
+type SchedulerStatus = {
+  enabled: boolean;
+  running: boolean;
+  intervalMinutes: number;
+  lastStartedAt: string | null;
+  lastFinishedAt: string | null;
+  lastSucceededAt: string | null;
+  lastStatus: 'idle' | 'running' | 'success' | 'partial' | 'failed';
+  lastError: string | null;
+  nextRunAt: string | null;
+};
+
 type SimilarGroup = {
   matchType: 'phone' | 'email';
   accountCount: number;
@@ -130,6 +142,9 @@ const reasonLabels: Record<string, string> = {
   repeated_device_pair: 'Одна связка на нескольких устройствах',
   duplicate_phone_identity: 'Совпадение телефона',
   duplicate_email_identity: 'Совпадение email',
+  similar_phone_identity: 'Похожий номер телефона',
+  similar_email_identity: 'Похожий email',
+  similar_identity_combo: 'Похожий телефон и email',
   linked_visit_proximity: 'Близкие посещения связанных аккаунтов',
   high_daily_visit_frequency: 'Высокая частота посещений',
   repeated_high_visit_days: 'Регулярный паттерн посещений',
@@ -177,6 +192,18 @@ const postJson = async <T,>(url: string): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const waitForRefreshCompletion = async (): Promise<SchedulerStatus> => {
+  const maxAttempts = 180;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const scheduler = await fetchJson<SchedulerStatus>('/api/anti-fraud/scheduler');
+    if (!scheduler.running) return scheduler;
+    await wait(2_000);
+  }
+  throw new Error('Обновление Anti-Fraud выполняется слишком долго. Проверьте состояние через несколько минут.');
+};
+
 const formatDate = (value: string | null) => {
   if (!value) return '—';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -194,7 +221,11 @@ const formatPoints = (value: number | null) =>
 const loyaltyText = (account: Account): string => {
   const count = account.loyaltyActiveCardCount;
   if (count === null || count === undefined) return 'Карты: не загружено · Бонусы: —';
-  if (count === 0) return 'Активных карт: 0 · Бонусы: —';
+  if (count === 0) {
+    return account.loyaltyIssue === 'no_active_card'
+      ? 'Активных карт: 0 · Бонусы: нет активной карты'
+      : 'Активных карт: 0 · Бонусы: —';
+  }
   if (account.bonusBalance === null) {
     return `Активных карт: ${count} · Бонусы: баланс недоступен`;
   }
@@ -209,6 +240,13 @@ const levelLabel: Record<RiskLevel, string> = {
   medium: 'Средний',
   high: 'Высокий',
   critical: 'Критический',
+};
+
+const identityMatchLabel = (match: IdentityMatch): string => {
+  if (match.type === 'phone') return 'Совпадает телефон';
+  if (match.type === 'email') return 'Совпадает email';
+  if (match.type === 'similar_phone') return 'Похожие номера телефонов';
+  return 'Похожие email';
 };
 
 const metricText = (label: string, change: MetricChange) =>
@@ -230,6 +268,8 @@ const parseDetails = (details: string) =>
       .replace('max_accounts=', 'аккаунтов на устройстве: ')
       .replace('shared_devices=', 'общих устройств: ')
       .replace('linked_accounts=', 'связанных аккаунтов: ')
+      .replace('corroborated_similar_phone_links=', 'подтверждённых связей по похожему номеру: ')
+      .replace('corroborated_similar_email_links=', 'подтверждённых связей по похожему email: ')
       .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ')
       .replace('bonus_balance=', 'остаток бонусов: ')
       .replace('threshold=', 'порог: ')
@@ -295,8 +335,18 @@ export default function AntiFraudPage() {
     setRefreshing(true);
     setError('');
     try {
-      await postJson<{ ok: boolean }>('/api/anti-fraud/refresh');
+      await postJson<{ ok: boolean; accepted: boolean; scheduler: SchedulerStatus }>('/api/anti-fraud/refresh');
+      const scheduler = await waitForRefreshCompletion();
+
+      if (scheduler.lastStatus === 'failed') {
+        throw new Error(scheduler.lastError ?? 'Обновление Anti-Fraud завершилось ошибкой.');
+      }
+
       await load();
+
+      if (scheduler.lastStatus === 'partial') {
+        setError(`Обновление завершено частично: ${scheduler.lastError ?? 'часть источников временно недоступна.'}`);
+      }
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Не удалось обновить Anti-Fraud.');
     } finally {
@@ -456,7 +506,7 @@ export default function AntiFraudPage() {
                             <div className="link-card" key={device.devicePrefix}><Smartphone size={18} /><div><strong>Общее устройство {device.devicePrefix}…</strong><span>{device.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span><small>Последняя активность: {formatDate(device.lastSeenAt)}</small></div></div>
                           ))}
                           {item.identityMatches.map((match, index) => (
-                            <div className="link-card" key={`${match.type}-${index}`}>{match.type === 'phone' ? <Link2 size={18} /> : <Mail size={18} />}<div><strong>{match.type === 'phone' ? 'Совпадает телефон' : 'Совпадает email'}</strong><span>{match.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span></div></div>
+                            <div className="link-card" key={`${match.type}-${index}`}>{match.type === 'phone' || match.type === 'similar_phone' ? <Link2 size={18} /> : <Mail size={18} />}<div><strong>{identityMatchLabel(match)}</strong><span>{match.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span></div></div>
                           ))}
                           {item.accountCount === 1 && item.signals.includes('visits') ? <div className="link-card solo"><Utensils size={18} /><div><strong>Одиночный поведенческий кейс</strong><span>Связующих признаков с другими аккаунтами не найдено.</span></div></div> : null}
                           {item.accountCount === 1 && item.signals.includes('bonus_balance') ? <div className="link-card solo"><AlertTriangle size={18} /><div><strong>Высокий остаток бонусов</strong><span>Более 40 000 бонусов запускают проверку истории за 60 дней.</span></div></div> : null}

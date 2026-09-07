@@ -89,6 +89,9 @@ const parseEmail = (value: string | null): {
   return { full, local, provider, tld };
 };
 
+const normalizeCrossProviderLocal = (value: string): string =>
+  value.toLowerCase().replace(/[._-]/g, "");
+
 // Проверяет расстояние Левенштейна <= 1 без построения полной матрицы.
 export const differsByAtMostOneEdit = (left: string, right: string): boolean => {
   if (left === right) return true;
@@ -136,19 +139,50 @@ export const phonesDifferByOneDigit = (left: string | null, right: string | null
 const emailsAreSimilar = (
   left: string | null,
   right: string | null,
-): { similar: boolean; details: string | null } => {
+): { similar: boolean; crossProvider: boolean; details: string | null } => {
   const a = parseEmail(left);
   const b = parseEmail(right);
-  if (!a || !b || a.full === b.full) return { similar: false, details: null };
-  if (a.provider !== b.provider) return { similar: false, details: null };
-  if (a.local.length < 6 || b.local.length < 6) return { similar: false, details: null };
-  if (!differsByAtMostOneEdit(a.local, b.local)) return { similar: false, details: null };
+  if (!a || !b || a.full === b.full) {
+    return { similar: false, crossProvider: false, details: null };
+  }
 
-  const localRelation = a.local === b.local ? "same_local" : "local_edit_distance_1";
+  if (a.provider === b.provider) {
+    if (a.local.length < 6 || b.local.length < 6) {
+      return { similar: false, crossProvider: false, details: null };
+    }
+    if (!differsByAtMostOneEdit(a.local, b.local)) {
+      return { similar: false, crossProvider: false, details: null };
+    }
+
+    const localRelation = a.local === b.local ? "same_local" : "local_edit_distance_1";
+    return {
+      similar: true,
+      crossProvider: false,
+      details:
+        `${localRelation}; provider=${a.provider}; ` +
+        `left_tld=${a.tld}; right_tld=${b.tld}`,
+    };
+  }
+
+  // Добавлено 07.09.2026 ИТ Директор Евразии
+  // Для разных почтовых провайдеров similarity intentionally stricter:
+  // убираем только типовые разделители . _ - и требуем полное совпадение local-part.
+  // Такая cross-provider связь остаётся слабой и не подтверждается одним только именем.
+  const normalizedLeft = normalizeCrossProviderLocal(a.local);
+  const normalizedRight = normalizeCrossProviderLocal(b.local);
+  if (normalizedLeft.length < 6 || normalizedRight.length < 6) {
+    return { similar: false, crossProvider: true, details: null };
+  }
+  if (normalizedLeft !== normalizedRight) {
+    return { similar: false, crossProvider: true, details: null };
+  }
+
   return {
     similar: true,
+    crossProvider: true,
     details:
-      `${localRelation}; provider=${a.provider}; ` +
+      `cross_provider_same_normalized_local; ` +
+      `left_provider=${a.provider}; right_provider=${b.provider}; ` +
       `left_tld=${a.tld}; right_tld=${b.tld}`,
   };
 };
@@ -177,10 +211,14 @@ export const evaluateIdentityPair = (
   const exactPhone = Boolean(leftPhone && leftPhone === rightPhone);
 
   // Слабый признак только открывает дополнительную проверку.
-  // Он становится подтверждённой связью, если есть хотя бы ещё один независимый
-  // identity/device-признак. Поведенческие признаки здесь намеренно не участвуют.
-  const emailCorroborated =
-    emailSimilarity.similar && (sameName || exactPhone || similarPhone || sharedDevice);
+  // Same-provider email может подтверждаться именем, exact/similar phone или устройством.
+  // Cross-provider email (совпавший local-part после удаления . _ -) намеренно строже:
+  // одного sameName недостаточно; нужен телефон или общее устройство.
+  const emailCorroborated = emailSimilarity.similar && (
+    emailSimilarity.crossProvider
+      ? (exactPhone || similarPhone || sharedDevice)
+      : (sameName || exactPhone || similarPhone || sharedDevice)
+  );
   const phoneCorroborated =
     similarPhone && (sameName || exactEmail || emailSimilarity.similar || sharedDevice);
   const corroborated = emailCorroborated || phoneCorroborated;

@@ -7,17 +7,18 @@
 Продолжаем проект Evrasia AI Bot. Не начинай работу заново и не проси меня повторять уже установленный контекст.
 
 Репозиторий: `juvantusik/Evrasia_AI_bot`.
-Актуальная исходная ветка: `main`.
+Production source baseline: `main`.
+Текущая рабочая ветка: `fix/antifraud-case-refresh-ux`, PR #34 Draft.
 PR #32 и PR #33 уже слиты в `main`.
 
-Сначала прочитай из `main`:
+Сначала прочитай из актуальной рабочей ветки/`main`:
 
 1. `docs/AI_PROJECT_CONTEXT.md` — главный технический source of truth;
 2. `docs/CURRENT_ARCHITECTURE.md` — текущая архитектура и правильные названия модулей;
 3. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
 4. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
-При противоречиях: production > актуальный `main` > staging/test > документация > старые обсуждения.
+При противоречиях: production > актуальный код/ветка > staging/test > документация > старые обсуждения.
 
 ---
 
@@ -41,6 +42,8 @@ PR #32 и PR #33 уже слиты в `main`.
 - `DIRECTORY_REMOVAL_PRODUCTION=VERIFIED`
 - `FINAL_STATUS=PASS`
 - `FINAL_RC=0`.
+
+Текущая новая работа — PR #34: исправление Anti-Fraud case grouping и ручного refresh UX. Production этим PR пока не менялся.
 
 Не повторять deployment v1.7, миграцию 4->18, nginx cutover, переименование PostgreSQL-инфраструктуры или удаление `/directory` без новой фактической причины.
 
@@ -118,7 +121,7 @@ PostgreSQL:
 - test DB migrations: 18
 - Anti-Fraud tables: 11.
 
-The cleanup deployment did **not** restart the DB container, did not change DB schema and did not change nginx.
+PR #34 does not require a DB migration, nginx change or production DB rename.
 
 Legacy infrastructure is gone:
 
@@ -150,9 +153,28 @@ PR #33 — remove obsolete `/directory` route:
 
 GitHub Actions build #252 for PR #33 merge completed successfully and published the immutable production image now deployed.
 
-Later documentation-only commits may advance `main`; do not confuse them with the deployed application revision `0fcebb1e...`.
+PR #34 — Anti-Fraud case grouping / async refresh UX:
 
-For any new technical work, inspect current `main` first and then create the appropriate next branch/PR.
+- `open`
+- `draft=true`
+- branch: `fix/antifraud-case-refresh-ux`
+- base: `main`
+- production unchanged.
+
+PR #34 contract:
+
+- corroborated similar phone/email links may join accounts into one case;
+- weak uncorroborated similarity does not join cases;
+- current rule `sameName + phone differs by exactly one digit` remains unchanged;
+- `POST /api/anti-fraud/refresh` returns `202 Accepted` after starting the existing single-flight cycle;
+- UI polls `GET /api/anti-fraud/scheduler` until completion;
+- `409` remains when refresh is already running;
+- `partial` and `failed` are shown factually;
+- `no_active_card` is shown explicitly;
+- similarity reason labels are translated for operator UI;
+- regression coverage must stay green before Ready/merge.
+
+Do not mark PR #34 Ready or merge it without explicit user approval after CI/review.
 
 ---
 
@@ -228,6 +250,8 @@ Nginx:
 - TEST 18081 references: 0
 - nginx file was unchanged by the cleanup deployment.
 
+PR #34 deliberately avoids changing nginx timeout. The manual web refresh becomes asynchronous at the HTTP layer: accept quickly, then poll scheduler status.
+
 ---
 
 ## 9. Anti-Fraud contracts not to lose
@@ -244,7 +268,11 @@ Nginx:
 - `0.00` is known zero; NULL is unavailable/unknown
 - raw loyalty-card numbers must not appear in bot UI/API/logs
 - RestIS credentials must not be copied into the bot
-- detailed 60-day history is targeted only to history-gated accounts.
+- detailed 60-day history is targeted only to history-gated accounts
+- shared device, exact phone/email and corroborated similar identity are valid case-linking signals
+- weak similar phone/email alone is not enough to merge accounts
+- behavioral signals alone do not merge separate identities
+- manual refresh: `POST /api/anti-fraud/refresh` -> 202 Accepted, then poll `GET /api/anti-fraud/scheduler`; 409 if already running.
 
 Fleet reference 2026-09-05:
 
@@ -342,28 +370,27 @@ Deployment lesson: if a Compose file uses relative `env_file` paths, do not vali
 
 ## 14. Current continuation point
 
-There is **no pending v1.7 production mutation, PR merge, or `/directory` cleanup deployment**.
+Production remains on revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`; there is no production mutation to repeat.
 
-Current production state is the new baseline:
+Current active engineering task is PR #34 (`fix/antifraud-case-refresh-ux`), still Draft.
 
-1. production revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`;
-2. `/phonebook` is the only Phonebook web route;
-3. `/directory` is absent and returns 404;
-4. Anti-Fraud remains healthy with scheduler enabled every 15 minutes;
-5. Telegram polling is enabled with 0 observed 409 conflicts after deployment;
-6. SamZaberu and MegaFon remain active modules in the same production app;
-7. DB remains at 18 migrations / 11 Anti-Fraud tables / 31 SamZaberu request rows;
-8. DB container and nginx were unchanged by the cleanup deployment;
-9. backups and archival TEST remain retained.
+Next actions for PR #34:
 
-For the next task:
+1. verify updated typecheck/unit tests/build/CI after the final regression/doc commit;
+2. ensure `similar_identity_combo` is human-readable in UI;
+3. ensure corroborated one-digit phone identity collapses to one case group while the risk rule itself remains unchanged;
+4. ensure refresh contract remains 202 + scheduler polling, 409 on already running, factual partial/failed;
+5. do not add DB schema migration or nginx change;
+6. do not touch production until the PR is reviewed and explicitly approved;
+7. do not mark Ready or merge without explicit user approval.
 
-1. restore context from the four docs above;
-2. treat production as source of truth;
-3. treat current `main` as source code baseline;
-4. do not reintroduce `/directory`;
-5. remember the unified four-direction architecture;
-6. keep backups/archival TEST until explicit cleanup approval;
-7. only then start the next requested feature/fix.
+Stable production state remains:
+
+- `/phonebook` only; `/directory` = 404;
+- Anti-Fraud scheduler every 15 minutes;
+- Telegram polling enabled;
+- SamZaberu and MegaFon active in the same production app;
+- DB at 18 migrations / 11 Anti-Fraud tables / 31 SamZaberu request rows;
+- backups and archival TEST retained.
 
 Parallel Bonus Club legal work exists, but it is a separate track.

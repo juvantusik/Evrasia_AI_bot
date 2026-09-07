@@ -8,6 +8,7 @@ const {
   phonesDifferByOneDigit,
   evaluateIdentityPair,
 } = await import("./anti-fraud-identity-similarity-service");
+const { groupAntiFraudCaseAccountIds } = await import("./anti-fraud-case-service");
 
 test("same Yandex local-part across TLDs opens candidate and same name corroborates it", () => {
   const link = evaluateIdentityPair(
@@ -101,6 +102,32 @@ test("phone differing by exactly one digit opens candidate and same name corrobo
   assert.equal(link.sameName, true);
   assert.equal(link.corroborated, true);
   assert.equal(link.riskScore, 20);
+});
+
+test("corroborated one-digit phone identity joins both users into one Anti-Fraud case group", () => {
+  const link = evaluateIdentityPair(
+    {
+      bitrixUserId: 601,
+      displayName: "Иван",
+      phone: "79678517424",
+      email: "first@example.com",
+    },
+    {
+      bitrixUserId: 602,
+      displayName: "Иван",
+      phone: "78678517424",
+      email: "other@example.net",
+    },
+    false,
+  );
+
+  assert.ok(link);
+  assert.equal(link.corroborated, true);
+  const groups = groupAntiFraudCaseAccountIds(
+    [link.leftUserId, link.rightUserId],
+    link.corroborated ? [[link.leftUserId, link.rightUserId]] : [],
+  );
+  assert.deepEqual(groups, [[601, 602]]);
 });
 
 test("similar email and one-digit phone corroborate each other without relying on visits", () => {

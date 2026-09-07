@@ -31,6 +31,11 @@ export type AntiFraudCaseDevice = {
   lastSeenAt: string | null;
 };
 
+export type AntiFraudCaseIdentityMatch = {
+  type: "phone" | "email" | "similar_phone" | "similar_email";
+  userIds: number[];
+};
+
 export type AntiFraudCase = {
   caseId: string;
   overallRisk: number;
@@ -41,7 +46,7 @@ export type AntiFraudCase = {
     "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance"
   >;
   devices: AntiFraudCaseDevice[];
-  identityMatches: Array<{ type: "phone" | "email"; userIds: number[] }>;
+  identityMatches: AntiFraudCaseIdentityMatch[];
   updatedAt: string;
 };
 
@@ -60,7 +65,8 @@ const ensureReady = async (): Promise<void> => {
       to_regclass('public.anti_fraud_risk_scores') IS NOT NULL
       AND to_regclass('public.anti_fraud_risk_reasons') IS NOT NULL
       AND to_regclass('public.anti_fraud_device_links') IS NOT NULL
-      AND to_regclass('public.anti_fraud_accounts') IS NOT NULL AS ready
+      AND to_regclass('public.anti_fraud_accounts') IS NOT NULL
+      AND to_regclass('public.anti_fraud_identity_links') IS NOT NULL AS ready
   `);
   if (!result.rows[0]?.ready) throw new Error("Anti-Fraud ещё не инициализирован в этой базе данных.");
 };
@@ -108,15 +114,43 @@ const union = (parents: ParentMap, ids: number[]): void => {
   }
 };
 
+// Добавлено 07.09.2026 ИТ Директор Евразии
+// Чистая часть case-builder: все реальные связующие группы (устройство, точный контакт,
+// corroborated similar identity) проходят через один и тот же транзитивный union.
+// Экспорт нужен также для regression-теста без подключения к production/test БД.
+export const groupAntiFraudCaseAccountIds = (
+  accountIds: number[],
+  linkGroups: number[][],
+): number[][] => {
+  const parents: ParentMap = new Map();
+  for (const id of accountIds) find(parents, id);
+  for (const ids of linkGroups) union(parents, ids);
+
+  const grouped = new Map<number, number[]>();
+  for (const id of accountIds) {
+    const root = find(parents, id);
+    const ids = grouped.get(root) ?? [];
+    ids.push(id);
+    grouped.set(root, ids);
+  }
+  return [...grouped.values()];
+};
+
 const validLevel = (value: unknown): AntiFraudCase["riskLevel"] => {
   const text = String(value ?? "low");
   if (text === "critical" || text === "high" || text === "medium") return text;
   return "low";
 };
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
-// Одна строка интерфейса = один кейс. Связующие признаки (устройство, телефон, email)
-// объединяют аккаунты транзитивно. Поведенческие признаки сами по себе аккаунты не объединяют.
+const validIdentityMatchType = (value: unknown): AntiFraudCaseIdentityMatch["type"] => {
+  if (value === "email" || value === "similar_phone" || value === "similar_email") return value;
+  return "phone";
+};
+
+// Обновлено 07.09.2026 ИТ Директор Евразии
+// Одна строка интерфейса = один кейс. Связующие признаки (устройство, точный контакт
+// или подтверждённая похожая идентичность) объединяют аккаунты транзитивно.
+// Поведенческие признаки сами по себе аккаунты не объединяют.
 export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
   await ensureReady();
 
@@ -144,6 +178,16 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
            (a1.email_normalized IS NOT NULL AND a1.email_normalized <> '' AND a2.email_normalized = a1.email_normalized)
          )
         JOIN risky r ON r.bitrix_user_id = a1.bitrix_user_id
+        UNION
+        SELECT CASE
+          WHEN l.left_user_id = r.bitrix_user_id THEN l.right_user_id
+          ELSE l.left_user_id
+        END AS bitrix_user_id
+        FROM anti_fraud_identity_links l
+        JOIN risky r
+          ON r.bitrix_user_id = l.left_user_id
+          OR r.bitrix_user_id = l.right_user_id
+        WHERE l.corroborated IS TRUE
       )
       SELECT
         u.bitrix_user_id,
@@ -207,23 +251,43 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
         SELECT DISTINCT m.match_type, m.match_key
         FROM matches m
         JOIN risky r ON r.bitrix_user_id = m.bitrix_user_id
+      ), exact_matches AS (
+        SELECT
+          m.match_type,
+          array_agg(DISTINCT m.bitrix_user_id ORDER BY m.bitrix_user_id) AS user_ids
+        FROM matches m
+        JOIN relevant_keys k USING (match_type, match_key)
+        GROUP BY m.match_type, m.match_key
+        HAVING count(DISTINCT m.bitrix_user_id) > 1
+      ), similarity_matches AS (
+        SELECT
+          v.match_type,
+          ARRAY[l.left_user_id, l.right_user_id]::int[] AS user_ids
+        FROM anti_fraud_identity_links l
+        CROSS JOIN LATERAL (
+          VALUES
+            ('similar_phone'::text, l.similar_phone),
+            ('similar_email'::text, l.similar_email)
+        ) AS v(match_type, matched)
+        WHERE l.corroborated IS TRUE
+          AND v.matched IS TRUE
+          AND EXISTS (
+            SELECT 1
+            FROM risky r
+            WHERE r.bitrix_user_id = l.left_user_id
+               OR r.bitrix_user_id = l.right_user_id
+          )
       )
-      SELECT
-        m.match_type,
-        array_agg(DISTINCT m.bitrix_user_id ORDER BY m.bitrix_user_id) AS user_ids
-      FROM matches m
-      JOIN relevant_keys k USING (match_type, match_key)
-      GROUP BY m.match_type, m.match_key
-      HAVING count(DISTINCT m.bitrix_user_id) > 1
+      SELECT match_type, user_ids FROM exact_matches
+      UNION ALL
+      SELECT match_type, user_ids FROM similarity_matches
     `),
   ]);
 
   const accounts = new Map<number, AntiFraudCaseAccount>();
-  const parents: ParentMap = new Map();
 
   for (const row of accountResult.rows) {
     const bitrixUserId = Number(row.bitrix_user_id);
-    find(parents, bitrixUserId);
     accounts.set(bitrixUserId, {
       bitrixUserId,
       displayName: row.display_name ?? null,
@@ -251,7 +315,6 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
 
   const devices: AntiFraudCaseDevice[] = deviceResult.rows.map((row: any) => {
     const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
-    union(parents, userIds);
     return {
       devicePrefix: String(row.device_prefix ?? ""),
       userIds,
@@ -261,23 +324,22 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
 
   const identityMatches: AntiFraudCase["identityMatches"] = identityResult.rows.map((row: any) => {
     const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
-    union(parents, userIds);
     return {
-      type: row.match_type === "email" ? "email" : "phone",
+      type: validIdentityMatchType(row.match_type),
       userIds,
     };
   });
 
-  const grouped = new Map<number, number[]>();
-  for (const id of accounts.keys()) {
-    const root = find(parents, id);
-    const ids = grouped.get(root) ?? [];
-    ids.push(id);
-    grouped.set(root, ids);
-  }
+  const grouped = groupAntiFraudCaseAccountIds(
+    [...accounts.keys()],
+    [
+      ...devices.map((device) => device.userIds),
+      ...identityMatches.map((match) => match.userIds),
+    ],
+  );
 
   const cases: AntiFraudCase[] = [];
-  for (const ids of grouped.values()) {
+  for (const ids of grouped) {
     const caseAccounts = ids
       .map((id) => accounts.get(id))
       .filter((value): value is AntiFraudCaseAccount => Boolean(value))
@@ -292,8 +354,16 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
     const signals: AntiFraudCase["signals"] = [];
 
     if (caseDevices.length > 0 || reasonCodes.has("shared_device_accounts")) signals.push("multiaccount");
-    if (caseIdentity.some((match) => match.type === "phone") || reasonCodes.has("duplicate_phone_identity")) signals.push("phone");
-    if (caseIdentity.some((match) => match.type === "email") || reasonCodes.has("duplicate_email_identity")) signals.push("email");
+    if (
+      caseIdentity.some((match) => match.type === "phone" || match.type === "similar_phone")
+      || reasonCodes.has("duplicate_phone_identity")
+      || reasonCodes.has("similar_phone_identity")
+    ) signals.push("phone");
+    if (
+      caseIdentity.some((match) => match.type === "email" || match.type === "similar_email")
+      || reasonCodes.has("duplicate_email_identity")
+      || reasonCodes.has("similar_email_identity")
+    ) signals.push("email");
     if (reasonCodes.has("high_daily_visit_frequency") || reasonCodes.has("repeated_high_visit_days")) signals.push("visits");
     if (reasonCodes.has("fast_account_switch") || reasonCodes.has("repeated_fast_switches")) signals.push("fast_switch");
     if (reasonCodes.has("linked_visit_proximity")) signals.push("linked_visits");
