@@ -8,7 +8,7 @@
 
 Репозиторий: `juvantusik/Evrasia_AI_bot`.
 Актуальная исходная ветка: `main`.
-PR #32 уже переведён Ready и слит в `main`; не считай его Draft или ожидающим merge.
+PR #32 и PR #33 уже слиты в `main`.
 
 Сначала прочитай из `main`:
 
@@ -23,9 +23,9 @@ PR #32 уже переведён Ready и слит в `main`; не считай 
 
 ## 1. Текущая точка проекта
 
-**Evrasia AI Bot v1.7 уже работает в production и прошёл post-production audit.**
+**Evrasia AI Bot v1.7 работает в production. `/directory` полностью удалён из рабочего контура.**
 
-Последний аудит:
+Базовый v1.7 post-production audit ранее прошёл:
 
 - 34 PASS
 - 0 WARN
@@ -33,7 +33,16 @@ PR #32 уже переведён Ready и слит в `main`; не считай 
 - `POST_PRODUCTION_AUDIT=PASS`
 - `PRODUCTION_V17_VERIFIED=YES`.
 
-Не повторять deployment, миграцию 4->18, nginx cutover или переименование PostgreSQL-инфраструктуры без новой фактической причины.
+После этого выполнен отдельный app-only cleanup deployment для удаления `/directory`:
+
+- `PASS_COUNT=37`
+- `FAIL_COUNT=0`
+- `ROLLBACK_FAIL_COUNT=0`
+- `DIRECTORY_REMOVAL_PRODUCTION=VERIFIED`
+- `FINAL_STATUS=PASS`
+- `FINAL_RC=0`.
+
+Не повторять deployment v1.7, миграцию 4->18, nginx cutover, переименование PostgreSQL-инфраструктуры или удаление `/directory` без новой фактической причины.
 
 ---
 
@@ -50,12 +59,14 @@ PR #32 уже переведён Ready и слит в `main`; не считай 
 
 ### `/directory`
 
-`/directory` **удалён из продуктового контракта**.
+`/directory` **удалён и в коде, и в production**.
 
 - это не интерфейс;
 - это не alias;
 - это не redirect на Phonebook;
-- `/directory` и `/directory/...` должны возвращать HTTP 404.
+- `/directory` = HTTP 404;
+- `/directory/...` = HTTP 404;
+- `/api/directory/phones` = HTTP 404.
 
 В схемах, документации и текущих проверках писать только **Phonebook = `/phonebook`**.
 
@@ -80,11 +91,19 @@ Host:
 Application:
 
 - container: `evrasia-ai-bot-app`
-- deployed revision: `109ac7a2a05c0289336b3b332cb09ca102253396`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
-- image ID: `sha256:ee94f6b17d4dc9f727266675d05fd3dd1ec992f30850b351d96dbca29a37e628`
-- audit status: running / healthy
+- deployed revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
+- image ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
+- status after cleanup deployment: running / healthy
 - port: `127.0.0.1:18080 -> 8080`.
+
+Verified routes after deployment:
+
+- `/phonebook` = 200 direct and routed
+- `/directory` = 404 direct and routed
+- `/api/directory/phones` = 404
+- `/api/phonebook/phones` = 200
+- `/antifraud` = 200 direct and routed.
 
 PostgreSQL:
 
@@ -99,6 +118,8 @@ PostgreSQL:
 - test DB migrations: 18
 - Anti-Fraud tables: 11.
 
+The cleanup deployment did **not** restart the DB container, did not change DB schema and did not change nginx.
+
 Legacy infrastructure is gone:
 
 - role `samzaberu`: absent
@@ -106,22 +127,30 @@ Legacy infrastructure is gone:
 - container/service `samzaberu-db`: absent
 - Compose refs to `samzaberu-db`: 0.
 
-Important: `public.samzaberu_requests` is current SamZaberu business data, not legacy infrastructure. It had 31 rows at audit.
+Important: `public.samzaberu_requests` is current SamZaberu business data, not legacy infrastructure. It has 31 rows after the cleanup deployment.
 
 ---
 
 ## 4. GitHub state
 
-PR #32:
+PR #32 — v1.7 Anti-Fraud release:
 
 - `closed`
 - `merged=true`
 - `draft=false`
 - merge commit: `33e3548ab014e927e1e00074e27f3a11ef252bbc`.
 
-That PR merged v1.7 code/documentation into `main`.
+PR #33 — remove obsolete `/directory` route:
 
-Production itself remains pinned to application revision `109ac7a2...`; Git merge/documentation commits do not imply automatic redeploy.
+- `closed`
+- `merged=true`
+- `draft=false`
+- source head before merge: `a9f017676f69f0d1594fbfe5b06bcfc448c628c2`
+- merge commit: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+
+GitHub Actions build #252 for PR #33 merge completed successfully and published the immutable production image now deployed.
+
+Later documentation-only commits may advance `main`; do not confuse them with the deployed application revision `0fcebb1e...`.
 
 For any new technical work, inspect current `main` first and then create the appropriate next branch/PR.
 
@@ -131,7 +160,7 @@ For any new technical work, inspect current `main` first and then create the app
 
 Canonical and only UI is `/phonebook`.
 
-There is no current `/directory` compatibility route. CI for the cleanup explicitly requires `/directory` and `/api/directory/phones` to return 404 while `/phonebook` and `/api/phonebook/...` remain operational.
+There is **no current `/directory` compatibility route**. Production and CI require `/directory` and `/api/directory/phones` to return 404 while `/phonebook` and `/api/phonebook/...` remain operational.
 
 ---
 
@@ -181,23 +210,23 @@ T2 remains part of Corporate communications but uses its own prepared-contact fl
 
 ## 8. Anti-Fraud runtime
 
-Verified:
+Verified after the cleanup deployment:
 
 - scheduler enabled: true
 - interval: 15 minutes
 - run-on-start: false
-- latest protected cycle: success
-- scheduler last error: none
+- scheduler was idle immediately after app restart
+- latest protected DB cycle: success
 - Telegram polling: true
 - Telegram 409 conflicts: 0
-- both secret mounts present/readable/non-empty
+- both secret mounts remain part of the production runtime
 - never print secret values.
 
 Nginx:
 
 - Anti-Fraud routes target production 18080
 - TEST 18081 references: 0
-- nginx config valid.
+- nginx file was unchanged by the cleanup deployment.
 
 ---
 
@@ -261,6 +290,16 @@ Phase 2:
 - production dump SHA256: `6dfd1b8f0d3d30857ac3c7a06d29f05e38ccdccb4b86db5a0862780b14bb56f1`
 - test dump SHA256: `bd862bc8445c632face19b4d96e23edc49d1c2385c5f05481be5d40a3a14327c`.
 
+App-only `/directory` removal backup:
+
+`/opt/evrasia-ai-bot/backups/app-only-remove-directory-20260907-090654`
+
+Previous production rollback image retained:
+
+`ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
+
+Do not clean these without explicit user approval.
+
 ---
 
 ## 12. Paused forensic branch
@@ -297,20 +336,32 @@ Also required:
 - no secret output
 - terminal remains open.
 
+Deployment lesson: if a Compose file uses relative `env_file` paths, do not validate a copied Compose file from an unrelated `/tmp` directory unless the env files are also staged consistently. For the current topology, staging the Compose file inside `/opt/evrasia-ai-bot/prod` preserves relative env-file resolution.
+
 ---
 
 ## 14. Current continuation point
 
-There is no pending v1.7 production mutation or PR merge.
+There is **no pending v1.7 production mutation, PR merge, or `/directory` cleanup deployment**.
 
-Current cleanup work removes the obsolete `/directory` compatibility route. It must be tested/merged/deployed independently without changing Phonebook business logic.
+Current production state is the new baseline:
+
+1. production revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`;
+2. `/phonebook` is the only Phonebook web route;
+3. `/directory` is absent and returns 404;
+4. Anti-Fraud remains healthy with scheduler enabled every 15 minutes;
+5. Telegram polling is enabled with 0 observed 409 conflicts after deployment;
+6. SamZaberu and MegaFon remain active modules in the same production app;
+7. DB remains at 18 migrations / 11 Anti-Fraud tables / 31 SamZaberu request rows;
+8. DB container and nginx were unchanged by the cleanup deployment;
+9. backups and archival TEST remain retained.
 
 For the next task:
 
 1. restore context from the four docs above;
 2. treat production as source of truth;
 3. treat current `main` as source code baseline;
-4. use `/phonebook` as the only Phonebook route;
+4. do not reintroduce `/directory`;
 5. remember the unified four-direction architecture;
 6. keep backups/archival TEST until explicit cleanup approval;
 7. only then start the next requested feature/fix.
