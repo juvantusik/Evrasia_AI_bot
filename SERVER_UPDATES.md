@@ -20,10 +20,11 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 Application:
 
 - service/container: `evrasia-ai-bot-app`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
-- deployed application revision: `109ac7a2a05c0289336b3b332cb09ca102253396`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
+- deployed application revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
+- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
 - app port: `127.0.0.1:18080 -> 8080`
-- status at post-production audit: running / healthy.
+- status after app-only cleanup deployment: running / healthy.
 
 The application is a unified production runtime containing:
 
@@ -41,12 +42,13 @@ Current canonical product routes:
 - Phonebook: `/phonebook`
 - Anti-Fraud: `/antifraud`.
 
-`/directory` is not a separate current module. It exists only for compatibility and redirects:
+`/directory` is fully removed from the current product contract and production runtime:
 
-- `/directory` -> 308 -> `/phonebook`
-- `/directory/` -> 308 -> `/phonebook/`.
+- `/directory` -> 404
+- `/directory/...` -> 404
+- `/api/directory/phones` -> 404.
 
-Operational documentation and diagrams should use **Phonebook** as the product name.
+Operational documentation and diagrams must use **Phonebook** as the product name and must not show `/directory` as an alias or redirect.
 
 ## Telegram runtime
 
@@ -103,7 +105,14 @@ Active legacy PostgreSQL infrastructure names are removed:
 
 Important: `public.samzaberu_requests` and the SamZaberu service/API are intentional current business functionality, not legacy infrastructure.
 
-At audit, `public.samzaberu_requests` had 31 rows and continuity passed.
+After the `/directory` cleanup deployment:
+
+- `public.samzaberu_requests` rows: 31
+- DB container ID unchanged
+- DB start timestamp unchanged
+- DB schema unchanged
+- production migrations remain 18
+- Anti-Fraud tables remain 11.
 
 ## Anti-Fraud runtime
 
@@ -112,14 +121,17 @@ Production runtime:
 - scheduler enabled
 - interval 15 minutes
 - run-on-start false
-- latest verified protected cycle status: success
+- scheduler idle immediately after the app-only restart
+- latest verified protected DB cycle status: success
 - Telegram polling enabled
-- no Telegram 409 conflict at audit
+- Telegram 409 conflict count after deployment: 0
 - Bitrix and Anti-Fraud service tokens mounted as secret files.
 
 Never print secret values.
 
 Nginx routes active Anti-Fraud traffic to production `127.0.0.1:18080`. TEST port `18081` has zero active nginx references.
+
+The `/directory` cleanup deployment did not modify nginx.
 
 ## TEST state
 
@@ -146,6 +158,14 @@ Phase 2:
 - production dump SHA256: `6dfd1b8f0d3d30857ac3c7a06d29f05e38ccdccb4b86db5a0862780b14bb56f1`
 - test dump SHA256: `bd862bc8445c632face19b4d96e23edc49d1c2385c5f05481be5d40a3a14327c`.
 
+App-only `/directory` removal backup:
+
+`/opt/evrasia-ai-bot/backups/app-only-remove-directory-20260907-090654`
+
+Previous production rollback image retained:
+
+`ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
+
 Keep associated globals/config backups until explicit cleanup approval.
 
 ## GitHub release state
@@ -156,7 +176,58 @@ PR #32 was explicitly approved, marked Ready and merged into `main` on 2026-09-0
 - draft: false
 - merge commit: `33e3548ab014e927e1e00074e27f3a11ef252bbc`.
 
-Production remains pinned to application revision `109ac7a2...`; the merge itself did not redeploy production.
+PR #33 removed obsolete `/directory` compatibility routing and was merged into `main` on 2026-09-07.
+
+- merged: true
+- draft: false
+- merge commit: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+
+GitHub Actions build #252 for merge commit `0fcebb1e...` completed successfully and published:
+
+- tag: `ghcr.io/juvantusik/evrasia_ai_bot:sha-0fcebb1`
+- digest: `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
+- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`.
+
+That exact immutable image is now production.
+
+## `/directory` cleanup deployment
+
+Date: 2026-09-07.
+
+Scope: app-only.
+
+Explicit non-changes:
+
+- database schema: no change
+- database container: no restart
+- nginx: no change
+- migrations: no new migration
+- TEST: remained stopped.
+
+Final verification:
+
+- `PASS_COUNT=37`
+- `FAIL_COUNT=0`
+- `ROLLBACK_FAIL_COUNT=0`
+- `/phonebook` = 200 direct/routed
+- `/directory` = 404 direct/routed
+- `/api/directory/phones` = 404
+- `/api/phonebook/phones` = 200
+- `/antifraud` = 200 direct/routed
+- scheduler enabled / idle / 15 minutes
+- latest protected cycle = success
+- Telegram polling = true
+- Telegram 409 conflicts = 0
+- SamZaberu module present
+- MegaFon module present
+- migrations = 18
+- Anti-Fraud tables = 11
+- SamZaberu request rows = 31
+- `DIRECTORY_REMOVAL_PRODUCTION=VERIFIED`
+- `FINAL_STATUS=PASS`
+- `FINAL_RC=0`.
+
+A first attempt stopped before cutover with `CUTOVER_STARTED=NO` because the staged Compose file was copied to `/tmp`, causing relative `prod-app.env` / `prod-db.env` references to resolve under `/tmp`. Production remained untouched. The corrected attempt staged the temporary Compose file inside `/opt/evrasia-ai-bot/prod` and succeeded.
 
 ## Deployment policy
 
@@ -176,7 +247,7 @@ For server scripts follow `docs/SERVER_SCRIPT_RULES.md`; the real script begins 
 
 ## Lessons from v1.7 deployment
 
-The successful release was split into two phases after earlier safe failures:
+The successful v1.7 release was split into two phases after earlier safe failures:
 
 1. application/migrations/nginx/scheduler cutover;
 2. PostgreSQL/Docker infrastructure rename only.
@@ -187,17 +258,18 @@ Known resolved pitfalls:
 
 - do not execute a YAML file as Python; pass generated-file args to `python3 - ...`;
 - map PostgreSQL booleans explicitly rather than depending on `t/true` display form;
-- `/directory` 308 is expected compatibility redirect, not a current product endpoint;
+- `/directory` is now removed and expected to return 404; do not retain old redirect assumptions;
 - keep old nginx upstream alive through reload/retry to avoid transient 502 race;
-- renaming a Compose-managed container does not make it an independent rollback artifact.
+- renaming a Compose-managed container does not make it an independent rollback artifact;
+- when staging a Compose file with relative `env_file` paths, keep the staged file in the same directory context or stage all referenced files consistently.
 
 ## Current release status
 
-Post-production audit on 2026-09-07:
+Production v1.7 is verified and current cleanup is complete.
 
-- 34 PASS
-- 0 WARN
-- 0 FAIL
-- production v1.7 verified.
+Current deployed identity:
 
-No further production mutation is required for this release.
+- revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
+- digest `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`.
+
+There is no pending `/directory` cleanup deployment. `/phonebook` is the only Phonebook route.
