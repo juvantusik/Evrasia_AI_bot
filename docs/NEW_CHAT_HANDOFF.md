@@ -43,21 +43,23 @@ PR #32 уже переведён Ready и слит в `main`; не считай 
 
 Текущие четыре направления:
 
-1. **Phonebook** — web, канонический URL `/phonebook`.
+1. **Phonebook** — web, канонический и единственный URL `/phonebook`.
 2. **Anti-Fraud** — web `/antifraud` + scheduler каждые 15 минут.
 3. **СамЗаберу** — Telegram-сценарий внутри `EvrasiaTelegramBotV2`; STOP/ENABLE через Bitrix service layer.
 4. **Корпоративная связь / МегаФон** — Telegram-сценарий и обработка привязанной группы «Евразия Мегафон», использующие Phonebook данные.
 
 ### `/directory`
 
-`/directory` **не является отдельным текущим интерфейсом или модулем**.
+`/directory` **удалён из продуктового контракта**.
 
-Это только legacy redirect:
+- это не интерфейс;
+- это не alias;
+- это не redirect на Phonebook;
+- `/directory` и `/directory/...` должны возвращать HTTP 404.
 
-- `/directory` -> 308 -> `/phonebook`
-- `/directory/` -> 308 -> `/phonebook/`.
+В схемах, документации и текущих проверках писать только **Phonebook = `/phonebook`**.
 
-В схемах и описаниях текущей системы писать **Phonebook**, а не Directory.
+Исторические внутренние идентификаторы с `directory` могут оставаться там, где речь идёт именно о структуре корпоративного справочника/стабильной схеме БД; они не создают web-маршрут `/directory`.
 
 ### Telegram
 
@@ -127,9 +129,9 @@ For any new technical work, inspect current `main` first and then create the app
 
 ## 5. Phonebook
 
-Canonical UI is `/phonebook`.
+Canonical and only UI is `/phonebook`.
 
-The codebase may still contain historical names such as `directory-web-service`, `DirectoryPage` or `directory-web.css`; those are implementation/history names and do not create a separate `/directory` product.
+There is no current `/directory` compatibility route. CI for the cleanup explicitly requires `/directory` and `/api/directory/phones` to return 404 while `/phonebook` and `/api/phonebook/...` remain operational.
 
 ---
 
@@ -301,12 +303,14 @@ Also required:
 
 There is no pending v1.7 production mutation or PR merge.
 
+Current cleanup work removes the obsolete `/directory` compatibility route. It must be tested/merged/deployed independently without changing Phonebook business logic.
+
 For the next task:
 
 1. restore context from the four docs above;
 2. treat production as source of truth;
 3. treat current `main` as source code baseline;
-4. use `/phonebook` as canonical name/path;
+4. use `/phonebook` as the only Phonebook route;
 5. remember the unified four-direction architecture;
 6. keep backups/archival TEST until explicit cleanup approval;
 7. only then start the next requested feature/fix.
