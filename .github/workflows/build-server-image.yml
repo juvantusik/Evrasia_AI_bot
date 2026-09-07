@@ -136,7 +136,7 @@ jobs:
           curl -fsS http://127.0.0.1:18080/client-route-check | grep -Fq 'id="root"'
 
           curl -fsS http://127.0.0.1:18080/phonebook | grep -Fq 'id="root"'
-          test "$(curl -sS -o /tmp/old-directory-route.html -w '%{http_code}' http://127.0.0.1:18080/directory)" = "308"
+          test "$(curl -sS -o /tmp/old-directory-route.html -w '%{http_code}' http://127.0.0.1:18080/directory)" = "404"
           test "$(curl -sS -o /tmp/old-directory-api.json -w '%{http_code}' http://127.0.0.1:18080/api/directory/phones)" = "404"
           curl -fsS http://127.0.0.1:18080/api/phonebook/phones | grep -Fq '"records"'
           curl -fsS http://127.0.0.1:18080/api/phonebook/restaurants >/tmp/phonebook-restaurants.json
