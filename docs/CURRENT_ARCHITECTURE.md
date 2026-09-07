@@ -64,18 +64,13 @@ Do not describe the live system as only Anti-Fraud, and do not draw SamZaberu or
 
 ### Phonebook
 
-Canonical UI path: `/phonebook`.
+Canonical and only current UI path: `/phonebook`.
 
 Purpose: corporate phone/operator/legal-entity/account information and related administration/search workflows.
 
-**Important:** `/directory` is not a separate current product.
+`/directory` is **removed**. It is not a product, alias or compatibility route. Requests to `/directory` and `/directory/...` must return HTTP 404.
 
-Compatibility only:
-
-- `/directory` -> HTTP 308 -> `/phonebook`
-- `/directory/` -> HTTP 308 -> `/phonebook/`.
-
-Historical implementation names such as `DirectoryPage`, `directory-web-service` or `directory-web.css` may remain in code, but current product naming is **Phonebook**.
+Historical implementation identifiers containing the word `directory` may still exist internally where they mean a corporate directory/data structure; they do not create a `/directory` web product or route. Renaming stable DB schema identifiers is not required merely for UI naming cleanup.
 
 ### Anti-Fraud
 
@@ -196,19 +191,30 @@ Anti-Fraud, SamZaberu, bot access/settings and Phonebook administration all live
 
 Do not say:
 
-- “рабочий `/directory`” as if it were a current module;
+- “рабочий `/directory`”;
+- “`/directory` — alias/redirect Phonebook”;
 - “три отдельных бота/контейнера” for Anti-Fraud, SamZaberu and MegaFon;
 - “Evrasia AI Bot = только Anti-Fraud”.
 
 Use instead:
 
-- Phonebook = `/phonebook`;
+- Phonebook = `/phonebook` only;
 - Anti-Fraud = `/antifraud` + scheduler;
 - SamZaberu = Telegram module inside Evrasia AI Bot;
 - Corporate communications/MegaFon = Telegram module/group workflow inside Evrasia AI Bot;
 - all of them are part of one current production application unless a later architecture change explicitly separates them.
 
-## 9. Change rule
+## 9. Change history
+
+### 2026-09-07 — remove `/directory`
+
+**Было:** `/directory` and `/directory/` returned HTTP 308 redirects to `/phonebook`.
+
+**Стало:** `/directory` and `/directory/...` are removed from the product contract and return HTTP 404; `/phonebook` is the only Phonebook UI route.
+
+**Причина:** no business or operational need exists for the old alias, and keeping it creates recurring ambiguity about whether Directory is a separate product/module.
+
+## 10. Change rule
 
 When this architecture changes, update this file and `docs/AI_PROJECT_CONTEXT.md` immediately and record:
 
