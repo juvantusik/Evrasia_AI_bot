@@ -130,8 +130,10 @@ router.get("/anti-fraud/scheduler", async (_req, res): Promise<void> => {
   res.json(getAntiFraudHourlySchedulerStatus());
 });
 
-// Обновлено 05.09.2026 ИТ Директор Евразии
-// Ручной refresh использует тот же single-flight цикл, что и scheduler.
+// Обновлено 07.09.2026 ИТ Директор Евразии
+// Ручной refresh запускает тот же single-flight цикл, что и scheduler, но HTTP-ответ
+// возвращается сразу. Полный цикл занимает больше nginx proxy_read_timeout, поэтому UI
+// отслеживает завершение через /anti-fraud/scheduler вместо ожидания одного длинного POST.
 router.post("/anti-fraud/refresh", async (req, res): Promise<void> => {
   try {
     const before = getAntiFraudHourlySchedulerStatus();
@@ -143,19 +145,15 @@ router.post("/anti-fraud/refresh", async (req, res): Promise<void> => {
       return;
     }
 
-    await runAntiFraudHourlyCycleOnce();
-    const after = getAntiFraudHourlySchedulerStatus();
-    if (after.lastStatus === "failed") {
-      res.status(503).json({
-        error: after.lastError ?? "Обновление Anti-Fraud завершилось ошибкой.",
-        scheduler: after,
-      });
-      return;
-    }
+    const cycle = runAntiFraudHourlyCycleOnce();
+    const started = getAntiFraudHourlySchedulerStatus();
+    res.status(202).json({ ok: true, accepted: true, scheduler: started });
 
-    res.json({ ok: true, scheduler: after });
+    void cycle.catch((error) => {
+      req.log.error({ error }, "Async Anti-Fraud refresh failed");
+    });
   } catch (error) {
-    req.log.error({ error }, "Failed to refresh Anti-Fraud");
+    req.log.error({ error }, "Failed to start Anti-Fraud refresh");
     res.status(503).json({ error: errorMessage(error) });
   }
 });
