@@ -6,7 +6,7 @@ These rules are mandatory for every server-side diagnostic, deployment, migratio
 
 - Provide **one complete bash block** intended to be copied and run as a whole.
 - Do not split a procedure into many isolated shell commands unless the operator explicitly asks for that.
-- Start interactive scripts with:
+- Start the real interactive script with:
 
 ```bash
 clear
@@ -14,6 +14,8 @@ set +e
 set +u
 set +o pipefail 2>/dev/null
 ```
+
+`clear` is mandatory by operator preference so output from the previous operation is visually removed before the new result starts.
 
 - Put variables and expected host/container/image values at the top.
 - Use clearly numbered stages: `=== 1. ... ===`, `=== 2. ... ===`, etc.
@@ -26,19 +28,21 @@ set +o pipefail 2>/dev/null
 ## Safety / guards
 
 - Verify the expected host before doing anything risky.
-- For TEST work, explicitly verify the TEST container/database before mutation.
-- Before every risky TEST mutation, verify that production is still the expected production container/image/database.
-- Repeat the production guard after the operation.
+- Distinguish production, TEST and archival/rollback containers explicitly.
+- Before every mutation, verify the exact currently active container/image/database and expected Compose topology.
+- Repeat critical production guards after the operation.
 - **Never change production without explicit operator approval.**
 - Never infer a server change from an intended command; only pasted output or direct verification counts as evidence.
 - Before DB mutation, create a backup and print its safe path/size/hash when appropriate.
+- Verify backup readability/integrity before relying on it.
 - Always provide a rollback path for deployments or DB mutations.
+- Prefer small independently verifiable phases over one large multi-risk cutover.
 
 ## Terminal behavior
 
 - Do **not** use an outer-shell `exit` that can terminate the operator's SSH session.
 - Put main logic in functions and use `return` for error handling.
-- Internal subprocess code (Node/PHP/etc.) may use its own `exit` where appropriate.
+- Internal subprocess code (Node/PHP/Python/etc.) may use its own exit where appropriate.
 - Finish with an explicit marker:
 
 `TERMINAL_WILL_STAY_OPEN=YES`
@@ -46,7 +50,7 @@ set +o pipefail 2>/dev/null
 ## Return codes / result contract
 
 - Capture actual command return codes into variables.
-- Do not mask a real failure with a wrapper that always returns `0`.
+- Do not mask a real failure with a wrapper that always reports success.
 - Use explicit result markers such as:
   - `PASS: ...`
   - `FAIL: ...`
@@ -54,6 +58,7 @@ set +o pipefail 2>/dev/null
   - `RUN_RC=...`
   - `FINAL_RC=...`
   - `FINAL_STATUS=PASS|FAIL`
+  - `ROLLBACK_FINAL_STATUS=PASS|FAIL` when rollback is possible.
 - If an application can print a fatal/error page while returning shell RC 0, add an explicit content/error check instead of trusting RC alone.
 
 ## Secrets / sensitive output
@@ -69,19 +74,43 @@ when that statement is true.
 - Do not suppress diagnostically useful stderr with `/dev/null` when it can be safely captured and sanitized instead.
 - If stderr may contain secrets, capture it to a restrictive temp file and print only sanitized/redacted output.
 
-## Production-specific invariants
+## Current production invariants
 
-- Production bot must remain untouched during v1.7 TEST work unless explicitly approved.
-- PR #32 remains Draft until visual/server acceptance and explicit approval.
+As of the verified v1.7 production baseline:
+
+- host: `eur-bot-01`
+- app: `evrasia-ai-bot-app`
+- DB service/container: `evrasia-ai-bot-db`
+- DB role: `evrasia_ai_bot`
+- production DB: `evrasia_ai_bot`
+- Compose project: `evrasia-prod`
+- network: `evrasia-prod-internal`
+- volume: `evrasia-postgres-prod-data`
+- production migrations: 18
+- Anti-Fraud scheduler: enabled, interval 15 minutes, run-on-start false
+- TEST container `evrasia-ai-bot-v17-test`: exited/archival; do not restart blindly.
+
+These are current documented invariants, not substitutes for guards before a future mutation.
+
+## Anti-Fraud invariants
+
 - Never copy RestIS credentials into the bot container.
 - Never expose raw loyalty-card numbers in bot UI/API/logs.
+- Preserve both secret mounts when recreating production.
+- Detailed 60-day history remains targeted; do not bulk-load the full fleet each scheduler cycle.
+- `/directory` returning `308` to `/phonebook` is expected if the redirected final response is `200`.
 
 ## Known pitfalls to avoid
 
 - A previous isolated `node --input-type=module -e` call failed because `-e` had no JavaScript argument. If using `-e`, the JS code must immediately follow it; preferably keep the whole diagnostic in one generated script.
-- A previous wrapper incorrectly reported `RUN_RC=0`; wrapper RC must reflect the actual script result.
-- A previous Docker mount recreation bug came from TSV parsing losing an empty `.Name` bind-mount field and shifting columns. For mount reconstruction, prefer structured JSON and explicit `--mount` handling rather than fragile tab-separated parsing.
+- A previous wrapper incorrectly reported success because the outer wrapper masked the real result; wrapper RC must reflect the actual script result.
+- A previous Docker mount recreation bug came from TSV parsing losing an empty `.Name` bind-mount field and shifting columns. Prefer structured JSON and explicit `--mount` handling.
+- A previous staging script accidentally invoked a YAML file as Python. When a Python heredoc needs file arguments, use `python3 - "$FILE" ... <<'PY'`, never `python3 "$FILE" ... <<'PY'`.
+- PostgreSQL boolean textual output can differ (`t`, `true`, etc.). Normalize explicitly to stable strings such as `YES/NO` in guards.
+- Do not reject an expected HTTP redirect simply because the direct status is not 200; validate the exact allowed redirect target and final status.
+- After nginx reload, do not immediately assume every worker is using the new upstream. Keep the old upstream alive during transition and use bounded retry before removing it.
+- Renaming a Compose-managed container retains Compose labels; do not rely on the renamed container as a standalone rollback artifact.
 
 ## Operator preference
 
-The operator prefers concise guidance: one full script, then paste the complete output, then analyze it section-by-section and provide the next full script. Do not ask again for facts that are already known from the project context.
+The operator prefers concise guidance: one full script, then paste the complete output, then analyze it section-by-section and provide the next full script. Do not ask again for facts already established in project context.
