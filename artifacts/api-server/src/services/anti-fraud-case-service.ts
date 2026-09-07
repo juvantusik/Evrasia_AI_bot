@@ -114,6 +114,28 @@ const union = (parents: ParentMap, ids: number[]): void => {
   }
 };
 
+// Добавлено 07.09.2026 ИТ Директор Евразии
+// Чистая часть case-builder: все реальные связующие группы (устройство, точный контакт,
+// corroborated similar identity) проходят через один и тот же транзитивный union.
+// Экспорт нужен также для regression-теста без подключения к production/test БД.
+export const groupAntiFraudCaseAccountIds = (
+  accountIds: number[],
+  linkGroups: number[][],
+): number[][] => {
+  const parents: ParentMap = new Map();
+  for (const id of accountIds) find(parents, id);
+  for (const ids of linkGroups) union(parents, ids);
+
+  const grouped = new Map<number, number[]>();
+  for (const id of accountIds) {
+    const root = find(parents, id);
+    const ids = grouped.get(root) ?? [];
+    ids.push(id);
+    grouped.set(root, ids);
+  }
+  return [...grouped.values()];
+};
+
 const validLevel = (value: unknown): AntiFraudCase["riskLevel"] => {
   const text = String(value ?? "low");
   if (text === "critical" || text === "high" || text === "medium") return text;
@@ -263,11 +285,9 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
   ]);
 
   const accounts = new Map<number, AntiFraudCaseAccount>();
-  const parents: ParentMap = new Map();
 
   for (const row of accountResult.rows) {
     const bitrixUserId = Number(row.bitrix_user_id);
-    find(parents, bitrixUserId);
     accounts.set(bitrixUserId, {
       bitrixUserId,
       displayName: row.display_name ?? null,
@@ -295,7 +315,6 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
 
   const devices: AntiFraudCaseDevice[] = deviceResult.rows.map((row: any) => {
     const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
-    union(parents, userIds);
     return {
       devicePrefix: String(row.device_prefix ?? ""),
       userIds,
@@ -305,23 +324,22 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
 
   const identityMatches: AntiFraudCase["identityMatches"] = identityResult.rows.map((row: any) => {
     const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
-    union(parents, userIds);
     return {
       type: validIdentityMatchType(row.match_type),
       userIds,
     };
   });
 
-  const grouped = new Map<number, number[]>();
-  for (const id of accounts.keys()) {
-    const root = find(parents, id);
-    const ids = grouped.get(root) ?? [];
-    ids.push(id);
-    grouped.set(root, ids);
-  }
+  const grouped = groupAntiFraudCaseAccountIds(
+    [...accounts.keys()],
+    [
+      ...devices.map((device) => device.userIds),
+      ...identityMatches.map((match) => match.userIds),
+    ],
+  );
 
   const cases: AntiFraudCase[] = [];
-  for (const ids of grouped.values()) {
+  for (const ids of grouped) {
     const caseAccounts = ids
       .map((id) => accounts.get(id))
       .filter((value): value is AntiFraudCaseAccount => Boolean(value))

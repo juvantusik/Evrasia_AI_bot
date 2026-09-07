@@ -5,7 +5,7 @@
 > **Last updated:** 2026-09-07
 > **Current production:** Evrasia AI Bot v1.7, `/directory` removed
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current source branch:** `main`
+> **Current source branch:** `fix/antifraud-case-refresh-ux` (PR #34 Draft; production unchanged)
 > **Merged release PRs:** #32 v1.7 Anti-Fraud, #33 remove obsolete `/directory`
 
 ---
@@ -16,7 +16,7 @@ In a new chat, read this file first, then `docs/CURRENT_ARCHITECTURE.md`, `docs/
 
 Recommended new-chat prompt:
 
-> Продолжаем проект Evrasia AI Bot. Репозиторий `juvantusik/Evrasia_AI_bot`. Сначала прочитай `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/SERVER_SCRIPT_RULES.md` и `docs/NEW_CHAT_HANDOFF.md` из `main`. Считай production главным источником истины, затем актуальный `main`. Не повторяй уже выполненные действия. Для серверных задач давай один полный bash-wrapper с `clear`, guards, backup/rollback, PASS/FAIL и без вывода секретов.
+> Продолжаем проект Evrasia AI Bot. Репозиторий `juvantusik/Evrasia_AI_bot`. Сначала прочитай `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/SERVER_SCRIPT_RULES.md` и `docs/NEW_CHAT_HANDOFF.md` из актуальной рабочей ветки/`main`. Считай production главным источником истины, затем актуальный код. Не повторяй уже выполненные действия. Для серверных задач давай один полный bash-wrapper с `clear`, guards, backup/rollback, PASS/FAIL и без вывода секретов.
 
 ---
 
@@ -54,6 +54,8 @@ Exact current deployed application:
 - app container: `evrasia-ai-bot-app`
 - status after deployment: running / healthy
 - direct app port: `127.0.0.1:18080 -> 8080`.
+
+PR #34 is a code/UI fix only at the current working stage; it has not changed production, nginx, DB schema or migrations.
 
 Later documentation-only commits may advance `main`; do not confuse them with the deployed application revision above.
 
@@ -129,7 +131,27 @@ Published image:
 
 That exact immutable image is current production.
 
-For future work, start from current `main` unless a new feature branch is explicitly created.
+### PR #34 — Anti-Fraud case grouping / async refresh UX
+
+Current working PR:
+
+- state: open
+- draft: true
+- base: `main`
+- branch: `fix/antifraud-case-refresh-ux`
+- production unchanged.
+
+Scope:
+
+- corroborated similar phone/email identity links are allowed to join accounts into one investigation case;
+- weak similarity remains insufficient unless `corroborated=true`;
+- manual refresh contract changes from one long synchronous request to `202 Accepted` plus scheduler polling;
+- UI shows `partial`/`failed` completion factually and preserves `409` when a cycle is already running;
+- `no_active_card` is shown explicitly;
+- technical similarity reason codes are translated for operator UI;
+- regression coverage checks that the same-name + one-digit-phone rule produces a corroborated link and that the resulting link group is collapsed into one Anti-Fraud case group.
+
+Do not mark PR #34 Ready or merge it until its updated CI is green and the user explicitly approves the next PR action.
 
 ---
 
@@ -282,6 +304,8 @@ After app-only cleanup deployment:
 - Telegram polling = true
 - Telegram 409 conflicts observed after deployment = 0.
 
+PR #34 does not alter the scheduler cadence or protected-cycle stage order; it changes only how manual web refresh waits for that existing single-flight cycle.
+
 ---
 
 ## 10. Nginx / current routes
@@ -303,6 +327,8 @@ Current route contract:
 - `/antifraud` = 200
 - `/directory` = 404
 - `/api/directory/...` = 404.
+
+PR #34 intentionally does not change nginx or `proxy_read_timeout`; the application returns manual refresh acceptance before that timeout and the UI polls scheduler status separately.
 
 ---
 
@@ -376,11 +402,23 @@ Protected scheduler cycle:
 6. final risk scoring with targeted 60-day history only for history gate
 7. case dynamics.
 
-Manual scheduler routes:
+Manual scheduler routes / web refresh contract in PR #34:
 
-- `GET /api/anti-fraud/scheduler`
-- `POST /api/anti-fraud/refresh`
-- POST returns 409 if a cycle is already running.
+- `GET /api/anti-fraud/scheduler` returns current single-flight cycle state;
+- `POST /api/anti-fraud/refresh` starts the same protected cycle and returns **HTTP 202 Accepted** immediately after the cycle is accepted;
+- the web UI then polls `GET /api/anti-fraud/scheduler` until `running=false`;
+- if a cycle is already running, POST remains **HTTP 409**;
+- completed `partial` and `failed` states must be shown factually to the operator; do not turn a long successful cycle into a false nginx timeout error.
+
+Anti-Fraud investigation-case grouping:
+
+- shared device can join accounts into one case;
+- exact normalized phone/email can join accounts into one case;
+- similar phone/email may join accounts only when the stored identity link has `corroborated=true`;
+- weak similarity by itself does not join cases;
+- current similarity rule `sameName + phone differs by exactly one digit` is unchanged;
+- corroborated links are included transitively, so a chain of valid links remains one investigation case;
+- behavioral signals by themselves do not merge separate identities into one case.
 
 Do not run a full ~1784-account loyalty burst every 15 minutes.
 
@@ -441,6 +479,8 @@ Important late migrations:
 Production audit verified the `partial` constraint.
 
 The `/directory` cleanup deployment added no DB migration and left migration count at 18.
+
+PR #34 also adds no DB schema/migration change; its case grouping consumes the existing `anti_fraud_identity_links.corroborated` data.
 
 ---
 
@@ -546,22 +586,27 @@ Current legal package in the project includes offer, PD policy, optional additio
 
 ## 22. NEXT STEP — current continuation point
 
-No v1.7 production deployment, PR action or `/directory` cleanup is pending.
+Production baseline remains unchanged at revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
 
-Current baseline:
+Current working task is PR #34 (`fix/antifraud-case-refresh-ux`), still Draft. Before any Ready/merge/production step:
 
-1. Production application revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
-2. Immutable production digest `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`.
-3. `/phonebook` is the only Phonebook route.
-4. `/directory` and `/api/directory/...` are absent and return 404.
-5. Four current directions remain: Phonebook, Anti-Fraud, SamZaberu Telegram, Corporate communications/MegaFon Telegram.
-6. Anti-Fraud scheduler remains enabled every 15 minutes; latest protected cycle verified `success`.
-7. Telegram polling remains enabled; deployment verification observed 0 Telegram 409 conflicts.
-8. DB remains `evrasia_ai_bot`, migrations 18, Anti-Fraud tables 11, SamZaberu rows 31.
-9. DB container and nginx were unchanged by the `/directory` cleanup deployment.
-10. Keep backups and archival TEST assets until explicit cleanup approval.
+1. keep production untouched;
+2. verify the updated PR CI/typecheck/tests are green;
+3. confirm regression coverage for corroborated similar identity -> one case group;
+4. confirm async refresh remains `202 + scheduler polling`, with 409 for already-running and factual partial/failed UX;
+5. do not add DB migrations or nginx changes for this fix;
+6. only after successful review ask for/receive explicit user approval before Ready or merge.
 
-For a new feature/fix, verify current `main` and production, then create the next branch/PR as needed. Do not reintroduce `/directory`.
+Stable production facts that remain in force:
+
+1. Immutable production digest `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`.
+2. `/phonebook` is the only Phonebook route.
+3. `/directory` and `/api/directory/...` are absent and return 404.
+4. Four current directions remain: Phonebook, Anti-Fraud, SamZaberu Telegram, Corporate communications/MegaFon Telegram.
+5. Anti-Fraud scheduler remains enabled every 15 minutes; latest protected production cycle verified `success`.
+6. Telegram polling remains enabled; deployment verification observed 0 Telegram 409 conflicts.
+7. DB remains `evrasia_ai_bot`, migrations 18, Anti-Fraud tables 11, SamZaberu rows 31.
+8. Keep backups and archival TEST assets until explicit cleanup approval.
 
 ---
 

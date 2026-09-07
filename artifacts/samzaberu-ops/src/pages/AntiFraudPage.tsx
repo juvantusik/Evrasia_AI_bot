@@ -144,6 +144,7 @@ const reasonLabels: Record<string, string> = {
   duplicate_email_identity: 'Совпадение email',
   similar_phone_identity: 'Похожий номер телефона',
   similar_email_identity: 'Похожий email',
+  similar_identity_combo: 'Похожий телефон и email',
   linked_visit_proximity: 'Близкие посещения связанных аккаунтов',
   high_daily_visit_frequency: 'Высокая частота посещений',
   repeated_high_visit_days: 'Регулярный паттерн посещений',
