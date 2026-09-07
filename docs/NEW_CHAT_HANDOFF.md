@@ -1,154 +1,261 @@
 # Evrasia — New Chat Handoff
 
-> This file is a ready handoff for a new ChatGPT chat in the user's business workspace. It must be read together with `docs/AI_PROJECT_CONTEXT.md` and `docs/SERVER_SCRIPT_RULES.md` before continuing technical/server work.
+> Ready handoff for continuing the Evrasia AI Bot project in a new ChatGPT chat. Read together with `docs/AI_PROJECT_CONTEXT.md` and `docs/SERVER_SCRIPT_RULES.md`.
 
 ## Ready-to-paste instruction for a new chat
 
-Продолжаем мою работу по Евразии. Не начинай проект заново и не проси меня повторять уже установленный контекст.
-
-### 1. Сначала восстанови контекст
+Продолжаем проект Evrasia AI Bot. Не начинай работу заново и не проси меня повторять уже установленный контекст.
 
 Репозиторий: `juvantusik/Evrasia_AI_bot`.
 Рабочая ветка: `feature/v1.7-antifraud-web`.
-PR: #32, он должен оставаться Draft до моего явного разрешения.
+PR: #32. Он должен оставаться Draft, пока я явно не разрешу Ready/merge.
 
-Сначала обязательно прочитай в этой ветке:
+Сначала прочитай в этой ветке:
 
-1. `docs/AI_PROJECT_CONTEXT.md` — технический source of truth проекта Evrasia AI Bot / Anti-Fraud;
-2. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила написания и выполнения серверных скриптов;
+1. `docs/AI_PROJECT_CONTEXT.md` — актуальный технический source of truth;
+2. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
 3. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
-После чтения проверь актуальные PR/HEAD только если это действительно нужно для текущей задачи. Не считай старые SHA, image или состояние scheduler актуальными без проверки.
+После этого проверь PR #32/HEAD, если задача связана с GitHub. Не путай documentation-only HEAD с фактически deployed application revision.
 
-### 2. Текущая точка продолжения работы
+---
 
-Сейчас мы **временно ушли от технической приемки Anti-Fraud к юридической доработке публичной оферты бонусной программы Евразии**.
+## 1. Текущая точка проекта
 
-Действующая оферта:
-`https://evrasia.rest/upload/docs/bonus_rules_202511.pdf`
+**Evrasia AI Bot v1.7 Anti-Fraud уже развернут в production и прошел post-production audit.**
 
-Отдельная страница, которую будем разбирать позже:
-`https://evrasia.rest/public-offer/`
+Последний аудит:
 
-Текущее задание — сначала закончить **только договор-оферту бонусной программы**. Политику/согласие на обработку персональных данных перерабатывать только после финальной редакции оферты, если пользователь отдельно не переключит задачу.
+- 34 PASS
+- 0 WARN
+- 0 FAIL
+- `POST_PRODUCTION_AUDIT=PASS`
+- `PRODUCTION_V17_VERIFIED=YES`.
 
-Последняя сгенерированная версия Word не считается финальной и не должна восприниматься как утвержденная редакция.
+Поэтому **не повторять deployment, миграцию 4→18, nginx cutover или переименование PostgreSQL-инфраструктуры** без новой причины.
 
-### 3. Обязательные принципы юридической правки оферты
+---
 
-Следуй им буквально:
+## 2. Exact production baseline
 
-1. Формулировки договора в первую очередь должны защищать интересы и возможности Организатора / Евразии.
-2. Если действующая формулировка **не противоречит законодательству РФ и выгодна Организатору**, ее не менять только ради «красоты», симметрии или более мягкой формулировки.
-3. Если действующая формулировка противоречит законодательству РФ либо создает существенный юридический риск, предложить новую редакцию и **после нее дать точную ссылку на соответствующую статью закона / норму**.
-4. Не придумывать добровольные ограничения для Организатора, которых закон не требует. В частности, **не вводить срок 7 дней только потому, что он кажется разумным**. Если законом конкретный срок не установлен, так и говорить. Мошенники могут использовать договорные ограничения против Организатора.
-5. Не объединять несколько пунктов в один без явной юридической или бизнес-необходимости. Каждый действующий пункт сначала анализировать отдельно.
-6. Если в договоре используется расплывчатое понятие (главный пример — «недобросовестное использование»), его нужно конкретно раскрыть, чтобы на него можно было опираться при блокировке, аннулировании бонусов и споре с Участником.
-7. Не упоминать в оферте функциональность, которой сейчас нет. **QR-коды для списания/передачи сейчас не используются — не добавлять их в формулировки.**
-8. На текущем этапе правим только оферту. Отдельные Правила/Политику обработки ПД, рекламные согласия и другие документы будем приводить в порядок после финализации оферты.
-9. Во всех актуальных ссылках использовать домен `evrasia.rest`, а не устаревший `evrasia.spb.ru`.
-10. Документ изменений должен быть максимально фактическим:
-    - левая колонка — **текущая формулировка**;
-    - правая колонка — **предлагаемая формулировка**;
-    - без длинных рассуждений «что этот пункт означает»;
-    - если изменение продиктовано законом — сразу после предлагаемой формулировки строка `Основание: ...` с кликабельной ссылкой на статью/норму.
-11. Обязательно проверить сам текст оферты на нарушения / риски по **152-ФЗ**, но пока не переписывать отдельную Политику ПД вместо оферты.
+Host:
 
-### 4. Дополнительные уже согласованные бизнес-факты по оферте
+- `eur-bot-01`
+- `192.168.103.200`
+- Debian 13
+- Docker 26.1.5
+- Compose 2.26.1-4.
 
-- Карта **не может передаваться другому лицу**.
-- Фактически покупка/активация Карты происходит с идентификацией владельца по документам; поэтому действующая формулировка «Карта не является именной и может быть передана другому лицу» должна быть устранена.
-- Нужно найти и согласованно исправить все места оферты, которые прямо или косвенно допускают использование/передачу Карты третьим лицом.
-- Право Организатора на временную блокировку, блокировку счета/Карты, прекращение участия и аннулирование бонусов нужно **сохранять и усиливать там, где это законно**, а не ослаблять без причины.
-- Для Anti-Fraud важен договорный перечень нарушений. Раскрывая «недобросовестное использование», можно включать фактические виды злоупотреблений: использование чужой Карты/учетной записи/кода; передача своей Карты или доступа третьему лицу; несколько регистраций для обхода правил; недостоверные регистрационные данные; неправомерное начисление/списание бонусов; действия в интересах третьих лиц; продажа/покупка/передача бонусов и доступа; сговор с сотрудниками/третьими лицами; фиктивные/искусственно измененные операции; использование ошибок/сбоев/уязвимостей; намеренный обход ограничений и средств защиты.
-- При этом **не раскрывать в договоре внутренние алгоритмы Anti-Fraud, risk score, пороги, device-граф, частоту переключений и иные методы выявления мошенников**, если закон не требует их раскрытия.
-- Не писать в договоре, что конкретный технический сигнал автоматически доказывает мошенничество.
+Application:
 
-### 5. Pending после финализации оферты
+- container: `evrasia-ai-bot-app`
+- deployed revision: `109ac7a2a05c0289336b3b332cb09ca102253396`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
+- image ID: `sha256:ee94f6b17d4dc9f727266675d05fd3dd1ec992f30850b351d96dbca29a37e628`
+- status at audit: running / healthy
+- port: `127.0.0.1:18080 -> 8080`.
 
-После того как оферта будет согласована, пользователь отдельно хочет два анализа:
+PostgreSQL:
 
-**A. Device ID и 152-ФЗ**
-- определить, является ли используемый в СамЗаберу `device_id` / его серверный SHA-256 hash персональными данными в понимании 152-ФЗ;
-- учитывать контекст: `device_id` — 32 случайных байта -> 64 lowercase hex; это не IMEI/MAC/advertising ID/hardware ID; один ID на установку; сервер хранит SHA-256 device hash; Anti-Fraud связывает device hash с учетными записями;
-- не делать заранее вывод «точно ПД» или «точно не ПД» без юридического анализа с учетом того, связывается ли идентификатор с определенным/определяемым физлицом;
-- если конкретный технический механизм не относится к ПД и закон не требует его раскрывать, **не предлагать описывать его мошенникам в публичных документах**.
+- container/service: `evrasia-ai-bot-db`
+- Compose project: `evrasia-prod`
+- role: `evrasia_ai_bot`
+- production DB: `evrasia_ai_bot`
+- retained test DB: `evrasia_ai_bot_antifraud_test`
+- network: `evrasia-prod-internal`
+- volume: `evrasia-postgres-prod-data`
+- production migrations: 18
+- test DB migrations: 18
+- Anti-Fraud tables: 11.
 
-**B. Аудит сайта `evrasia.rest`**
-- посмотреть сайт и перечислить, каких обязательных по законодательству РФ ссылок/документов/сведений не хватает, включая требования 152-ФЗ;
-- ответ по этому пункту пользователь просил написать **в чат**, а не сразу в документ.
+Legacy infrastructure is gone:
 
-Не переходи к A/B раньше завершения текущей правки оферты, если пользователь сам не переключит задачу.
+- role `samzaberu`: absent
+- DB names `samzaberu` / `samzaberu_antifraud_test`: absent
+- container/service `samzaberu-db`: absent
+- Compose refs to `samzaberu-db`: 0.
 
-### 6. Формат Word-документов для пользователя
+Important: `public.samzaberu_requests` is **real SamZaberu business data**, not legacy infrastructure. It intentionally remains and had 31 rows at audit.
 
-Пользователь уже несколько раз уточнил предпочтение:
+---
 
-- спокойное деловое оформление, без ярких цветов и декоративных блоков;
-- для изменений договора — **только две основные колонки**: текущая формулировка / предлагаемая формулировка;
-- нормальные поля страницы и заметные отступы таблицы от левого и правого края;
-- таблица не должна выходить за печатную область;
-- перед отправкой Word **обязательно визуально проверить рендер каждой страницы**, особенно таблицы; не утверждать «все помещается», пока это не проверено;
-- не добавлять лишние пояснительные колонки, если пользователь их не просил.
+## 3. Anti-Fraud production runtime
 
-### 7. Обязательные правила серверных скриптов
+Verified:
 
-Перед любым серверным bash-скриптом прочитай `docs/SERVER_SCRIPT_RULES.md` и следуй ему как обязательной спецификации.
+- scheduler enabled: true
+- interval: 15 minutes
+- run-on-start: false
+- latest protected cycle: success
+- scheduler last error: none
+- Telegram polling: true
+- Telegram 409 conflicts: 0
+- both Bitrix and Anti-Fraud secret mounts present/readable/non-empty
+- no secret values should ever be printed.
 
-Кратко, без исключений:
+Nginx:
 
-- один полный bash-блок, а не россыпь команд;
-- начало:
-  `clear`
-  `set +e`
-  `set +u`
-  `set +o pipefail 2>/dev/null`;
-- переменные наверху;
-- нумерованные стадии;
-- production guard до и после любых рискованных действий;
-- TEST guard;
-- backup до DB mutation + rollback;
-- `/tmp`, quoted heredoc, `bash -n`, запуск только при PASS, cleanup;
-- `umask 077` для чувствительных временных файлов;
-- не использовать outer-shell `exit`, способный закрыть SSH; функции + `return`;
-- реальные RC, `PASS/FAIL`, не скрывать ошибки wrapper-ом;
-- учитывать, что Bitrix иногда выводит HTML fatal message при RC=0 — проверять и содержимое вывода;
-- не печатать секреты; в конце `SECRET_VALUES_PRINTED=NO`, если это правда;
-- в конце `TERMINAL_WILL_STAY_OPEN=YES`;
-- stderr не выкидывать бездумно в `/dev/null`: при необходимости сохранить в закрытый temp и вывести sanitized/redacted версию;
-- production не менять без явного разрешения пользователя.
+- `/antifraud`, `/api/anti-fraud/`, Anti-Fraud assets all target production 18080
+- references to TEST 18081: 0
+- nginx config valid
+- routed phonebook/antifraud/directory checks passed.
 
-### 8. Критический технический контекст Anti-Fraud
+`/directory` is intentionally a redirect:
 
-Полная версия находится в `docs/AI_PROJECT_CONTEXT.md`; здесь только то, что нельзя потерять:
+- `/directory` -> 308 -> `/phonebook`
+- `/directory/` -> 308 -> `/phonebook/`
+- final HTTP after redirect: 200.
 
-- v1.6.9 — production baseline; v1.7 — Anti-Fraud; v1.8/v1.9 — следующие этапы документов/Exchange.
-- PR #32 должен оставаться Draft.
-- production в ходе v1.7 не трогать без явного разрешения.
-- тест: `evrasia-ai-bot-v17-test`, DB `samzaberu_antifraud_test`; точный текущий image и scheduler state нужно **REVERIFY**, нельзя угадывать.
-- migration 0016 добавляет `loyalty_active_card_count` и `loyalty_issue`; всего target 17 migrations.
-- active Bitrix accounts: 1784; exactly one active state-113 card: 1438; no active card: 240; multiple active: 106.
-- multiple active cards — anomaly visible to operator, но **0 automatic risk points**.
-- account-level RestIS `TotalSum` может быть известен даже при multiple active cards; не суммировать его по каждой карте.
-- текущий Risk v1.3 advisory-only, без автоматической блокировки.
-- подробную 60-day history грузить только адресно для history gate, никогда не для всего флота.
-- raw card numbers не отдавать в bot UI/API/logs.
-- RestIS credentials не копировать в bot.
-- scheduler code default false, но фактическое server state нужно перепроверить.
-- USER_ID 737384 card investigation **PAUSED** по просьбе пользователя; не продолжать без запроса.
-- расследование доказало: Anti-Fraud не создавал девять новых карт; они уже были в RestIS и были отражены legacy `account.php` в Bitrix. Exact initiating cause тысяч activation calls остается unresolved.
+Do not flag that verified redirect as an error.
 
-### 9. Не повторять прошлые ошибки
+---
 
-- Не придумывать договорные ограничения «для справедливости», если они не нужны закону и ослабляют Организатора.
-- Не выдавать рекомендованный срок/процесс за требование закона.
-- Не объединять пункты договора без необходимости.
-- Не добавлять в публичный договор внутреннюю Anti-Fraud механику.
-- Не упоминать несуществующую функциональность.
-- Не говорить, что документ визуально проверен, если реально не проверен.
-- Не забывать правила серверных скриптов даже при переходе в новый чат.
-- Не терять текущую точку задачи и не возвращаться самовольно к paused forensic investigation.
+## 4. TEST state
 
-## Как продолжить прямо сейчас
+Old container `evrasia-ai-bot-v17-test` is exited and archival only.
 
-Первое действие нового чата: подтвердить, что прочитаны `AI_PROJECT_CONTEXT.md`, `SERVER_SCRIPT_RULES.md` и этот handoff, а затем продолжить **финальную точечную проверку оферты по 11 правилам выше**. Не генерировать новый Word до того, как будет сформирован и показан пользователю окончательный список действительно необходимых изменений и их юридических оснований. После согласования списка — сделать двухколоночный Word и визуально проверить каждую страницу.
+**Do not restart it blindly.** Its environment belongs to the old test topology, while the retained test DB has already been renamed to `evrasia_ai_bot_antifraud_test`.
+
+If a new TEST is needed later, recreate it intentionally from the current naming/topology.
+
+---
+
+## 5. Backups to keep
+
+Do not clean without explicit approval.
+
+Phase 1:
+
+`/opt/evrasia-ai-bot/backups/production-v17-phase1-20260907-053318`
+
+Production dump SHA256:
+
+`8cf697c2faa5010d12cb9389aac1ecd38929d1672ff1bdd432bad5df5c45e14a`
+
+Phase 2:
+
+`/opt/evrasia-ai-bot/backups/production-v17-phase2-dbrename-20260907-054218`
+
+- production dump SHA256: `6dfd1b8f0d3d30857ac3c7a06d29f05e38ccdccb4b86db5a0862780b14bb56f1`
+- test dump SHA256: `bd862bc8445c632face19b4d96e23edc49d1c2385c5f05481be5d40a3a14327c`
+
+Both dump hashes/readability were verified in the post-production audit.
+
+---
+
+## 6. Anti-Fraud business contracts not to lose
+
+- advisory-only; no automatic account blocking
+- Risk range 0–100
+- critical >=75
+- high >=50
+- medium >=25
+- current bonus balance strictly >40,000 gives +50 and history gate
+- exactly 40,000 does not trigger that rule
+- multiple active cards are visible anomaly but add 0 automatic risk points
+- `TotalSum` is account/phone-level current balance; never multiply/sum it per card
+- `0.00` is known zero; NULL is unavailable/unknown
+- raw loyalty card numbers must not appear in bot UI/API/logs
+- RestIS credentials must not be copied into the bot
+- detailed 60-day history is targeted only to history-gated accounts, never fleet-loaded every cycle.
+
+Fleet reference from 2026-09-05:
+
+- active Bitrix accounts: 1784
+- exactly one active state-113 card: 1438
+- no active card: 240
+- multiple active cards: 106
+- unresolved: 0.
+
+---
+
+## 7. Trusted Device foundation
+
+- `device_id`: 32 cryptographically random bytes -> 64 lowercase hex
+- regex `^[a-f0-9]{64}$`
+- not UUID/IMEI/MAC/advertising ID/hardware identifier
+- stable for one installation through restart/update/logout
+- reinstall creates a new ID
+- server may store SHA-256 hash
+- trust TTL: 90 days
+- IP is not identity/trust.
+
+---
+
+## 8. Paused forensic branch
+
+USER_ID 737384 loyalty-card anomaly investigation remains **PAUSED** by user request.
+
+Safe conclusion already established:
+
+- Anti-Fraud did not create the nine newer cards
+- RestIS already contained them
+- legacy `account.php` mirrored them into Bitrix
+- thousands of activation requests were observed
+- exact initiating frontend/user/process cause remains unresolved.
+
+Do not resume without explicit request. Never replay activation requests and never persist full card numbers in documentation.
+
+---
+
+## 9. Mandatory server-script format
+
+Before server work read `docs/SERVER_SCRIPT_RULES.md`.
+
+Every normal server wrapper must use one complete copy-paste block and the real script must begin with:
+
+```bash
+clear
+set +e
+set +u
+set +o pipefail 2>/dev/null
+```
+
+The user explicitly requested `clear` so previous terminal output is visually removed.
+
+Also required:
+
+- variables at top
+- numbered stages
+- hostname/environment guards
+- backup before risky DB mutation
+- rollback
+- quoted heredoc + `/tmp` wrapper for long scripts
+- `bash -n` before execution
+- explicit PASS/FAIL and final RC
+- no secret output
+- terminal must remain open.
+
+---
+
+## 10. GitHub / PR policy
+
+PR #32 is still expected to remain:
+
+- open
+- Draft
+- not merged
+
+until explicit user approval.
+
+The deployed production application revision remains `109ac7a...` even if documentation commits move the branch HEAD afterward.
+
+Do not mark Ready or merge automatically just because production passed audit.
+
+---
+
+## 11. Current continuation point
+
+**There is no pending production mutation.**
+
+Next actions:
+
+1. Keep production unchanged.
+2. Keep rollback backups and archival TEST assets.
+3. Finish documentation updates.
+4. Then wait for the user's explicit decision about PR #32:
+   - keep Draft for more business/visual acceptance, or
+   - mark Ready/merge if explicitly approved.
+5. For any new feature, start from the verified production v1.7 baseline; do not repeat migration/deployment work.
+
+Parallel Bonus Club legal work exists in the project, but it is separate from this technical continuation. If the user switches back to legal work, restore the latest legal documents/context rather than using old handoff text.
