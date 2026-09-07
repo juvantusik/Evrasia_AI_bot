@@ -184,6 +184,7 @@ const parseResponse = (
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 // Gateway принимает только адресный список USER_ID, не умеет выгружать всю пользовательскую базу Bitrix.
+// Loyalty balance намеренно вынесен в отдельный защищённый /anti-fraud/loyalty endpoint.
 export class BitrixAntiFraudAccountGateway {
   private readonly fetchImpl: typeof fetch;
 

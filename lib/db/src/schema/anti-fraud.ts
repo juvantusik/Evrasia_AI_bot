@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  numeric,
   pgTable,
   serial,
   text,
@@ -19,11 +20,23 @@ export const antiFraudAccountsTable = pgTable(
     displayName: text("display_name"),
     registeredAt: timestamp("registered_at", { withTimezone: true }),
     bitrixActive: boolean("bitrix_active").notNull().default(true),
+    // Обновлено 05.09.2026 ИТ Директор Евразии
+    // RestIS TotalSum содержит копейки, поэтому используем точный NUMERIC(14,2), а не integer/float.
+    bonusBalance: numeric("bonus_balance", { precision: 14, scale: 2 }),
+    // Protected loyalty resolution: NULL = ещё не загружено; 0 = нет активной карты;
+    // 1 = одна активная карта; >1 = несколько активных RESTIS_STATE=113 карт.
+    loyaltyActiveCardCount: integer("loyalty_active_card_count"),
+    loyaltyIssue: text("loyalty_issue"),
+    loyaltySyncedAt: timestamp("loyalty_synced_at", { withTimezone: true }),
+    loyaltyHistoryLoadedFrom: timestamp("loyalty_history_loaded_from", { withTimezone: true }),
+    loyaltyHistoryLoadedUntil: timestamp("loyalty_history_loaded_until", { withTimezone: true }),
+    loyaltyHistoryLoadedAt: timestamp("loyalty_history_loaded_at", { withTimezone: true }),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     phoneIdx: index("anti_fraud_accounts_phone_idx").on(table.phoneNormalized),
     emailIdx: index("anti_fraud_accounts_email_idx").on(table.emailNormalized),
+    loyaltyIssueIdx: index("anti_fraud_accounts_loyalty_issue_idx").on(table.loyaltyIssue),
   }),
 );
 
@@ -35,14 +48,12 @@ export const antiFraudCardsTable = pgTable(
     cardNumber: text("card_number").notNull(),
     bitrixUserId: integer("bitrix_user_id"),
     cardType: integer("card_type"),
-    // Добавлено 03.09.2026 ИТ Директор Евразии
     bitrixCardStatusId: integer("bitrix_card_status_id"),
     isActive: boolean("is_active").notNull().default(false),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-    // Добавлено 03.09.2026 ИТ Директор Евразии
-    // Эти поля описывают только адресно загруженное VIP_HISTORY для активной карты.
+    // Legacy coverage для старого прямого VIP_HISTORY. Новый loyalty flow хранит coverage на аккаунте.
     historyLoadedFrom: timestamp("history_loaded_from", { withTimezone: true }),
     historyLoadedUntil: timestamp("history_loaded_until", { withTimezone: true }),
     historyLoadedAt: timestamp("history_loaded_at", { withTimezone: true }),
@@ -57,17 +68,30 @@ export const antiFraudCardsTable = pgTable(
 export const antiFraudVisitsTable = pgTable(
   "anti_fraud_visits",
   {
+    // В legacy VIP_TODAY здесь raw RestIS ID. Для protected history — детерминированный
+    // внутренний event key, потому что один source RestIS ID может относиться к разным операциям.
     restisId: text("restis_id").primaryKey(),
-    cardId: integer("card_id")
-      .notNull()
-      .references(() => antiFraudCardsTable.id, { onDelete: "restrict" }),
+    sourceRestisId: text("source_restis_id").notNull(),
+    // Обновлено 05.09.2026: новый защищённый loyalty API не раскрывает номер активной карты,
+    // поэтому card_id может быть NULL для проверенной истории, привязанной напрямую к USER_ID.
+    cardId: integer("card_id").references(() => antiFraudCardsTable.id, { onDelete: "restrict" }),
     bitrixUserId: integer("bitrix_user_id"),
     visitedAt: timestamp("visited_at", { withTimezone: true }).notNull(),
     restaurant: text("restaurant").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }),
+    bonusAdded: numeric("bonus_added", { precision: 14, scale: 2 }),
+    bonusSpent: numeric("bonus_spent", { precision: 14, scale: 2 }),
+    loyaltyVerified: boolean("loyalty_verified").notNull().default(false),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (table) => ({
+    sourceRestisIdx: index("anti_fraud_visits_source_restis_idx").on(table.sourceRestisId),
+    sourceUserTimeIdx: index("anti_fraud_visits_source_user_time_idx").on(
+      table.sourceRestisId,
+      table.bitrixUserId,
+      table.visitedAt,
+    ),
     cardVisitedIdx: index("anti_fraud_visits_card_visited_idx").on(
       table.cardId,
       table.visitedAt,
@@ -92,7 +116,6 @@ export const antiFraudDeviceEventsTable = pgTable(
     deviceHash: text("device_hash").notNull(),
     eventType: text("event_type").notNull(),
     authMethod: text("auth_method"),
-    // Добавлено 03.09.2026 ИТ Директор Евразии
     clientType: text("client_type"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),

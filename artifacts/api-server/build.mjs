@@ -30,6 +30,9 @@ async function buildAll() {
       path.resolve(artifactDir, "src/anti-fraud-trusted-device-cli.ts"),
       // Добавлено 03.09.2026 ИТ Директор Евразии
       path.resolve(artifactDir, "src/anti-fraud-risk-cli.ts"),
+      // Добавлено 05.09.2026 ИТ Директор Евразии
+      path.resolve(artifactDir, "src/anti-fraud-loyalty-cli.ts"),
+      path.resolve(artifactDir, "src/anti-fraud-loyalty-balance-cli.ts"),
     ],
     platform: "node",
     bundle: true,

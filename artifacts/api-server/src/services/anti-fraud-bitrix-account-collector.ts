@@ -44,6 +44,8 @@ const chunk = <T>(values: T[], size: number): T[][] => {
 // Добавлено 03.09.2026 ИТ Директор Евразии
 // В Bitrix запрашиваются только USER_ID, уже попавшие в Anti-Fraud через карты, устройства или ранее известные аккаунты.
 // Массовая выгрузка всей базы пользователей Bitrix этим collector не поддерживается.
+// Обновлено 05.09.2026: bonus_balance здесь больше не читается и не перезаписывается —
+// текущий TotalSum приходит только через защищённый loyalty endpoint.
 export const syncBitrixAccountsOnce = async (
   options: CollectorOptions = {},
 ): Promise<AntiFraudBitrixAccountCollectorResult> => {

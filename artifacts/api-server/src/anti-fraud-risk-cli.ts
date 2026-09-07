@@ -1,5 +1,5 @@
 import { pool } from "@workspace/db";
-import { analyzeAntiFraudOnce } from "./services/anti-fraud-risk-engine";
+import { analyzeAntiFraudWithSimilarityOnce } from "./services/anti-fraud-identity-similarity-service";
 
 const envBoolean = (name: string, fallback: boolean): boolean => {
   const raw = (process.env[name] ?? "").trim().toLowerCase();
@@ -12,7 +12,7 @@ const envBoolean = (name: string, fallback: boolean): boolean => {
 // Добавлено 03.09.2026 ИТ Директор Евразии
 const main = async (): Promise<void> => {
   try {
-    const result = await analyzeAntiFraudOnce({
+    const result = await analyzeAntiFraudWithSimilarityOnce({
       refreshAccounts: envBoolean("ANTI_FRAUD_REFRESH_ACCOUNTS", true),
       autoHistory: envBoolean("ANTI_FRAUD_AUTO_HISTORY", false),
     });
@@ -32,6 +32,10 @@ const main = async (): Promise<void> => {
         historySuccessfulAccounts: result.historySuccessfulAccounts,
         historyFailedAccounts: result.historyFailedAccounts,
         refreshedAccounts: result.refreshedAccounts,
+        identityCandidatePairs: result.identityCandidatePairs,
+        identityCorroboratedPairs: result.identityCorroboratedPairs,
+        identitySimilarEmailPairs: result.identitySimilarEmailPairs,
+        identitySimilarPhonePairs: result.identitySimilarPhonePairs,
         topRisk: result.topRisk,
       })}\n`,
     );

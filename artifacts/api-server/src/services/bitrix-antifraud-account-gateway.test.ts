@@ -23,6 +23,8 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
               display_name: "Тестовый пользователь",
               registered_at: "2025-08-30T10:00:00+03:00",
               bitrix_active: true,
+              // Старое поле может присутствовать в legacy response, но account-map его намеренно игнорирует.
+              bonus_balance: 45678,
             },
           ],
           unresolved: [415307],
@@ -45,6 +47,7 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
   assert.equal(result.records[0]?.emailNormalized, "test@example.com");
   assert.equal(result.records[0]?.bitrixActive, true);
   assert.deepEqual(result.unresolved, [415307]);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.records[0] ?? {}, "bonusBalance"), false);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии

@@ -97,7 +97,7 @@ jobs:
           fi
 
           docker run -d \
-            --name samzaberu-smoke \
+            --name evrasia-ai-bot-smoke \
             --network host \
             -e PORT=18080 \
             -e DATABASE_URL=postgresql://samzaberu:samzaberu@127.0.0.1:5432/samzaberu \
@@ -106,19 +106,19 @@ jobs:
             "$image_tag"
 
           cleanup() {
-            docker logs --tail 100 samzaberu-smoke || true
-            docker rm -f samzaberu-smoke >/dev/null 2>&1 || true
+            docker logs --tail 100 evrasia-ai-bot-smoke || true
+            docker rm -f evrasia-ai-bot-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
           ready=0
           for _ in {1..60}; do
-            if curl -fsS http://127.0.0.1:18080/api/healthz >/tmp/samzaberu-health.json; then
+            if curl -fsS http://127.0.0.1:18080/api/healthz >/tmp/evrasia-ai-bot-health.json; then
               ready=1
               break
             fi
 
-            if ! docker ps --filter name=samzaberu-smoke --format '{{.Names}}' | grep -qx samzaberu-smoke; then
+            if ! docker ps --filter name=evrasia-ai-bot-smoke --format '{{.Names}}' | grep -qx evrasia-ai-bot-smoke; then
               echo "Smoke-test container exited before becoming ready." >&2
               exit 1
             fi
@@ -131,7 +131,7 @@ jobs:
             exit 1
           fi
 
-          grep -Fq '"status":"ok"' /tmp/samzaberu-health.json
+          grep -Fq '"status":"ok"' /tmp/evrasia-ai-bot-health.json
           curl -fsS http://127.0.0.1:18080/ | grep -Fq 'id="root"'
           curl -fsS http://127.0.0.1:18080/client-route-check | grep -Fq 'id="root"'
 
@@ -145,3 +145,73 @@ jobs:
             -H 'content-type: application/json' \
             -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест"}' \
             http://127.0.0.1:18080/api/phonebook/phones)" = "401"
+
+          # Добавлено 03.09.2026 ИТ Директор Евразии
+          curl -fsS http://127.0.0.1:18080/antifraud | grep -Fq 'id="root"'
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/summary >/tmp/antifraud-summary.json
+          test "$(jq '.scoredAccounts' /tmp/antifraud-summary.json)" = "0"
+          test "$(jq '.sharedDevices' /tmp/antifraud-summary.json)" = "0"
+          test "$(jq '.updatedAt' /tmp/antifraud-summary.json)" = "null"
+
+          # Добавлено 05.09.2026 ИТ Директор Евразии
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/case-dynamics >/tmp/antifraud-dynamics.json
+          test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
+
+          # Обновлено 06.09.2026: 0017 разрешает штатный scheduler status=partial.
+          # Также проверяем signed NUMERIC и loyalty resolution через psql,
+          # не полагаясь на наличие standalone pg package в runtime image.
+          migration_rows="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
+                -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
+          )"
+          test "$migration_rows" = "18"
+
+          partial_status="$(
+            docker run --rm -i \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu \
+                -v ON_ERROR_STOP=1 -Atq <<'SQL'
+          BEGIN;
+          INSERT INTO anti_fraud_sync_runs (run_id, source, status)
+          VALUES ('ci-partial-status', 'ci-partial-status', 'partial');
+          SELECT status FROM anti_fraud_sync_runs WHERE run_id = 'ci-partial-status';
+          ROLLBACK;
+          SQL
+          )"
+          test "$partial_status" = "partial"
+
+          loyalty_columns="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT count(*) FILTER (WHERE column_name='loyalty_active_card_count'), count(*) FILTER (WHERE column_name='loyalty_issue') FROM information_schema.columns WHERE table_schema='public' AND table_name='anti_fraud_accounts';"
+          )"
+          test "$loyalty_columns" = "1|1"
+
+          signed_balance="$(
+            docker run --rm -i \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu \
+                -v ON_ERROR_STOP=1 -Atq <<'SQL'
+          BEGIN;
+          INSERT INTO anti_fraud_accounts
+            (bitrix_user_id, bitrix_active, bonus_balance, loyalty_active_card_count, loyalty_issue)
+          VALUES
+            (2147483000, true, -1.25, 4, 'multiple_active_cards');
+          SELECT bonus_balance::text || '|' || loyalty_active_card_count::text || '|' || loyalty_issue
+          FROM anti_fraud_accounts
+          WHERE bitrix_user_id = 2147483000;
+          ROLLBACK;
+          SQL
+          )"
+          test "$signed_balance" = "-1.25|4|multiple_active_cards"
