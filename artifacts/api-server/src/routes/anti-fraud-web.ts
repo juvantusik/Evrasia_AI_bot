@@ -75,6 +75,7 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     bitrix_blocked: boolean;
     bitrix_block_reason: string | null;
     blocked_at: Date | null;
+    blocked_audit_result: string | null;
     bonus_balance: string | number | null;
     loyalty_active_card_count: number | null;
     loyalty_issue: string | null;
@@ -88,18 +89,22 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       a.bitrix_blocked,
       a.bitrix_block_reason,
       audit.blocked_at,
+      audit.blocked_audit_result,
       a.bonus_balance,
       a.loyalty_active_card_count,
       a.loyalty_issue,
       a.loyalty_synced_at
     FROM anti_fraud_accounts a
     LEFT JOIN LATERAL (
-      SELECT max(created_at) AS blocked_at
+      SELECT
+        b.created_at AS blocked_at,
+        b.result AS blocked_audit_result
       FROM anti_fraud_block_audit b
       WHERE b.bitrix_user_id = a.bitrix_user_id
         AND b.success IS TRUE
-        AND b.after_blocked IS TRUE
-        AND b.result = 'blocked'
+        AND b.result IN ('blocked', 'unblocked')
+      ORDER BY b.created_at DESC, b.id DESC
+      LIMIT 1
     ) audit ON true
     WHERE a.bitrix_user_id = ANY($1::int[])
   `, [ids]);
@@ -113,7 +118,10 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
         bitrixActive: row.bitrix_active === true,
         bitrixBlocked: row.bitrix_blocked === true,
         bitrixBlockReason: row.bitrix_block_reason ?? null,
-        blockedAt: row.bitrix_blocked === true ? iso(row.blocked_at) : null,
+        blockedAt:
+          row.bitrix_blocked === true && row.blocked_audit_result === "blocked"
+            ? iso(row.blocked_at)
+            : null,
         bonusBalance: row.bonus_balance === null ? null : Number(row.bonus_balance),
         loyaltyActiveCardCount:
           row.loyalty_active_card_count === null ? null : Number(row.loyalty_active_card_count),
