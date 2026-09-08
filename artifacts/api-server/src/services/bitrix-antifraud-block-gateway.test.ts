@@ -55,11 +55,11 @@ test("Bitrix block gateway sends protected write request and parses per-user res
   assert.equal(result.records[1]?.changed, false);
 });
 
-test("Bitrix block gateway supports partial per-user failure without exposing technical body", async () => {
+test("Bitrix block gateway preserves partial per-user result when source ok=false", async () => {
   const gateway = new BitrixAntiFraudBlockGateway({
     token: "x".repeat(64),
     fetchImpl: async () => new Response(JSON.stringify({
-      ok: true,
+      ok: false,
       dry_run: false,
       reason,
       requested: 2,
@@ -94,7 +94,7 @@ test("Bitrix block gateway supports partial per-user failure without exposing te
   assert.equal(result.records[1]?.result, "update_failed");
 });
 
-test("Bitrix block gateway rejects unexpected response fields and does not echo server body", async () => {
+test("Bitrix block gateway rejects HTTP failures without echoing server body", async () => {
   const secret = "AF-SECRET-CASE-ID";
   const gateway = new BitrixAntiFraudBlockGateway({
     token: "x".repeat(64),
