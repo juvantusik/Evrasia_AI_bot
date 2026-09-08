@@ -1,12 +1,12 @@
 # Evrasia AI Bot — Current Architecture
 
-> Canonical current architecture. Use this file for diagrams, module naming and new-chat recovery.
+> Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: 2026-09-07.
+> Last updated: **2026-09-08**.
 
 ## 1. Main rule
 
-Evrasia AI Bot is currently a **single production application** (`evrasia-ai-bot-app`) with several business modules.
+Evrasia AI Bot is a **single production application** (`evrasia-ai-bot-app`) with several business modules sharing one PostgreSQL database.
 
 Do not describe the live system as only Anti-Fraud, and do not draw SamZaberu or MegaFon as separate Docker production bots unless the live topology changes later.
 
@@ -42,16 +42,22 @@ Do not describe the live system as only Anti-Fraud, and do not draw SamZaberu or
         |             Anti-Fraud scheduler
         |                 every 15 min
         |                      |
-        |          +-----------+-----------+
-        |          |           |           |
-        |          v           v           v
-        |      Trusted       Bitrix      Loyalty/history
-        |      Device                     (targeted)
-        |          \           |           /
-        |           +----------+----------+
+        |          +-----------+------------+
+        |          |           |            |
+        |          v           v            v
+        |      Trusted       Bitrix     Loyalty/history
+        |      Device                    via protected
+        |          \           |          site API
+        |           +----------+-----------+
         |                      |
         |                      v
-        |                Risk / Cases
+        |          Risk / links / cases / audit
+        |                      |
+        |                      v
+        |              manual block/unblock
+        |                      |
+        |                      v
+        |              protected Bitrix API
         |
         +----------------------+----------------------+
                                |
@@ -66,11 +72,9 @@ Do not describe the live system as only Anti-Fraud, and do not draw SamZaberu or
 
 Canonical and only current UI path: `/phonebook`.
 
-Purpose: corporate phone/operator/legal-entity/account information and related administration/search workflows.
+`/directory` is removed. It is not a product, alias or compatibility route. Requests to `/directory`, `/directory/...` and `/api/directory/...` are expected to return HTTP 404.
 
-`/directory` is **removed**. It is not a product, alias or compatibility route. Requests to `/directory` and `/directory/...` return HTTP 404 in production.
-
-Historical implementation identifiers containing the word `directory` may still exist internally where they mean a corporate directory/data structure; they do not create a `/directory` web product or route. Renaming stable DB schema identifiers is not required merely for UI naming cleanup.
+Historical implementation identifiers containing `directory` may remain where they mean an internal corporate-directory data structure; they do not create a current `/directory` product.
 
 ### Anti-Fraud
 
@@ -79,12 +83,68 @@ Canonical UI path: `/antifraud`.
 Includes:
 
 - risk/case/account/device investigation UI;
-- protected integration endpoints;
-- scheduler every 15 minutes;
-- targeted loyalty/history refresh;
-- advisory risk scoring and case dynamics.
+- protected data integrations;
+- protected scheduler every 15 minutes;
+- targeted loyalty/history enrichment;
+- advisory explainable risk scoring;
+- identity-link/case grouping;
+- group bonus aggregation;
+- manual per-account and group blocking;
+- manual per-account unblock;
+- block/unblock audit;
+- Bitrix factual status synchronization.
 
-No automatic account blocking.
+Risk is **advisory**. There is **no automatic account blocking** from risk score.
+
+#### Bitrix account-state contract
+
+Bitrix is the source of truth:
+
+- `ACTIVE=Y`, `BLOCKED=N` → **Активен**
+- `ACTIVE=N`, `BLOCKED=N` → **Неактивен**
+- any `BLOCKED=Y` → **Заблокирован**
+
+Only `BLOCKED=Y` is a true Bitrix block.
+
+Operationally after PR #41:
+
+- blocked and inactive accounts are hidden from ordinary operational lists by default;
+- the shared UI toggle is `Показать заблокированных и неактивных`;
+- inactive remains a distinct visual status, not a synthetic block;
+- KPI/shared-device/duplicate-contact summaries exclude both blocked and inactive accounts;
+- case/group evidence and group bonus may still include excluded accounts;
+- group bulk block targets active unblocked accounts only;
+- an inactive account exposed through the toggle may still be individually/formally blocked if an operator explicitly chooses it.
+
+#### Manual block/unblock architecture
+
+Bot-facing operator routes call protected Bitrix-side routes:
+
+```text
+Anti-Fraud UI
+   |
+   +--> POST /api/anti-fraud/block
+   |         |
+   |         v
+   |    protected Bitrix block endpoint
+   |         |
+   |         v
+   |    ACTIVE=N, BLOCKED=Y
+   |
+   +--> POST /api/anti-fraud/unblock
+             |
+             v
+        protected Bitrix unblock endpoint
+             |
+             v
+        ACTIVE=Y, BLOCKED=N
+```
+
+The application re-reads factual state and persists local audit. Customer-facing block reason is generic and must not expose case IDs, risk scores, devices or identity-detection internals.
+
+#### Loyalty/history credential boundary
+
+The bot container does **not** hold RestIS credentials. Loyalty/history access goes through the protected site-side integration. This boundary is intentional and must not be “fixed” by copying RestIS credentials into `evrasia-ai-bot-app`.
 
 ### SamZaberu Telegram
 
@@ -92,14 +152,7 @@ SamZaberu is an internal scenario of `EvrasiaTelegramBotV2`, not a separate Dock
 
 User-facing Telegram entry: `🍱 СамЗаберу`.
 
-Backend behavior:
-
-- allowed operational-manager access;
-- STOP / ENABLE actions;
-- Bitrix `applyStop` / `applyEnable` service-layer calls;
-- PostgreSQL request/rule journal;
-- retries and factual-state verification;
-- escalation/manual completion on failure.
+Backend behavior includes operational-manager access, STOP/ENABLE actions, Bitrix service calls, PostgreSQL request/rule journal, retry, factual verification and escalation/manual completion.
 
 Business API remains under `/api/samzaberu/...`.
 
@@ -109,40 +162,24 @@ Corporate communications is another scenario inside `EvrasiaTelegramBotV2`.
 
 User-facing Telegram entry: `📱 Корпоративная связь`.
 
-MegaFon private-chat flow:
-
-1. user enters a corporate number;
-2. Phonebook resolves operator/ООО/account data;
-3. user describes the problem;
-4. bot verifies membership of the bound MegaFon group;
-5. bot publishes the structured request into the group.
-
-MegaFon group flow:
-
-1. Super Admin binds the group using `/bind_megafon_group`;
-2. bot listens only to that bound group;
-3. it parses phone/legal-entity/problem data;
-4. asks clarification when data is missing;
-5. rejects ambiguous or mismatched phone-to-ООО combinations;
-6. produces the structured request addressed to the MegaFon manager.
-
-T2 is handled inside Corporate communications but uses its own prepared-contact/request flow rather than the MegaFon group path.
+MegaFon private-chat/group handling uses Phonebook data and the bound “Евразия Мегафон” group. T2 remains part of Corporate communications but uses its own prepared-contact/request flow rather than the MegaFon group path.
 
 ## 4. Process topology
 
-Production application startup:
+Production application startup owns:
 
-- runs DB migrations;
-- initializes/refreshes Phonebook cache;
-- starts HTTP server;
-- starts `EvrasiaTelegramBotV2` when Telegram polling is enabled;
-- starts Anti-Fraud scheduler when scheduler is enabled.
+- DB migration runner;
+- Phonebook cache/init logic;
+- HTTP server;
+- `EvrasiaTelegramBotV2` when polling is enabled;
+- Anti-Fraud scheduler when enabled.
 
 Therefore:
 
 - one application process owns web + Telegram + Anti-Fraud scheduler;
 - one Telegram polling consumer handles multiple Telegram scenarios;
-- PostgreSQL is shared by the product modules.
+- PostgreSQL is shared by product modules;
+- an app-only recreation can affect all modules at process level even when the code change is Anti-Fraud-only, so regression probes must be chosen carefully without turning unrelated subsystems into false blocking gates.
 
 ## 5. Production infrastructure
 
@@ -150,119 +187,114 @@ Host:
 
 - `eur-bot-01`
 - `192.168.103.200`
-- Debian 13.
+- Debian 13
 
 Docker:
 
 - Compose project: `evrasia-prod`
+- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - app: `evrasia-ai-bot-app`
 - DB: `evrasia-ai-bot-db`
 - network: `evrasia-prod-internal`
-- volume: `evrasia-postgres-prod-data`.
+- volume: `evrasia-postgres-prod-data`
 
 PostgreSQL:
 
 - role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
 - retained test DB: `evrasia_ai_bot_antifraud_test`
-- production migrations: 18.
+- production migrations: **20**
+- latest migration journal timestamp: `1788769200000`
+- migrations 0018/0019 provide blocked-state fields and block audit.
+
+Legacy TEST container `evrasia-ai-bot-v17-test` is exited/archival. Do not restart it blindly.
 
 ## 6. Current production release identity
 
-Current deployed application after the `/directory` cleanup deployment on 2026-09-07:
+Current deployed application after PR #41 rollout on 2026-09-08:
 
-- deployed application revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
-- immutable image digest: `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
-- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
-- app container: `evrasia-ai-bot-app`
+- deployed revision: `a156db2e30dd2a31d7bd4126410f9f513382adaa`
+- immutable digest: `sha256:ce3b85fe789495f3b5ee4e59fe8eb129a75343d1916f2a7c45483da18d988947`
+- image/config ID: `sha256:cbe989d6375189f9f12d7a0ad6f74f9f5455536838750fd96f0e2e459d9cc145`
+- platform: `linux/amd64`
 - app status after deployment: running / healthy.
 
-App-only deployment verification:
+Production deployment verification:
 
-- `PASS_COUNT=37`
-- `FAIL_COUNT=0`
-- `ROLLBACK_FAIL_COUNT=0`
-- `DIRECTORY_REMOVAL_PRODUCTION=VERIFIED`
-- `FINAL_STATUS=PASS`
-- `FINAL_RC=0`.
+- app-only recreation
+- DB container unchanged / not restarted
+- schema and migration state unchanged at 20
+- environment, mounts and ports preserved
+- scheduler enabled, idle, 15 minutes, no last error
+- `/api/healthz`, `/`, `/phonebook`, `/antifraud`, Anti-Fraud APIs = 200
+- `/directory` = 404
+- backup: `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
+- `PASS_COUNT=29`, `FAIL_COUNT=0`, `ROLLBACK_ATTEMPTED=NO`, `FINAL_STATUS=PASS`.
 
-Route checks:
+Main CI #298 / run ID `34202375971` built the exact image and passed 70/70 tests.
 
-- `/phonebook` = 200 direct and routed
-- `/directory` = 404 direct and routed
-- `/api/directory/phones` = 404
-- `/api/phonebook/phones` = 200
-- `/antifraud` = 200 direct and routed.
+Later documentation-only commits may advance GitHub `main`; they do not change the deployed application identity above.
 
-Runtime continuity:
+## 7. Anti-Fraud performance architecture
 
-- Anti-Fraud scheduler enabled, 15-minute interval
-- latest protected cycle = `success`
-- Telegram polling = true
-- Telegram 409 conflicts = 0
-- SamZaberu and MegaFon modules remain in the same production application.
+PR #38 replaced the previous exhaustive all-pairs identity-similarity scan with indexed candidate generation.
 
-Database/nginx continuity:
+Important invariant:
 
-- production migrations = 18
-- Anti-Fraud tables = 11
-- `public.samzaberu_requests` rows = 31
-- DB container was not restarted
-- DB schema was not changed
-- nginx was not changed.
+- the candidate index may produce extra candidates;
+- the existing final identity evaluator remains source of truth;
+- risk weights, corroboration rules and grouping semantics are not changed by the optimization.
 
-PR #32 containing v1.7 was merged into `main` on 2026-09-07, merge commit `33e3548ab014e927e1e00074e27f3a11ef252bbc`.
+Measured protected cycle improved from 206 s to 53 s while HTTP health/scheduler probes remained responsive and the app did not restart.
 
-PR #33 removed obsolete `/directory` compatibility routing and was merged into `main` on 2026-09-07, merge commit `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+The persisted `anti_fraud_risk_scoring` timing does not include the subsequent similarity overlay and must not be used as the performance gate for this optimization.
 
-Later documentation-only commits may advance `main`; they do not change the deployed application identity above.
+## 8. Current routes
 
-## 7. Shared-data notes
+- `/phonebook` = 200
+- `/antifraud` = 200
+- `/api/anti-fraud/...` = current Anti-Fraud API
+- `/directory` = 404
+- `/api/directory/...` = 404
 
-`public.samzaberu_requests` is current business data and must not be treated as legacy simply because old infrastructure once used the name `samzaberu`.
-
-Anti-Fraud, SamZaberu, bot access/settings and Phonebook administration all live in the unified current production data/application context.
-
-## 8. Naming mistakes to avoid
-
-Do not say:
-
-- “рабочий `/directory`”;
-- “`/directory` — alias/redirect Phonebook”;
-- “три отдельных бота/контейнера” for Anti-Fraud, SamZaberu and MegaFon;
-- “Evrasia AI Bot = только Anti-Fraud”.
-
-Use instead:
-
-- Phonebook = `/phonebook` only;
-- `/directory` = absent / HTTP 404;
-- Anti-Fraud = `/antifraud` + scheduler;
-- SamZaberu = Telegram module inside Evrasia AI Bot;
-- Corporate communications/MegaFon = Telegram module/group workflow inside Evrasia AI Bot;
-- all of them are part of one current production application unless a later architecture change explicitly separates them.
+Nginx routes production to port 18080. TEST port 18081 has no active role in the current production path.
 
 ## 9. Change history
 
 ### 2026-09-07 — remove `/directory`
 
-**Было:** `/directory` and `/directory/` returned HTTP 308 redirects to `/phonebook`.
+**Было:** `/directory` existed as old compatibility routing.
 
-**Стало:** `/directory` and `/directory/...` are removed from the product contract and return HTTP 404 in production; `/phonebook` is the only Phonebook UI route.
+**Стало:** `/directory` and `/api/directory/...` are removed; `/phonebook` is the only Phonebook route.
 
-**Причина:** no business or operational need exists for the old alias, and keeping it creates recurring ambiguity about whether Directory is a separate product/module.
+**Причина:** eliminate product ambiguity and obsolete compatibility behavior.
 
-Deployment implementation:
+### 2026-09-08 — Anti-Fraud manual block/unblock
 
-- PR #33 merged into `main`;
-- CI build #252 passed;
-- immutable image `sha256:fd58cc95...` deployed app-only;
-- no DB migration, DB restart or nginx change;
-- verification 37 PASS / 0 FAIL.
+**Было:** Anti-Fraud displayed risk but did not provide the full operator block/unblock workflow.
 
-A first deployment attempt stopped **before cutover** because a staged Compose file placed under `/tmp` resolved relative `env_file` paths against `/tmp`. No production change occurred. The corrected deployment staged the Compose file inside `/opt/evrasia-ai-bot/prod`, preserving relative env-file resolution.
+**Стало:** Bitrix factual blocked status/reason are synchronized; operator can block individually or by group and unblock individually; audit and group bonus are present; blocked accounts are hidden by default.
+
+**Причина:** convert Anti-Fraud from analysis-only UI into a controlled manual operator workflow while preserving Bitrix as source of truth and keeping risk advisory.
+
+### 2026-09-08 — similarity performance hotfix
+
+**Было:** synchronous exhaustive all-pairs similarity scanning caused long protected cycles and event-loop starvation.
+
+**Стало:** indexed candidate generation narrows pairs before the unchanged final evaluator; production measurement 206 s → 53 s with responsive HTTP probes.
+
+**Причина:** remove O(n²)-style fleet scanning from the hot path without changing detection semantics.
+
+### 2026-09-08 — inactive operational treatment
+
+**Было:** `ACTIVE=N`, `BLOCKED=N` was visually `Неактивен` but still participated in ordinary operational lists/summaries, unlike blocked accounts.
+
+**Стало:** inactive remains a distinct Bitrix/UI status but is operationally hidden/excluded together with blocked accounts by default. Shared toggle exposes both. Technical reason details are localized for the operator UI.
+
+**Причина:** an externally deactivated account should not pollute active operational Anti-Fraud workload/KPI while still remaining distinguishable from an Anti-Fraud/Bitrix block.
 
 ## 10. Change rule
 
-When this architecture changes, update this file and `docs/AI_PROJECT_CONTEXT.md` immediately and record:
+When architecture or production identity changes, update this file together with `docs/AI_PROJECT_CONTEXT.md`, `docs/PROJECT_CHECKPOINT.md`, `docs/NEW_CHAT_HANDOFF.md` and `SERVER_UPDATES.md`.
 
-**Было -> Стало -> Причина**.
+Record changed decisions as **Было → Стало → Причина** and never let a later docs-only GitHub revision be mistaken for the deployed application revision.

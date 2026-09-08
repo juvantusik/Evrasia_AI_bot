@@ -1,317 +1,303 @@
 # Evrasia AI Bot — Current Project Checkpoint
 
-> **Authoritative addendum for continuation across chats.**
+> **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-07**
+> Updated: **2026-09-08** after final production deployment and operator visual acceptance of PR #41.
 >
-> Read this file together with `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md` and `docs/SERVER_SCRIPT_RULES.md`.
+> Read together with `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `docs/SERVER_SCRIPT_RULES.md` and `SERVER_UPDATES.md`.
 >
-> When this checkpoint conflicts with older text in those files, this checkpoint is newer and therefore wins until the older files are consolidated.
+> Source priority remains: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
 ---
 
-## 1. Production baseline — current
+## 1. Production baseline — current and verified
 
-Evrasia AI Bot production is on host `eur-bot-01` (`192.168.103.200`).
+Host: `eur-bot-01` (`192.168.103.200`).
 
-Current application baseline after PR #34/#35 rollout:
+Current deployed application:
 
 - repo: `juvantusik/Evrasia_AI_bot`
-- `main` application revision deployed: `be631fd31c96434ac7232f5e1641ecf9ea94c823`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:74a6d19805eb0d2f51da86cf8e8c2660e89d28c429250ebd64eb46549c106ff1`
-- image config ID: `sha256:f1e11e8dc8bcca6ef80bbbe4142badf7d50401203e1e468ff93e970b6c2b3d4e`
+- deployed application revision: `a156db2e30dd2a31d7bd4126410f9f513382adaa`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ce3b85fe789495f3b5ee4e59fe8eb129a75343d1916f2a7c45483da18d988947`
+- image config ID: `sha256:cbe989d6375189f9f12d7a0ad6f74f9f5455536838750fd96f0e2e459d9cc145`
 - app container: `evrasia-ai-bot-app`
 - DB container: `evrasia-ai-bot-db`
 - Compose project: `evrasia-prod`
+- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - DB: `evrasia_ai_bot`
-- migrations: 18
-- Anti-Fraud tables: 11
-- production backup made before final rollout: `/opt/evrasia-ai-bot/backups/antifraud-final-20260907-135220`
+- direct app port: `127.0.0.1:18080`
+- migrations: **20**
+- latest migration journal timestamp: `1788769200000`
 
-Final rollout verification:
+PR #41 production deployment on 2026-09-08:
 
 - app-only recreation
+- database schema unchanged
 - DB container unchanged / not restarted
-- nginx unchanged
-- `/phonebook` OK
-- `/antifraud` OK
-- `/directory` and `/api/directory/...` remain 404
-- Telegram polling active, conflicts 0
-- SamZaberu data continuity preserved
-- Danil grouped case verified
-- async Anti-Fraud refresh manually verified
-- final rollout audit: `PASS=49`, `WARN=0`, `FAIL=0`, `FINAL_STATUS=PASS`
+- environment, mounts and ports preserved exactly
+- Anti-Fraud refresh not triggered by deployment
+- no Bitrix user-state mutation during deployment
+- scheduler remained enabled, idle, interval 15 minutes, no last error
+- `/api/healthz`, `/`, `/phonebook`, `/antifraud`, Anti-Fraud summary/cases/accounts/scheduler all returned 200
+- `/directory` remained 404
+- deployment result: `PASS_COUNT=29`, `FAIL_COUNT=0`, `ROLLBACK_ATTEMPTED=NO`, `FINAL_STATUS=PASS`
+- fresh backup: `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
 
-Old production baseline `0fcebb1...` is superseded.
+The prior production application revision `971af94e...` is superseded by `a156db2e...`.
 
----
-
-## 2. GitHub release state
-
-Merged and deployed:
-
-- PR #32 — v1.7 Anti-Fraud release, merge `33e3548...`
-- PR #33 — remove obsolete `/directory`, merge `0fcebb1...`
-- PR #34 — Anti-Fraud similar-identity case grouping + async refresh UX, merge `bf17177a...`
-- PR #35 — CI regression fix, merge `be631fd31c96434ac7232f5e1641ecf9ea94c823`
-
-Release CI after PR #35:
-
-- run #268 / ID `34105440103`
-- success
-- tests: `60/60`
-
-Do not describe PR #34 as Draft/open anymore.
+A later **documentation-only** merge may advance GitHub `main`; do not mistake a docs-only commit for a new deployed application revision.
 
 ---
 
-## 3. Anti-Fraud identity and refresh behavior — verified
+## 2. GitHub / CI release state
 
-Current implemented contracts include:
+Relevant merged application PRs:
 
-- exactly-one-digit phone similarity preserved
-- `similar_phone_identity` risk contribution: +20
-- cross-provider email matching: normalize local part by removing only `.`, `_`, `-`; exact normalized local match across different providers; minimum normalized local length 6
-- cross-provider email alone is weak and does not group accounts
-- same name alone does not corroborate cross-provider email
-- corroboration may come from exact/similar phone or shared device
-- combined similar phone + cross-provider email can produce one case
-- Danil example is manually verified in production as one case with two accounts
-- manual refresh is asynchronous: POST starts/accepts existing single-flight cycle; UI polls scheduler
-- refresh UX manually verified in production
+- PR #36 — `Anti-Fraud: Bitrix blocking status and operator actions`, merge `947c815d15cc12d0ce571edbc2a2905ef9fed009`
+- PR #37 — `Anti-Fraud: blocking UI, hidden blocked accounts and unblock preparation`, merge `86c98eacf5959ca2bf8d0f2c95441ff1e4192f8f`
+- PR #38 — `Anti-Fraud: remove all-pairs identity similarity scan`, merge `971af94e26160914efd2c229a4352d398a65214a`
+- PR #41 — `Anti-Fraud: hide inactive accounts from operational lists`, merge `a156db2e30dd2a31d7bd4126410f9f513382adaa`
 
-Risk thresholds remain:
+PR #41 pre-merge CI #297 passed. Main push CI #298 / run ID `34202375971` passed and published the exact production image above.
 
-- critical >= 75
-- high >= 50
-- medium >= 25
-- bonus balance strictly > 40,000 => +50
+Main CI #298 facts:
 
-Loyalty semantics remain:
+- `70/70` tests passed
+- TypeScript typecheck passed
+- API build passed
+- main web build passed
+- Phonebook build passed
+- Anti-Fraud build passed
+- smoke `/antifraud` passed
+- smoke Anti-Fraud summary/case-dynamics passed
+- migration smoke confirmed 20 migrations and block/audit schema
+- published platform: `linux/amd64`
 
-- `TotalSum` is account-level current balance; never sum card balances
-- `0.00` means known zero
-- `NULL` means unavailable
-- multiple active cards are visible anomaly but not an automatic risk score
+Docs-only PR #39 (`SERVER_SCRIPT_RULES` hardening) was merged as `13bf28fe96a857498bc108705ccd6ed3f05915f4`.
+
+Draft PR #40 contains the production lesson about validating acceptance-fixture eligibility. That lesson must be retained in `docs/SERVER_SCRIPT_RULES.md`; it is superseded by the consolidated documentation update once the same rules are merged there.
 
 ---
 
-## 4. ACTIVE WORKSTREAM — Anti-Fraud blocking + group bonus + Bitrix integration
+## 3. Anti-Fraud account-state contract — current
 
-This is the current continuation point.
+Bitrix remains the source of truth.
 
-### Business requirements
+Status mapping:
 
-1. Show **sum of bonuses across all accounts in a grouped Anti-Fraud case**.
-2. Add blocking from Anti-Fraud:
-   - block one account
-   - block all not-yet-blocked accounts in a group
-3. Bitrix is the **source of truth** for account status.
-4. Every Anti-Fraud refresh must re-read actual Bitrix `ACTIVE`, `BLOCKED`, and block reason.
-5. Status mapping:
-   - `ACTIVE=Y`, `BLOCKED=N` => `Активен`
-   - `ACTIVE=N`, `BLOCKED=N` => `Неактивен`
-   - `BLOCKED=Y` => `Заблокирован` regardless of ACTIVE
-6. Anti-Fraud block must set both:
-   - `ACTIVE=N`
-   - `BLOCKED=Y`
-7. Already blocked accounts are idempotent: do not block again and do not overwrite an existing external reason.
-8. Inactive but not blocked accounts may still be formally Anti-Fraud blocked (`BLOCKED=Y`).
-9. Group block reports per `USER_ID`; partial success must be visible.
-10. Group bonus includes all accounts regardless of status. Unknown values remain unknown; preferred UI form: `Бонусы группы: 64 350 · данные 3 из 4`.
+- `ACTIVE=Y`, `BLOCKED=N` → **Активен**
+- `ACTIVE=N`, `BLOCKED=N` → **Неактивен**
+- any `BLOCKED=Y` → **Заблокирован**
 
-### Public block reason — current approved wording
+Important distinction:
 
-Use this exact public wording for Anti-Fraud blocks:
+- **true blocked** means `BLOCKED=Y`;
+- `ACTIVE=N`, `BLOCKED=N` is not rewritten as a Bitrix block and remains the separate UI status **Неактивен**;
+- operationally, however, inactive accounts are treated like excluded blocked accounts in Anti-Fraud lists and KPI calculations.
+
+Current operational behavior after PR #41:
+
+- blocked **and inactive** accounts are hidden from ordinary risk/case/account operational views by default;
+- one toggle exposes the hidden population: **`Показать заблокированных и неактивных`**;
+- inactive accounts still display as **Неактивен**, not `Заблокирован`;
+- KPI, shared-device summaries and duplicate-contact summaries exclude both blocked and inactive accounts;
+- a case containing only excluded accounts is hidden from the ordinary case list;
+- partial cases report the hidden-account count;
+- group bulk block targets only active, unblocked accounts;
+- group bonus/risk evidence continues to use all accounts in the case, including excluded ones;
+- an inactive account revealed by the toggle may still be individually/formally blocked by an operator if required; it is simply not swept into a group bulk block.
+
+The operator visually confirmed this production behavior on 2026-09-08.
+
+---
+
+## 4. Blocking / unblock — implemented and production-proven
+
+Anti-Fraud is advisory/investigative. Risk never auto-blocks an account.
+
+Manual blocking is implemented.
+
+Bitrix protected routes:
+
+- `POST /api/internal/anti-fraud/block`
+- `POST /api/internal/anti-fraud/unblock`
+
+Bot-facing routes:
+
+- `POST /api/anti-fraud/block`
+- `POST /api/anti-fraud/unblock`
+
+Block contract:
+
+- writes `ACTIVE=N`, `BLOCKED=Y`
+- uses fixed approved public reason
+- re-reads factual Bitrix state after mutation
+- already blocked is idempotent and does not overwrite an existing reason
+- group block reports per-account results and supports partial success
+
+Unblock contract:
+
+- blocked account becomes `ACTIVE=Y`, `BLOCKED=N`
+- already unblocked is idempotent
+- historical block reason is retained rather than silently cleared
+- no fake Bitrix block/unblock date is invented
+
+App audit uses `anti_fraud_block_audit`. `blockedAt` is shown only when the application has an authoritative successful current block audit for that state; externally blocked accounts do not receive a fabricated timestamp.
+
+Approved public block wording remains:
 
 > По результатам проведенной проверки подтверждено нарушение Правил программы лояльности «Бонусный Клуб Евразия», квалифицированное как недобросовестное использование Программы. В соответствии с п. 3.9 Правил применена блокировка учетной записи и связанных с ней возможностей участия в Программе.
 
-Do **not** expose to the user/customer:
-
-- Anti-Fraud case ID (`AF-...`)
-- risk score
-- device identifiers
-- similar-phone/email detection details
-- multi-account grouping internals
-- technical evidence/reason codes
-
-Internal audit may retain case ID/risk/evidence separately.
-
-Future email to the blocked user should use the same generic public wording. Email delivery must be independent of blocking result; missing email must not make the block fail.
+Customer-facing reason must never expose case ID, risk score, device identifiers, identity-similarity mechanics or other detection internals.
 
 ---
 
-## 5. Bitrix production integration — current factual state
+## 5. Controlled production acceptance — completed, do not repeat
 
-Bitrix server:
+Safe test account: `USER_ID=880339`.
 
-- hostname: `evrasia`
-- site root: `/home/site_evrasia/web/evrasia.spb.ru/public_html`
-- nginx listens on `192.168.103.141:80` and `192.168.103.141:443`
-- local endpoint verification must use `--resolve evrasia.rest:443:192.168.103.141`; loopback `127.0.0.1:443` is not listening
+Backend/API acceptance was completed without requiring case membership:
 
-Important repository state on the Bitrix server:
+- initial state: `ACTIVE=Y`, `BLOCKED=N`
+- account had `overallRisk=0`, therefore zero current Anti-Fraud cases was expected
+- block succeeded and was independently re-read as `ACTIVE=N`, `BLOCKED=Y`
+- unblock succeeded and restored `ACTIVE=Y`, `BLOCKED=N`
+- historical public reason remained unchanged
+- audit rows advanced exactly by two transitions
+- summary returned exactly to the original state
+- risk/history/bonus values were not altered by block/unblock
+- final result: **27 PASS / 0 FAIL / 0 WARN**
+- `CONTROLLED_BACKEND_E2E_ACCEPTANCE=PASS`
+- `REAL_CUSTOMER_MUTATION=NO`
 
-- the tree already contained unrelated modifications before this work
-- **never use** `git reset --hard`, `git clean`, `git add .`, or broad checkout to clean it
-- stage/commit only exact Anti-Fraud files after reviewing `git diff --cached`
+Do **not** repeat this block/unblock round-trip merely for reassurance.
 
-### Added/changed on Bitrix production
+The safe account is risk-0 and not eligible for a live case-card blocked visual fixture. Therefore:
 
-User field created:
+- backend/API blocked-state semantics are production-verified;
+- UI blocked-state logic is implemented and code-reviewed;
+- live blocked-card rendering on a safe eligible risky case was **not manufactured** and is not falsely claimed as observed;
+- no real customer was mutated to create a convenient visual fixture.
 
-- `UF_AF_BLOCK_REASON`
-- field ID: `166`
-- type: string
-- Bitrix ORM `Bitrix\Main\UserTable` successfully reads it
-
-`AntiFraudAccountMapService.php` now returns:
-
-- `bitrix_active`
-- `bitrix_blocked`
-- `block_reason`
-
-Verified live for user `880339` before block and then after block.
-
-Protected block endpoint added:
-
-- `POST /api/internal/anti-fraud/block`
-- uses existing Anti-Fraud service token/auth pattern
-- max batch currently 50 user IDs
-- public block reason is fixed server-side; client does not supply arbitrary reason
-- real block path uses `CUser->Update()`
-- writes `ACTIVE=N`, `BLOCKED=Y`, `UF_AF_BLOCK_REASON=<approved public wording>`
-- after update it re-reads Bitrix state and verifies the write
-- already blocked user => `already_blocked`, `changed=false`, success=true
-
-The endpoint was first deployed as dry-run only and verified:
-
-- dry-run 200
-- real write rejected with 409 while disabled
-
-Then real write was enabled and tested on the user-approved account `USER_ID=880339`.
-
-### Real controlled test on USER_ID=880339
-
-The user explicitly authorized using account `880339` for the real test.
-
-Verified result:
-
-- before: `ACTIVE=Y`, `BLOCKED=N`
-- after: `ACTIVE=N`, `BLOCKED=Y`
-- approved public reason stored in `UF_AF_BLOCK_REASON`
-- account-map independently confirmed blocked state and reason
-- second block request was idempotent (`already_blocked`, `changed=false`)
-
-The account is intentionally still blocked at this checkpoint until the test sequence is completed.
-
-### Bitrix admin card reason display
-
-Core Bitrix file `bitrix/modules/main/admin/user_edit.php` was **not modified**.
-
-A custom handler was added through the supported `main:OnAdminTabControlBegin` hook:
-
-- `local/php_interface/anti_fraud_admin.php`
-- included from `local/php_interface/init.php`
-- if the opened user has `BLOCKED=Y`, the card shows an `Основание блокировки` row directly under `Заблокирован`
-- any administrator who has permission to open the user card sees the reason
-- if user is externally blocked and reason is empty, UI shows `не указано`
-- reason is read-only display; it is not intended as a manually editable operator field
-
-User visually confirmed the Bitrix card display is correct.
-
-Current observed Git status for these files includes expected local changes, for example:
-
-- `M local/php_interface/init.php`
-- `?? local/php_interface/anti_fraud_admin.php`
-- service files/routes also have Anti-Fraud changes and must be reviewed/staged explicitly when committing
-
-### Bitrix backups retained during this work
-
-Keep until explicit cleanup approval:
-
-- `/home/site_evrasia/backups/anti-fraud-status-contract-20260907-181220`
-- `/home/site_evrasia/backups/anti-fraud-status-contract-v2-20260907-181958`
-- `/home/site_evrasia/backups/anti-fraud-status-contract-v3-20260907-190321`
-- `/home/site_evrasia/backups/anti-fraud-block-endpoint-20260907-190544`
-- `/home/site_evrasia/backups/anti-fraud-block-endpoint-v2-20260907-190759`
-- `/home/site_evrasia/backups/anti-fraud-public-reason-20260907-192746`
-- `/home/site_evrasia/backups/anti-fraud-admin-reason-20260907-192900`
-
-Do not remove them yet.
+This acceptance-fixture lesson is mandatory in `docs/SERVER_SCRIPT_RULES.md`.
 
 ---
 
-## 6. What remains to implement in Evrasia AI Bot
+## 6. Performance hotfix — production accepted
 
-The Bitrix side is functionally proven. The Evrasia AI Bot application still needs the integration layer and UI work.
+PR #38 replaced exhaustive all-pairs identity-similarity scanning with indexed candidate generation while retaining the existing final evaluator and risk/grouping semantics.
 
-Current app code known before this checkpoint:
+Reference production cycle before hotfix:
 
-- `anti-fraud-web.ts` and case DTOs expose `bitrixActive` only; no `bitrixBlocked` / `bitrixBlockReason` yet
-- Bitrix account gateway record exposes `bitrixActive` only
-- account collector persists `bitrix_active` only
-- Anti-Fraud case service exposes `bitrixActive` only
-- frontend Anti-Fraud account cards show `активен/неактивен` only
-- no block buttons in the app UI yet
-- no group bonus total yet
+- protected cycle: **206 s**
+- 6119 active similarity accounts
+- theoretical exhaustive pairs per pass: 18,718,021
+- HTTP scheduler probe could stall during the synchronous scan
 
-Next implementation should include:
+Measured production cycle after hotfix:
 
-1. PostgreSQL migration for `bitrix_blocked` and `bitrix_block_reason` on `anti_fraud_accounts` (inspect current migration conventions first).
-2. Extend Bitrix account-map gateway/collector to ingest `bitrix_blocked` + `block_reason` on every refresh.
-3. Extend case/account API DTOs.
-4. Add gateway/service for calling protected Bitrix `/api/internal/anti-fraud/block`.
-5. Add internal audit for block operations: case ID, target IDs, operator/source, timestamp, prior/new status, result. Do not expose case ID to customer-facing reason/email.
-6. UI account status: `Активен`, `Неактивен`, `Заблокирован`.
-7. Per-account block button.
-8. Group block button; only attempt accounts where `BLOCKED != Y`; show per-user partial results.
-9. Disabled / `Уже заблокирован` state for already blocked accounts.
-10. Group bonus aggregation across all accounts, preserving unknown-count semantics.
-11. Tests for status mapping, idempotency, partial group result, public reason, no public case ID, group bonus NULL handling.
-12. Git branch/PR/CI; no merge without explicit user approval.
-13. Production deployment with normal guards/backups/migration checks.
+- protected cycle: **53 s**
+- `/api/healthz`: 24/24 HTTP 200, max observed 3 ms
+- `/api/anti-fraud/scheduler`: 24/24 HTTP 200, max observed 6 ms
+- zero probe errors/non-200 responses
+- app restart count: 0
 
-After integration is complete, perform controlled unblock of `880339` (or earlier if needed by the user) and verify the reverse status transition. Do not blindly clear `UF_AF_BLOCK_REASON` without an explicit unblock contract; define whether unblock clears or retains historical reason/audit first.
+The persisted `anti_fraud_risk_scoring` duration around ~3.1 s is **not** an acceptance metric for this optimization because it does not include the subsequent similarity overlay. Do not reintroduce that false gate.
+
+Do not rerun the performance refresh unless a future change requires a new measurement.
 
 ---
 
-## 7. Server-script rules learned during this work
+## 7. Operator UI / localization — accepted
 
-In addition to `docs/SERVER_SCRIPT_RULES.md`, preserve these concrete lessons:
+Current production UI behavior is visually accepted by the operator.
 
-- every pasted server block starts with `clear`
-- prefer one complete copy/paste operation
-- KiTTY may leave a green secondary `>` prompt when a very large/nested heredoc paste is truncated; if that happens, use `Ctrl+C` and do **not** retry the same fragile block unchanged
-- prefer shorter paste-robust wrappers and avoid deeply nested heredocs when practical
-- an inner temporary child script may safely use `exit "$RC"`; the **outer interactive pasted wrapper must never `exit`**, so SSH stays open
-- do not use top-level `return` in a child script unless it is inside a function; Bash otherwise reports `return: can only ... from a function or sourced script`
-- propagate child RC correctly so `WRAPPER_RC` reflects failures
-- `curl` from the Bitrix host to its own vhost must target the actual listening IP `192.168.103.141`, not `127.0.0.1`
-- before a write, hash-guard exact target files and back them up
-- after a state-changing API request, independently re-read factual state rather than trusting HTTP 200 alone
+Confirmed after PR #41:
 
----
+- inactive account card shows **Неактивен**;
+- inactive and blocked accounts use the shared hidden operational population;
+- operator toggle wording is **Показать заблокированных и неактивных**;
+- raw technical reason `max_devices_for_same_pair=...` is rendered in Russian as human-readable text, e.g. **`макс. общих устройств для одной пары аккаунтов: 2`**;
+- generated raw keys `matching_other_accounts`, `max_gap_days`, `similar_phone_links`, `similar_email_links` are also localized for operator UI.
 
-## 8. Paused / do not resume automatically
-
-The full-Bitrix email investigation is paused by user decision (“бог с ними, попадутся позже”). Do not resume unless explicitly requested.
-
-Do not expose or repeat secrets previously observed in server diagnostics. A Yandex API key was once printed by a diagnostic from `init.php`; never repeat it. Secret rotation is a separate task only if the user asks.
+Operator confirmation on 2026-09-08: **«все отрабатывает»**.
 
 ---
 
-## 9. Immediate continuation point
+## 8. Anti-Fraud invariants that remain in force
 
-At this checkpoint:
+- risk thresholds: critical `>=75`, high `>=50`, medium `>=25`
+- balance strictly `>40000.00` gives +50 and opens history gate; exactly `40000.00` does not
+- multiple active loyalty cards alone do not add risk points
+- account balance is not multiplied by card count
+- known zero is different from missing; negative current balance is valid
+- detailed 60-day history remains targeted after gate; no fleet-wide history burst
+- protected scheduler interval remains 15 minutes
+- grouping evidence is distinct from risk evidence; behavior alone must not group separate identities
+- Trusted Device represents an installation/trust identity, not IP/hardware identity
+- logout must not manufacture a new device identity
+- bot container must not receive RestIS credentials; loyalty/history access uses protected site-side integration
+- raw card numbers must not appear in bot UI/API/logs
 
-- Evrasia AI Bot production app is stable on `be631fd...` and immutable digest `74a6d1...`
-- Bitrix blocking endpoint is real and verified
-- approved public reason is in use
-- Bitrix admin card reason display is visually verified
-- test account `880339` remains blocked intentionally
-- app-side block/status/group-bonus integration is **not yet implemented**
+Identity-similarity semantics preserved by PR #38:
 
-The next engineering iteration is:
+- phone: same normalized length >=7, exactly one differing digit
+- same-provider email locals >=6, edit distance <=1; same local across provider TLD candidate remains supported
+- cross-provider normalization removes only `.`, `_`, `-`; normalized local >=6 must match and provider differ
+- same-provider email needs corroboration by same name, exact/similar phone or shared device
+- cross-provider email cannot use same-name alone; requires phone/shared-device corroboration
+- candidate index only narrows pairs; final evaluator remains source of truth
 
-**inspect current `main` code/migrations -> implement Bitrix blocked/reason sync + block API client + group bonus UI/buttons -> tests -> PR/CI -> explicit approval -> production deployment.**
+---
+
+## 9. Product / infrastructure continuity
+
+One production application contains four current directions:
+
+1. Phonebook — `/phonebook`
+2. Anti-Fraud — `/antifraud` + scheduler
+3. SamZaberu — Telegram scenario inside `EvrasiaTelegramBotV2`
+4. Corporate communications / MegaFon — Telegram scenario/workflow inside the same app
+
+Canonical routes:
+
+- `/phonebook` = current Phonebook UI
+- `/antifraud` = current Anti-Fraud UI
+- `/directory` = removed / expected 404
+- `/api/directory/...` = removed / expected 404
+
+TEST container `evrasia-ai-bot-v17-test` remains exited/archival. Do not restart it blindly.
+
+Preserve both production secret mounts. Never print secret values.
+
+---
+
+## 10. Backups to retain
+
+Do not clean without explicit operator approval.
+
+Current latest app deployment backup:
+
+- `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
+
+Similarity-hotfix backup:
+
+- `/opt/evrasia-ai-bot/backups/anti-fraud-similarity-hotfix-20260908-090617`
+
+Older production/DB/Bitrix backups documented in `SERVER_UPDATES.md` remain retained until explicit cleanup approval.
+
+---
+
+## 11. Immediate continuation point
+
+The Anti-Fraud blocking / inactive-state / localization / similarity-performance milestone is **implemented, deployed and accepted in production**.
+
+Do not reopen completed work automatically:
+
+- do not repeat USER_ID 880339 block/unblock acceptance;
+- do not rerun the 53-second performance refresh;
+- do not redesign the accepted Anti-Fraud UI without a new requirement;
+- do not restart archival TEST;
+- do not resume the paused full-Bitrix email investigation unless explicitly requested.
+
+The next engineering workstream should start only from a new user requirement and must first inspect current `main` plus current production before mutation.

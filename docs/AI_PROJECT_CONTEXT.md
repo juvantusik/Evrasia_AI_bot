@@ -1,629 +1,470 @@
 # Evrasia AI Bot — AI Project Context
 
-> Operational source of truth for continuing Evrasia AI Bot work across ChatGPT chats.
+> Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-07
-> **Current production:** Evrasia AI Bot v1.7, `/directory` removed
+> **Last updated:** 2026-09-08
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current source branch:** `fix/antifraud-case-refresh-ux` (PR #34 Draft; production unchanged)
-> **Merged release PRs:** #32 v1.7 Anti-Fraud, #33 remove obsolete `/directory`
+> **Current deployed app revision:** `a156db2e30dd2a31d7bd4126410f9f513382adaa`
+> **Current production milestone:** Anti-Fraud manual block/unblock + inactive operational treatment + similarity performance fix are deployed and accepted.
 
 ---
 
 ## 1. Continuation rule
 
-In a new chat, read this file first, then `docs/CURRENT_ARCHITECTURE.md`, `docs/SERVER_SCRIPT_RULES.md` and `docs/NEW_CHAT_HANDOFF.md`. Verify live GitHub/server state only where the next task actually depends on it. Do not replay completed deployment steps.
+In a new chat, read in this order:
 
-Recommended new-chat prompt:
+1. `docs/PROJECT_CHECKPOINT.md`
+2. `docs/AI_PROJECT_CONTEXT.md`
+3. `docs/CURRENT_ARCHITECTURE.md`
+4. `docs/SERVER_SCRIPT_RULES.md`
+5. `SERVER_UPDATES.md`
+6. `docs/NEW_CHAT_HANDOFF.md`
 
-> Продолжаем проект Evrasia AI Bot. Репозиторий `juvantusik/Evrasia_AI_bot`. Сначала прочитай `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/SERVER_SCRIPT_RULES.md` и `docs/NEW_CHAT_HANDOFF.md` из актуальной рабочей ветки/`main`. Считай production главным источником истины, затем актуальный код. Не повторяй уже выполненные действия. Для серверных задач давай один полный bash-wrapper с `clear`, guards, backup/rollback, PASS/FAIL и без вывода секретов.
+Source priority:
 
----
+**production actual state → current GitHub → staging/test → current docs → older discussion**.
 
-## 2. Current milestone — PRODUCTION VERIFIED
+Do not replay completed deployment, block/unblock or performance-acceptance steps unless a new change makes them relevant.
 
-Evrasia AI Bot v1.7 is deployed to production and verified.
-
-Base v1.7 post-production audit on 2026-09-07:
-
-- `PASS_COUNT=34`
-- `WARN_COUNT=0`
-- `FAIL_COUNT=0`
-- `POST_PRODUCTION_AUDIT=PASS`
-- `PRODUCTION_V17_VERIFIED=YES`
-- `FINAL_STATUS=PASS`
-- `FINAL_RC=0`.
-
-After that audit, obsolete `/directory` compatibility routing was removed in PR #33 and deployed app-only to production.
-
-Final `/directory` cleanup deployment result:
-
-- `PASS_COUNT=37`
-- `FAIL_COUNT=0`
-- `ROLLBACK_FAIL_COUNT=0`
-- `DIRECTORY_REMOVAL_PRODUCTION=VERIFIED`
-- `CUTOVER_STARTED=YES`
-- `FINAL_STATUS=PASS`
-- `FINAL_RC=0`.
-
-Exact current deployed application:
-
-- application revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
-- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
-- app container: `evrasia-ai-bot-app`
-- status after deployment: running / healthy
-- direct app port: `127.0.0.1:18080 -> 8080`.
-
-PR #34 is a code/UI fix only at the current working stage; it has not changed production, nginx, DB schema or migrations.
-
-Later documentation-only commits may advance `main`; do not confuse them with the deployed application revision above.
+A documentation-only commit may advance GitHub `main` without changing production. Always keep `main` revision and deployed application revision conceptually separate.
 
 ---
 
-## 3. Current product architecture — IMPORTANT
+## 2. Current production baseline
 
-Evrasia AI Bot is **one production application** with several business modules. Do not describe the current system as only “Phonebook + Anti-Fraud”, and do not describe SamZaberu/MegaFon as separate Docker bots unless the live topology is changed later.
-
-The production container `evrasia-ai-bot-app` contains four working directions:
-
-1. **Phonebook** — canonical and only web interface at `/phonebook`.
-2. **Anti-Fraud** — web interface at `/antifraud` plus protected scheduler/data pipeline.
-3. **SamZaberu** — Telegram scenario inside `EvrasiaTelegramBotV2`, with STOP/ENABLE operations through the Bitrix service layer.
-4. **Corporate communications / MegaFon** — Telegram personal-chat and bound-group workflow using Phonebook data and MegaFon routing logic.
-
-### Canonical route naming
-
-`/phonebook` is the only current Phonebook web route.
-
-`/directory` is **removed**:
-
-- `/directory` = HTTP 404
-- `/directory/...` = HTTP 404
-- `/api/directory/phones` = HTTP 404.
-
-Do not describe `/directory` as an alias, redirect, product or compatibility route.
-
-Historical internal names containing `directory` may remain where they refer to a corporate-directory data structure or stable implementation identifier; they do not create a web route.
-
-### Telegram topology
-
-The server starts one `EvrasiaTelegramBotV2` polling consumer from the production application when `TELEGRAM_BOT_POLLING=true`.
-
-Inside it:
-
-- SamZaberu is an internal Telegram scenario/module;
-- Corporate communications is another module;
-- MegaFon group handling is part of Corporate communications;
-- there is no separate production Docker container for “SamZaberu bot” or “MegaFon bot”.
-
-See `docs/CURRENT_ARCHITECTURE.md` for the compact current diagram.
-
----
-
-## 4. GitHub current state
-
-### PR #32 — v1.7 Anti-Fraud release
-
-- state: closed
-- draft: false
-- merged: true
-- source branch: `feature/v1.7-antifraud-web`
-- merge commit: `33e3548ab014e927e1e00074e27f3a11ef252bbc`.
-
-### PR #33 — remove obsolete `/directory` route
-
-- state: closed
-- draft: false
-- merged: true
-- source branch: `cleanup/remove-directory-route`
-- source head before merge: `a9f017676f69f0d1594fbfe5b06bcfc448c628c2`
-- merge commit: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
-
-GitHub Actions build #252 for merge commit `0fcebb1e...` completed successfully.
-
-Published image:
-
-- tag: `ghcr.io/juvantusik/evrasia_ai_bot:sha-0fcebb1`
-- digest: `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
-- image/config ID: `sha256:78c3d07078995c04948f1fbad600421a665ce03ad35fd388f4d6893f3bc11a47`
-- OCI revision label: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
-
-That exact immutable image is current production.
-
-### PR #34 — Anti-Fraud case grouping / async refresh UX
-
-Current working PR:
-
-- state: open
-- draft: true
-- base: `main`
-- branch: `fix/antifraud-case-refresh-ux`
-- production unchanged.
-
-Scope:
-
-- corroborated similar phone/email identity links are allowed to join accounts into one investigation case;
-- weak similarity remains insufficient unless `corroborated=true`;
-- manual refresh contract changes from one long synchronous request to `202 Accepted` plus scheduler polling;
-- UI shows `partial`/`failed` completion factually and preserves `409` when a cycle is already running;
-- `no_active_card` is shown explicitly;
-- technical similarity reason codes are translated for operator UI;
-- regression coverage checks that the same-name + one-digit-phone rule produces a corroborated link and that the resulting link group is collapsed into one Anti-Fraud case group.
-
-Do not mark PR #34 Ready or merge it until its updated CI is green and the user explicitly approves the next PR action.
-
----
-
-## 5. Production infrastructure — verified 2026-09-07
-
-### Host
+Host:
 
 - hostname: `eur-bot-01`
 - IP: `192.168.103.200`
-- OS: Debian 13 (trixie)
-- Docker Engine: 26.1.5
-- Docker Compose: 2.26.1-4.
+- OS: Debian 13
 
-### Docker / Compose
+Runtime:
 
 - Compose project: `evrasia-prod`
+- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - app service/container: `evrasia-ai-bot-app`
-- PostgreSQL service/container: `evrasia-ai-bot-db`
-- Docker network: `evrasia-prod-internal`
-- PostgreSQL volume: `evrasia-postgres-prod-data`
-- PostgreSQL image: `postgres:16-bookworm`.
-
-### PostgreSQL
-
-- production role/user: `evrasia_ai_bot`
+- DB service/container: `evrasia-ai-bot-db`
 - production DB: `evrasia_ai_bot`
-- retained test DB: `evrasia_ai_bot_antifraud_test`
-- both DBs owned by `evrasia_ai_bot`
-- production migrations: 18
-- retained test DB migrations: 18
-- Anti-Fraud production tables: 11.
+- DB role: `evrasia_ai_bot`
+- direct app port: `127.0.0.1:18080`
+- network: `evrasia-prod-internal`
+- volume: `evrasia-postgres-prod-data`
 
-Active legacy infrastructure names are absent:
+Current deployed application:
 
-- DB role `samzaberu`: absent
-- DB names `samzaberu`, `samzaberu_antifraud_test`: absent
-- container/service `samzaberu-db`: absent
-- active Compose refs to `samzaberu-db`: 0.
+- revision: `a156db2e30dd2a31d7bd4126410f9f513382adaa`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ce3b85fe789495f3b5ee4e59fe8eb129a75343d1916f2a7c45483da18d988947`
+- config ID: `sha256:cbe989d6375189f9f12d7a0ad6f74f9f5455536838750fd96f0e2e459d9cc145`
+- platform: `linux/amd64`
+- migrations: **20**
+- latest migration journal timestamp: `1788769200000`
 
-### SamZaberu business data is NOT legacy
+PR #41 app-only deployment result:
 
-`public.samzaberu_requests`, SamZaberu API/service names and SamZaberu business semantics are intentional current business functionality.
+- `PASS_COUNT=29`
+- `FAIL_COUNT=0`
+- `ROLLBACK_ATTEMPTED=NO`
+- `FINAL_STATUS=PASS`
+- DB container unchanged/not restarted
+- schema/migrations unchanged
+- environment/mounts/ports preserved
+- scheduler enabled/idle/15m/no last error
+- main HTTP routes passed
+- no Anti-Fraud refresh triggered by deployment
+- no Bitrix user-state mutation during deployment
 
-After the `/directory` cleanup deployment:
+Latest deployment backup:
 
-- `public.samzaberu_requests` rows: 31
-- continuity: PASS
-- DB container ID/start timestamp unchanged
-- DB schema unchanged.
-
-Do not rename/delete SamZaberu business data merely because the old infrastructure once used the name `samzaberu`.
-
----
-
-## 6. Phonebook web
-
-Canonical and only working UI:
-
-- `/phonebook`.
-
-Current production verification:
-
-- direct `/phonebook` = 200
-- routed `/phonebook` = 200
-- direct `/api/phonebook/phones` = 200
-- `/directory` = 404 direct/routed
-- `/api/directory/phones` = 404.
-
-Product, documentation and architecture wording must say **Phonebook**, not Directory.
-
-The codebase may still contain historical `directory-*` file/service/schema identifiers where they refer to corporate-directory implementation details; those identifiers do not mean a separate current `/directory` product.
+`/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
 
 ---
 
-## 7. SamZaberu Telegram module
+## 3. Product architecture — IMPORTANT
 
-SamZaberu is active business functionality inside `EvrasiaTelegramBotV2`.
+Evrasia AI Bot is **one production application** with four current directions:
 
-Telegram root menu exposes `🍱 СамЗаберу` to allowed operational managers.
+1. **Phonebook** — `/phonebook`
+2. **Anti-Fraud** — `/antifraud` + protected scheduler/data pipeline
+3. **SamZaberu** — Telegram scenario inside `EvrasiaTelegramBotV2`
+4. **Corporate communications / MegaFon** — Telegram scenario/workflow inside the same application
 
-Backend routes include `/api/samzaberu/...` for restaurants, access, summary, requests and manual completion.
+There are not separate production Docker bots for SamZaberu and MegaFon.
 
-`SamzaberuService`:
+Canonical route contract:
 
-- validates operator/restaurant access;
-- persists request journal and rules;
-- supports actions `STOP` and `ENABLE`;
-- calls the Bitrix service layer (`applyStop` / `applyEnable`);
-- retries up to 3 times;
-- verifies persisted/factual rule state;
-- records success/cancel/escalation states;
-- preserves manual-completion path for escalated requests.
+- `/phonebook` = current Phonebook UI
+- `/antifraud` = current Anti-Fraud UI
+- `/directory` = removed / HTTP 404
+- `/directory/...` = removed / HTTP 404
+- `/api/directory/...` = removed / HTTP 404
 
-This module is production functionality, not a TEST artifact.
+Historical internal identifiers containing `directory` may remain as implementation names and do not recreate the product route.
 
----
-
-## 8. Corporate communications / MegaFon Telegram module
-
-Corporate communications is another active module inside `EvrasiaTelegramBotV2`.
-
-Private-chat flow:
-
-- user chooses `📱 Корпоративная связь`;
-- enters a phone number;
-- bot resolves Phonebook data;
-- user describes the problem;
-- for MegaFon, the bot checks membership of the bound “Евразия Мегафон” group and posts a structured request into that group.
-
-Bound-group flow:
-
-- Super Admin binds the target MegaFon group with `/bind_megafon_group`;
-- bot processes normal messages only in the bound group;
-- it can resolve phone/ООО from Phonebook data;
-- asks for missing phone/legal-entity/problem data when needed;
-- refuses ambiguous/mismatched phone-to-legal-entity routing;
-- prepares/addressses the structured request to the configured MegaFon manager.
-
-The group-routing logic is implemented in `megafon-group-routing.ts`; group chat binding is stored as bot setting.
-
-For T2 records, Corporate communications produces a prepared contact/request flow rather than using the MegaFon bound-group path.
+See `docs/CURRENT_ARCHITECTURE.md` for the canonical topology and current Anti-Fraud state flow.
 
 ---
 
-## 9. Anti-Fraud production runtime
+## 4. GitHub / release history relevant to current production
 
-Verified runtime:
+Merged application PRs leading to the current Anti-Fraud state:
 
-- `ANTI_FRAUD_SCHEDULER_ENABLED=true`
-- `ANTI_FRAUD_SCHEDULER_INTERVAL_MINUTES=15`
-- `ANTI_FRAUD_SCHEDULER_RUN_ON_START=false`
-- `TELEGRAM_BOT_POLLING=true`
-- `BITRIX_ANTI_FRAUD_TOKEN_FILE=/run/secrets/anti-fraud-service-token`.
+- PR #32 — v1.7 Anti-Fraud release → `33e3548ab014e927e1e00074e27f3a11ef252bbc`
+- PR #33 — remove obsolete `/directory` → `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
+- PR #34 — similar-identity grouping + async refresh UX → merged and superseded as active work
+- PR #35 — CI regression fix → `be631fd31c96434ac7232f5e1641ecf9ea94c823`
+- PR #36 — Bitrix blocking status/operator actions → `947c815d15cc12d0ce571edbc2a2905ef9fed009`
+- PR #37 — blocking UI/unblock/group bonus → `86c98eacf5959ca2bf8d0f2c95441ff1e4192f8f`
+- PR #38 — remove all-pairs identity similarity scan → `971af94e26160914efd2c229a4352d398a65214a`
+- PR #41 — inactive operational exclusion + reason localization → `a156db2e30dd2a31d7bd4126410f9f513382adaa`
 
-Required secret mounts are present/readable/non-empty:
+Docs-only hardening:
 
-- `/run/secrets/bitrix-api-token`
-- `/run/secrets/anti-fraud-service-token`.
+- PR #39 — server-script rules hardening → merge `13bf28fe96a857498bc108705ccd6ed3f05915f4`
+- PR #40 — acceptance-fixture eligibility lesson; its rule content must be retained in `docs/SERVER_SCRIPT_RULES.md` and is superseded once consolidated into the current docs update.
 
-Never print their values.
+Main push CI #298 / run ID `34202375971` for `a156db2e...`:
 
-After app-only cleanup deployment:
-
-- scheduler endpoint = 200
-- enabled = true
-- running = false at check time
-- interval = 15 minutes
-- immediate post-restart scheduler status = `idle`
-- latest protected DB cycle = `success`
-- Telegram polling = true
-- Telegram 409 conflicts observed after deployment = 0.
-
-PR #34 does not alter the scheduler cadence or protected-cycle stage order; it changes only how manual web refresh waits for that existing single-flight cycle.
+- success
+- tests `70/70`
+- typecheck/API/main web/Phonebook/Anti-Fraud builds passed
+- smoke tests passed
+- published exact immutable production image above.
 
 ---
 
-## 10. Nginx / current routes
+## 5. Anti-Fraud product contract — current
 
-Verified active routing:
+Anti-Fraud is advisory/investigative. Risk score never automatically blocks an account.
 
-- `/antifraud` -> production 18080
-- `/antifraud/` -> production 18080
-- `/api/anti-fraud/` -> production 18080
-- `/assets/antifraud-` -> production 18080
-- normal Phonebook/default traffic -> production 18080
-- TEST port `18081` references: 0.
+### Risk thresholds
 
-The `/directory` cleanup deployment did **not** modify nginx; nginx checksum remained unchanged.
-
-Current route contract:
-
-- `/phonebook` = 200
-- `/antifraud` = 200
-- `/directory` = 404
-- `/api/directory/...` = 404.
-
-PR #34 intentionally does not change nginx or `proxy_read_timeout`; the application returns manual refresh acceptance before that timeout and the UI polls scheduler status separately.
-
----
-
-## 11. TEST state after production cutover
-
-Old container:
-
-- `evrasia-ai-bot-v17-test`
-- status: exited
-- archival/rollback evidence only.
-
-Do not restart it blindly. Its environment belongs to the old TEST topology, while the retained DB has already been renamed to `evrasia_ai_bot_antifraud_test`.
-
-If TEST is needed again, recreate it deliberately using the current production-era naming/topology.
-
----
-
-## 12. Backups / rollback assets — KEEP
-
-Do not clean without explicit user approval.
-
-Phase 1 directory:
-
-`/opt/evrasia-ai-bot/backups/production-v17-phase1-20260907-053318`
-
-Production dump SHA256:
-
-`8cf697c2faa5010d12cb9389aac1ecd38929d1672ff1bdd432bad5df5c45e14a`
-
-Phase 2 directory:
-
-`/opt/evrasia-ai-bot/backups/production-v17-phase2-dbrename-20260907-054218`
-
-- production dump `evrasia-production-pre-dbrename.dump`
-- SHA256 `6dfd1b8f0d3d30857ac3c7a06d29f05e38ccdccb4b86db5a0862780b14bb56f1`
-- test dump `evrasia-test-pre-dbrename.dump`
-- SHA256 `bd862bc8445c632face19b4d96e23edc49d1c2385c5f05481be5d40a3a14327c`
-- `postgres-globals-pre-dbrename.sql`
-- pre-change Compose/env/inspect assets.
-
-App-only `/directory` removal backup:
-
-`/opt/evrasia-ai-bot/backups/app-only-remove-directory-20260907-090654`
-
-Previous production rollback image retained:
-
-`ghcr.io/juvantusik/evrasia_ai_bot@sha256:381e9d34e3ecd65e814cc93b2c0b91656bc9155a5437e86ea93c1a7f34bceffc`
-
-Do not remove any of these until explicit cleanup approval.
-
----
-
-## 13. Anti-Fraud architecture / contracts
-
-Protected site-side routes:
-
-- `POST /api/internal/anti-fraud/card-map`
-- `POST /api/internal/anti-fraud/account-map`
-- `POST /api/internal/anti-fraud/trusted-device-export`
-- `POST /api/internal/anti-fraud/loyalty`.
-
-The bot does not receive direct RestIS credentials.
-
-Protected scheduler cycle:
-
-1. Trusted Device export
-2. Bitrix account-map
-3. preliminary risk scoring without history
-4. priority loyalty for risky/newly-risky accounts
-5. rolling stale loyalty scan up to 200 accounts
-6. final risk scoring with targeted 60-day history only for history gate
-7. case dynamics.
-
-Manual scheduler routes / web refresh contract in PR #34:
-
-- `GET /api/anti-fraud/scheduler` returns current single-flight cycle state;
-- `POST /api/anti-fraud/refresh` starts the same protected cycle and returns **HTTP 202 Accepted** immediately after the cycle is accepted;
-- the web UI then polls `GET /api/anti-fraud/scheduler` until `running=false`;
-- if a cycle is already running, POST remains **HTTP 409**;
-- completed `partial` and `failed` states must be shown factually to the operator; do not turn a long successful cycle into a false nginx timeout error.
-
-Anti-Fraud investigation-case grouping:
-
-- shared device can join accounts into one case;
-- exact normalized phone/email can join accounts into one case;
-- similar phone/email may join accounts only when the stored identity link has `corroborated=true`;
-- weak similarity by itself does not join cases;
-- current similarity rule `sameName + phone differs by exactly one digit` is unchanged;
-- corroborated links are included transitively, so a chain of valid links remains one investigation case;
-- behavioral signals by themselves do not merge separate identities into one case.
-
-Do not run a full ~1784-account loyalty burst every 15 minutes.
-
-Risk is advisory-only; no automatic account blocking.
-
-Thresholds:
-
-- critical >=75
-- high >=50
-- medium >=25.
+- critical `>=75`
+- high `>=50`
+- medium `>=25`
 
 High-balance rule:
 
-- current balance strictly `> 40000.00`: +50 and history gate
-- exactly `40000.00`: no high-balance trigger.
+- current bonus balance strictly `>40000.00` → +50 and history gate
+- exactly `40000.00` → no high-balance trigger
 
-Multiple active cards are operator-visible anomaly but add 0 automatic risk points until business rules change.
+Loyalty semantics:
 
-`TotalSum` is account/phone-level current balance; never multiply/sum it once per active card.
+- account balance is not multiplied by active-card count
+- multiple active cards alone add 0 automatic risk points
+- known zero and missing are different
+- negative current bonus balance is valid
+- detailed 60-day history is targeted after gate; never bulk-load fleet history every scheduler cycle
 
-`0.00` means known zero; `NULL` means unavailable/unknown.
+Grouping semantics:
+
+- grouping evidence is separate from risk evidence
+- behavioral signals alone do not merge separate identities
+- shared device, exact identity and corroborated similarity can create links/groups under the current rules
+
+---
+
+## 6. Bitrix account state / operational visibility
+
+Bitrix is the account-state source of truth.
+
+Status mapping:
+
+- `ACTIVE=Y`, `BLOCKED=N` → **Активен**
+- `ACTIVE=N`, `BLOCKED=N` → **Неактивен**
+- any `BLOCKED=Y` → **Заблокирован**
+
+Only `BLOCKED=Y` is a true Bitrix block.
+
+PR #41 operational rule:
+
+- inactive and blocked accounts are hidden from ordinary Anti-Fraud operational lists by default;
+- shared toggle: **`Показать заблокированных и неактивных`**;
+- inactive remains visually **Неактивен**;
+- KPI, shared-device summary and duplicate-contact summary exclude both blocked and inactive accounts;
+- cases with only excluded accounts disappear from ordinary case list;
+- group bonus and risk evidence continue to include all case accounts;
+- group bulk block targets active unblocked accounts only;
+- an inactive account exposed by the toggle may still be individually/formally blocked if the operator explicitly chooses it.
+
+The operator visually confirmed this current production behavior on 2026-09-08.
+
+---
+
+## 7. Manual block / unblock
+
+Bitrix protected routes:
+
+- `POST /api/internal/anti-fraud/block`
+- `POST /api/internal/anti-fraud/unblock`
+
+Bot-facing routes:
+
+- `POST /api/anti-fraud/block`
+- `POST /api/anti-fraud/unblock`
+
+Block:
+
+- manual operator action only
+- sets `ACTIVE=N`, `BLOCKED=Y`
+- fixed approved public reason is stored
+- factual state is re-read after mutation
+- already-blocked is idempotent and does not overwrite an existing reason
+- group action returns per-account outcomes and may partially succeed
+
+Unblock:
+
+- blocked account becomes `ACTIVE=Y`, `BLOCKED=N`
+- already-unblocked is idempotent
+- historical reason is retained
+- no fake Bitrix block/unblock date is invented
+
+Audit:
+
+- application uses `anti_fraud_block_audit`
+- `blockedAt` is shown only when current state has authoritative successful app audit; an externally blocked account does not receive a fabricated date.
+
+Approved public wording:
+
+> По результатам проведенной проверки подтверждено нарушение Правил программы лояльности «Бонусный Клуб Евразия», квалифицированное как недобросовестное использование Программы. В соответствии с п. 3.9 Правил применена блокировка учетной записи и связанных с ней возможностей участия в Программе.
+
+Do not expose customer-facing:
+
+- Anti-Fraud case ID
+- risk score
+- device IDs
+- similar phone/email mechanics
+- multi-account grouping internals
+- technical reason/evidence codes.
+
+---
+
+## 8. Controlled backend acceptance — COMPLETE
+
+Safe test account: `USER_ID=880339`.
+
+The account had `overallRisk=0`, so no current case was expected.
+
+Completed production round-trip:
+
+- before: `ACTIVE=Y`, `BLOCKED=N`
+- block: `ACTIVE=N`, `BLOCKED=Y`
+- unblock: `ACTIVE=Y`, `BLOCKED=N`
+- final state exactly restored
+- historical reason unchanged
+- exactly two audit transitions
+- risk/history/bonus unchanged
+- summary restored exactly
+- **27 PASS / 0 FAIL / 0 WARN**
+- `CONTROLLED_BACKEND_E2E_ACCEPTANCE=PASS`
+- no real customer mutation
+
+Do not repeat this test merely for reassurance.
+
+### Acceptance-fixture lesson
+
+A known-safe account is not automatically eligible for every UI path.
+
+USER_ID 880339 is risk-0 and legitimately has no case. Never choose/mutate a real customer or fabricate production risk data just to force a visual fixture. Split acceptance honestly when a safe fixture cannot exercise one visual state.
+
+Backend blocked-state semantics are production-verified. A live blocked-card visual on a safe eligible risky case was not manufactured and must not be falsely claimed.
+
+---
+
+## 9. Similarity performance — COMPLETE
+
+PR #38 removed the exhaustive all-pairs candidate scan while preserving final evaluator semantics.
+
+Reference before hotfix:
+
+- 6119 active similarity accounts
+- 18,718,021 theoretical account pairs per exhaustive pass
+- protected cycle 206 s
+- event-loop responsiveness degraded during synchronous scan
+
+Measured after hotfix:
+
+- protected cycle 53 s
+- `/api/healthz`: 24/24 HTTP 200, max 3 ms
+- `/api/anti-fraud/scheduler`: 24/24 HTTP 200, max 6 ms
+- zero probe errors/non-200
+- app restart count 0
+
+Important instrumentation rule:
+
+`anti_fraud_risk_scoring` duration around ~3.1 s measures the base scorer and does **not** include the subsequent identity-similarity overlay. It is not a valid performance gate for PR #38.
+
+Do not rerun the performance refresh unless a future relevant code change requires a new measurement.
+
+Identity evaluator semantics retained:
+
+- phone: same normalized length >=7, exactly one differing digit
+- same-provider email local >=6, edit distance <=1; same-local provider-TLD candidate supported
+- cross-provider normalization removes only `.`, `_`, `-`; normalized local >=6 equal, provider differs
+- same-provider email requires corroboration by same name, exact/similar phone or shared device
+- cross-provider email cannot use same name alone; requires phone/shared-device corroboration
+- final evaluator remains source of truth; candidate index only narrows candidate pairs.
+
+---
+
+## 10. UI / localization acceptance
+
+Operator production UI is accepted after PR #41.
+
+Confirmed:
+
+- inactive card shows `Неактивен`
+- inactive/blocked operational hiding works
+- shared toggle wording is correct
+- raw `max_devices_for_same_pair=...` is localized to human-readable Russian, e.g. `макс. общих устройств для одной пары аккаунтов: 2`
+- generated keys `matching_other_accounts`, `max_gap_days`, `similar_phone_links`, `similar_email_links` are localized.
+
+Operator confirmation: **«все отрабатывает»**.
+
+---
+
+## 11. Anti-Fraud scheduler / async refresh contract
+
+Runtime:
+
+- `ANTI_FRAUD_SCHEDULER_ENABLED=true`
+- interval 15 minutes
+- run-on-start false
+
+Manual refresh:
+
+- `POST /api/anti-fraud/refresh` accepts the existing protected single-flight cycle and returns HTTP 202 when accepted
+- UI polls `GET /api/anti-fraud/scheduler`
+- already-running cycle remains 409
+- completed partial/failed states are shown factually
+
+HTTP timeout after a 202 is not proof of job failure. Persisted `anti_fraud_sync_runs` state is authoritative for accepted background cycles.
+
+Never trigger a second refresh while the previous accepted cycle may still be running.
+
+---
+
+## 12. Credential / integration boundaries
+
+Required app secret mounts remain protected and must never be printed.
+
+The bot container must **not** receive RestIS credentials.
+
+Anti-Fraud loyalty/history data is reached through the protected site-side integration. Do not add RestIS credentials to `evrasia-ai-bot-app` as a deployment guard or “fix”.
 
 Raw loyalty card numbers must not appear in bot UI/API/logs.
 
-Case dynamics:
-
-- Новый
-- Усилился
-- Без изменений
-- Ослаб.
+Trusted Device represents app install/trust identity, not IP or hardware identity. Logout must not create a new identity.
 
 ---
 
-## 14. Loyalty fleet reference
+## 13. Phonebook / Telegram continuity
 
-Read-only classification from 2026-09-05:
+Phonebook:
 
-- active Bitrix accounts: 1784
-- exactly one active state-113 card: 1438
-- no active state-113 card: 240
-- multiple active state-113 cards: 106
-- unresolved: 0.
+- `/phonebook` is the only canonical Phonebook route
+- `/directory` is absent / 404
 
----
+SamZaberu:
 
-## 15. Migrations relevant to v1.7
+- remains current production functionality inside `EvrasiaTelegramBotV2`
+- STOP/ENABLE through Bitrix service layer
+- PostgreSQL request/rule journal remains intentional business data
 
-Production/test total: 18.
+Corporate communications / MegaFon:
 
-Important late migrations:
+- remains current production functionality inside the same bot process
+- uses Phonebook data and bound group workflow
 
-- **0013** — exact monetary/loyalty decimal fields, `bonus_balance NUMERIC(14,2)`, `loyalty_verified`.
-- **0014** — RestIS event identity hardening; raw `restis_id` retained as nonunique source metadata.
-- **0015** — signed current bonus balance; current balance may be negative.
-- **0016** — `loyalty_active_card_count`, `loyalty_issue`; NULL/0/1/>1 semantics.
-- **0017** — `anti_fraud_sync_runs.status` supports `running`, `success`, `partial`, `failed`.
-
-Production audit verified the `partial` constraint.
-
-The `/directory` cleanup deployment added no DB migration and left migration count at 18.
-
-PR #34 also adds no DB schema/migration change; its case grouping consumes the existing `anti_fraud_identity_links.corroborated` data.
+Do not rename/delete current SamZaberu business data merely because older infrastructure once used `samzaberu` in DB/container naming.
 
 ---
 
-## 16. Trusted Device foundation
+## 14. TEST / backups
 
-- per-install opaque `device_id`
-- 32 cryptographically random bytes -> 64 lowercase hex
-- regex `^[a-f0-9]{64}$`
-- not UUID/IMEI/MAC/advertising ID/hardware identifier
-- survives restart/update/logout
-- reinstall creates a new ID
-- server may store SHA-256 device hash
-- trust TTL: 90 days
-- IP is not identity/trust.
+Legacy `evrasia-ai-bot-v17-test` is exited/archival. Do not restart blindly.
 
-Protected export endpoint:
+Retain backups until explicit approval, including:
 
-`/api/internal/anti-fraud/trusted-device-export`.
+- `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
+- `/opt/evrasia-ai-bot/backups/anti-fraud-similarity-hotfix-20260908-090617`
+- earlier v1.7 production/DB rename backups listed in `SERVER_UPDATES.md`
+- retained Bitrix Anti-Fraud backups documented from blocking endpoint/admin work.
+
+Do not clean backup assets automatically.
 
 ---
 
-## 17. Paused anomaly investigation — USER_ID 737384
-
-**Status: PAUSED by user. Do not resume unless asked.**
-
-Safe conclusions already established:
-
-- account had 10 active state-113 cards
-- 9 newer cards map to type/prefix corresponding to «Евразия 50%»
-- current RestIS and Bitrix card sets matched
-- legacy `account.php` mirrored RestIS cards into Bitrix
-- Anti-Fraud did not create these cards
-- thousands of activation-related requests were observed around 2026-09-02/03
-- exact initiating frontend/user/process cause remains unresolved
-- never replay activation requests and never persist full card numbers in docs.
-
----
-
-## 18. Deployment history / lessons already resolved
-
-Do not repeat these failures:
-
-1. YAML accidentally executed as Python; generated-file path must be passed to `python3 - ...`.
-2. PostgreSQL boolean display mismatch caused false rollback; map booleans explicitly to stable values.
-3. Old deployment logic treated the former `/directory` 308 redirect as a regression; that route is now removed and expected to return 404.
-4. Nginx first-request race produced transient 502 when old worker still pointed at stopped TEST; keep old upstream alive through reload/retry.
-5. Renaming a Compose-managed container is not a reliable rollback artifact because Compose labels remain.
-6. One rollback restored DBs but not app; dedicated app recovery completed and was verified.
-7. During `/directory` cleanup, a first app-only attempt stopped **before cutover** because a staged Compose file copied to `/tmp` resolved relative `prod-app.env` / `prod-db.env` paths under `/tmp`. Production stayed unchanged. Correct fix: stage the temporary Compose file inside `/opt/evrasia-ai-bot/prod` or stage all referenced relative files consistently.
-
-Successful release history:
-
-- Phase 1: application v1.7 + migrations 4->18 + nginx + scheduler + protected control cycle.
-- Phase 2: PostgreSQL/Docker infrastructure rename only.
-- App-only cleanup: remove `/directory`, no DB migration/restart and no nginx change.
-
-All completed successfully.
-
----
-
-## 19. Mandatory server-script rules
+## 15. Mandatory server-script rules
 
 `docs/SERVER_SCRIPT_RULES.md` is mandatory.
 
-Operator preference:
+Current high-value lessons:
 
-- one complete copy-paste block
-- wrapper writes `/tmp/...sh` via quoted heredoc
-- real script begins with `clear`
-- then `set +e`, `set +u`, `set +o pipefail 2>/dev/null`
-- syntax check with `bash -n`
-- numbered stages
-- guards before mutation
-- backup before DB changes
-- rollback
-- explicit PASS/FAIL/FINAL_STATUS/FINAL_RC
-- no secret values
+- one complete copy-paste block; real script starts with `clear`, then safe shell mode
+- architecture-aware, operation-specific guards only
+- no unrelated Telegram/RestIS gates for Anti-Fraud-only work
+- use GHCR auth under user `tech`; do not invent a new token first
+- stage Compose under `/opt/evrasia-ai-bot/prod` when relative paths exist
+- pre-cutover scheduler race → bounded wait, then revalidate; not immediate false failure
+- async 202 + transient timeout ≠ job failure
+- persisted DB run state is authoritative when HTTP responsiveness is under test
+- validate performance metric boundaries before using them as pass/fail gates
+- validate UI/API fixture eligibility before production mutation
+- never mutate a real customer merely to make acceptance visually convenient
+- no secrets in output
+- backups/rollback/post-check for production mutations
 - terminal remains open.
 
-Do not omit `clear`; the operator explicitly requires each new server script to visually clear previous output.
+---
 
-For Compose staging, preserve the directory context of relative `env_file` and mount paths.
+## 16. Paused work
+
+Full-Bitrix email investigation remains paused by user decision. Do not resume unless explicitly asked.
+
+Historical anomaly investigation around USER_ID 737384 remains paused unless the user explicitly asks to reopen it. Do not persist or repeat raw card-number data.
 
 ---
 
-## 20. Product roadmap
+## 17. Product roadmap / parallel legal track
 
-- **v1.7** — current production baseline; Phonebook + Anti-Fraud + Telegram SamZaberu + Corporate communications/MegaFon all remain part of the unified production application; `/directory` removed.
-- **v1.8** — document generation (Jira KAN-66, KAN-77).
-- **v1.9** — document sending through Exchange (Jira KAN-67, KAN-78).
+Current technical baseline remains v1.7 unified production app.
 
-Trusted Device remains Anti-Fraud foundation/data source, not a separate bot version.
+Previously noted roadmap:
 
----
+- v1.8 — document generation
+- v1.9 — document sending through Exchange
 
-## 21. Parallel legal Bonus Club work
+Trusted Device is an Anti-Fraud foundation/data source, not a separate bot version.
 
-Technical Evrasia AI Bot and legal Bonus Club work are separate tracks.
-
-Current legal package in the project includes offer, PD policy, optional additional-processing consent and advertising consent for `evrasia.rest`. Do not mix internal Anti-Fraud algorithms/risk thresholds into public legal documents unless legally required.
+Legal Bonus Club work is a separate track. Do not expose internal Anti-Fraud algorithms/risk thresholds in public legal documents unless specifically required.
 
 ---
 
-## 22. NEXT STEP — current continuation point
+## 18. Immediate continuation point
 
-Production baseline remains unchanged at revision `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`.
+The current Anti-Fraud milestone is **implemented, deployed, performance-accepted and visually accepted**.
 
-Current working task is PR #34 (`fix/antifraud-case-refresh-ux`), still Draft. Before any Ready/merge/production step:
+Do not automatically reopen:
 
-1. keep production untouched;
-2. verify the updated PR CI/typecheck/tests are green;
-3. confirm regression coverage for corroborated similar identity -> one case group;
-4. confirm async refresh remains `202 + scheduler polling`, with 409 for already-running and factual partial/failed UX;
-5. do not add DB migrations or nginx changes for this fix;
-6. only after successful review ask for/receive explicit user approval before Ready or merge.
+- PR #34/#36/#37/#38/#41 implementation work
+- USER_ID 880339 block/unblock acceptance
+- 53-second performance refresh measurement
+- archival TEST
+- paused email/anomaly investigations.
 
-Stable production facts that remain in force:
-
-1. Immutable production digest `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`.
-2. `/phonebook` is the only Phonebook route.
-3. `/directory` and `/api/directory/...` are absent and return 404.
-4. Four current directions remain: Phonebook, Anti-Fraud, SamZaberu Telegram, Corporate communications/MegaFon Telegram.
-5. Anti-Fraud scheduler remains enabled every 15 minutes; latest protected production cycle verified `success`.
-6. Telegram polling remains enabled; deployment verification observed 0 Telegram 409 conflicts.
-7. DB remains `evrasia_ai_bot`, migrations 18, Anti-Fraud tables 11, SamZaberu rows 31.
-8. Keep backups and archival TEST assets until explicit cleanup approval.
+The next engineering iteration starts from the next user requirement. Before any change, inspect factual production, current `main`, affected files, PR/CI state and only then make the smallest necessary change.
 
 ---
 
-## 23. Maintenance rule
+## 19. Maintenance rule
 
-Update this file, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `SERVER_UPDATES.md` and, when relevant, `docs/SERVER_SCRIPT_RULES.md` after every material milestone affecting:
+After any material change to deployed revision/image, topology, DB/migrations, scheduler behavior, integrations, Anti-Fraud business rules, canonical routes or backup/rollback state, update:
 
-- branch / PR / merge state
-- deployed revision/image
-- production infrastructure/naming
-- current product modules or canonical routes
-- Telegram bot/module topology
-- DB/migration level
-- scheduler/runtime
-- nginx routing
-- integrations/business logic
-- backup/rollback status
-- next continuation point.
+- `docs/PROJECT_CHECKPOINT.md`
+- `docs/AI_PROJECT_CONTEXT.md`
+- `docs/CURRENT_ARCHITECTURE.md`
+- `docs/NEW_CHAT_HANDOFF.md`
+- `SERVER_UPDATES.md`
+- `docs/SERVER_SCRIPT_RULES.md` when a new operational lesson is learned.
 
-When a decision changes, preserve the meaning as: **Было -> Стало -> Причина**.
+When a decision changes, record **Было → Стало → Причина** and keep production application identity separate from docs-only GitHub revisions.
