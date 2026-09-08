@@ -95,6 +95,9 @@ runuser -u tech -- env HOME=/home/tech docker pull "<immutable-image>"
 - Preserve the last confirmed phase between iterations.
 - If a deployment fails before `CUTOVER_STARTED=YES`, do not rollback and do not blindly repeat already-passed phases.
 - If the failure was only registry authentication and the target image is later pulled successfully, resume from the next required phase instead of restarting the whole deployment.
+- If a scheduler/refresh cycle is already running at a pre-cutover guard, **do not treat this normal race as a deployment failure** and force the operator to restart the whole procedure. If no mutation has started, wait for the existing cycle to become idle with a bounded timeout, then re-check the current image, DB/container identity and scheduler state before continuing.
+- The bounded scheduler wait must not trigger, cancel, restart or mutate the cycle. If the wait limit is exceeded or authoritative run state becomes failed/ambiguous, stop before mutation and report `HOLD` with the observed state.
+- For a 15-minute scheduler whose normal cycle can last several minutes, prefer an in-script idle wait over an immediate `FAIL: scheduler is not idle`; this avoids repeated operator copy-paste runs while preserving the same safety gate immediately before cutover.
 - If a production cutover is in progress, avoid unrelated changes to `main` that would create a new image/revision and make the selected immutable target ambiguous. Documentation work should go to a separate branch/PR until the cutover target is verified in production.
 - For an app-only hotfix with no new migrations, verify that migration journal state remains unchanged; do not invent new schema expectations.
 - Data row-count equality is only a valid cutover guard when background writers are known idle for the measurement window. Scheduler-driven tables may legitimately change between widely separated snapshots.
@@ -190,6 +193,7 @@ These are current documented invariants, not substitutes for guards before a fut
 - **Architecture-drift pitfall:** do not require RestIS credentials in the bot container; current architecture intentionally keeps them out of the bot.
 - **Async-timeout pitfall:** after `POST /api/anti-fraud/refresh` returns `202`, a later `/scheduler` timeout does not prove the refresh failed. Check persisted run state and do not retrigger blindly.
 - **First-timeout pitfall:** a monitoring script must not terminate the entire acceptance procedure on the first transient HTTP timeout when DB-backed state can still be checked.
+- **Scheduler-race pitfall:** if the periodic Anti-Fraud cycle starts between preflight and deployment, do not fail immediately and make the operator rerun the full script. Wait boundedly for the existing cycle to become idle, then re-run only the critical pre-cutover guards.
 - **Invented-contract pitfall:** never block deployment on assumed JSON fields or response shapes that were not verified against current code/live output.
 
 ## Operator preference
