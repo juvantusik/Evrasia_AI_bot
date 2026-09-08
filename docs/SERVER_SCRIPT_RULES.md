@@ -53,6 +53,21 @@ Every guard must be justified by the exact operation being performed. A guard is
 - If old documentation, an old chat and the current implementation disagree, follow project source priority: production actual state → current GitHub → staging/test → current docs → older discussion.
 - If a script discovers that a documented invariant is stale, stop using that invariant as a blocker and update the documentation after the actual state is confirmed.
 
+## Acceptance fixtures and UI eligibility
+
+A known-safe test account is not automatically a valid fixture for every UI/API acceptance path.
+
+- Before a mutation-driven acceptance test, prove that the chosen fixture is **eligible for the exact UI/API path being exercised** under current production data and current code.
+- Check the real inclusion/filter rules first: risk threshold, case membership, blocked/unblocked/inactive filtering, search scope, pagination/limit, role, status and any other view-specific condition.
+- Do not assume that an account previously approved for block/unblock testing must appear in the current Anti-Fraud `cases` response or in the visible UI.
+- Current Anti-Fraud case-builder starts from accounts with `overall_risk > 0` and then brings in accounts linked to those risky accounts by device/contact/corroborated identity. Therefore an isolated account with `overall_risk = 0` may correctly have no current case.
+- Before requiring `MATCHING_CASE_COUNT=1`, first inspect the account's current risk score and the current case-builder inclusion rules. A zero-case result can be expected state, not a product failure.
+- **Never choose or mutate a real customer account merely to make a visual fixture convenient.** Any such production mutation requires separate explicit operator approval and a precise rollback/restore plan.
+- Do not fabricate temporary production risk/case data just to force a safe test account into the UI unless that data-fixture mutation has been explicitly designed and approved.
+- If the approved safe fixture cannot exercise one visual path, split acceptance honestly: validate the real service/API round-trip on the safe fixture, validate static/current UI logic from code and available live data, and mark the unexercised visual state as not yet live-observed rather than manufacturing evidence.
+- If there are no naturally blocked accounts in live data, do not claim that the blocked-card UI was visually verified unless a separately approved controlled fixture made that state observable.
+- A fixture-precondition mismatch should stop **before mutation**, print the observed eligibility facts, and route to fixture selection/acceptance-plan correction rather than report a generic application failure.
+
 ## Asynchronous jobs and monitoring
 
 Background refreshes and protected cycles must be treated as asynchronous operations, not synchronous shell commands.
@@ -159,24 +174,29 @@ when that statement is true.
 
 ## Current production invariants
 
-As of the verified Anti-Fraud similarity hotfix production acceptance on 2026-09-08:
+As of the verified PR #41 production acceptance on 2026-09-08:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- deployed application revision: `971af94e26160914efd2c229a4352d398a65214a`
-- deployed immutable digest: `sha256:53c62ce75e90ddc83d3ba7e7e36133ef43cff9d01e9bfbffa8fd181a9e7f7734`
-- deployed image config ID: `sha256:473032fe887d026c5771da5d8c79012720b0a87a3a5ed57134dba3d6dfd8da1f`
+- deployed application revision: `a156db2e30dd2a31d7bd4126410f9f513382adaa`
+- deployed immutable digest: `sha256:ce3b85fe789495f3b5ee4e59fe8eb129a75343d1916f2a7c45483da18d988947`
+- deployed image config ID: `sha256:cbe989d6375189f9f12d7a0ad6f74f9f5455536838750fd96f0e2e459d9cc145`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
+- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 - production migrations: 20; latest migration timestamp `1788769200000`
 - Anti-Fraud block/unblock schema migrations 0018/0019 are present
 - Anti-Fraud scheduler: enabled, interval 15 minutes, run-on-start false
-- similarity candidate-index hotfix from PR #38 is deployed and runtime performance acceptance passed: reference protected cycle `206s`, target measured cycle `53s`; during the 53-second target cycle `/api/healthz` returned HTTP 200 on `24/24` probes with max observed `3ms`, `/api/anti-fraud/scheduler` returned HTTP 200 on `24/24` probes with max observed `6ms`, there were zero probe errors/non-200 responses, and app restart count stayed `0`
-- the measured `anti_fraud_risk_scoring` durations remained about `3.1s` before/after because that persisted run does not include the subsequent similarity candidate scan; it is explicitly not used as the PR #38 acceptance gate
+- PR #41 deployment: 29 PASS / 0 FAIL / no rollback; DB container unchanged; env/mounts/ports preserved; no refresh or Bitrix state write triggered by deployment
+- latest app-deployment backup: `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
+- similarity candidate-index hotfix from PR #38 remains deployed and runtime performance acceptance remains valid: reference protected cycle `206s`, measured optimized cycle `53s`; `/api/healthz` 24/24 HTTP 200 max `3ms`, `/api/anti-fraud/scheduler` 24/24 HTTP 200 max `6ms`, zero probe errors/non-200, app restart count `0`
+- `anti_fraud_risk_scoring` ~3.1s does not include the similarity overlay and is not a valid PR #38 acceptance gate
+- controlled block/unblock backend acceptance on safe USER_ID 880339 completed: 27 PASS / 0 FAIL / 0 WARN; final state restored; do not repeat merely for reassurance
+- operator visually accepted PR #41 inactive-state and localization behavior in production
 - Phonebook canonical route: `/phonebook`
 - `/directory`: removed, expected HTTP 404
 - `/api/directory/...`: absent, expected HTTP 404
@@ -191,6 +211,8 @@ These are current documented invariants, not substitutes for guards before a fut
 - Preserve both secret mounts when recreating production.
 - Detailed 60-day history remains targeted; do not bulk-load the full fleet each scheduler cycle.
 - `/directory` is no longer a compatibility redirect. Current production contract requires HTTP 404.
+- `ACTIVE=N`, `BLOCKED=N` is factual `Неактивен`, not a synthetic `Заблокирован`; operational UI may exclude it together with blocked accounts without rewriting Bitrix state.
+- Only `BLOCKED=Y` is a true blocked state.
 
 ## Known pitfalls to avoid
 
@@ -211,6 +233,7 @@ These are current documented invariants, not substitutes for guards before a fut
 - **First-timeout pitfall:** a monitoring script must not terminate the entire acceptance procedure on the first transient HTTP timeout when DB-backed state can still be checked.
 - **Scheduler-race pitfall:** if the periodic Anti-Fraud cycle starts between preflight and deployment, do not fail immediately and make the operator rerun the full script. Wait boundedly for the existing cycle to become idle, then re-run only the critical pre-cutover guards.
 - **Wrong-performance-gate pitfall:** never fail an optimization because an unrelated timing row did not improve. First prove that the timing boundary actually contains the optimized code path.
+- **Fixture-eligibility pitfall:** never assume a safe test account is visible in the exact UI path being tested. Prove current eligibility first; if the fixture is legitimately absent, correct the acceptance plan before any mutation instead of blaming the application.
 - **Invented-contract pitfall:** never block deployment on assumed JSON fields or response shapes that were not verified against current code/live output.
 
 ## Operator preference
