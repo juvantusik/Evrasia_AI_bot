@@ -1,5 +1,6 @@
 import { pool } from "@workspace/db";
 import { enrichRestisHistoryForHighRiskUserOnce } from "./anti-fraud-restis-history-enricher";
+import { buildIdentityCandidatePairs } from "./anti-fraud-identity-candidate-index";
 import {
   analyzeAntiFraudOnce,
   type AntiFraudRiskAnalysisOptions,
@@ -286,18 +287,18 @@ export const syncIdentitySimilarityLinksOnce = async (): Promise<IdentitySimilar
     email: row.email_normalized ?? null,
   }));
 
+  const accountsById = new Map(accounts.map((account) => [account.bitrixUserId, account]));
   const links: IdentitySimilarityLink[] = [];
-  for (let leftIndex = 0; leftIndex < accounts.length; leftIndex += 1) {
-    const left = accounts[leftIndex]!;
-    for (let rightIndex = leftIndex + 1; rightIndex < accounts.length; rightIndex += 1) {
-      const right = accounts[rightIndex]!;
-      const evaluated = evaluateIdentityPair(
-        left,
-        right,
-        sharedDevicePairs.has(pairKey(left.bitrixUserId, right.bitrixUserId)),
-      );
-      if (evaluated) links.push(evaluated);
-    }
+  for (const [leftUserId, rightUserId] of buildIdentityCandidatePairs(accounts)) {
+    const left = accountsById.get(leftUserId);
+    const right = accountsById.get(rightUserId);
+    if (!left || !right) continue;
+    const evaluated = evaluateIdentityPair(
+      left,
+      right,
+      sharedDevicePairs.has(pairKey(leftUserId, rightUserId)),
+    );
+    if (evaluated) links.push(evaluated);
   }
 
   const client = await pool.connect();
