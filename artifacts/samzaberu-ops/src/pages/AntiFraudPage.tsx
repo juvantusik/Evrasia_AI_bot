@@ -361,7 +361,18 @@ export default function AntiFraudPage() {
                 </button>
 
                 {isExpanded ? <div className="af-case-details">
-                  {dynamics ? <div className={`case-dynamics-card trend-${dynamics.trend}`}><div className="case-dynamics-head"><div><strong>{trend?.symbol} {trend?.label}</strong><span>{dynamics.trend === 'new' ? `Первое наблюдение: ${formatDate(dynamics.changedAt)}` : `Последнее изменение: ${formatDate(dynamics.changedAt)}`}</span></div><small>Risk остаётся в шкале 0–100; здесь показано, что изменилось в самом кейсе.</small></div><div className="case-dynamics-metrics"><span>{metricText('Risk', dynamics.metrics.risk)}</span><span>{metricText('Аккаунты', dynamics.metrics.accounts)}</span><span>{metricText('Устройства', dynamics.metrics.devices)}</span><span>{metricText('Признаки', dynamics.metrics.reasons)}</span></div></div> : null}
+                  {dynamics ? <div className={`case-dynamics-card trend-${dynamics.trend}`}>
+                    <div className="case-dynamics-head"><div><strong>{trend?.symbol} {trend?.label}</strong><span>{dynamics.trend === 'new' ? `Первое наблюдение: ${formatDate(dynamics.changedAt)}` : `Последнее изменение: ${formatDate(dynamics.changedAt)}`}</span></div><small>Risk остаётся в шкале 0–100; здесь показано, что изменилось в самом кейсе.</small></div>
+                    <div className="case-dynamics-metrics"><span>{metricText('Risk', dynamics.metrics.risk)}</span><span>{metricText('Аккаунты', dynamics.metrics.accounts)}</span><span>{metricText('Устройства', dynamics.metrics.devices)}</span><span>{metricText('Признаки', dynamics.metrics.reasons)}</span></div>
+                    {dynamics.addedAccountIds.length || dynamics.removedAccountIds.length || dynamics.addedReasonCodes.length || dynamics.removedReasonCodes.length ? (
+                      <div className="case-dynamics-diff">
+                        {dynamics.addedAccountIds.length ? <span><b>Добавлены аккаунты:</b> {dynamics.addedAccountIds.map((id) => `ID ${id}`).join(', ')}</span> : null}
+                        {dynamics.removedAccountIds.length ? <span><b>Ушли аккаунты:</b> {dynamics.removedAccountIds.map((id) => `ID ${id}`).join(', ')}</span> : null}
+                        {dynamics.addedReasonCodes.length ? <span><b>Добавлены признаки:</b> {dynamics.addedReasonCodes.map((code) => reasonLabels[code] ?? code).join(', ')}</span> : null}
+                        {dynamics.removedReasonCodes.length ? <span><b>Исчезли признаки:</b> {dynamics.removedReasonCodes.map((code) => reasonLabels[code] ?? code).join(', ')}</span> : null}
+                      </div>
+                    ) : <div className="case-dynamics-diff"><span>{dynamics.trend === 'new' ? 'Сравнение появится после следующего расчёта Anti-Fraud.' : 'С момента последнего изменившегося состояния новых признаков не обнаружено.'}</span></div>}
+                  </div> : null}
 
                   <div className="case-action-bar">
                     <div><strong>Бонусы группы: {formatPoints(item.groupBonusBalance)}</strong><span>данные {item.groupBonusKnownAccounts ?? 0} из {item.groupBonusTotalAccounts ?? item.accounts.length} · учитываются все аккаунты группы</span></div>
