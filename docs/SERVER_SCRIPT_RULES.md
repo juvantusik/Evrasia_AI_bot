@@ -147,20 +147,23 @@ when that statement is true.
 
 ## Current production invariants
 
-As of the verified v1.7 production baseline after `/directory` removal:
+As of the verified v1.7 production hotfix cutover on 2026-09-08:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- deployed application revision: `0fcebb1ecba3375ba8ce207ced1b7bf1921bfdf3`
-- deployed immutable digest: `sha256:fd58cc95d3c26f541bd15d70fbd057f068630d093c6990f926152c995ca8f479`
+- deployed application revision: `971af94e26160914efd2c229a4352d398a65214a`
+- deployed immutable digest: `sha256:53c62ce75e90ddc83d3ba7e7e36133ef43cff9d01e9bfbffa8fd181a9e7f7734`
+- deployed image config ID: `sha256:473032fe887d026c5771da5d8c79012720b0a87a3a5ed57134dba3d6dfd8da1f`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
-- production migrations: 18
+- production migrations: 20; latest migration timestamp `1788769200000`
+- Anti-Fraud block/unblock schema migrations 0018/0019 are present
 - Anti-Fraud scheduler: enabled, interval 15 minutes, run-on-start false
+- similarity candidate-index hotfix from PR #38 is deployed; production performance acceptance is the next verification step
 - Phonebook canonical route: `/phonebook`
 - `/directory`: removed, expected HTTP 404
 - `/api/directory/...`: absent, expected HTTP 404
