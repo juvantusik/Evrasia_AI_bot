@@ -53,6 +53,21 @@ Every guard must be justified by the exact operation being performed. A guard is
 - If old documentation, an old chat and the current implementation disagree, follow project source priority: production actual state → current GitHub → staging/test → current docs → older discussion.
 - If a script discovers that a documented invariant is stale, stop using that invariant as a blocker and update the documentation after the actual state is confirmed.
 
+## Acceptance fixtures and UI eligibility
+
+A known-safe test account is not automatically a valid fixture for every UI/API acceptance path.
+
+- Before a mutation-driven acceptance test, prove that the chosen fixture is **eligible for the exact UI/API path being exercised** under current production data and current code.
+- Check the real inclusion/filter rules first: risk threshold, case membership, blocked/unblocked filtering, search scope, pagination/limit, role, status and any other view-specific condition.
+- Do not assume that an account previously approved for block/unblock testing must appear in the current Anti-Fraud `cases` response or in the visible UI.
+- Current Anti-Fraud case-builder starts from accounts with `overall_risk > 0` and then brings in accounts linked to those risky accounts by device/contact/corroborated identity. Therefore an isolated account with `overall_risk = 0` may correctly have no current case.
+- Before requiring `MATCHING_CASE_COUNT=1`, first inspect the account's current risk score and the current case-builder inclusion rules. A zero-case result can be expected state, not a product failure.
+- **Never choose or mutate a real customer account merely to make a visual fixture convenient.** Any such production mutation requires separate explicit operator approval and a precise rollback/restore plan.
+- Do not fabricate temporary production risk/case data just to force a safe test account into the UI unless that data-fixture mutation has been explicitly designed and approved.
+- If the approved safe fixture cannot exercise one visual path, split acceptance honestly: validate the real service/API round-trip on the safe fixture, validate static/current UI logic from code and available live data, and mark the unexercised visual state as not yet live-observed rather than manufacturing evidence.
+- If there are no naturally blocked accounts in live data, do not claim that the blocked-card UI was visually verified unless a separately approved controlled fixture made that state observable.
+- A fixture-precondition mismatch should stop **before mutation**, print the observed eligibility facts, and route to fixture selection/acceptance-plan correction rather than report a generic application failure.
+
 ## Asynchronous jobs and monitoring
 
 Background refreshes and protected cycles must be treated as asynchronous operations, not synchronous shell commands.
@@ -211,6 +226,7 @@ These are current documented invariants, not substitutes for guards before a fut
 - **First-timeout pitfall:** a monitoring script must not terminate the entire acceptance procedure on the first transient HTTP timeout when DB-backed state can still be checked.
 - **Scheduler-race pitfall:** if the periodic Anti-Fraud cycle starts between preflight and deployment, do not fail immediately and make the operator rerun the full script. Wait boundedly for the existing cycle to become idle, then re-run only the critical pre-cutover guards.
 - **Wrong-performance-gate pitfall:** never fail an optimization because an unrelated timing row did not improve. First prove that the timing boundary actually contains the optimized code path.
+- **Fixture-eligibility pitfall:** never assume a safe test account is visible in the exact UI path being tested. Prove current eligibility first; if the fixture is legitimately absent, correct the acceptance plan before any mutation instead of blaming the application.
 - **Invented-contract pitfall:** never block deployment on assumed JSON fields or response shapes that were not verified against current code/live output.
 
 ## Operator preference
