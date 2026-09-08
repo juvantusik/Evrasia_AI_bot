@@ -105,7 +105,9 @@ const parseResponse = (body: string, requestedUserIds: number[]): BitrixAntiFrau
   }
 
   const data = payload as Record<string, unknown>;
-  if (data.ok !== true || data.dry_run !== false || !Array.isArray(data.records) || !Array.isArray(data.unresolved)) {
+  // ok=false является валидным контрактом для частичного результата: детали по каждому USER_ID
+  // всё равно должны дойти до оператора, а не превращаться в общую 503.
+  if (typeof data.ok !== "boolean" || data.dry_run !== false || !Array.isArray(data.records) || !Array.isArray(data.unresolved)) {
     throw new Error("Bitrix Anti-Fraud block вернул неполный ответ");
   }
 
