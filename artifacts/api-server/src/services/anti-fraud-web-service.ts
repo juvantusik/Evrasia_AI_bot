@@ -94,7 +94,7 @@ const maskEmail = (value: unknown): string | null => {
 };
 
 // Обновлено 08.09.2026 ИТ Директор Евразии:
-// верхние operational-счётчики не включают уже заблокированные аккаунты.
+// верхние operational-счётчики не включают заблокированные и неактивные аккаунты.
 export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => {
   await ensureReady();
   const result = await pool.query<{
@@ -122,7 +122,8 @@ export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => 
         max(s.computed_at) AS updated_at
       FROM anti_fraud_risk_scores s
       LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = s.bitrix_user_id
-      WHERE COALESCE(a.bitrix_blocked, false) IS NOT TRUE
+      WHERE COALESCE(a.bitrix_active, true) IS TRUE
+        AND COALESCE(a.bitrix_blocked, false) IS NOT TRUE
     ),
     device_summary AS (
       SELECT
@@ -133,7 +134,8 @@ export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => 
         SELECT l.device_hash, count(DISTINCT l.bitrix_user_id) AS account_count
         FROM anti_fraud_device_links l
         LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = l.bitrix_user_id
-        WHERE COALESCE(a.bitrix_blocked, false) IS NOT TRUE
+        WHERE COALESCE(a.bitrix_active, true) IS TRUE
+          AND COALESCE(a.bitrix_blocked, false) IS NOT TRUE
         GROUP BY l.device_hash
       ) d
     )
@@ -235,7 +237,7 @@ export const listAntiFraudWebAccounts = async (input?: {
 };
 
 // Обновлено 08.09.2026 ИТ Директор Евразии:
-// вкладка общих устройств отражает только незаблокированные аккаунты.
+// вкладка общих устройств отражает только активные незаблокированные аккаунты.
 export const listAntiFraudWebDevices = async (limitValue = 200): Promise<AntiFraudWebDevice[]> => {
   await ensureReady();
   const limit = Math.max(1, Math.min(500, Math.floor(limitValue)));
@@ -248,7 +250,8 @@ export const listAntiFraudWebDevices = async (limitValue = 200): Promise<AntiFra
       array_remove(array_agg(DISTINCT l.client_type ORDER BY l.client_type), NULL) AS client_types
     FROM anti_fraud_device_links l
     LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = l.bitrix_user_id
-    WHERE COALESCE(a.bitrix_blocked, false) IS NOT TRUE
+    WHERE COALESCE(a.bitrix_active, true) IS TRUE
+      AND COALESCE(a.bitrix_blocked, false) IS NOT TRUE
     GROUP BY l.device_hash
     HAVING count(DISTINCT l.bitrix_user_id) > 1
     ORDER BY account_count DESC, max(l.last_seen_at) DESC NULLS LAST
@@ -264,7 +267,7 @@ export const listAntiFraudWebDevices = async (limitValue = 200): Promise<AntiFra
 };
 
 // Обновлено 08.09.2026 ИТ Директор Евразии:
-// рекомендации по совпадающим контактам также являются operational и исключают блокированных.
+// рекомендации по совпадающим контактам являются operational и исключают заблокированные и неактивные аккаунты.
 export const listAntiFraudWebSimilarAccounts = async (limitValue = 100): Promise<AntiFraudWebSimilarGroup[]> => {
   await ensureReady();
   const limit = Math.max(1, Math.min(300, Math.floor(limitValue)));
@@ -274,12 +277,14 @@ export const listAntiFraudWebSimilarAccounts = async (limitValue = 100): Promise
       FROM anti_fraud_accounts
       WHERE phone_normalized IS NOT NULL
         AND phone_normalized <> ''
+        AND COALESCE(bitrix_active, true) IS TRUE
         AND COALESCE(bitrix_blocked, false) IS NOT TRUE
       UNION ALL
       SELECT 'email'::text AS match_type, email_normalized AS match_key, bitrix_user_id
       FROM anti_fraud_accounts
       WHERE email_normalized IS NOT NULL
         AND email_normalized <> ''
+        AND COALESCE(bitrix_active, true) IS TRUE
         AND COALESCE(bitrix_blocked, false) IS NOT TRUE
     ), duplicate_keys AS (
       SELECT match_type, match_key
