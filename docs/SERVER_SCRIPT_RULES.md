@@ -72,6 +72,18 @@ Background refreshes and protected cycles must be treated as asynchronous operat
 - If HTTP is unavailable during a heavy cycle but DB state progresses and the process does not restart, record this as **service responsiveness/performance evidence**, not as an immediate refresh failure.
 - Measure and print the actual cycle duration when performance is under investigation.
 
+## Performance acceptance metrics
+
+A performance gate is valid only if the metric actually covers the code path being changed.
+
+- Before comparing `before`/`after` timings, inspect where the timer or persisted run starts and finishes in the current implementation.
+- Do **not** use a convenient timing merely because its source name sounds related to the optimization.
+- If the optimized work runs outside that timing boundary, an unchanged timing is expected and must not fail acceptance.
+- For the v1.7 identity-similarity optimization, `anti_fraud_risk_scoring` measures the base `analyzeAntiFraudOnce` work. `analyzeAntiFraudWithSimilarityOnce` calls that base scorer first and only then runs `syncIdentitySimilarityLinksOnce`; therefore `anti_fraud_risk_scoring` duration does **not** measure the candidate-index similarity scan and is not a valid gate for PR #38.
+- For event-loop responsiveness fixes, test the symptom directly while the protected cycle is actually running: repeatedly probe `/api/healthz` and `/api/anti-fraud/scheduler`, count timeouts/non-200 responses, track maximum observed latency, and verify the application process did not restart.
+- Whole protected-cycle duration is useful secondary evidence, but external Bitrix/loyalty/history latency can also change it. Do not attribute the entire delta to one internal optimization without stage-level instrumentation.
+- If the optimized stage has no direct timing instrumentation, do not invent a proxy threshold. Use symptom-based runtime acceptance plus CI regression tests, or add explicit instrumentation in a later controlled code change.
+
 ## Registry authentication / Docker image pulls
 
 - Do not conclude that GHCR authentication is missing merely because `/root/.docker/config.json` has no `ghcr.io` entry.
@@ -147,7 +159,7 @@ when that statement is true.
 
 ## Current production invariants
 
-As of the verified v1.7 production hotfix cutover on 2026-09-08:
+As of the verified Anti-Fraud similarity hotfix production acceptance on 2026-09-08:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
@@ -163,7 +175,8 @@ As of the verified v1.7 production hotfix cutover on 2026-09-08:
 - production migrations: 20; latest migration timestamp `1788769200000`
 - Anti-Fraud block/unblock schema migrations 0018/0019 are present
 - Anti-Fraud scheduler: enabled, interval 15 minutes, run-on-start false
-- similarity candidate-index hotfix from PR #38 is deployed; production performance acceptance is the next verification step
+- similarity candidate-index hotfix from PR #38 is deployed and runtime performance acceptance passed: reference protected cycle `206s`, target measured cycle `53s`; during the 53-second target cycle `/api/healthz` returned HTTP 200 on `24/24` probes with max observed `3ms`, `/api/anti-fraud/scheduler` returned HTTP 200 on `24/24` probes with max observed `6ms`, there were zero probe errors/non-200 responses, and app restart count stayed `0`
+- the measured `anti_fraud_risk_scoring` durations remained about `3.1s` before/after because that persisted run does not include the subsequent similarity candidate scan; it is explicitly not used as the PR #38 acceptance gate
 - Phonebook canonical route: `/phonebook`
 - `/directory`: removed, expected HTTP 404
 - `/api/directory/...`: absent, expected HTTP 404
@@ -197,6 +210,7 @@ These are current documented invariants, not substitutes for guards before a fut
 - **Async-timeout pitfall:** after `POST /api/anti-fraud/refresh` returns `202`, a later `/scheduler` timeout does not prove the refresh failed. Check persisted run state and do not retrigger blindly.
 - **First-timeout pitfall:** a monitoring script must not terminate the entire acceptance procedure on the first transient HTTP timeout when DB-backed state can still be checked.
 - **Scheduler-race pitfall:** if the periodic Anti-Fraud cycle starts between preflight and deployment, do not fail immediately and make the operator rerun the full script. Wait boundedly for the existing cycle to become idle, then re-run only the critical pre-cutover guards.
+- **Wrong-performance-gate pitfall:** never fail an optimization because an unrelated timing row did not improve. First prove that the timing boundary actually contains the optimized code path.
 - **Invented-contract pitfall:** never block deployment on assumed JSON fields or response shapes that were not verified against current code/live output.
 
 ## Operator preference
