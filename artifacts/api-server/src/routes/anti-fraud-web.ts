@@ -26,6 +26,7 @@ type ContactTarget = {
   bitrixActive?: boolean;
   bitrixBlocked?: boolean;
   bitrixBlockReason?: string | null;
+  blockedAt?: string | null;
   bonusBalance?: number | null;
   loyaltyActiveCardCount?: number | null;
   loyaltyIssue?: string | null;
@@ -38,6 +39,7 @@ type ContactValue = {
   bitrixActive: boolean;
   bitrixBlocked: boolean;
   bitrixBlockReason: string | null;
+  blockedAt: string | null;
   bonusBalance: number | null;
   loyaltyActiveCardCount: number | null;
   loyaltyIssue: string | null;
@@ -71,24 +73,34 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     bitrix_active: boolean;
     bitrix_blocked: boolean;
     bitrix_block_reason: string | null;
+    blocked_at: Date | null;
     bonus_balance: string | number | null;
     loyalty_active_card_count: number | null;
     loyalty_issue: string | null;
     loyalty_synced_at: Date | null;
   }>(`
     SELECT
-      bitrix_user_id,
-      phone_normalized,
-      email_normalized,
-      bitrix_active,
-      bitrix_blocked,
-      bitrix_block_reason,
-      bonus_balance,
-      loyalty_active_card_count,
-      loyalty_issue,
-      loyalty_synced_at
-    FROM anti_fraud_accounts
-    WHERE bitrix_user_id = ANY($1::int[])
+      a.bitrix_user_id,
+      a.phone_normalized,
+      a.email_normalized,
+      a.bitrix_active,
+      a.bitrix_blocked,
+      a.bitrix_block_reason,
+      audit.blocked_at,
+      a.bonus_balance,
+      a.loyalty_active_card_count,
+      a.loyalty_issue,
+      a.loyalty_synced_at
+    FROM anti_fraud_accounts a
+    LEFT JOIN LATERAL (
+      SELECT max(created_at) AS blocked_at
+      FROM anti_fraud_block_audit b
+      WHERE b.bitrix_user_id = a.bitrix_user_id
+        AND b.success IS TRUE
+        AND b.after_blocked IS TRUE
+        AND b.result = 'blocked'
+    ) audit ON true
+    WHERE a.bitrix_user_id = ANY($1::int[])
   `, [ids]);
 
   return new Map(
@@ -100,6 +112,7 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
         bitrixActive: row.bitrix_active === true,
         bitrixBlocked: row.bitrix_blocked === true,
         bitrixBlockReason: row.bitrix_block_reason ?? null,
+        blockedAt: row.bitrix_blocked === true ? iso(row.blocked_at) : null,
         bonusBalance: row.bonus_balance === null ? null : Number(row.bonus_balance),
         loyaltyActiveCardCount:
           row.loyalty_active_card_count === null ? null : Number(row.loyalty_active_card_count),
@@ -127,6 +140,7 @@ const exposeFullContacts = <T extends ContactTarget>(
       bitrixActive: contact.bitrixActive,
       bitrixBlocked: contact.bitrixBlocked,
       bitrixBlockReason: contact.bitrixBlockReason,
+      blockedAt: contact.blockedAt,
       bonusBalance: contact.bonusBalance,
       loyaltyActiveCardCount: contact.loyaltyActiveCardCount,
       loyaltyIssue: contact.loyaltyIssue,
