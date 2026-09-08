@@ -3,6 +3,7 @@ import { pool } from "@workspace/db";
 import { listAntiFraudCases } from "../services/anti-fraud-case-service";
 import { listAntiFraudCaseDynamics } from "../services/anti-fraud-case-dynamics-service";
 import { blockAntiFraudAccounts } from "../services/anti-fraud-block-service";
+import { unblockAntiFraudAccounts } from "../services/anti-fraud-unblock-service";
 import {
   getAntiFraudWebSummary,
   listAntiFraudWebAccounts,
@@ -160,7 +161,7 @@ const groupBonusSummary = (accounts: ContactTarget[]) => {
   };
 };
 
-const parseBlockUserIds = (value: unknown): number[] | null => {
+const parseActionUserIds = (value: unknown): number[] | null => {
   if (!Array.isArray(value) || value.length < 1 || value.length > 50) return null;
   const unique = new Set<number>();
   for (const raw of value) {
@@ -187,34 +188,23 @@ router.get("/anti-fraud/scheduler", async (_req, res): Promise<void> => {
 });
 
 // Обновлено 07.09.2026 ИТ Директор Евразии
-// Ручной refresh запускает тот же single-flight цикл, что и scheduler, но HTTP-ответ
-// возвращается сразу. Полный цикл занимает больше nginx proxy_read_timeout, поэтому UI
-// отслеживает завершение через /anti-fraud/scheduler вместо ожидания одного длинного POST.
 router.post("/anti-fraud/refresh", async (req, res): Promise<void> => {
   try {
     const before = getAntiFraudHourlySchedulerStatus();
     if (before.running) {
-      res.status(409).json({
-        error: "Обновление Anti-Fraud уже выполняется.",
-        scheduler: before,
-      });
+      res.status(409).json({ error: "Обновление Anti-Fraud уже выполняется.", scheduler: before });
       return;
     }
-
     const cycle = runAntiFraudHourlyCycleOnce();
     const started = getAntiFraudHourlySchedulerStatus();
     res.status(202).json({ ok: true, accepted: true, scheduler: started });
-
-    void cycle.catch((error) => {
-      req.log.error({ error }, "Async Anti-Fraud refresh failed");
-    });
+    void cycle.catch((error) => req.log.error({ error }, "Async Anti-Fraud refresh failed"));
   } catch (error) {
     req.log.error({ error }, "Failed to start Anti-Fraud refresh");
     res.status(503).json({ error: errorMessage(error) });
   }
 });
 
-// Добавлено 05.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/case-dynamics", async (req, res): Promise<void> => {
   try {
     res.json({ records: await listAntiFraudCaseDynamics() });
@@ -224,7 +214,6 @@ router.get("/anti-fraud/case-dynamics", async (req, res): Promise<void> => {
   }
 });
 
-// Обновлено 08.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
   try {
     const records = await listAntiFraudCases();
@@ -233,11 +222,7 @@ router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
     res.json({
       records: records.map((item) => {
         const accounts = exposeFullContacts(item.accounts, contacts);
-        return {
-          ...item,
-          accounts,
-          ...groupBonusSummary(accounts),
-        };
+        return { ...item, accounts, ...groupBonusSummary(accounts) };
       }),
     });
   } catch (error) {
@@ -246,7 +231,6 @@ router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
   }
 });
 
-// Обновлено 08.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/accounts", async (req, res): Promise<void> => {
   try {
     const records = await listAntiFraudWebAccounts({
@@ -262,25 +246,36 @@ router.get("/anti-fraud/accounts", async (req, res): Promise<void> => {
   }
 });
 
-// Добавлено 08.09.2026 ИТ Директор Евразии
 // caseId используется только во внутреннем audit и не передаётся в Bitrix/public reason.
 router.post("/anti-fraud/block", async (req, res): Promise<void> => {
   try {
-    const userIds = parseBlockUserIds(req.body?.userIds);
+    const userIds = parseActionUserIds(req.body?.userIds);
     if (!userIds) {
       res.status(400).json({ error: "Нужно передать от 1 до 50 корректных USER_ID." });
       return;
     }
-
-    const result = await blockAntiFraudAccounts(userIds, req.body?.caseId);
-    res.json(result);
+    res.json(await blockAntiFraudAccounts(userIds, req.body?.caseId));
   } catch (error) {
     req.log.error({ error }, "Failed to block Anti-Fraud accounts");
     res.status(503).json({ error: errorMessage(error) });
   }
 });
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
+// Разблокировка индивидуальная/служебная: ACTIVE=Y, BLOCKED=N; основание не стирается.
+router.post("/anti-fraud/unblock", async (req, res): Promise<void> => {
+  try {
+    const userIds = parseActionUserIds(req.body?.userIds);
+    if (!userIds) {
+      res.status(400).json({ error: "Нужно передать от 1 до 50 корректных USER_ID." });
+      return;
+    }
+    res.json(await unblockAntiFraudAccounts(userIds, req.body?.caseId));
+  } catch (error) {
+    req.log.error({ error }, "Failed to unblock Anti-Fraud accounts");
+    res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
 router.get("/anti-fraud/devices", async (req, res): Promise<void> => {
   try {
     res.json({ records: await listAntiFraudWebDevices(Number(req.query.limit ?? 200)) });
@@ -290,7 +285,6 @@ router.get("/anti-fraud/devices", async (req, res): Promise<void> => {
   }
 });
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/similar-accounts", async (req, res): Promise<void> => {
   try {
     res.json({ records: await listAntiFraudWebSimilarAccounts(Number(req.query.limit ?? 100)) });
