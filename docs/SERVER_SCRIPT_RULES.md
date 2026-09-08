@@ -38,6 +38,74 @@ set +o pipefail 2>/dev/null
 - Always provide a rollback path for deployments or DB mutations.
 - Prefer small independently verifiable phases over one large multi-risk cutover.
 
+## Scope discipline and architecture-aware guards
+
+Every guard must be justified by the exact operation being performed. A guard is not useful merely because it checks something on the same server.
+
+- Before writing a guard, inspect the **current code path, current Compose configuration and latest accepted architecture** for the subsystem being changed.
+- A blocking guard is allowed only when its failure would make the requested operation unsafe or would invalidate the acceptance result.
+- **Do not add unrelated subsystem gates.** For example, an Anti-Fraud app-only deployment must not be blocked by Telegram- or RestIS-specific checks unless the current change actually touches that subsystem or a verified shared-runtime failure makes the check necessary.
+- Separate **blocking safety gates** from **informational regression probes**. Informational probes may produce `WARN`, but must not turn a safe deployment into `HOLD` without a concrete dependency.
+- Do not require credentials, mounts, environment variables or services that are **intentionally absent by architecture**.
+- Before checking a credential, first verify which process actually uses it and where that credential is supposed to live.
+- Current example: the bot container must **not** require RestIS credentials. Anti-Fraud loyalty/history access is performed through the protected site-side API; RestIS credentials remain outside the bot container.
+- Do not invent API/JSON response fields for a validation gate. Inspect the current implementation or an already verified live response first, then validate only that real contract.
+- If old documentation, an old chat and the current implementation disagree, follow project source priority: production actual state → current GitHub → staging/test → current docs → older discussion.
+- If a script discovers that a documented invariant is stale, stop using that invariant as a blocker and update the documentation after the actual state is confirmed.
+
+## Asynchronous jobs and monitoring
+
+Background refreshes and protected cycles must be treated as asynchronous operations, not synchronous shell commands.
+
+- HTTP `202 Accepted` means that the job was accepted; it does **not** mean the job failed because a later monitoring request timed out.
+- A single timeout of `/scheduler`, `/healthz` or another probe must **never** be interpreted as proof that the accepted background job failed.
+- Do not stop a monitoring loop on the first transient HTTP timeout if an authoritative persisted run state exists.
+- For Anti-Fraud protected cycles, use `anti_fraud_sync_runs` / persisted DB state as the authoritative completion source when HTTP responsiveness is itself under investigation.
+- Distinguish these states explicitly:
+  - job accepted;
+  - job still running;
+  - monitoring endpoint temporarily unresponsive;
+  - job finished successfully/partially/failed;
+  - application process restarted or died.
+- Never trigger a second manual refresh while the previous accepted refresh may still be running. First prove completion/failure from authoritative state.
+- Monitoring scripts should use bounded total wait time and may use bounded consecutive HTTP-failure counters, but must continue DB-backed observation when possible.
+- If HTTP is unavailable during a heavy cycle but DB state progresses and the process does not restart, record this as **service responsiveness/performance evidence**, not as an immediate refresh failure.
+- Measure and print the actual cycle duration when performance is under investigation.
+
+## Registry authentication / Docker image pulls
+
+- Do not conclude that GHCR authentication is missing merely because `/root/.docker/config.json` has no `ghcr.io` entry.
+- Before creating a new PAT or changing root credentials, inspect the documented deployment user and existing credential source.
+- Current production pattern: GHCR credentials are owned by user `tech`; root intentionally does not need its own copied GHCR token.
+- Reuse the existing credential source without printing it. Preferred pattern:
+
+```bash
+runuser -u tech -- env HOME=/home/tech docker pull "<immutable-image>"
+```
+
+- Do not copy the `tech` Docker auth into root config just to make a pull work.
+- Do not ask the operator to create a new token until existing documented credential sources have been checked and proven unusable.
+- Do not add an unnecessary dependency on `sudo` for this flow when the script already runs as root; prefer the already verified `runuser` pattern unless the host state proves otherwise.
+- After pull, always verify immutable digest/config ID, OCI revision and platform before using the image.
+- If the exact target image is already local and verified, do not pull it again; use `--pull never` for the cutover.
+
+## Deployment phase continuity
+
+- Treat deployment as phases: guards → image → backup → staging → final guard → cutover → post-check.
+- Preserve the last confirmed phase between iterations.
+- If a deployment fails before `CUTOVER_STARTED=YES`, do not rollback and do not blindly repeat already-passed phases.
+- If the failure was only registry authentication and the target image is later pulled successfully, resume from the next required phase instead of restarting the whole deployment.
+- If a production cutover is in progress, avoid unrelated changes to `main` that would create a new image/revision and make the selected immutable target ambiguous. Documentation work should go to a separate branch/PR until the cutover target is verified in production.
+- For an app-only hotfix with no new migrations, verify that migration journal state remains unchanged; do not invent new schema expectations.
+- Data row-count equality is only a valid cutover guard when background writers are known idle for the measurement window. Scheduler-driven tables may legitimately change between widely separated snapshots.
+
+## Tool and environment assumptions
+
+- Do not introduce a host-tool requirement merely because a command is convenient. First check whether the required tool is guaranteed on the host or already available inside the relevant container.
+- Prefer validating a PostgreSQL dump with a known-compatible `pg_restore` from the DB container when host PostgreSQL client availability/version has not already been verified.
+- Explicitly guard every newly introduced tool (`runuser`, `jq`, `python3`, etc.) before the stage that needs it.
+- Do not silently change the chosen credential/user-switch mechanism between iterations after a working production pattern has already been confirmed.
+
 ## Terminal behavior
 
 - Do **not** use an outer-shell `exit` that can terminate the operator's SSH session.
@@ -117,6 +185,12 @@ These are current documented invariants, not substitutes for guards before a fut
 - Renaming a Compose-managed container retains Compose labels; do not rely on the renamed container as a standalone rollback artifact.
 - **Compose relative-path staging pitfall:** if `compose.yml` uses relative `env_file`, bind-mount or other file paths, copying only the Compose file to `/tmp` changes how those paths resolve. Do not validate/deploy such a staged Compose file from a different directory unless all referenced relative files are staged consistently. For the current production topology, keep a temporary staged Compose file inside `/opt/evrasia-ai-bot/prod` so `prod-app.env` / `prod-db.env` resolve correctly.
 - If a deployment attempt fails before `CUTOVER_STARTED=YES`, do not perform rollback or repeat already-passed image pull/backup steps unless state changed; first confirm production remained untouched, then continue from the failed stage.
+- **Wrong-user GHCR pitfall:** root Docker config may intentionally have no GHCR credentials while deployment user `tech` has valid auth. Never create/replace credentials before checking the documented deployment user.
+- **Irrelevant-gate pitfall:** do not turn unrelated Telegram/RestIS checks into blocking gates for an Anti-Fraud-only deployment.
+- **Architecture-drift pitfall:** do not require RestIS credentials in the bot container; current architecture intentionally keeps them out of the bot.
+- **Async-timeout pitfall:** after `POST /api/anti-fraud/refresh` returns `202`, a later `/scheduler` timeout does not prove the refresh failed. Check persisted run state and do not retrigger blindly.
+- **First-timeout pitfall:** a monitoring script must not terminate the entire acceptance procedure on the first transient HTTP timeout when DB-backed state can still be checked.
+- **Invented-contract pitfall:** never block deployment on assumed JSON fields or response shapes that were not verified against current code/live output.
 
 ## Operator preference
 
