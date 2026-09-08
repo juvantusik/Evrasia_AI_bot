@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { pool } from "@workspace/db";
 import { listAntiFraudCases } from "../services/anti-fraud-case-service";
 import { listAntiFraudCaseDynamics } from "../services/anti-fraud-case-dynamics-service";
+import { blockAntiFraudAccounts } from "../services/anti-fraud-block-service";
 import {
   getAntiFraudWebSummary,
   listAntiFraudWebAccounts,
@@ -145,6 +146,17 @@ const groupBonusSummary = (accounts: ContactTarget[]) => {
   };
 };
 
+const parseBlockUserIds = (value: unknown): number[] | null => {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 50) return null;
+  const unique = new Set<number>();
+  for (const raw of value) {
+    const id = Number(raw);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    unique.add(id);
+  }
+  return [...unique];
+};
+
 // Добавлено 03.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
   try {
@@ -232,6 +244,24 @@ router.get("/anti-fraud/accounts", async (req, res): Promise<void> => {
     res.json({ records: exposeFullContacts(records, contacts) });
   } catch (error) {
     req.log.error({ error }, "Failed to load Anti-Fraud accounts");
+    res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
+// Добавлено 08.09.2026 ИТ Директор Евразии
+// caseId используется только во внутреннем audit и не передаётся в Bitrix/public reason.
+router.post("/anti-fraud/block", async (req, res): Promise<void> => {
+  try {
+    const userIds = parseBlockUserIds(req.body?.userIds);
+    if (!userIds) {
+      res.status(400).json({ error: "Нужно передать от 1 до 50 корректных USER_ID." });
+      return;
+    }
+
+    const result = await blockAntiFraudAccounts(userIds, req.body?.caseId);
+    res.json(result);
+  } catch (error) {
+    req.log.error({ error }, "Failed to block Anti-Fraud accounts");
     res.status(503).json({ error: errorMessage(error) });
   }
 });
