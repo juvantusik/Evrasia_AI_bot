@@ -213,12 +213,14 @@ const metricText = (label: string, change: MetricChange) => change.before === nu
 const parseDetails = (details: string) => details.split(';').map((part) => part.trim()).filter(Boolean)
   .map((part) => part.replace('max_visits_per_day=', 'макс. посещений за день: ')
     .replace('high_visit_days_60d=', 'дней с 3+ посещениями: ').replace('max_distinct_restaurants=', 'макс. ресторанов за день: ')
-    .replace('sequence_days=', 'длина серии: ').replace('fastest_seconds=', 'самое быстрое переключение: ')
+    .replace('sequence_days=', 'длина серии: ').replace('max_gap_days=', 'макс. интервал между днями, дней: ')
+    .replace('fastest_seconds=', 'самое быстрое переключение: ')
     .replace('switches_under_5m=', 'переключений до 5 минут: ').replace('max_accounts=', 'аккаунтов на устройстве: ')
     .replace('shared_devices=', 'общих устройств: ').replace('max_devices_for_same_pair=', 'макс. общих устройств для одной пары аккаунтов: ')
-    .replace('linked_accounts=', 'связанных аккаунтов: ')
+    .replace('linked_accounts=', 'связанных аккаунтов: ').replace('matching_other_accounts=', 'совпадающих других аккаунтов: ')
     .replace('corroborated_similar_phone_links=', 'подтверждённых связей по похожему номеру: ')
     .replace('corroborated_similar_email_links=', 'подтверждённых связей по похожему email: ')
+    .replace('similar_phone_links=', 'связей по похожему номеру: ').replace('similar_email_links=', 'связей по похожему email: ')
     .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ').replace('bonus_balance=', 'остаток бонусов: ')
     .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: '));
 
