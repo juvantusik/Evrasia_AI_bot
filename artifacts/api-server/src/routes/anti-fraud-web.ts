@@ -22,6 +22,9 @@ type ContactTarget = {
   bitrixUserId: number;
   phoneMasked: string | null;
   emailMasked: string | null;
+  bitrixActive?: boolean;
+  bitrixBlocked?: boolean;
+  bitrixBlockReason?: string | null;
   bonusBalance?: number | null;
   loyaltyActiveCardCount?: number | null;
   loyaltyIssue?: string | null;
@@ -31,6 +34,9 @@ type ContactTarget = {
 type ContactValue = {
   phone: string | null;
   email: string | null;
+  bitrixActive: boolean;
+  bitrixBlocked: boolean;
+  bitrixBlockReason: string | null;
   bonusBalance: number | null;
   loyaltyActiveCardCount: number | null;
   loyaltyIssue: string | null;
@@ -61,6 +67,9 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     bitrix_user_id: number;
     phone_normalized: string | null;
     email_normalized: string | null;
+    bitrix_active: boolean;
+    bitrix_blocked: boolean;
+    bitrix_block_reason: string | null;
     bonus_balance: string | number | null;
     loyalty_active_card_count: number | null;
     loyalty_issue: string | null;
@@ -70,6 +79,9 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       bitrix_user_id,
       phone_normalized,
       email_normalized,
+      bitrix_active,
+      bitrix_blocked,
+      bitrix_block_reason,
       bonus_balance,
       loyalty_active_card_count,
       loyalty_issue,
@@ -84,6 +96,9 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       {
         phone: displayPhone(row.phone_normalized),
         email: displayEmail(row.email_normalized),
+        bitrixActive: row.bitrix_active === true,
+        bitrixBlocked: row.bitrix_blocked === true,
+        bitrixBlockReason: row.bitrix_block_reason ?? null,
         bonusBalance: row.bonus_balance === null ? null : Number(row.bonus_balance),
         loyaltyActiveCardCount:
           row.loyalty_active_card_count === null ? null : Number(row.loyalty_active_card_count),
@@ -108,12 +123,27 @@ const exposeFullContacts = <T extends ContactTarget>(
       ...record,
       phoneMasked: contact.phone,
       emailMasked: contact.email,
+      bitrixActive: contact.bitrixActive,
+      bitrixBlocked: contact.bitrixBlocked,
+      bitrixBlockReason: contact.bitrixBlockReason,
       bonusBalance: contact.bonusBalance,
       loyaltyActiveCardCount: contact.loyaltyActiveCardCount,
       loyaltyIssue: contact.loyaltyIssue,
       loyaltySyncedAt: contact.loyaltySyncedAt,
     };
   });
+
+const groupBonusSummary = (accounts: ContactTarget[]) => {
+  const known = accounts
+    .map((account) => account.bonusBalance)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  return {
+    groupBonusBalance: known.length ? known.reduce((sum, value) => sum + value, 0) : null,
+    groupBonusKnownAccounts: known.length,
+    groupBonusTotalAccounts: accounts.length,
+  };
+};
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
@@ -168,17 +198,21 @@ router.get("/anti-fraud/case-dynamics", async (req, res): Promise<void> => {
   }
 });
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
+// Обновлено 08.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
   try {
     const records = await listAntiFraudCases();
     const userIds = records.flatMap((item) => item.accounts.map((account) => account.bitrixUserId));
     const contacts = await loadContactMap(userIds);
     res.json({
-      records: records.map((item) => ({
-        ...item,
-        accounts: exposeFullContacts(item.accounts, contacts),
-      })),
+      records: records.map((item) => {
+        const accounts = exposeFullContacts(item.accounts, contacts);
+        return {
+          ...item,
+          accounts,
+          ...groupBonusSummary(accounts),
+        };
+      }),
     });
   } catch (error) {
     req.log.error({ error }, "Failed to load Anti-Fraud cases");
@@ -186,7 +220,7 @@ router.get("/anti-fraud/cases", async (req, res): Promise<void> => {
   }
 });
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
+// Обновлено 08.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/accounts", async (req, res): Promise<void> => {
   try {
     const records = await listAntiFraudWebAccounts({
