@@ -20,6 +20,9 @@ export const antiFraudAccountsTable = pgTable(
     displayName: text("display_name"),
     registeredAt: timestamp("registered_at", { withTimezone: true }),
     bitrixActive: boolean("bitrix_active").notNull().default(true),
+    // Обновлено 07.09.2026: Bitrix — master/source of truth для статуса блокировки.
+    bitrixBlocked: boolean("bitrix_blocked").notNull().default(false),
+    bitrixBlockReason: text("bitrix_block_reason"),
     // Обновлено 05.09.2026 ИТ Директор Евразии
     // RestIS TotalSum содержит копейки, поэтому используем точный NUMERIC(14,2), а не integer/float.
     bonusBalance: numeric("bonus_balance", { precision: 14, scale: 2 }),

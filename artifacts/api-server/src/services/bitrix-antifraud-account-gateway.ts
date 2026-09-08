@@ -12,6 +12,8 @@ export type BitrixAntiFraudAccountRecord = {
   displayName: string | null;
   registeredAt: Date | null;
   bitrixActive: boolean;
+  bitrixBlocked: boolean;
+  bitrixBlockReason: string | null;
 };
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -150,6 +152,9 @@ const parseResponse = (
     if (typeof row.bitrix_active !== "boolean") {
       throw new Error("Bitrix Anti-Fraud account-map вернул некорректное поле bitrix_active");
     }
+    if (typeof row.bitrix_blocked !== "boolean") {
+      throw new Error("Bitrix Anti-Fraud account-map вернул некорректное поле bitrix_blocked");
+    }
 
     return {
       bitrixUserId,
@@ -158,6 +163,8 @@ const parseResponse = (
       displayName: parseNullableText(row.display_name, "display_name", 255),
       registeredAt: parseDate(row.registered_at),
       bitrixActive: row.bitrix_active,
+      bitrixBlocked: row.bitrix_blocked,
+      bitrixBlockReason: parseNullableText(row.block_reason, "block_reason", 1000),
     };
   });
 

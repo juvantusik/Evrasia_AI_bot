@@ -23,6 +23,8 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
               display_name: "Тестовый пользователь",
               registered_at: "2025-08-30T10:00:00+03:00",
               bitrix_active: true,
+              bitrix_blocked: true,
+              block_reason: "Нарушение правил программы лояльности",
               // Старое поле может присутствовать в legacy response, но account-map его намеренно игнорирует.
               bonus_balance: 45678,
             },
@@ -46,12 +48,14 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
   assert.equal(result.records[0]?.phoneNormalized, "79991234567");
   assert.equal(result.records[0]?.emailNormalized, "test@example.com");
   assert.equal(result.records[0]?.bitrixActive, true);
+  assert.equal(result.records[0]?.bitrixBlocked, true);
+  assert.equal(result.records[0]?.bitrixBlockReason, "Нарушение правил программы лояльности");
   assert.deepEqual(result.unresolved, [415307]);
   assert.equal(Object.prototype.hasOwnProperty.call(result.records[0] ?? {}, "bonusBalance"), false);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
-test("Bitrix Anti-Fraud account gateway accepts nullable PII fields", async () => {
+test("Bitrix Anti-Fraud account gateway accepts nullable PII and block reason fields", async () => {
   const gateway = new BitrixAntiFraudAccountGateway({
     token: "x".repeat(64),
     fetchImpl: async () =>
@@ -66,6 +70,8 @@ test("Bitrix Anti-Fraud account gateway accepts nullable PII fields", async () =
               display_name: null,
               registered_at: null,
               bitrix_active: false,
+              bitrix_blocked: false,
+              block_reason: null,
             },
           ],
           unresolved: [],
@@ -80,6 +86,39 @@ test("Bitrix Anti-Fraud account gateway accepts nullable PII fields", async () =
   assert.equal(result.records[0]?.phoneNormalized, null);
   assert.equal(result.records[0]?.registeredAt, null);
   assert.equal(result.records[0]?.bitrixActive, false);
+  assert.equal(result.records[0]?.bitrixBlocked, false);
+  assert.equal(result.records[0]?.bitrixBlockReason, null);
+});
+
+// Добавлено 07.09.2026 ИТ Директор Евразии
+test("Bitrix Anti-Fraud account gateway rejects malformed blocked status", async () => {
+  const gateway = new BitrixAntiFraudAccountGateway({
+    token: "x".repeat(64),
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          records: [
+            {
+              bitrix_user_id: 120445,
+              phone_normalized: null,
+              email_normalized: null,
+              display_name: null,
+              registered_at: null,
+              bitrix_active: true,
+              bitrix_blocked: "Y",
+              block_reason: null,
+            },
+          ],
+          unresolved: [],
+          requested: 1,
+          resolved: 1,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  await assert.rejects(gateway.resolveAccounts([120445]), /bitrix_blocked/);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -99,6 +138,8 @@ test("Bitrix Anti-Fraud account gateway rejects duplicate classification without
               display_name: "Секретное имя",
               registered_at: null,
               bitrix_active: true,
+              bitrix_blocked: false,
+              block_reason: null,
             },
           ],
           unresolved: [120445],
