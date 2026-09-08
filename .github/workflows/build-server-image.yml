@@ -157,7 +157,7 @@ jobs:
           curl -fsS http://127.0.0.1:18080/api/anti-fraud/case-dynamics >/tmp/antifraud-dynamics.json
           test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
 
-          # Обновлено 06.09.2026: 0017 разрешает штатный scheduler status=partial.
+          # Обновлено 08.09.2026: 0018/0019 добавляют статус блокировки и внутренний аудит.
           # Также проверяем signed NUMERIC и loyalty resolution через psql,
           # не полагаясь на наличие standalone pg package в runtime image.
           migration_rows="$(
@@ -168,7 +168,17 @@ jobs:
               psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
                 -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
           )"
-          test "$migration_rows" = "18"
+          test "$migration_rows" = "20"
+
+          block_schema="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT count(*) FILTER (WHERE column_name='bitrix_blocked'), count(*) FILTER (WHERE column_name='bitrix_block_reason'), CASE WHEN to_regclass('public.anti_fraud_block_audit') IS NOT NULL THEN 1 ELSE 0 END FROM information_schema.columns WHERE table_schema='public' AND table_name='anti_fraud_accounts';"
+          )"
+          test "$block_schema" = "1|1|1"
 
           partial_status="$(
             docker run --rm -i \
