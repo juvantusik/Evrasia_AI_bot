@@ -206,6 +206,7 @@ const loyaltyText = (account: Account): string => {
 };
 
 const accountStatus = (account: Account) => account.bitrixBlocked ? 'Заблокирован' : account.bitrixActive ? 'Активен' : 'Неактивен';
+const isOperationalAccount = (account: Account) => account.bitrixActive && !account.bitrixBlocked;
 const levelLabel: Record<RiskLevel, string> = { low: 'Низкий', medium: 'Средний', high: 'Высокий', critical: 'Критический' };
 const identityMatchLabel = (match: IdentityMatch): string => match.type === 'phone' ? 'Совпадает телефон' : match.type === 'email' ? 'Совпадает email' : match.type === 'similar_phone' ? 'Похожие номера телефонов' : 'Похожие email';
 const metricText = (label: string, change: MetricChange) => change.before === null ? `${label}: ${change.after}` : `${label}: ${change.before} → ${change.after}`;
@@ -214,7 +215,8 @@ const parseDetails = (details: string) => details.split(';').map((part) => part.
     .replace('high_visit_days_60d=', 'дней с 3+ посещениями: ').replace('max_distinct_restaurants=', 'макс. ресторанов за день: ')
     .replace('sequence_days=', 'длина серии: ').replace('fastest_seconds=', 'самое быстрое переключение: ')
     .replace('switches_under_5m=', 'переключений до 5 минут: ').replace('max_accounts=', 'аккаунтов на устройстве: ')
-    .replace('shared_devices=', 'общих устройств: ').replace('linked_accounts=', 'связанных аккаунтов: ')
+    .replace('shared_devices=', 'общих устройств: ').replace('max_devices_for_same_pair=', 'макс. общих устройств для одной пары аккаунтов: ')
+    .replace('linked_accounts=', 'связанных аккаунтов: ')
     .replace('corroborated_similar_phone_links=', 'подтверждённых связей по похожему номеру: ')
     .replace('corroborated_similar_email_links=', 'подтверждённых связей по похожему email: ')
     .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ').replace('bonus_balance=', 'остаток бонусов: ')
@@ -291,7 +293,7 @@ export default function AntiFraudPage() {
   const filteredCases = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ru-RU');
     return cases.filter((item) => {
-      const visibleAccounts = showBlocked ? item.accounts : item.accounts.filter((account) => !account.bitrixBlocked);
+      const visibleAccounts = showBlocked ? item.accounts : item.accounts.filter(isOperationalAccount);
       if (!visibleAccounts.length) return false;
       if (level !== 'all' && item.riskLevel !== level) return false;
       if (signal !== 'all' && !item.signals.includes(signal)) return false;
@@ -303,7 +305,7 @@ export default function AntiFraudPage() {
   }, [cases, level, query, signal, showBlocked]);
 
   const toggleCase = (caseId: string) => setExpanded((current) => { const next = new Set(current); if (next.has(caseId)) next.delete(caseId); else next.add(caseId); return next; });
-  const riskAccounts = accounts.filter((account) => account.overallRisk > 0 && (showBlocked || !account.bitrixBlocked));
+  const riskAccounts = accounts.filter((account) => account.overallRisk > 0 && (showBlocked || isOperationalAccount(account)));
   const similarPhone = similar.filter((group) => group.matchType === 'phone').length;
   const similarEmail = similar.filter((group) => group.matchType === 'email').length;
   const busy = loading || refreshing || actingIds.size > 0;
@@ -320,10 +322,10 @@ export default function AntiFraudPage() {
         {error ? <div className="af-error"><AlertTriangle size={19} />{error}</div> : null}
 
         <section className="af-summary-grid">
-          <article><span>Требуют внимания</span><strong>{(summary?.criticalAccounts ?? 0) + (summary?.highAccounts ?? 0)}</strong><small>High + Critical · без заблокированных</small></article>
-          <article className="critical-card"><span>Критический риск</span><strong>{summary?.criticalAccounts ?? '—'}</strong><small>75–100 · без заблокированных</small></article>
-          <article className="high-card"><span>Высокий риск</span><strong>{summary?.highAccounts ?? '—'}</strong><small>50–74 · без заблокированных</small></article>
-          <article><span>Общие устройства</span><strong>{summary?.sharedDevices ?? '—'}</strong><small>{summary?.accountsOnSharedDevices ?? 0} незаблокированных аккаунтов</small></article>
+          <article><span>Требуют внимания</span><strong>{(summary?.criticalAccounts ?? 0) + (summary?.highAccounts ?? 0)}</strong><small>High + Critical · без заблокированных и неактивных</small></article>
+          <article className="critical-card"><span>Критический риск</span><strong>{summary?.criticalAccounts ?? '—'}</strong><small>75–100 · без заблокированных и неактивных</small></article>
+          <article className="high-card"><span>Высокий риск</span><strong>{summary?.highAccounts ?? '—'}</strong><small>50–74 · без заблокированных и неактивных</small></article>
+          <article><span>Общие устройства</span><strong>{summary?.sharedDevices ?? '—'}</strong><small>{summary?.accountsOnSharedDevices ?? 0} активных незаблокированных аккаунтов</small></article>
         </section>
 
         <nav className="af-tabs" aria-label="Разделы Anti-Fraud">
@@ -338,25 +340,25 @@ export default function AntiFraudPage() {
             <label className="af-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID, имя, телефон или email" /></label>
             <select value={level} onChange={(event) => setLevel(event.target.value as typeof level)}><option value="all">Все уровни</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
             <select value={signal} onChange={(event) => setSignal(event.target.value as typeof signal)}><option value="all">Все причины</option>{Object.entries(signalMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</select>
-            <label className="af-blocked-toggle"><input type="checkbox" checked={showBlocked} onChange={(event) => setShowBlocked(event.target.checked)} /><span>Показать заблокированных</span></label>
+            <label className="af-blocked-toggle"><input type="checkbox" checked={showBlocked} onChange={(event) => setShowBlocked(event.target.checked)} /><span>Показать заблокированных и неактивных</span></label>
           </section>
 
           <section className="af-case-list">
             <div className="af-case-head"><span>Риск</span><span>Кейс</span><span>Причины</span><span>Аккаунты</span><span>Последний сигнал</span><span /></div>
             {filteredCases.map((item) => {
               const isExpanded = expanded.has(item.caseId);
-              const visibleAccounts = showBlocked ? item.accounts : item.accounts.filter((account) => !account.bitrixBlocked);
-              const hiddenBlocked = item.accounts.length - visibleAccounts.length;
+              const visibleAccounts = showBlocked ? item.accounts : item.accounts.filter(isOperationalAccount);
+              const hiddenExcluded = item.accounts.length - visibleAccounts.length;
               const primary = visibleAccounts[0] ?? item.accounts[0];
               const title = item.accountCount > 1 ? 'Группа аккаунтов' : (primary?.displayName || `Аккаунт ${primary?.bitrixUserId ?? ''}`);
               const dynamics = item.dynamics; const trend = dynamics ? trendMeta[dynamics.trend] : null;
-              const blockable = item.accounts.filter((account) => !account.bitrixBlocked).map((account) => account.bitrixUserId);
+              const blockable = item.accounts.filter(isOperationalAccount).map((account) => account.bitrixUserId);
               return <article className={`af-case ${isExpanded ? 'expanded' : ''}`} key={item.caseId}>
                 <button className="af-case-row" type="button" onClick={() => toggleCase(item.caseId)}>
                   <span className={`risk-pill ${item.riskLevel}`}>{item.overallRisk}<small>{levelLabel[item.riskLevel]}</small></span>
                   <span className="case-title"><span className="case-title-line"><strong>{title}</strong>{trend ? <em className={`case-trend trend-${dynamics?.trend}`}>{trend.symbol} {trend.label}</em> : null}</span><small>{item.caseId}{item.accountCount === 1 && primary ? ` · ID ${primary.bitrixUserId}` : ''}</small></span>
                   <span className="case-tags">{item.signals.map((itemSignal) => <em className={signalMeta[itemSignal].className} key={itemSignal}>{signalMeta[itemSignal].label}</em>)}</span>
-                  <span className="case-count"><Users size={16} />{visibleAccounts.length}{hiddenBlocked > 0 ? <small>+{hiddenBlocked} скрыт.</small> : null}</span>
+                  <span className="case-count"><Users size={16} />{visibleAccounts.length}{hiddenExcluded > 0 ? <small>+{hiddenExcluded} скрыт.</small> : null}</span>
                   <span className="case-time">{formatDate(item.updatedAt)}</span><span>{isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</span>
                 </button>
 
@@ -376,7 +378,7 @@ export default function AntiFraudPage() {
 
                   <div className="case-action-bar">
                     <div><strong>Бонусы группы: {formatPoints(item.groupBonusBalance)}</strong><span>данные {item.groupBonusKnownAccounts ?? 0} из {item.groupBonusTotalAccounts ?? item.accounts.length} · учитываются все аккаунты группы</span></div>
-                    {blockable.length > 1 ? <button className="af-danger-button" type="button" disabled={busy} onClick={() => void runAccountAction('block', blockable, item.caseId)}><LockKeyhole size={16} /> Заблокировать незаблокированных ({blockable.length})</button> : null}
+                    {blockable.length > 1 ? <button className="af-danger-button" type="button" disabled={busy} onClick={() => void runAccountAction('block', blockable, item.caseId)}><LockKeyhole size={16} /> Заблокировать активных ({blockable.length})</button> : null}
                   </div>
 
                   <div className="detail-column account-column"><h3>Аккаунты кейса</h3>
@@ -406,11 +408,11 @@ export default function AntiFraudPage() {
           </section>
         </> : null}
 
-        {tab === 'devices' ? <section className="af-panel"><div className="panel-title"><Smartphone /><div><h2>Общие устройства</h2><p>Только устройства с двумя и более незаблокированными аккаунтами.</p></div></div><div className="simple-table"><div className="simple-head"><span>Устройство</span><span>Аккаунты</span><span>Тип</span><span>Последняя активность</span></div>{devices.map((device) => <div className="simple-row" key={device.devicePrefix}><strong>{device.devicePrefix}…</strong><span>{device.userIds.join(', ')}</span><span>{device.clientTypes.join(', ') || '—'}</span><span>{formatDate(device.lastSeenAt)}</span></div>)}</div></section> : null}
+        {tab === 'devices' ? <section className="af-panel"><div className="panel-title"><Smartphone /><div><h2>Общие устройства</h2><p>Только устройства с двумя и более активными незаблокированными аккаунтами.</p></div></div><div className="simple-table"><div className="simple-head"><span>Устройство</span><span>Аккаунты</span><span>Тип</span><span>Последняя активность</span></div>{devices.map((device) => <div className="simple-row" key={device.devicePrefix}><strong>{device.devicePrefix}…</strong><span>{device.userIds.join(', ')}</span><span>{device.clientTypes.join(', ') || '—'}</span><span>{formatDate(device.lastSeenAt)}</span></div>)}</div></section> : null}
 
-        {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском</h2><p>{showBlocked ? 'Показаны также заблокированные аккаунты.' : 'Заблокированные аккаунты скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
+        {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском</h2><p>{showBlocked ? 'Показаны также заблокированные и неактивные аккаунты.' : 'Заблокированные и неактивные аккаунты скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
 
-        {tab === 'recommendations' ? <section className="af-panel recommendation-panel"><div className="panel-title"><ShieldAlert /><div><h2>Рекомендации</h2><p>Risk остаётся advisory: блокировка выполняется только вручную после проверки кейса.</p></div></div><div className="recommendation-grid"><article><strong>{summary?.historyGateAccounts ?? 0}</strong><span>незаблокированных аккаунтов достигли history gate</span></article><article><strong>{summary?.historyEnrichedAccounts ?? 0}</strong><span>обогащены 60-дневной историей</span></article><article><strong>{similarPhone}</strong><span>групп с совпадающим телефоном</span></article><article><strong>{similarEmail}</strong><span>групп с совпадающим email</span></article></div><div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой откройте кейс и проверьте связующие признаки, контакты, бонусы и поведенческие причины. Заблокированные по умолчанию скрыты, но доступны через переключатель.</p></div></div></section> : null}
+        {tab === 'recommendations' ? <section className="af-panel recommendation-panel"><div className="panel-title"><ShieldAlert /><div><h2>Рекомендации</h2><p>Risk остаётся advisory: блокировка выполняется только вручную после проверки кейса.</p></div></div><div className="recommendation-grid"><article><strong>{summary?.historyGateAccounts ?? 0}</strong><span>активных незаблокированных аккаунтов достигли history gate</span></article><article><strong>{summary?.historyEnrichedAccounts ?? 0}</strong><span>обогащены 60-дневной историей</span></article><article><strong>{similarPhone}</strong><span>групп с совпадающим телефоном</span></article><article><strong>{similarEmail}</strong><span>групп с совпадающим email</span></article></div><div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой откройте кейс и проверьте связующие признаки, контакты, бонусы и поведенческие причины. Заблокированные и неактивные аккаунты по умолчанию скрыты, но доступны через переключатель.</p></div></div></section> : null}
       </main>
     </div>
   );
