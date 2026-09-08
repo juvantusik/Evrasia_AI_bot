@@ -93,7 +93,8 @@ const maskEmail = (value: unknown): string | null => {
   return `${visible}${local.length > 2 ? "***" : ""}@${domain}`;
 };
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
+// Обновлено 08.09.2026 ИТ Директор Евразии:
+// верхние operational-счётчики не включают уже заблокированные аккаунты.
 export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => {
   await ensureReady();
   const result = await pool.query<{
@@ -112,24 +113,28 @@ export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => 
     WITH score_summary AS (
       SELECT
         count(*) AS scored_accounts,
-        count(*) FILTER (WHERE risk_level = 'critical') AS critical_accounts,
-        count(*) FILTER (WHERE risk_level = 'high') AS high_accounts,
-        count(*) FILTER (WHERE risk_level = 'medium') AS medium_accounts,
-        count(*) FILTER (WHERE risk_level = 'low') AS low_accounts,
-        count(*) FILTER (WHERE history_gate IS TRUE) AS history_gate_accounts,
-        count(*) FILTER (WHERE history_enriched IS TRUE) AS history_enriched_accounts,
-        max(computed_at) AS updated_at
-      FROM anti_fraud_risk_scores
+        count(*) FILTER (WHERE s.risk_level = 'critical') AS critical_accounts,
+        count(*) FILTER (WHERE s.risk_level = 'high') AS high_accounts,
+        count(*) FILTER (WHERE s.risk_level = 'medium') AS medium_accounts,
+        count(*) FILTER (WHERE s.risk_level = 'low') AS low_accounts,
+        count(*) FILTER (WHERE s.history_gate IS TRUE) AS history_gate_accounts,
+        count(*) FILTER (WHERE s.history_enriched IS TRUE) AS history_enriched_accounts,
+        max(s.computed_at) AS updated_at
+      FROM anti_fraud_risk_scores s
+      LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = s.bitrix_user_id
+      WHERE COALESCE(a.bitrix_blocked, false) IS NOT TRUE
     ),
     device_summary AS (
       SELECT
-        count(DISTINCT device_hash) AS devices,
+        count(*) AS devices,
         count(*) FILTER (WHERE account_count > 1) AS shared_devices,
         COALESCE(sum(account_count) FILTER (WHERE account_count > 1), 0) AS accounts_on_shared_devices
       FROM (
-        SELECT device_hash, count(DISTINCT bitrix_user_id) AS account_count
-        FROM anti_fraud_device_links
-        GROUP BY device_hash
+        SELECT l.device_hash, count(DISTINCT l.bitrix_user_id) AS account_count
+        FROM anti_fraud_device_links l
+        LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = l.bitrix_user_id
+        WHERE COALESCE(a.bitrix_blocked, false) IS NOT TRUE
+        GROUP BY l.device_hash
       ) d
     )
     SELECT * FROM score_summary CROSS JOIN device_summary
@@ -229,21 +234,24 @@ export const listAntiFraudWebAccounts = async (input?: {
   }));
 };
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
+// Обновлено 08.09.2026 ИТ Директор Евразии:
+// вкладка общих устройств отражает только незаблокированные аккаунты.
 export const listAntiFraudWebDevices = async (limitValue = 200): Promise<AntiFraudWebDevice[]> => {
   await ensureReady();
   const limit = Math.max(1, Math.min(500, Math.floor(limitValue)));
   const result = await pool.query<any>(`
     SELECT
-      left(device_hash, 16) AS device_prefix,
-      count(DISTINCT bitrix_user_id)::int AS account_count,
-      array_agg(DISTINCT bitrix_user_id ORDER BY bitrix_user_id) AS user_ids,
-      max(last_seen_at) AS last_seen_at,
-      array_remove(array_agg(DISTINCT client_type ORDER BY client_type), NULL) AS client_types
-    FROM anti_fraud_device_links
-    GROUP BY device_hash
-    HAVING count(DISTINCT bitrix_user_id) > 1
-    ORDER BY account_count DESC, max(last_seen_at) DESC NULLS LAST
+      left(l.device_hash, 16) AS device_prefix,
+      count(DISTINCT l.bitrix_user_id)::int AS account_count,
+      array_agg(DISTINCT l.bitrix_user_id ORDER BY l.bitrix_user_id) AS user_ids,
+      max(l.last_seen_at) AS last_seen_at,
+      array_remove(array_agg(DISTINCT l.client_type ORDER BY l.client_type), NULL) AS client_types
+    FROM anti_fraud_device_links l
+    LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = l.bitrix_user_id
+    WHERE COALESCE(a.bitrix_blocked, false) IS NOT TRUE
+    GROUP BY l.device_hash
+    HAVING count(DISTINCT l.bitrix_user_id) > 1
+    ORDER BY account_count DESC, max(l.last_seen_at) DESC NULLS LAST
     LIMIT $1
   `, [limit]);
   return result.rows.map((row: any) => ({
@@ -255,7 +263,8 @@ export const listAntiFraudWebDevices = async (limitValue = 200): Promise<AntiFra
   }));
 };
 
-// Добавлено 03.09.2026 ИТ Директор Евразии
+// Обновлено 08.09.2026 ИТ Директор Евразии:
+// рекомендации по совпадающим контактам также являются operational и исключают блокированных.
 export const listAntiFraudWebSimilarAccounts = async (limitValue = 100): Promise<AntiFraudWebSimilarGroup[]> => {
   await ensureReady();
   const limit = Math.max(1, Math.min(300, Math.floor(limitValue)));
@@ -263,11 +272,15 @@ export const listAntiFraudWebSimilarAccounts = async (limitValue = 100): Promise
     WITH matches AS (
       SELECT 'phone'::text AS match_type, phone_normalized AS match_key, bitrix_user_id
       FROM anti_fraud_accounts
-      WHERE phone_normalized IS NOT NULL AND phone_normalized <> ''
+      WHERE phone_normalized IS NOT NULL
+        AND phone_normalized <> ''
+        AND COALESCE(bitrix_blocked, false) IS NOT TRUE
       UNION ALL
       SELECT 'email'::text AS match_type, email_normalized AS match_key, bitrix_user_id
       FROM anti_fraud_accounts
-      WHERE email_normalized IS NOT NULL AND email_normalized <> ''
+      WHERE email_normalized IS NOT NULL
+        AND email_normalized <> ''
+        AND COALESCE(bitrix_blocked, false) IS NOT TRUE
     ), duplicate_keys AS (
       SELECT match_type, match_key
       FROM matches
