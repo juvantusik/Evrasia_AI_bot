@@ -5,6 +5,10 @@ import { listAntiFraudCaseDynamics } from "../services/anti-fraud-case-dynamics-
 import { blockAntiFraudAccounts } from "../services/anti-fraud-block-service";
 import { unblockAntiFraudAccounts } from "../services/anti-fraud-unblock-service";
 import {
+  getAntiFraudSettings,
+  setAntiFraudBonusBalanceThreshold,
+} from "../services/anti-fraud-settings-service";
+import {
   getAntiFraudWebSummary,
   listAntiFraudWebAccounts,
   listAntiFraudWebDevices,
@@ -193,6 +197,31 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
 // Добавлено 05.09.2026 ИТ Директор Евразии
 router.get("/anti-fraud/scheduler", async (_req, res): Promise<void> => {
   res.json(getAntiFraudHourlySchedulerStatus());
+});
+
+// Настройки Anti-Fraud сохраняются в bot_settings и применяются при следующем scoring/refresh.
+router.get("/anti-fraud/settings", async (req, res): Promise<void> => {
+  try {
+    res.json(await getAntiFraudSettings());
+  } catch (error) {
+    req.log.error({ error }, "Failed to load Anti-Fraud settings");
+    res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
+router.post("/anti-fraud/settings", async (req, res): Promise<void> => {
+  try {
+    const value = req.body?.bonusBalanceThreshold;
+    if (value === undefined || value === null || value === "") {
+      res.status(400).json({ error: "Укажите порог бонусного баланса." });
+      return;
+    }
+    res.json(await setAntiFraudBonusBalanceThreshold(value));
+  } catch (error) {
+    req.log.error({ error }, "Failed to save Anti-Fraud settings");
+    const message = errorMessage(error);
+    res.status(message.includes("Порог бонусов") ? 400 : 503).json({ error: message });
+  }
 });
 
 // Обновлено 07.09.2026 ИТ Директор Евразии
