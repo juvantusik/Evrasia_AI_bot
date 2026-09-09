@@ -2,9 +2,9 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-09** after final production deployment and operator visual acceptance of PR #45.
+> Updated: **2026-09-09** after final production deployment and operator visual acceptance of PR #45, website legal-document publication, and capture of the next Anti-Fraud UI iteration.
 >
-> Read together with `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `docs/SERVER_SCRIPT_RULES.md`, `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` and `SERVER_UPDATES.md`.
+> Read together with `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `docs/SERVER_SCRIPT_RULES.md`, `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`, `docs/ANTI_FRAUD_UI_NEXT.md` and `SERVER_UPDATES.md`.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -83,7 +83,7 @@ See `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`.
 
 ---
 
-## 4. `Новый` linked-account marker — production accepted
+## 4. `Новый` linked-account marker — production accepted semantics
 
 Case dynamics already persist previous/current case membership.
 
@@ -94,6 +94,14 @@ UI behavior after PR #43:
 - no guessed timestamp/window is introduced.
 
 This is a structural case-dynamics marker, not a risk score and not a Bitrix account state.
+
+### Next UI iteration
+
+Operator feedback on 2026-09-09: newly appeared users are not visible enough in the current table/workflow. The next iteration should place **`Новый`** in the same case-dynamics/status area where labels such as `усилился`, `без изменений`, etc. are shown, effectively making it another clearly visible dynamics state while preserving the existing PR #43 `addedAccountIds` semantics.
+
+Before implementation, inspect the exact current status set/priorities in code. Do not guess how multiple dynamics conditions compose.
+
+See `docs/ANTI_FRAUD_UI_NEXT.md`.
 
 ---
 
@@ -187,7 +195,25 @@ Do not rerun the refresh/performance acceptance unless a later relevant code cha
 
 ---
 
-## 9. Product / infrastructure continuity
+## 9. Device-hash accumulation visibility — next planned Anti-Fraud UI work
+
+Operator requirement captured on 2026-09-09: add a visible measure of how much `device_hash_id` data has already been accumulated so collection progress can be monitored from the Anti-Fraud interface.
+
+First version should report only facts supported by the current data model, e.g. current known/unique device hashes or another clearly defined count after inspecting the factual schema/query path.
+
+Future requirement: split the visualization by authoritative source/origin:
+
+1. website;
+2. SamZaberu application;
+3. mobile waiter application.
+
+Before designing that split, verify whether source/origin is already persisted for each `device_hash_id`. If not, the source split requires a later data-model/integration change; do not infer it from heuristics.
+
+See `docs/ANTI_FRAUD_UI_NEXT.md`.
+
+---
+
+## 10. Product / infrastructure continuity
 
 One production application contains:
 
@@ -207,7 +233,15 @@ Legacy `evrasia-ai-bot-v17-test` remains exited/archival. Do not restart blindly
 
 ---
 
-## 10. Backups / retained state
+## 11. Website legal / consent integration status
+
+On 2026-09-09 the loyalty-program offer and personal-data policy on `evrasia.rest` were updated and visually accepted in production in support of the Anti-Fraud/legal-processing perimeter. See `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` for production paths, backups and the planned registration-consent work.
+
+Registration checkbox redesign and per-user consent persistence/versioning/audit remain **PLANNED**, not implemented.
+
+---
+
+## 12. Backups / retained state
 
 Do not clean backups without explicit operator approval.
 
@@ -222,7 +256,7 @@ The exact final PR #45 backup path was not captured in the pasted transcript. Re
 
 ---
 
-## 11. Mandatory server-script / deployment lesson from PR #45 sequence
+## 13. Mandatory server-script / deployment lesson from PR #45 sequence
 
 The first PR #45 deployment attempt was safely stopped **before cutover** because its script expected stale production baseline `3ce9f8c...`, while production had already advanced to healthy PR #44 revision `a45554b...`.
 
@@ -240,17 +274,23 @@ Other mandatory rules remain in `docs/SERVER_SCRIPT_RULES.md`.
 
 ---
 
-## 12. Immediate continuation point
+## 14. Immediate continuation point
 
-The latest Anti-Fraud operator-settings/UI milestone is **implemented, merged, deployed and operator accepted**.
+The latest Anti-Fraud operator-settings/modal milestone is **implemented, merged, deployed and operator accepted**.
+
+The next planned Anti-Fraud UI iteration is now explicitly captured:
+
+1. make existing `Новый` membership-delta semantics clearly visible in the case-dynamics/status area;
+2. add an operator-visible `device_hash_id` accumulation/progress metric, designed for later source segmentation (website / SamZaberu / mobile waiter) after factual source persistence is verified.
+
+Read `docs/ANTI_FRAUD_UI_NEXT.md` before starting this work.
 
 Do not automatically reopen:
 
-- PR #43/#44/#45 work
-- modal viewport redesign
+- PR #43/#44/#45 modal work
 - USER_ID 880339 block/unblock acceptance
 - similarity performance refresh
 - archival TEST
 - paused full-Bitrix email/anomaly investigation.
 
-Next engineering iteration begins only from a new user requirement. Before any mutation, inspect current GitHub/CI and factual production state first.
+Before any implementation or production mutation, inspect current GitHub/CI, exact current UI/data code and factual production state first.
