@@ -63,6 +63,16 @@ type StateRow = {
   observed_runs: number;
 };
 
+export type AntiFraudCaseLineageSnapshot = {
+  caseId: string;
+  accountIds: number[];
+};
+
+export type AntiFraudCaseLineageRename = {
+  fromCaseId: string;
+  toCaseId: string;
+};
+
 const uniqueSortedNumbers = (values: number[]): number[] =>
   [...new Set(values.filter((value) => Number.isInteger(value) && value > 0))].sort((a, b) => a - b);
 
@@ -103,6 +113,44 @@ const metric = (before: number | null, after: number): AntiFraudCaseMetricChange
   delta: before === null ? null : after - before,
 });
 
+const isStrictSubset = (left: number[], right: number[]): boolean => {
+  const leftIds = uniqueSortedNumbers(left);
+  const rightIds = new Set(uniqueSortedNumbers(right));
+  return leftIds.length > 0 && leftIds.length < rightIds.size && leftIds.every((id) => rightIds.has(id));
+};
+
+// caseId сейчас строится от минимального USER_ID. Поэтому новый аккаунт с меньшим USER_ID
+// меняет caseId, хотя логически это та же связка. Продолжаем lineage только при однозначном
+// сценарии: ровно один недавно наблюдавшийся старый кейс является строгим подмножеством нового.
+// При merge нескольких старых кейсов ничего не угадываем и считаем новый caseId новым кейсом.
+export const resolveAntiFraudCaseLineageRenames = (
+  currentSnapshots: AntiFraudCaseLineageSnapshot[],
+  persistedSnapshots: AntiFraudCaseLineageSnapshot[],
+): AntiFraudCaseLineageRename[] => {
+  const currentCaseIds = new Set(currentSnapshots.map((item) => item.caseId));
+  const persistedById = new Map(persistedSnapshots.map((item) => [item.caseId, item]));
+  const consumed = new Set<string>();
+  const renames: AntiFraudCaseLineageRename[] = [];
+
+  for (const current of currentSnapshots) {
+    if (persistedById.has(current.caseId)) continue;
+
+    const candidates = persistedSnapshots.filter(
+      (persisted) =>
+        !currentCaseIds.has(persisted.caseId) &&
+        !consumed.has(persisted.caseId) &&
+        isStrictSubset(persisted.accountIds, current.accountIds),
+    );
+
+    if (candidates.length !== 1) continue;
+
+    consumed.add(candidates[0].caseId);
+    renames.push({ fromCaseId: candidates[0].caseId, toCaseId: current.caseId });
+  }
+
+  return renames;
+};
+
 const snapshotForCase = (item: AntiFraudCase): Snapshot => {
   const accountIds = uniqueSortedNumbers(item.accounts.map((account) => account.bitrixUserId));
   const reasonCodes = uniqueSortedStrings(
@@ -141,6 +189,53 @@ const snapshotForCase = (item: AntiFraudCase): Snapshot => {
     accountIds,
     reasonCodes,
   };
+};
+
+const reconcileSnapshotCaseLineage = async (snapshots: Snapshot[]): Promise<Set<string>> => {
+  const renamedCaseIds = new Set<string>();
+  if (!snapshots.length) return renamedCaseIds;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('anti_fraud_case_lineage'))");
+
+    const result = await client.query<{ case_id: string; current_account_ids: string }>(
+      `SELECT case_id, current_account_ids
+       FROM anti_fraud_case_state
+       WHERE last_seen_at >= now() - interval '1 hour'
+       FOR UPDATE`,
+    );
+
+    const renames = resolveAntiFraudCaseLineageRenames(
+      snapshots.map((snapshot) => ({ caseId: snapshot.caseId, accountIds: snapshot.accountIds })),
+      result.rows.map((row) => ({
+        caseId: row.case_id,
+        accountIds: parseNumberCsv(row.current_account_ids),
+      })),
+    );
+
+    for (const rename of renames) {
+      const updated = await client.query(
+        `UPDATE anti_fraud_case_state old_state
+         SET case_id = $2
+         WHERE old_state.case_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM anti_fraud_case_state new_state WHERE new_state.case_id = $2
+           )`,
+        [rename.fromCaseId, rename.toCaseId],
+      );
+      if ((updated.rowCount ?? 0) === 1) renamedCaseIds.add(rename.toCaseId);
+    }
+
+    await client.query("COMMIT");
+    return renamedCaseIds;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 const persistSnapshots = async (snapshots: Snapshot[], bootstrapOnly: boolean): Promise<void> => {
@@ -259,7 +354,9 @@ const persistSnapshots = async (snapshots: Snapshot[], bootstrapOnly: boolean): 
 // не сдвигает previous/current snapshot, а только увеличивает observed_runs.
 export const captureAntiFraudCaseDynamics = async (): Promise<void> => {
   const cases = await listAntiFraudCases();
-  await persistSnapshots(cases.map(snapshotForCase), false);
+  const snapshots = cases.map(snapshotForCase);
+  await reconcileSnapshotCaseLineage(snapshots);
+  await persistSnapshots(snapshots, false);
 };
 
 const trendFor = (
@@ -300,12 +397,24 @@ const trendFor = (
   return "unchanged";
 };
 
-// Read API лениво создаёт только baseline для ранее не встречавшегося caseId.
-// Существующие snapshots при открытии/обновлении страницы не изменяются.
+// Read API лениво создаёт baseline для ранее не встречавшегося caseId. Если caseId сменился
+// только из-за добавления меньшего USER_ID, сначала восстанавливаем однозначный lineage и
+// фиксируем это как обычное изменение состава, чтобы новый аккаунт попал в addedAccountIds.
 export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics[]> => {
   const cases = await listAntiFraudCases();
   const snapshots = cases.map(snapshotForCase);
-  await persistSnapshots(snapshots, true);
+  const renamedCaseIds = await reconcileSnapshotCaseLineage(snapshots);
+
+  if (renamedCaseIds.size > 0) {
+    await persistSnapshots(
+      snapshots.filter((snapshot) => renamedCaseIds.has(snapshot.caseId)),
+      false,
+    );
+  }
+  await persistSnapshots(
+    snapshots.filter((snapshot) => !renamedCaseIds.has(snapshot.caseId)),
+    true,
+  );
 
   const caseIds = snapshots.map((snapshot) => snapshot.caseId);
   if (!caseIds.length) return [];
