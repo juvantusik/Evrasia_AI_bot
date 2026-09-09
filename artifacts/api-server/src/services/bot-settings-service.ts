@@ -1,24 +1,25 @@
-import { botSettingsTable, db } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { botSettings, db, eq } from "@workspace/db";
 
 export const BOT_SETTING_KEYS = {
   megafonGroupChatId: "megafon_group_chat_id",
+  antiFraudBonusBalanceThreshold: "anti_fraud_bonus_balance_threshold",
 } as const;
 
 export const getBotSetting = async (key: string): Promise<string | null> => {
-  const row = await db.query.botSettingsTable.findFirst({
-    where: eq(botSettingsTable.key, key),
-  });
-  return row?.value ?? null;
+  const rows = await db
+    .select({ value: botSettings.settingValue })
+    .from(botSettings)
+    .where(eq(botSettings.settingKey, key))
+    .limit(1);
+  return rows[0]?.value ?? null;
 };
 
 export const setBotSetting = async (key: string, value: string): Promise<void> => {
-  const now = new Date();
   await db
-    .insert(botSettingsTable)
-    .values({ key, value, updatedAt: now })
+    .insert(botSettings)
+    .values({ settingKey: key, settingValue: value })
     .onConflictDoUpdate({
-      target: botSettingsTable.key,
-      set: { value, updatedAt: now },
+      target: botSettings.settingKey,
+      set: { settingValue: value, updatedAt: new Date() },
     });
 };
