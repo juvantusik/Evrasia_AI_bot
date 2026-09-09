@@ -8,6 +8,9 @@ import test from "node:test";
 process.env.DATABASE_URL ??= "postgresql://test:test@127.0.0.1:5432/test";
 
 const { scoreAntiFraudSignals } = await import("./anti-fraud-risk-engine");
+const { resolveAntiFraudCaseLineageRenames } = await import(
+  "./anti-fraud-case-dynamics-service"
+);
 type AntiFraudRiskSignals = Parameters<typeof scoreAntiFraudSignals>[0];
 
 const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRiskSignals => ({
@@ -217,4 +220,25 @@ test("custom 30000.00 threshold preserves strict greater-than boundary", () => {
   assert.ok(reason);
   assert.match(reason.details, /bonus_balance=30000\.01/);
   assert.match(reason.details, /threshold=30000\.00/);
+});
+
+test("case lineage follows an existing group when a lower USER_ID joins", () => {
+  const renames = resolveAntiFraudCaseLineageRenames(
+    [{ caseId: "AF-50", accountIds: [50, 100, 200] }],
+    [{ caseId: "AF-100", accountIds: [100, 200] }],
+  );
+
+  assert.deepEqual(renames, [{ fromCaseId: "AF-100", toCaseId: "AF-50" }]);
+});
+
+test("case lineage does not guess when two previous cases merge", () => {
+  const renames = resolveAntiFraudCaseLineageRenames(
+    [{ caseId: "AF-50", accountIds: [50, 100, 200, 300] }],
+    [
+      { caseId: "AF-100", accountIds: [100, 200] },
+      { caseId: "AF-50-old", accountIds: [50, 300] },
+    ],
+  );
+
+  assert.deepEqual(renames, []);
 });
