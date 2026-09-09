@@ -16,6 +16,7 @@ import {
   Users,
   Utensils,
 } from 'lucide-react';
+import AntiFraudSettingsButton from './AntiFraudSettingsButton';
 
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
@@ -135,7 +136,7 @@ const signalMeta: Record<CaseSignal, { label: string; className: string }> = {
   visits: { label: 'Высокая частота посещений', className: 'tag-orange' },
   fast_switch: { label: 'Быстрые переключения', className: 'tag-red' },
   linked_visits: { label: 'Связанные посещения', className: 'tag-orange' },
-  bonus_balance: { label: 'Бонусы > 40 000', className: 'tag-orange' },
+  bonus_balance: { label: 'Высокий остаток бонусов', className: 'tag-orange' },
 };
 
 const reasonLabels: Record<string, string> = {
@@ -316,7 +317,7 @@ export default function AntiFraudPage() {
     <div className="af-page">
       <header className="af-header">
         <div className="af-brand"><span className="af-brand-icon"><ShieldAlert size={22} /></span><div><strong>Anti-Fraud</strong><span>Евразия AI Bot</span></div></div>
-        <button className="af-refresh" type="button" onClick={() => void refreshNow()} disabled={busy}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Обновляем…' : 'Обновить сейчас'}</button>
+        <div className="af-header-actions"><AntiFraudSettingsButton disabled={busy} /><button className="af-refresh" type="button" onClick={() => void refreshNow()} disabled={busy}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Обновляем…' : 'Обновить сейчас'}</button></div>
       </header>
 
       <main className="af-content">
@@ -385,7 +386,7 @@ export default function AntiFraudPage() {
 
                   <div className="detail-column account-column"><h3>Аккаунты кейса</h3>
                     {visibleAccounts.map((account) => <div className={`account-card ${account.bitrixBlocked ? 'blocked' : ''}`} key={account.bitrixUserId}>
-                      <div className="account-top"><div><strong>{account.displayName || 'Без имени'}</strong><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
+                      <div className="account-top"><div><strong>{account.displayName || 'Без имени'}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
                       <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>{loyaltyText(account)}</span></div>
                       {account.bitrixBlocked ? <div className="block-info"><strong>Дата блокировки: {account.blockedAt ? formatDate(account.blockedAt) : 'неизвестна'}</strong><span>{account.bitrixBlockReason || 'Основание блокировки не указано'}</span></div> : null}
                       <div className="risk-bars"><span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span></div>
@@ -401,7 +402,7 @@ export default function AntiFraudPage() {
                     {item.devices.map((device) => <div className="link-card" key={device.devicePrefix}><Smartphone size={18} /><div><strong>Общее устройство {device.devicePrefix}…</strong><span>{device.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span><small>Последняя активность: {formatDate(device.lastSeenAt)}</small></div></div>)}
                     {item.identityMatches.map((match, index) => <div className="link-card" key={`${match.type}-${index}`}>{match.type === 'phone' || match.type === 'similar_phone' ? <Link2 size={18} /> : <Mail size={18} />}<div><strong>{identityMatchLabel(match)}</strong><span>{match.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span></div></div>)}
                     {item.accountCount === 1 && item.signals.includes('visits') ? <div className="link-card solo"><Utensils size={18} /><div><strong>Одиночный поведенческий кейс</strong><span>Связующих признаков с другими аккаунтами не найдено.</span></div></div> : null}
-                    {item.accountCount === 1 && item.signals.includes('bonus_balance') ? <div className="link-card solo"><AlertTriangle size={18} /><div><strong>Высокий остаток бонусов</strong><span>Более 40 000 бонусов запускают проверку истории за 60 дней.</span></div></div> : null}
+                    {item.accountCount === 1 && item.signals.includes('bonus_balance') ? <div className="link-card solo"><AlertTriangle size={18} /><div><strong>Высокий остаток бонусов</strong><span>Баланс выше настроенного порога запускает проверку истории за 60 дней.</span></div></div> : null}
                   </div>
                 </div> : null}
               </article>;

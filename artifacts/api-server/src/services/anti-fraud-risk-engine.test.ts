@@ -8,6 +8,9 @@ import test from "node:test";
 process.env.DATABASE_URL ??= "postgresql://test:test@127.0.0.1:5432/test";
 
 const { scoreAntiFraudSignals } = await import("./anti-fraud-risk-engine");
+const { resolveAntiFraudCaseLineageRenames } = await import(
+  "./anti-fraud-case-dynamics-service"
+);
 type AntiFraudRiskSignals = Parameters<typeof scoreAntiFraudSignals>[0];
 
 const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRiskSignals => ({
@@ -173,6 +176,7 @@ test("five visits on repeated high-visit days clamp visit risk to 100", () => {
   assert.equal(score.visitBehaviorRisk, 100);
   assert.equal(score.overallRisk, 100);
   assert.equal(score.riskLevel, "critical");
+  assert.equal(score.historyGate, true);
 });
 
 // Добавлено 05.09.2026 ИТ Директор Евразии
@@ -200,4 +204,41 @@ test("40000.01 bonuses add 50 risk and trigger 60-day history gate", () => {
   assert.match(reason.details, /bonus_balance=40000\.01/);
   assert.match(reason.details, /threshold=40000\.00/);
   assert.match(reason.details, /history_window_days=60/);
+});
+
+test("custom 30000.00 threshold preserves strict greater-than boundary", () => {
+  const exact = scoreAntiFraudSignals(baseSignals({ bonusBalance: 30_000 }), 50, 30_000);
+  const above = scoreAntiFraudSignals(baseSignals({ bonusBalance: 30_000.01 }), 50, 30_000);
+
+  assert.equal(exact.historicalBehaviorRisk, 0);
+  assert.equal(exact.historyGate, false);
+  assert.equal(above.historicalBehaviorRisk, 50);
+  assert.equal(above.overallRisk, 50);
+  assert.equal(above.historyGate, true);
+
+  const reason = above.reasons.find((item) => item.code === "high_bonus_balance");
+  assert.ok(reason);
+  assert.match(reason.details, /bonus_balance=30000\.01/);
+  assert.match(reason.details, /threshold=30000\.00/);
+});
+
+test("case lineage follows an existing group when a lower USER_ID joins", () => {
+  const renames = resolveAntiFraudCaseLineageRenames(
+    [{ caseId: "AF-50", accountIds: [50, 100, 200] }],
+    [{ caseId: "AF-100", accountIds: [100, 200] }],
+  );
+
+  assert.deepEqual(renames, [{ fromCaseId: "AF-100", toCaseId: "AF-50" }]);
+});
+
+test("case lineage does not guess when two previous cases merge", () => {
+  const renames = resolveAntiFraudCaseLineageRenames(
+    [{ caseId: "AF-50", accountIds: [50, 100, 200, 300] }],
+    [
+      { caseId: "AF-100", accountIds: [100, 200] },
+      { caseId: "AF-50-old", accountIds: [50, 300] },
+    ],
+  );
+
+  assert.deepEqual(renames, []);
 });

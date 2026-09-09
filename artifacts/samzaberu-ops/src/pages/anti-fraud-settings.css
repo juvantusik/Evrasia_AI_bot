@@ -1,0 +1,261 @@
+.af-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.af-settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #d8e0eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.af-settings-button:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.af-settings-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.af-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, .42);
+}
+
+.af-settings-dialog {
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, .2);
+}
+
+.af-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.af-settings-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.af-settings-head strong {
+  color: #111827;
+  font-size: 18px;
+}
+
+.af-settings-head span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.af-settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+
+.af-settings-close:hover:not(:disabled) {
+  background: #f2f4f7;
+}
+
+.af-settings-loading {
+  padding: 28px 22px;
+  color: #667085;
+}
+
+.af-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 22px 12px;
+}
+
+.af-settings-field > span {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.af-settings-field input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid #cfd8e5;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.af-settings-field input:focus {
+  border-color: #98a2b3;
+  box-shadow: 0 0 0 3px rgba(152, 162, 179, .14);
+}
+
+.af-settings-field small,
+.af-settings-current small {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.af-settings-current {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 16px;
+  margin: 4px 22px 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.af-settings-current > span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.af-settings-current > strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.af-settings-current > small {
+  grid-column: 1 / -1;
+}
+
+.af-settings-error,
+.af-settings-notice {
+  margin: 0 22px 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.af-settings-error {
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.af-settings-notice {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.af-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 14px 22px 20px;
+}
+
+.af-settings-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.af-settings-actions button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.af-settings-cancel {
+  border: 1px solid #d8e0eb;
+  background: #fff;
+  color: #344054;
+}
+
+.af-settings-save {
+  border: 1px solid #253b57;
+  background: #253b57;
+  color: #fff;
+}
+
+.account-new-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .01em;
+  vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+  .af-header-actions {
+    gap: 6px;
+  }
+
+  .af-settings-button {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+  }
+
+  .af-settings-button svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .af-settings-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .af-settings-dialog {
+    width: 100%;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .af-settings-current {
+    grid-template-columns: 1fr;
+  }
+}
