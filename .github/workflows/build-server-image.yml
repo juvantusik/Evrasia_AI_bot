@@ -157,6 +157,22 @@ jobs:
           curl -fsS http://127.0.0.1:18080/api/anti-fraud/case-dynamics >/tmp/antifraud-dynamics.json
           test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
 
+          # Добавлено 09.09.2026: operator setting реально читается/пишется через bot_settings.
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-default.json
+          test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-default.json)" = "40000"
+          curl -fsS -X POST \
+            -H 'content-type: application/json' \
+            -d '{"bonusBalanceThreshold":30000}' \
+            http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-set.json
+          test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-set.json)" = "30000"
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-readback.json
+          test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-readback.json)" = "30000"
+          curl -fsS -X POST \
+            -H 'content-type: application/json' \
+            -d '{"bonusBalanceThreshold":40000}' \
+            http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-restore.json
+          test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-restore.json)" = "40000"
+
           # Обновлено 08.09.2026: 0018/0019 добавляют статус блокировки и внутренний аудит.
           # Также проверяем signed NUMERIC и loyalty resolution через psql,
           # не полагаясь на наличие standalone pg package в runtime image.
