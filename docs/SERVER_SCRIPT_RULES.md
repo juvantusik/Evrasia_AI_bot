@@ -24,19 +24,33 @@ set +o pipefail 2>/dev/null
   2. run `bash -n` against it;
   3. execute it only when syntax check passes;
   4. remove the temporary script afterwards.
+- Do not invent alternative wrapper conventions unless the operator explicitly asks for a different format.
 
 ## Safety / guards
 
 - Verify the expected host before doing anything risky.
 - Distinguish production, TEST and archival/rollback containers explicitly.
 - Before every mutation, verify the exact currently active container/image/database and expected Compose topology.
-- Repeat critical production guards after the operation.
+- Repeat critical production guards immediately before the actual cutover/mutation.
 - **Never change production without explicit operator approval.**
 - Never infer a server change from an intended command; only pasted output or direct verification counts as evidence.
 - Before DB mutation, create a backup and print its safe path/size/hash when appropriate.
 - Verify backup readability/integrity before relying on it.
 - Always provide a rollback path for deployments or DB mutations.
 - Prefer small independently verifiable phases over one large multi-risk cutover.
+
+### Factual production baseline rule — mandatory
+
+The expected `OLD_REVISION`, `OLD_IMAGE`, config ID, container identity and other exact baseline guards must come from the **factual current production state immediately before the requested deployment**, not from memory or an earlier point in the workstream.
+
+- If production may have advanced because of an intervening deployment, re-read the current runtime before generating the next deployment script.
+- Do not assume that the last revision discussed in chat is still deployed.
+- If an exact baseline guard finds a newer/different healthy production state **before `CUTOVER_STARTED=YES`**, stop without rollback.
+- Treat that stop as successful guard behavior. Investigate why production advanced, confirm the new factual baseline, then regenerate/resume against it.
+- Never weaken, remove or bypass an exact revision/image guard merely to make the deployment continue.
+- Never silently replace an observed production baseline with the target revision.
+
+Concrete lesson from PR #45 deployment on 2026-09-09: the first PR #45 script expected stale revision `3ce9f8c...`, while production had already advanced to PR #44 `a45554b...`. The script correctly stopped with `CUTOVER_STARTED=NO`. The guard was right; generating the script with stale expected values was the error.
 
 ## Scope discipline and architecture-aware guards
 
@@ -58,98 +72,90 @@ Every guard must be justified by the exact operation being performed. A guard is
 A known-safe test account is not automatically a valid fixture for every UI/API acceptance path.
 
 - Before a mutation-driven acceptance test, prove that the chosen fixture is **eligible for the exact UI/API path being exercised** under current production data and current code.
-- Check the real inclusion/filter rules first: risk threshold, case membership, blocked/unblocked/inactive filtering, search scope, pagination/limit, role, status and any other view-specific condition.
-- Do not assume that an account previously approved for block/unblock testing must appear in the current Anti-Fraud `cases` response or in the visible UI.
+- Check real inclusion/filter rules first: risk threshold, case membership, blocked/unblocked/inactive filtering, search scope, pagination/limit, role, status and any other view-specific condition.
+- Do not assume that an account previously approved for block/unblock testing must appear in the current Anti-Fraud `cases` response or visible UI.
 - Current Anti-Fraud case-builder starts from accounts with `overall_risk > 0` and then brings in accounts linked to those risky accounts by device/contact/corroborated identity. Therefore an isolated account with `overall_risk = 0` may correctly have no current case.
-- Before requiring `MATCHING_CASE_COUNT=1`, first inspect the account's current risk score and the current case-builder inclusion rules. A zero-case result can be expected state, not a product failure.
-- **Never choose or mutate a real customer account merely to make a visual fixture convenient.** Any such production mutation requires separate explicit operator approval and a precise rollback/restore plan.
-- Do not fabricate temporary production risk/case data just to force a safe test account into the UI unless that data-fixture mutation has been explicitly designed and approved.
-- If the approved safe fixture cannot exercise one visual path, split acceptance honestly: validate the real service/API round-trip on the safe fixture, validate static/current UI logic from code and available live data, and mark the unexercised visual state as not yet live-observed rather than manufacturing evidence.
-- If there are no naturally blocked accounts in live data, do not claim that the blocked-card UI was visually verified unless a separately approved controlled fixture made that state observable.
-- A fixture-precondition mismatch should stop **before mutation**, print the observed eligibility facts, and route to fixture selection/acceptance-plan correction rather than report a generic application failure.
+- Before requiring `MATCHING_CASE_COUNT=1`, first inspect current risk and case-builder inclusion rules. Zero cases can be expected state, not a product failure.
+- **Never choose or mutate a real customer account merely to make a visual fixture convenient.** Any such production mutation requires separate explicit operator approval and a precise restore plan.
+- Do not fabricate temporary production risk/case data just to force a safe fixture into the UI unless that mutation is explicitly designed and approved.
+- If the approved safe fixture cannot exercise one visual path, split acceptance honestly and mark the unexercised state as not live-observed instead of manufacturing evidence.
+- A fixture-precondition mismatch must stop **before mutation** and report the observed eligibility facts.
 
 ## Asynchronous jobs and monitoring
 
-Background refreshes and protected cycles must be treated as asynchronous operations, not synchronous shell commands.
+Background refreshes and protected cycles must be treated as asynchronous operations.
 
-- HTTP `202 Accepted` means that the job was accepted; it does **not** mean the job failed because a later monitoring request timed out.
+- HTTP `202 Accepted` means the job was accepted; it does not mean the job failed because a later monitoring request timed out.
 - A single timeout of `/scheduler`, `/healthz` or another probe must **never** be interpreted as proof that the accepted background job failed.
-- Do not stop a monitoring loop on the first transient HTTP timeout if an authoritative persisted run state exists.
-- For Anti-Fraud protected cycles, use `anti_fraud_sync_runs` / persisted DB state as the authoritative completion source when HTTP responsiveness is itself under investigation.
-- Distinguish these states explicitly:
-  - job accepted;
-  - job still running;
-  - monitoring endpoint temporarily unresponsive;
-  - job finished successfully/partially/failed;
-  - application process restarted or died.
-- Never trigger a second manual refresh while the previous accepted refresh may still be running. First prove completion/failure from authoritative state.
-- Monitoring scripts should use bounded total wait time and may use bounded consecutive HTTP-failure counters, but must continue DB-backed observation when possible.
-- If HTTP is unavailable during a heavy cycle but DB state progresses and the process does not restart, record this as **service responsiveness/performance evidence**, not as an immediate refresh failure.
-- Measure and print the actual cycle duration when performance is under investigation.
+- Do not stop a monitoring loop on the first transient HTTP timeout if authoritative persisted run state exists.
+- For Anti-Fraud protected cycles, use `anti_fraud_sync_runs` / persisted DB state as authoritative completion state when HTTP responsiveness is itself under investigation.
+- Distinguish: job accepted; running; monitoring endpoint unavailable; job finished success/partial/fail; application restarted/died.
+- Never trigger a second refresh while the previous accepted refresh may still be running.
+- Monitoring scripts should use bounded total wait time and may use bounded consecutive HTTP-failure counters while continuing DB-backed observation when possible.
+- Measure actual cycle duration when performance is being investigated.
 
 ## Performance acceptance metrics
 
-A performance gate is valid only if the metric actually covers the code path being changed.
+A performance gate is valid only if the metric actually covers the changed code path.
 
-- Before comparing `before`/`after` timings, inspect where the timer or persisted run starts and finishes in the current implementation.
-- Do **not** use a convenient timing merely because its source name sounds related to the optimization.
-- If the optimized work runs outside that timing boundary, an unchanged timing is expected and must not fail acceptance.
-- For the v1.7 identity-similarity optimization, `anti_fraud_risk_scoring` measures the base `analyzeAntiFraudOnce` work. `analyzeAntiFraudWithSimilarityOnce` calls that base scorer first and only then runs `syncIdentitySimilarityLinksOnce`; therefore `anti_fraud_risk_scoring` duration does **not** measure the candidate-index similarity scan and is not a valid gate for PR #38.
-- For event-loop responsiveness fixes, test the symptom directly while the protected cycle is actually running: repeatedly probe `/api/healthz` and `/api/anti-fraud/scheduler`, count timeouts/non-200 responses, track maximum observed latency, and verify the application process did not restart.
-- Whole protected-cycle duration is useful secondary evidence, but external Bitrix/loyalty/history latency can also change it. Do not attribute the entire delta to one internal optimization without stage-level instrumentation.
-- If the optimized stage has no direct timing instrumentation, do not invent a proxy threshold. Use symptom-based runtime acceptance plus CI regression tests, or add explicit instrumentation in a later controlled code change.
+- Inspect timer/persisted-run boundaries before comparing `before`/`after` timings.
+- Do not use a convenient timing merely because its source name sounds related.
+- If optimized work runs outside the timing boundary, unchanged timing is expected and must not fail acceptance.
+- For the v1.7 identity-similarity optimization, `anti_fraud_risk_scoring` measures the base scorer and does **not** include the later similarity overlay; it is not a valid PR #38 performance gate.
+- For event-loop responsiveness fixes, test the symptom directly while the protected cycle is running: repeated `/api/healthz` and `/api/anti-fraud/scheduler` probes, timeout/non-200 counts, max latency and restart count.
+- Whole-cycle duration is secondary evidence because external latency can vary.
+- If no direct stage timer exists, do not invent a proxy threshold.
 
 ## Registry authentication / Docker image pulls
 
-- Do not conclude that GHCR authentication is missing merely because `/root/.docker/config.json` has no `ghcr.io` entry.
-- Before creating a new PAT or changing root credentials, inspect the documented deployment user and existing credential source.
-- Current production pattern: GHCR credentials are owned by user `tech`; root intentionally does not need its own copied GHCR token.
-- Reuse the existing credential source without printing it. Preferred pattern:
-
-```bash
-runuser -u tech -- env HOME=/home/tech docker pull "<immutable-image>"
-```
-
-- Do not copy the `tech` Docker auth into root config just to make a pull work.
-- Do not ask the operator to create a new token until existing documented credential sources have been checked and proven unusable.
-- Do not add an unnecessary dependency on `sudo` for this flow when the script already runs as root; prefer the already verified `runuser` pattern unless the host state proves otherwise.
-- After pull, always verify immutable digest/config ID, OCI revision and platform before using the image.
-- If the exact target image is already local and verified, do not pull it again; use `--pull never` for the cutover.
+- Do not conclude GHCR authentication is missing merely because `/root/.docker/config.json` has no `ghcr.io` entry.
+- Check the documented deployment user first.
+- Current production pattern: GHCR credentials belong to user `tech`; root intentionally does not need a copied GHCR token.
+- Reuse existing auth without printing it. Preferred verified pattern may use the `tech` Docker config or `runuser -u tech -- env HOME=/home/tech docker pull ...`, depending on the current host pattern already proven in the immediately preceding deployment.
+- Do not copy `tech` auth into root config just to make a pull work.
+- Do not ask for a new token until existing credential sources are proven unusable.
+- After pull, verify immutable digest/config ID, OCI revision and platform.
+- If exact target image is already local and verified, do not pull it again unnecessarily.
 
 ## Deployment phase continuity
 
 - Treat deployment as phases: guards → image → backup → staging → final guard → cutover → post-check.
 - Preserve the last confirmed phase between iterations.
-- If a deployment fails before `CUTOVER_STARTED=YES`, do not rollback and do not blindly repeat already-passed phases.
-- If the failure was only registry authentication and the target image is later pulled successfully, resume from the next required phase instead of restarting the whole deployment.
-- If a scheduler/refresh cycle is already running at a pre-cutover guard, **do not treat this normal race as a deployment failure** and force the operator to restart the whole procedure. If no mutation has started, wait for the existing cycle to become idle with a bounded timeout, then re-check the current image, DB/container identity and scheduler state before continuing.
-- The bounded scheduler wait must not trigger, cancel, restart or mutate the cycle. If the wait limit is exceeded or authoritative run state becomes failed/ambiguous, stop before mutation and report `HOLD` with the observed state.
-- For a 15-minute scheduler whose normal cycle can last several minutes, prefer an in-script idle wait over an immediate `FAIL: scheduler is not idle`; this avoids repeated operator copy-paste runs while preserving the same safety gate immediately before cutover.
-- If a production cutover is in progress, avoid unrelated changes to `main` that would create a new image/revision and make the selected immutable target ambiguous. Documentation work should go to a separate branch/PR until the cutover target is verified in production.
-- For an app-only hotfix with no new migrations, verify that migration journal state remains unchanged; do not invent new schema expectations.
-- Data row-count equality is only a valid cutover guard when background writers are known idle for the measurement window. Scheduler-driven tables may legitimately change between widely separated snapshots.
+- If deployment fails before `CUTOVER_STARTED=YES`, do not rollback and do not blindly repeat already-passed phases.
+- If a scheduler/refresh cycle is already running at pre-cutover guard, do not treat this normal race as a deployment failure. Wait boundedly for idle, then re-check current image, DB/container identity and scheduler state.
+- The bounded scheduler wait must not trigger, cancel, restart or mutate the cycle.
+- If wait limit is exceeded or authoritative state is failed/ambiguous, stop before mutation.
+- For a 15-minute scheduler whose normal cycle can last several minutes, prefer bounded in-script wait over an immediate false failure.
+- If a production cutover is in progress, avoid unrelated app changes to `main` that would create a new image/revision and make the selected target ambiguous. Docs-only work may advance `main`, but production application identity remains separate.
+- For app-only hotfix with no new migrations, verify migration journal remains unchanged; do not invent schema expectations.
+- Data row-count equality is only a valid guard when background writers are known idle for that measurement window.
+
+## Compose staging
+
+- If `compose.yml` uses relative `env_file`, bind mounts or other relative files, do **not** copy only the Compose file to `/tmp` for validation/deployment because relative resolution changes.
+- For current production topology, stage temporary Compose in `/opt/evrasia-ai-bot/prod` so relative production files resolve correctly.
+- Validate the staged Compose and verify the resolved target image before replacing canonical Compose.
 
 ## Tool and environment assumptions
 
-- Do not introduce a host-tool requirement merely because a command is convenient. First check whether the required tool is guaranteed on the host or already available inside the relevant container.
-- Prefer validating a PostgreSQL dump with a known-compatible `pg_restore` from the DB container when host PostgreSQL client availability/version has not already been verified.
-- Explicitly guard every newly introduced tool (`runuser`, `jq`, `python3`, etc.) before the stage that needs it.
-- Do not silently change the chosen credential/user-switch mechanism between iterations after a working production pattern has already been confirmed.
+- Do not introduce a host-tool requirement just because a command is convenient.
+- Prefer validating a PostgreSQL dump with a compatible `pg_restore` from the DB image/container when host client compatibility is not already verified.
+- Explicitly guard every newly introduced tool before the stage that needs it.
+- Do not silently change a proven credential/user-switch mechanism between iterations without a reason from current state.
 
 ## Terminal behavior
 
-- Do **not** use an outer-shell `exit` that can terminate the operator's SSH session.
-- Put main logic in functions and use `return` for error handling.
-- Internal subprocess code (Node/PHP/Python/etc.) may use its own exit where appropriate.
-- Finish with an explicit marker:
+- Do **not** use an outer-shell `exit` that can terminate the operator SSH session.
+- Main logic should run inside the generated script; the wrapper should return control to the shell.
+- Finish with explicit marker:
 
 `TERMINAL_WILL_STAY_OPEN=YES`
 
 ## Return codes / result contract
 
-- Capture actual command return codes into variables.
-- Do not mask a real failure with a wrapper that always reports success.
-- Use explicit result markers such as:
+- Capture actual command return codes.
+- Do not mask a failure with a wrapper that always reports success.
+- Use explicit markers such as:
   - `PASS: ...`
   - `FAIL: ...`
   - `SYNTAX_RC=...`
@@ -157,84 +163,77 @@ runuser -u tech -- env HOME=/home/tech docker pull "<immutable-image>"
   - `FINAL_RC=...`
   - `FINAL_STATUS=PASS|FAIL`
   - `ROLLBACK_FINAL_STATUS=PASS|FAIL` when rollback is possible.
-- If an application can print a fatal/error page while returning shell RC 0, add an explicit content/error check instead of trusting RC alone.
+- If an application can render an error page while shell RC is 0, validate content/state explicitly instead of trusting RC alone.
 
 ## Secrets / sensitive output
 
-- Never print tokens, passwords, RestIS credentials, service-token values, secret files, full phones, bulk USER_ID lists, or other protected values unless the operator explicitly requests a narrowly scoped forensic exception.
-- Always print:
-
-`SECRET_VALUES_PRINTED=NO`
-
-when that statement is true.
-- Use `umask 077` and restrictive file permissions for temporary files that may contain environment/config data.
-- Use `/tmp` for temporary artifacts and clean them at the end.
-- Do not suppress diagnostically useful stderr with `/dev/null` when it can be safely captured and sanitized instead.
-- If stderr may contain secrets, capture it to a restrictive temp file and print only sanitized/redacted output.
+- Never print tokens, passwords, RestIS credentials, service-token values, secret files, full phones, bulk USER_ID lists or other protected values unless an explicitly approved narrow forensic exception requires it.
+- Print `SECRET_VALUES_PRINTED=NO` when true.
+- Use `umask 077` for temporary files that may contain environment/config data.
+- Clean temporary files at the end.
+- Do not suppress useful stderr when it can be safely captured/sanitized; if it may contain secrets, redact it.
 
 ## Current production invariants
 
-As of the verified PR #41 production acceptance on 2026-09-08:
+As of the accepted PR #45 production state on 2026-09-09:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- deployed application revision: `a156db2e30dd2a31d7bd4126410f9f513382adaa`
-- deployed immutable digest: `sha256:ce3b85fe789495f3b5ee4e59fe8eb129a75343d1916f2a7c45483da18d988947`
-- deployed image config ID: `sha256:cbe989d6375189f9f12d7a0ad6f74f9f5455536838750fd96f0e2e459d9cc145`
+- accepted deployed application revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
+- immutable digest: `sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
+- image config ID: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
 - DB service/container: `evrasia-ai-bot-db`
-- DB role: `evrasia_ai_bot`
-- production DB: `evrasia_ai_bot`
+- DB role / production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
-- production migrations: 20; latest migration timestamp `1788769200000`
-- Anti-Fraud block/unblock schema migrations 0018/0019 are present
-- Anti-Fraud scheduler: enabled, interval 15 minutes, run-on-start false
-- PR #41 deployment: 29 PASS / 0 FAIL / no rollback; DB container unchanged; env/mounts/ports preserved; no refresh or Bitrix state write triggered by deployment
-- latest app-deployment backup: `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
-- similarity candidate-index hotfix from PR #38 remains deployed and runtime performance acceptance remains valid: reference protected cycle `206s`, measured optimized cycle `53s`; `/api/healthz` 24/24 HTTP 200 max `3ms`, `/api/anti-fraud/scheduler` 24/24 HTTP 200 max `6ms`, zero probe errors/non-200, app restart count `0`
-- `anti_fraud_risk_scoring` ~3.1s does not include the similarity overlay and is not a valid PR #38 acceptance gate
-- controlled block/unblock backend acceptance on safe USER_ID 880339 completed: 27 PASS / 0 FAIL / 0 WARN; final state restored; do not repeat merely for reassurance
-- operator visually accepted PR #41 inactive-state and localization behavior in production
+- production migrations: 20; latest timestamp `1788769200000`
+- Anti-Fraud scheduler: enabled, 15 minutes, run-on-start false
+- confirmed operator threshold: `40000`
+- PR #43 introduced configurable threshold + `Новый` badge with no schema migration
+- PR #44 is a superseded intermediate modal-layout deployment
+- PR #45 is the final accepted portal-based modal fix; operator confirmed `все супер, отображение как надо`
+- exact final PR #45 backup path was not captured in pasted transcript; re-read server backup inventory before cleanup/rollback planning
+- similarity PR #38 performance acceptance remains valid: 206s → 53s protected cycle, health/scheduler probes responsive, restart count 0
+- controlled block/unblock on safe USER_ID 880339 completed 27 PASS / 0 FAIL / 0 WARN; do not repeat merely for reassurance
 - Phonebook canonical route: `/phonebook`
-- `/directory`: removed, expected HTTP 404
-- `/api/directory/...`: absent, expected HTTP 404
-- TEST container `evrasia-ai-bot-v17-test`: exited/archival; do not restart blindly.
+- `/directory` and `/api/directory/...`: expected 404
+- TEST `evrasia-ai-bot-v17-test`: exited/archival.
 
-These are current documented invariants, not substitutes for guards before a future mutation.
+These documented invariants are not substitutes for fresh guards before a future mutation.
 
 ## Anti-Fraud invariants
 
 - Never copy RestIS credentials into the bot container.
 - Never expose raw loyalty-card numbers in bot UI/API/logs.
-- Preserve both secret mounts when recreating production.
-- Detailed 60-day history remains targeted; do not bulk-load the full fleet each scheduler cycle.
-- `/directory` is no longer a compatibility redirect. Current production contract requires HTTP 404.
-- `ACTIVE=N`, `BLOCKED=N` is factual `Неактивен`, not a synthetic `Заблокирован`; operational UI may exclude it together with blocked accounts without rewriting Bitrix state.
+- Preserve required secret mounts when recreating production.
+- Detailed 60-day history remains targeted; do not bulk-load full fleet each scheduler cycle.
+- `/directory` remains removed/404.
+- `ACTIVE=N`, `BLOCKED=N` is factual `Неактивен`, not synthetic `Заблокирован`.
 - Only `BLOCKED=Y` is a true blocked state.
+- operator bonus threshold is persisted data, not a schema constant; default/current confirmed value is 40000 and strict comparison remains `>`.
 
 ## Known pitfalls to avoid
 
-- A previous isolated `node --input-type=module -e` call failed because `-e` had no JavaScript argument. If using `-e`, the JS code must immediately follow it; preferably keep the whole diagnostic in one generated script.
-- A previous wrapper incorrectly reported success because the outer wrapper masked the real result; wrapper RC must reflect the actual script result.
-- A previous Docker mount recreation bug came from TSV parsing losing an empty `.Name` bind-mount field and shifting columns. Prefer structured JSON and explicit `--mount` handling.
-- A previous staging script accidentally invoked a YAML file as Python. When a Python heredoc needs file arguments, use `python3 - "$FILE" ... <<'PY'`, never `python3 "$FILE" ... <<'PY'`.
-- PostgreSQL boolean textual output can differ (`t`, `true`, etc.). Normalize explicitly to stable strings such as `YES/NO` in guards.
-- Do not reject an expected HTTP redirect simply because the direct status is not 200; validate the exact allowed redirect target and final status. This is a general rule only; `/directory` specifically is now expected to return 404.
-- After nginx reload, do not immediately assume every worker is using the new upstream. Keep the old upstream alive during transition and use bounded retry before removing it.
-- Renaming a Compose-managed container retains Compose labels; do not rely on the renamed container as a standalone rollback artifact.
-- **Compose relative-path staging pitfall:** if `compose.yml` uses relative `env_file`, bind-mount or other file paths, copying only the Compose file to `/tmp` changes how those paths resolve. Do not validate/deploy such a staged Compose file from a different directory unless all referenced relative files are staged consistently. For the current production topology, keep a temporary staged Compose file inside `/opt/evrasia-ai-bot/prod` so `prod-app.env` / `prod-db.env` resolve correctly.
-- If a deployment attempt fails before `CUTOVER_STARTED=YES`, do not perform rollback or repeat already-passed image pull/backup steps unless state changed; first confirm production remained untouched, then continue from the failed stage.
-- **Wrong-user GHCR pitfall:** root Docker config may intentionally have no GHCR credentials while deployment user `tech` has valid auth. Never create/replace credentials before checking the documented deployment user.
-- **Irrelevant-gate pitfall:** do not turn unrelated Telegram/RestIS checks into blocking gates for an Anti-Fraud-only deployment.
-- **Architecture-drift pitfall:** do not require RestIS credentials in the bot container; current architecture intentionally keeps them out of the bot.
-- **Async-timeout pitfall:** after `POST /api/anti-fraud/refresh` returns `202`, a later `/scheduler` timeout does not prove the refresh failed. Check persisted run state and do not retrigger blindly.
-- **First-timeout pitfall:** a monitoring script must not terminate the entire acceptance procedure on the first transient HTTP timeout when DB-backed state can still be checked.
-- **Scheduler-race pitfall:** if the periodic Anti-Fraud cycle starts between preflight and deployment, do not fail immediately and make the operator rerun the full script. Wait boundedly for the existing cycle to become idle, then re-run only the critical pre-cutover guards.
-- **Wrong-performance-gate pitfall:** never fail an optimization because an unrelated timing row did not improve. First prove that the timing boundary actually contains the optimized code path.
-- **Fixture-eligibility pitfall:** never assume a safe test account is visible in the exact UI path being tested. Prove current eligibility first; if the fixture is legitimately absent, correct the acceptance plan before any mutation instead of blaming the application.
-- **Invented-contract pitfall:** never block deployment on assumed JSON fields or response shapes that were not verified against current code/live output.
+- wrapper RC masking the real script result
+- Docker mount reconstruction using lossy TSV parsing
+- invoking a YAML file as Python instead of using `python3 - "$FILE" <<'PY'`
+- unnormalized PostgreSQL boolean text in guards
+- rejecting an expected redirect/HTTP contract without checking the real route contract
+- removing old nginx upstream too early after reload
+- relying on a renamed Compose container as standalone rollback artifact
+- staging a relative-path Compose file in `/tmp`
+- assuming root must have GHCR credentials when `tech` already has them
+- unrelated Telegram/RestIS deployment gates
+- requiring intentionally absent RestIS credentials in bot runtime
+- interpreting a post-202 timeout as job failure
+- stopping on first transient HTTP timeout when DB state is authoritative
+- immediate failure on a normal scheduler race instead of bounded wait
+- using `anti_fraud_risk_scoring` as similarity-performance gate
+- assuming a safe fixture is eligible for every UI state
+- inventing JSON/API fields for a guard
+- **stale-production-baseline pitfall:** generating a deployment script with an earlier revision/image after production has already advanced. Exact guard must stop; confirm the new factual baseline and regenerate rather than bypassing the guard.
 
 ## Operator preference
 
