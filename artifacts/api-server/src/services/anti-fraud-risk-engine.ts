@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import { enrichRestisHistoryForHighRiskUserOnce } from "./anti-fraud-restis-history-enricher";
 import { syncBitrixAccountsOnce } from "./anti-fraud-bitrix-account-collector";
+import {
+  DEFAULT_ANTI_FRAUD_BONUS_BALANCE_THRESHOLD,
+  getAntiFraudSettings,
+} from "./anti-fraud-settings-service";
 
 const SOURCE = "anti_fraud_risk_scoring";
 const LOCK_NAME = "anti_fraud_risk_scoring";
@@ -9,7 +13,6 @@ const CALCULATION_VERSION = "v1.3";
 const DEFAULT_HISTORY_THRESHOLD = 50;
 const DEFAULT_MAX_HISTORY_USERS = 10;
 const MAX_HISTORY_USERS = 50;
-const BONUS_BALANCE_THRESHOLD = 40_000;
 const BONUS_BALANCE_RISK = 50;
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -61,6 +64,7 @@ export type AntiFraudRiskAnalysisOptions = {
   autoHistory?: boolean;
   historyThreshold?: number;
   maxHistoryUsers?: number;
+  bonusBalanceThreshold?: number;
 };
 
 export type AntiFraudRiskAnalysisResult = {
@@ -115,6 +119,9 @@ const boundedInteger = (
   return Math.max(minimum, Math.min(maximum, value));
 };
 
+const nonNegativeNumber = (value: number, fallback: number): number =>
+  Number.isFinite(value) && value >= 0 ? Math.round(value * 100) / 100 : fallback;
+
 const toCount = (value: string | number | null): number => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
@@ -139,10 +146,12 @@ const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
 // + 10 за один связанный аккаунт = итоговые 50. Посещения считаются по всем ресторанам вместе:
 // одинаковые и разные рестораны одинаково входят в суточную частоту; 3+ посещения за ресторанный
 // день являются самостоятельным risk gate.
-// Обновлено 05.09.2026: остаток RestIS TotalSum строго > 40000.00 даёт +50 и запускает history gate.
+// Обновлено 05.09.2026: остаток RestIS TotalSum строго выше настроенного порога даёт +50
+// и запускает history gate. Значение по умолчанию остаётся 40000.00.
 export const scoreAntiFraudSignals = (
   signals: AntiFraudRiskSignals,
   historyThreshold = DEFAULT_HISTORY_THRESHOLD,
+  bonusBalanceThreshold = DEFAULT_ANTI_FRAUD_BONUS_BALANCE_THRESHOLD,
 ): AntiFraudRiskScore => {
   const reasons: AntiFraudRiskReason[] = [];
   let deviceRisk = 0;
@@ -150,6 +159,10 @@ export const scoreAntiFraudSignals = (
   let identitySimilarityRisk = 0;
   let visitBehaviorRisk = 0;
   let historicalBehaviorRisk = 0;
+  const effectiveBonusBalanceThreshold = nonNegativeNumber(
+    bonusBalanceThreshold,
+    DEFAULT_ANTI_FRAUD_BONUS_BALANCE_THRESHOLD,
+  );
 
   if (signals.maxAccountsOnDevice >= 4) {
     deviceRisk += 45;
@@ -321,14 +334,17 @@ export const scoreAntiFraudSignals = (
     });
   }
 
-  if (signals.bonusBalance !== null && signals.bonusBalance > BONUS_BALANCE_THRESHOLD) {
+  if (
+    signals.bonusBalance !== null &&
+    signals.bonusBalance > effectiveBonusBalanceThreshold
+  ) {
     historicalBehaviorRisk += BONUS_BALANCE_RISK;
     reasons.push({
       code: "high_bonus_balance",
       score: BONUS_BALANCE_RISK,
       details:
         `bonus_balance=${signals.bonusBalance.toFixed(2)}; ` +
-        `threshold=${BONUS_BALANCE_THRESHOLD.toFixed(2)}; history_window_days=60`,
+        `threshold=${effectiveBonusBalanceThreshold.toFixed(2)}; history_window_days=60`,
     });
   }
 
@@ -759,9 +775,12 @@ const persistScores = async (scores: AntiFraudRiskScore[], runId: string): Promi
 const calculateAndPersist = async (
   runId: string,
   historyThreshold: number,
+  bonusBalanceThreshold: number,
 ): Promise<AntiFraudRiskScore[]> => {
   const signals = await loadRiskSignals();
-  const scores = signals.map((signal) => scoreAntiFraudSignals(signal, historyThreshold));
+  const scores = signals.map((signal) =>
+    scoreAntiFraudSignals(signal, historyThreshold, bonusBalanceThreshold),
+  );
   await persistScores(scores, runId);
   return scores;
 };
@@ -796,6 +815,13 @@ export const analyzeAntiFraudOnce = async (
     1,
     MAX_HISTORY_USERS,
   );
+  const bonusBalanceThreshold =
+    options.bonusBalanceThreshold === undefined
+      ? (await getAntiFraudSettings()).bonusBalanceThreshold
+      : nonNegativeNumber(
+          Number(options.bonusBalanceThreshold),
+          DEFAULT_ANTI_FRAUD_BONUS_BALANCE_THRESHOLD,
+        );
 
   let refreshedAccounts = 0;
   if (refreshAccounts) {
@@ -823,7 +849,11 @@ export const analyzeAntiFraudOnce = async (
       [runId, SOURCE],
     );
 
-    let scores = await calculateAndPersist(runId, historyThreshold);
+    let scores = await calculateAndPersist(
+      runId,
+      historyThreshold,
+      bonusBalanceThreshold,
+    );
 
     const signalByUser = new Map(
       (await loadRiskSignals()).map((signal) => [signal.bitrixUserId, signal] as const),
@@ -860,7 +890,11 @@ export const analyzeAntiFraudOnce = async (
       }
 
       if (historyAttemptedAccounts > 0) {
-        scores = await calculateAndPersist(runId, historyThreshold);
+        scores = await calculateAndPersist(
+          runId,
+          historyThreshold,
+          bonusBalanceThreshold,
+        );
       }
     }
 
