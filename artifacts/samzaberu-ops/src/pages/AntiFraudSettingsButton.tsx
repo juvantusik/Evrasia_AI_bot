@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Settings, X } from 'lucide-react';
 import './anti-fraud-settings.css';
 
@@ -91,12 +92,8 @@ export default function AntiFraudSettingsButton({ disabled = false }: Props) {
     }
   };
 
-  return <>
-    <button className="af-settings-button" type="button" onClick={() => void openSettings()} disabled={disabled}>
-      <Settings size={17} /> Настройка
-    </button>
-
-    {open ? <div className="af-settings-overlay" role="presentation" onMouseDown={(event) => {
+  const dialog = open && typeof document !== 'undefined' ? createPortal(
+    <div className="af-settings-overlay" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !saving) setOpen(false);
     }}>
       <section className="af-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="af-settings-title">
@@ -136,6 +133,14 @@ export default function AntiFraudSettingsButton({ disabled = false }: Props) {
           </div>
         </>}
       </section>
-    </div> : null}
+    </div>,
+    document.body,
+  ) : null;
+
+  return <>
+    <button className="af-settings-button" type="button" onClick={() => void openSettings()} disabled={disabled}>
+      <Settings size={17} /> Настройка
+    </button>
+    {dialog}
   </>;
 }
