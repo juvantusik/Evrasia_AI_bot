@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-09** after production deployment and operator visual acceptance of PR #45.
+> **Updated: 2026-09-09** after production deployment and operator visual acceptance of PR #45, plus production website legal-document updates related to the Anti-Fraud/legal perimeter.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -18,7 +18,8 @@
 4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
 5. `SERVER_UPDATES.md` — фактическая история production/server updates;
 6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
-7. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+7. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
+8. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
 
@@ -158,6 +159,12 @@ One production app/container contains:
 
 Legacy TEST container `evrasia-ai-bot-v17-test` is exited/archival. Do not restart blindly.
 
+### Website legal/consent perimeter
+
+On 2026-09-09 the loyalty-program offer and personal-data policy on `evrasia.rest` were updated and visually accepted in production in support of the Anti-Fraud/legal-processing perimeter. The privacy page was converted to a responsive text layout and linked below `Договор оферты` in the site footer.
+
+The next planned cross-system task is the registration form: separate checkboxes/choices and auditable per-user persistence/versioning of what was accepted or declined. This is not implemented yet. Before implementation inspect the factual Bitrix registration/persistence mechanisms; do not invent fields. See `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` for the complete handoff and production paths/backups.
+
 ---
 
 ## 7. Mandatory deployment/script lessons
@@ -183,6 +190,10 @@ Especially important after the PR #44 → #45 deployment sequence:
 ## 8. Immediate continuation point
 
 The latest Anti-Fraud operator-settings/UI work is **implemented, merged, deployed and visually accepted**.
+
+The website offer/privacy-policy update described in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` is also **production / visually accepted**. Do not redo that styling unless a new defect is reported.
+
+Registration consent checkboxes and per-user consent persistence/versioning/audit are **planned, not implemented**.
 
 Do not automatically resume:
 
