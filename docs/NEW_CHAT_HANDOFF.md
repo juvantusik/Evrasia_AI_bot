@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-09** after production deployment and operator visual acceptance of PR #45, plus production website legal-document updates related to the Anti-Fraud/legal perimeter.
+> **Updated: 2026-09-09** after production deployment and operator visual acceptance of PR #45, production website legal-document updates, and capture of the next Anti-Fraud UI iteration.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -18,8 +18,9 @@
 4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
 5. `SERVER_UPDATES.md` — фактическая история production/server updates;
 6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
-7. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-8. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+7. `docs/ANTI_FRAUD_UI_NEXT.md` — следующий запланированный UI-этап Anti-Fraud (`Новый` в dynamics + device_hash_id progress);
+8. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
+9. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
 
@@ -97,7 +98,19 @@ Do not reopen PR #44's intermediate layout approach; PR #45 supersedes it.
 
 ---
 
-## 3. Existing Anti-Fraud status semantics — still current
+## 3. Next Anti-Fraud UI iteration — PLANNED
+
+Two operator requirements are queued for the next session:
+
+1. **Make `Новый` visible in the established case-dynamics/status area.** The current PR #43 semantics remain authoritative (`addedAccountIds` for a previously observed case), but the operator does not see newly appeared users clearly enough in the table. `Новый` should be presented where the UI already shows dynamics such as `усилился`, `без изменений`, etc. Before implementing, inspect the exact current status set/priorities and decide how `Новый` composes with existing dynamics instead of guessing.
+
+2. **Add visual progress for accumulated `device_hash_id`.** The operator wants to see how much device-hash data has already been collected. First inspect the real DB/schema/query path and expose only a meaningful factual count. Design the UI so it can later split by authoritative source: website / SamZaberu application / mobile waiter application. If source is not currently persisted, do not fake the split — record the required future data-model/integration change.
+
+See `docs/ANTI_FRAUD_UI_NEXT.md` before implementation.
+
+---
+
+## 4. Existing Anti-Fraud status semantics — still current
 
 Bitrix is source of truth:
 
@@ -120,7 +133,7 @@ Localization remains accepted, including Russian rendering of `max_devices_for_s
 
 ---
 
-## 4. Blocking / unblock acceptance — completed, do not repeat
+## 5. Blocking / unblock acceptance — completed, do not repeat
 
 Safe test USER_ID `880339` completed the controlled backend round-trip:
 
@@ -132,7 +145,7 @@ Do not repeat it merely for reassurance or fabricate/mutate a risky customer to 
 
 ---
 
-## 5. Similarity performance — completed
+## 6. Similarity performance — completed
 
 PR #38 acceptance remains valid:
 
@@ -146,7 +159,7 @@ PR #38 acceptance remains valid:
 
 ---
 
-## 6. Current product architecture
+## 7. Current product architecture
 
 One production app/container contains:
 
@@ -167,7 +180,7 @@ The next planned cross-system task is the registration form: separate checkboxes
 
 ---
 
-## 7. Mandatory deployment/script lessons
+## 8. Mandatory deployment/script lessons
 
 Read `docs/SERVER_SCRIPT_RULES.md` before any server work.
 
@@ -187,9 +200,11 @@ Especially important after the PR #44 → #45 deployment sequence:
 
 ---
 
-## 8. Immediate continuation point
+## 9. Immediate continuation point
 
-The latest Anti-Fraud operator-settings/UI work is **implemented, merged, deployed and visually accepted**.
+The latest Anti-Fraud operator-settings/modal work is **implemented, merged, deployed and visually accepted**.
+
+The next Anti-Fraud UI session should begin from `docs/ANTI_FRAUD_UI_NEXT.md`: first inspect current code/data, then implement `Новый` visibility in the dynamics/status area and a factual `device_hash_id` progress metric.
 
 The website offer/privacy-policy update described in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` is also **production / visually accepted**. Do not redo that styling unless a new defect is reported.
 
@@ -197,11 +212,10 @@ Registration consent checkboxes and per-user consent persistence/versioning/audi
 
 Do not automatically resume:
 
-- PR #43/#44/#45 implementation
-- modal layout rework
+- PR #43/#44/#45 modal implementation
 - USER_ID 880339 block/unblock acceptance
 - similarity performance refresh
 - archival TEST
 - paused full-Bitrix email/anomaly investigations.
 
-Start the next engineering iteration only from a new user requirement. Before changing production, inspect current GitHub/CI **and factual current production runtime** first.
+Before changing production, inspect current GitHub/CI **and factual current production runtime** first.
