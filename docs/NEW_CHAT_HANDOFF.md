@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-09** after production deployment and operator visual acceptance of PR #45, production website legal-document updates, and capture of the next Anti-Fraud UI iteration.
+> **Updated: 2026-09-10** after documenting the production-proven Trusted Device device-hash counting method, in addition to the previously accepted PR #45 / Anti-Fraud state.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -19,8 +19,9 @@
 5. `SERVER_UPDATES.md` — фактическая история production/server updates;
 6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
 7. `docs/ANTI_FRAUD_UI_NEXT.md` — следующий запланированный UI-этап Anti-Fraud (`Новый` в dynamics + device_hash_id progress);
-8. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-9. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
+9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
+10. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
 
@@ -104,7 +105,9 @@ Two operator requirements are queued for the next session:
 
 1. **Make `Новый` visible in the established case-dynamics/status area.** The current PR #43 semantics remain authoritative (`addedAccountIds` for a previously observed case), but the operator does not see newly appeared users clearly enough in the table. `Новый` should be presented where the UI already shows dynamics such as `усилился`, `без изменений`, etc. Before implementing, inspect the exact current status set/priorities and decide how `Новый` composes with existing dynamics instead of guessing.
 
-2. **Add visual progress for accumulated `device_hash_id`.** The operator wants to see how much device-hash data has already been collected. First inspect the real DB/schema/query path and expose only a meaningful factual count. Design the UI so it can later split by authoritative source: website / SamZaberu application / mobile waiter application. If source is not currently persisted, do not fake the split — record the required future data-model/integration change.
+2. **Add visual progress for accumulated Anti-Fraud `device_hash_id`.** This is distinct from the authentication Trusted Device count. The operator wants to see how much Anti-Fraud device-hash data has already been collected. First inspect the real DB/schema/query path and expose only a meaningful factual count. Design the UI so it can later split by authoritative source: website / SamZaberu application / mobile waiter application. If source is not currently persisted, do not fake the split — record the required future data-model/integration change.
+
+For the **authentication Trusted Device / SMS trust mechanism**, use `docs/TRUSTED_DEVICE_DIAGNOSTICS.md`: host `evrasia` (`192.168.103.141`), table `ev_trusted_devices`, primary metric `COUNT(DISTINCT DEVICE_ID_HASH)`. Do not answer that question from `eur-bot-01` or `anti_fraud_device_links`.
 
 See `docs/ANTI_FRAUD_UI_NEXT.md` before implementation.
 
@@ -204,7 +207,9 @@ Especially important after the PR #44 → #45 deployment sequence:
 
 The latest Anti-Fraud operator-settings/modal work is **implemented, merged, deployed and visually accepted**.
 
-The next Anti-Fraud UI session should begin from `docs/ANTI_FRAUD_UI_NEXT.md`: first inspect current code/data, then implement `Новый` visibility in the dynamics/status area and a factual `device_hash_id` progress metric.
+The next Anti-Fraud UI session should begin from `docs/ANTI_FRAUD_UI_NEXT.md`: first inspect current code/data, then implement `Новый` visibility in the dynamics/status area and a factual Anti-Fraud `device_hash_id` progress metric.
+
+If the user instead asks how many hashes have accumulated for **Trusted Device authentication / SMS bypass**, do not use the Anti-Fraud DB. Read `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` and query `ev_trusted_devices` on Bitrix host `evrasia`.
 
 The website offer/privacy-policy update described in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` is also **production / visually accepted**. Do not redo that styling unless a new defect is reported.
 
