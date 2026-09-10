@@ -17,6 +17,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import AntiFraudSettingsButton from './AntiFraudSettingsButton';
+import './anti-fraud-ui-next.css';
 
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
@@ -100,6 +101,7 @@ type Summary = {
   devices: number;
   sharedDevices: number;
   accountsOnSharedDevices: number;
+  trustedDeviceHashes: number;
   updatedAt: string | null;
 };
 
@@ -329,6 +331,7 @@ export default function AntiFraudPage() {
           <article className="critical-card"><span>Критический риск</span><strong>{summary?.criticalAccounts ?? '—'}</strong><small>75–100 · без заблокированных и неактивных</small></article>
           <article className="high-card"><span>Высокий риск</span><strong>{summary?.highAccounts ?? '—'}</strong><small>50–74 · без заблокированных и неактивных</small></article>
           <article><span>Общие устройства</span><strong>{summary?.sharedDevices ?? '—'}</strong><small>{summary?.accountsOnSharedDevices ?? 0} активных незаблокированных аккаунтов</small></article>
+          <article className="trusted-device-card"><span>Trusted Device</span><strong>{summary?.trustedDeviceHashes ?? '—'}</strong><small>уникальных накопленных идентификаторов</small></article>
         </section>
 
         <nav className="af-tabs" aria-label="Разделы Anti-Fraud">
@@ -355,11 +358,12 @@ export default function AntiFraudPage() {
               const primary = visibleAccounts[0] ?? item.accounts[0];
               const title = item.accountCount > 1 ? 'Группа аккаунтов' : (primary?.displayName || `Аккаунт ${primary?.bitrixUserId ?? ''}`);
               const dynamics = item.dynamics; const trend = dynamics ? trendMeta[dynamics.trend] : null;
+              const hasNewAccounts = (dynamics?.addedAccountIds.length ?? 0) > 0;
               const blockable = item.accounts.filter(isOperationalAccount).map((account) => account.bitrixUserId);
               return <article className={`af-case ${isExpanded ? 'expanded' : ''}`} key={item.caseId}>
                 <button className="af-case-row" type="button" onClick={() => toggleCase(item.caseId)}>
                   <span className={`risk-pill ${item.riskLevel}`}>{item.overallRisk}<small>{levelLabel[item.riskLevel]}</small></span>
-                  <span className="case-title"><span className="case-title-line"><strong>{title}</strong>{trend ? <em className={`case-trend trend-${dynamics?.trend}`}>{trend.symbol} {trend.label}</em> : null}</span><small>{item.caseId}{item.accountCount === 1 && primary ? ` · ID ${primary.bitrixUserId}` : ''}</small></span>
+                  <span className="case-title"><span className="case-title-line"><strong>{title}</strong>{hasNewAccounts ? <em className="case-trend trend-new">● Новый</em> : null}{trend ? <em className={`case-trend trend-${dynamics?.trend}`}>{trend.symbol} {trend.label}</em> : null}</span><small>{item.caseId}{item.accountCount === 1 && primary ? ` · ID ${primary.bitrixUserId}` : ''}</small></span>
                   <span className="case-tags">{item.signals.map((itemSignal) => <em className={signalMeta[itemSignal].className} key={itemSignal}>{signalMeta[itemSignal].label}</em>)}</span>
                   <span className="case-count"><Users size={16} />{visibleAccounts.length}{hiddenExcluded > 0 ? <small>+{hiddenExcluded} скрыт.</small> : null}</span>
                   <span className="case-time">{formatDate(item.updatedAt)}</span><span>{isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</span>

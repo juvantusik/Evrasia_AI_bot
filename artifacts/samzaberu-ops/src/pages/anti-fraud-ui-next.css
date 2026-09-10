@@ -1,0 +1,17 @@
+/* Добавлено 10.09.2026 ИТ Директор Евразии: следующий Anti-Fraud UI этап. */
+@media (min-width: 901px) {
+  .af-summary-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.af-summary-grid .trusted-device-card strong {
+  color: var(--af-accent);
+}
+
+/* Если в уже известном кейсе появились аккаунты, в строке кейса "Новый" становится
+   единственным видимым статусом динамики. Фактический case trend остаётся в данных
+   и по-прежнему отображается внутри раскрытой карточки для расследования. */
+.case-title-line > .trend-new + .case-trend {
+  display: none;
+}
