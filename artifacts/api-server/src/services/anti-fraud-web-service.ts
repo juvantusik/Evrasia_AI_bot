@@ -12,6 +12,7 @@ export type AntiFraudWebSummary = {
   devices: number;
   sharedDevices: number;
   accountsOnSharedDevices: number;
+  trustedDeviceHashes: number;
   updatedAt: string | null;
 };
 
@@ -93,8 +94,9 @@ const maskEmail = (value: unknown): string | null => {
   return `${visible}${local.length > 2 ? "***" : ""}@${domain}`;
 };
 
-// Обновлено 08.09.2026 ИТ Директор Евразии:
-// верхние operational-счётчики не включают заблокированные и неактивные аккаунты.
+// Обновлено 10.09.2026 ИТ Директор Евразии:
+// operational-счётчики по-прежнему исключают заблокированные и неактивные аккаунты,
+// а trustedDeviceHashes отражает полный синхронизированный snapshot Trusted Device без этого фильтра.
 export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => {
   await ensureReady();
   const result = await pool.query<{
@@ -108,6 +110,7 @@ export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => 
     devices: string;
     shared_devices: string;
     accounts_on_shared_devices: string;
+    trusted_device_hashes: string;
     updated_at: Date | null;
   }>(`
     WITH score_summary AS (
@@ -138,8 +141,12 @@ export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => 
           AND COALESCE(a.bitrix_blocked, false) IS NOT TRUE
         GROUP BY l.device_hash
       ) d
+    ),
+    trusted_device_summary AS (
+      SELECT count(DISTINCT device_hash) AS trusted_device_hashes
+      FROM anti_fraud_device_links
     )
-    SELECT * FROM score_summary CROSS JOIN device_summary
+    SELECT * FROM score_summary CROSS JOIN device_summary CROSS JOIN trusted_device_summary
   `);
   const row = result.rows[0];
   return {
@@ -153,6 +160,7 @@ export const getAntiFraudWebSummary = async (): Promise<AntiFraudWebSummary> => 
     devices: Number(row?.devices ?? 0),
     sharedDevices: Number(row?.shared_devices ?? 0),
     accountsOnSharedDevices: Number(row?.accounts_on_shared_devices ?? 0),
+    trustedDeviceHashes: Number(row?.trusted_device_hashes ?? 0),
     updatedAt: iso(row?.updated_at),
   };
 };
