@@ -2,9 +2,9 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-09** after final production deployment and operator visual acceptance of PR #45, website legal-document publication, and capture of the next Anti-Fraud UI iteration.
+> Updated: **2026-09-10** after documenting the authoritative Trusted Device device-hash counting method; prior PR #45 production/UI acceptance and Anti-Fraud continuation remain current.
 >
-> Read together with `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `docs/SERVER_SCRIPT_RULES.md`, `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`, `docs/ANTI_FRAUD_UI_NEXT.md` and `SERVER_UPDATES.md`.
+> Read together with `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md`, `docs/NEW_CHAT_HANDOFF.md`, `docs/SERVER_SCRIPT_RULES.md`, `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`, `docs/ANTI_FRAUD_UI_NEXT.md`, `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` and `SERVER_UPDATES.md`.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -195,21 +195,43 @@ Do not rerun the refresh/performance acceptance unless a later relevant code cha
 
 ---
 
-## 9. Device-hash accumulation visibility — next planned Anti-Fraud UI work
+## 9. Device-hash accumulation — keep the two mechanisms separate
 
-Operator requirement captured on 2026-09-09: add a visible measure of how much `device_hash_id` data has already been accumulated so collection progress can be monitored from the Anti-Fraud interface.
+There are **two different questions** that use similar `device hash` terminology and must not be mixed.
 
-First version should report only facts supported by the current data model, e.g. current known/unique device hashes or another clearly defined count after inspecting the factual schema/query path.
+### 9.1 Anti-Fraud device graph / planned UI metric
 
-Future requirement: split the visualization by authoritative source/origin:
+Operator requirement captured on 2026-09-09: add a visible measure of how much Anti-Fraud `device_hash_id` data has already been accumulated so collection progress can be monitored from the Anti-Fraud interface.
 
-1. website;
-2. SamZaberu application;
-3. mobile waiter application.
-
-Before designing that split, verify whether source/origin is already persisted for each `device_hash_id`. If not, the source split requires a later data-model/integration change; do not infer it from heuristics.
+This concerns the Anti-Fraud application on `eur-bot-01` and its own ingestion/data model. First version should report only facts supported by that model. Future source split: website / SamZaberu application / mobile waiter application, but only after authoritative source persistence is verified.
 
 See `docs/ANTI_FRAUD_UI_NEXT.md`.
+
+### 9.2 Trusted Device authentication / future SMS decision
+
+When the user asks **how many device IDs / device hashes have accumulated for the Trusted Device login mechanism that will decide whether SMS is required**, the authoritative source is **not** Anti-Fraud PostgreSQL.
+
+Use:
+
+- host: `evrasia` (`192.168.103.141`);
+- Bitrix table: `ev_trusted_devices`;
+- primary metric: `COUNT(DISTINCT DEVICE_ID_HASH)`;
+- DB access: Bitrix bootstrap + `Bitrix\Main\Application::getConnection()`;
+- do not print raw hashes or trust tokens.
+
+Last confirmed read-only snapshot on 2026-09-08:
+
+- stored user↔hash rows: **8224**
+- unique `DEVICE_ID_HASH`: **8155**
+- unique users: **6125**
+- hashes linked to >1 user: **42**
+- maximum users on one hash: **9**
+
+These values are historical only; rerun the read-only query for current counts.
+
+Current accumulated hashes discussed here come from the browser-side Trusted Device mechanism, so do **not** call `8155` physical phones/devices.
+
+Exact production-proven command and SQL are in `docs/TRUSTED_DEVICE_DIAGNOSTICS.md`. Future chats must read that file before answering this question.
 
 ---
 
@@ -281,9 +303,11 @@ The latest Anti-Fraud operator-settings/modal milestone is **implemented, merged
 The next planned Anti-Fraud UI iteration is now explicitly captured:
 
 1. make existing `Новый` membership-delta semantics clearly visible in the case-dynamics/status area;
-2. add an operator-visible `device_hash_id` accumulation/progress metric, designed for later source segmentation (website / SamZaberu / mobile waiter) after factual source persistence is verified.
+2. add an operator-visible Anti-Fraud `device_hash_id` accumulation/progress metric, designed for later source segmentation (website / SamZaberu / mobile waiter) after factual source persistence is verified.
 
-Read `docs/ANTI_FRAUD_UI_NEXT.md` before starting this work.
+Read `docs/ANTI_FRAUD_UI_NEXT.md` before starting that work.
+
+For any question about accumulated hashes for **Trusted Device authentication / future SMS bypass**, read `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` and query `ev_trusted_devices` on host `evrasia`; do not use Anti-Fraud tables.
 
 Do not automatically reopen:
 
