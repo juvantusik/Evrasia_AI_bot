@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-10** after production deployment and operator acceptance of PR #46 Anti-Fraud UI / Trusted Device KPI.
+> Updated: **2026-09-11** after production acceptance of PR #46 and the latest website legal-document alignment.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -186,8 +186,31 @@ Future deployment checks must use the actual implemented API contract and must n
 
 ---
 
-## 10. Next continuation point
+## 10. Website legal / consent state — accepted 2026-09-11
 
-PR #46 is now **PRODUCTION / ACCEPTED**. Do not redeploy or re-test it merely for reassurance.
+The website legal work is related to Anti-Fraud because it defines the participant-facing legal/data-processing perimeter for the loyalty program whose data is analyzed by Anti-Fraud. Detailed history is in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`.
 
-Continue from the next explicit Anti-Fraud requirement. Future Trusted Device source segmentation (website / SamZaberu app / mobile waiter) remains a future task and must not be invented until authoritative source persistence exists.
+Current accepted state:
+
+- loyalty-program offer: **PRODUCTION / ACCEPTED**;
+- personal-data policy page `https://evrasia.rest/privacypolicy/`: **PRODUCTION / ACCEPTED**, including desktop/mobile presentation and latest content alignment;
+- the old concept **«Согласие на обработку дополнительных персональных данных»** is **SUPERSEDED / DO NOT USE**;
+- target standalone document is **«Согласие на обработку персональных данных»**, concise version accepted;
+- date of birth and gender are included in the main/core participant data set;
+- the former `Дополнительные цели` policy section was removed;
+- advertising remains a separate consent/action;
+- public Policy/Consent must not describe device hashes, Trusted Device identifiers, fingerprinting or internal Anti-Fraud linking/detection mechanics;
+- target required registration checkbox combines PD consent + acknowledgement of the Policy while linking to the two separate documents;
+- registration persistence/versioning/audit remains **PLANNED / DESIGN REQUIRED**.
+
+The latest policy production patch was visually confirmed successful by the user. Its final resulting SHA was not pasted into chat; re-read production before any future mutation and do not invent it.
+
+---
+
+## 11. Next continuation point
+
+PR #46 is **PRODUCTION / ACCEPTED**. Do not redeploy or re-test it merely for reassurance.
+
+Website Policy and the concise PD Consent are the current accepted legal-document direction. The next website implementation step is the registration checkbox + auditable per-user consent/version persistence, after factual inspection of the current Bitrix registration flow.
+
+Future Trusted Device source segmentation (website / SamZaberu app / mobile waiter) remains a future Anti-Fraud task and must not be invented until authoritative source persistence exists.
