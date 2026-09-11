@@ -24,12 +24,14 @@ export type AntiFraudCaseDynamics = {
     devices: AntiFraudCaseMetricChange;
     reasons: AntiFraudCaseMetricChange;
   };
-  // Историческая дельта последнего изменившегося состояния кейса.
+  // Для совместимости текущего web-клиента addedAccountIds теперь означает
+  // USER_ID, впервые появившиеся в web Anti-Fraud менее 24 часов назад.
   addedAccountIds: number[];
+  // Точная историческая дельта последнего изменившегося состояния кейса сохранена отдельно.
+  forensicAddedAccountIds: number[];
   removedAccountIds: number[];
   addedReasonCodes: string[];
   removedReasonCodes: string[];
-  // Операторская метка: аккаунты, впервые появившиеся в web Anti-Fraud менее 24 часов назад.
   recentAccountIds: number[];
 };
 
@@ -122,10 +124,6 @@ const isStrictSubset = (left: number[], right: number[]): boolean => {
   return leftIds.length > 0 && leftIds.length < rightIds.size && leftIds.every((id) => rightIds.has(id));
 };
 
-// caseId сейчас строится от минимального USER_ID. Поэтому новый аккаунт с меньшим USER_ID
-// меняет caseId, хотя логически это та же связка. Продолжаем lineage только при однозначном
-// сценарии: ровно один недавно наблюдавшийся старый кейс является строгим подмножеством нового.
-// При merge нескольких старых кейсов ничего не угадываем и считаем новый caseId новым кейсом.
 export const resolveAntiFraudCaseLineageRenames = (
   currentSnapshots: AntiFraudCaseLineageSnapshot[],
   persistedSnapshots: AntiFraudCaseLineageSnapshot[],
@@ -160,9 +158,6 @@ const snapshotForCase = (item: AntiFraudCase): Snapshot => {
     item.accounts.flatMap((account) => account.reasons.map((reason) => reason.code)),
   );
 
-  // Причины могут суммарно значительно превысить 100. Именно это нам и нужно для
-  // внутреннего сравнения saturated-кейсов. Если у risk-аккаунта причины отсутствуют,
-  // overallRisk используется как безопасный fallback.
   const evidenceScore = item.accounts.reduce((caseTotal, account) => {
     const reasonTotal = account.reasons.reduce(
       (sum, reason) => sum + Math.max(0, Math.round(Number(reason.score) || 0)),
@@ -353,8 +348,6 @@ const persistSnapshots = async (snapshots: Snapshot[], bootstrapOnly: boolean): 
   }
 };
 
-// Фиксируем только первое появление аккаунта именно в web-visible наборе Anti-Fraud.
-// Повторные refresh не меняют first_seen_at, поэтому бейдж «Новый» живёт ровно 24 часа.
 const persistWebVisibleAccountFirstSeen = async (snapshots: Snapshot[]): Promise<void> => {
   const accountIds = uniqueSortedNumbers(snapshots.flatMap((snapshot) => snapshot.accountIds));
   if (!accountIds.length) return;
@@ -367,8 +360,6 @@ const persistWebVisibleAccountFirstSeen = async (snapshots: Snapshot[]): Promise
   );
 };
 
-// Вызывается после законченного Anti-Fraud расчёта. Повторный расчёт без изменений
-// не сдвигает previous/current snapshot, а только увеличивает observed_runs.
 export const captureAntiFraudCaseDynamics = async (): Promise<void> => {
   const cases = await listAntiFraudCases();
   const snapshots = cases.map(snapshotForCase);
@@ -415,9 +406,6 @@ const trendFor = (
   return "unchanged";
 };
 
-// Read API лениво создаёт baseline для ранее не встречавшегося caseId. Если caseId сменился
-// только из-за добавления меньшего USER_ID, сначала восстанавливаем однозначный lineage и
-// фиксируем это как обычное изменение состава, чтобы новый аккаунт попал в addedAccountIds.
 export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics[]> => {
   const cases = await listAntiFraudCases();
   const snapshots = cases.map(snapshotForCase);
@@ -503,6 +491,11 @@ export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics
         ? Number(row.current_reason_count)
         : null;
 
+    const forensicAddedAccountIds = hasPrevious
+      ? differenceNumbers(currentAccounts, previousAccounts)
+      : [];
+    const recentForCase = currentAccounts.filter((id) => recentAccountIds.has(id));
+
     return {
       caseId: row.case_id,
       trend: trendFor(row, currentAccounts, previousAccounts, currentReasons, previousReasons),
@@ -515,11 +508,12 @@ export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics
         devices: metric(beforeDevices, Number(row.current_device_count)),
         reasons: metric(beforeReasons, Number(row.current_reason_count)),
       },
-      addedAccountIds: hasPrevious ? differenceNumbers(currentAccounts, previousAccounts) : [],
+      addedAccountIds: recentForCase,
+      forensicAddedAccountIds,
       removedAccountIds: hasPrevious ? differenceNumbers(previousAccounts, currentAccounts) : [],
       addedReasonCodes: hasPrevious ? differenceStrings(currentReasons, previousReasons) : [],
       removedReasonCodes: hasPrevious ? differenceStrings(previousReasons, currentReasons) : [],
-      recentAccountIds: currentAccounts.filter((id) => recentAccountIds.has(id)),
+      recentAccountIds: recentForCase,
     };
   });
 };
