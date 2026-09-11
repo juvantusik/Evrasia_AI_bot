@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-11** after production signup-consent implementation and visual acceptance of the repaired public-offer header.
+> Updated: **2026-09-11** after production E2E acceptance of the existing-user personal-account consent popup.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -10,17 +10,15 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Current accepted deployed bot application:
+Current accepted bot application:
 - repo: `juvantusik/Evrasia_AI_bot`
 - PR #46 application revision: `555e19f0b9d0a76d629962d538c66df6ec9a4000`
 - image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:531eff8c80a91a707abf51d5b2c51f8fc8f8bb8e29336a9b493364a8f9f170a3`
 - config: `sha256:94e3575d8c92f88328ec0d638e66b00ff0069d6c2ea7df8144ccd99bfe9664cb`
-- migrations: 20; latest journal timestamp `1788769200000`
 - Anti-Fraud threshold: 40000
-- scheduler: enabled / 15 min
-- PR #46 deployment backup: `/opt/evrasia-ai-bot/backups/pr46-redeploy-20260910-101450-gCNdgw`
+- scheduler: 15 min.
 
-PR #46 is **PRODUCTION / ACCEPTED**. Trusted Device KPI and case-level `Новый` behavior remain accepted. Do not redeploy/retest merely for reassurance.
+PR #46 is **PRODUCTION / ACCEPTED**. Trusted Device KPI and case-level `Новый` remain accepted.
 
 ## 2. Anti-Fraud invariants
 
@@ -32,9 +30,10 @@ PR #46 is **PRODUCTION / ACCEPTED**. Trusted Device KPI and case-level `Новы
 - consent choices must not become fraud/risk/grouping evidence merely because they exist;
 - public legal documents must not expose internal Anti-Fraud/device-linking mechanics.
 
-## 3. Website legal / consent production state
+## 3. Website legal production state
 
-Website host: `evrasia.spb.ru`; docroot `/home/site_evrasia/web/evrasia.spb.ru/public_html`.
+Website host: `evrasia.spb.ru`.
+Document root: `/home/site_evrasia/web/evrasia.spb.ru/public_html`.
 
 Canonical legal catalog:
 - `/legal/public-offer/`
@@ -42,19 +41,9 @@ Canonical legal catalog:
 - `/legal/privacy-policy/`
 - `/legal/marketing-consent/`
 
-Legacy legal URLs redirect to canonical pages. The obsolete `protection_personal_data.pdf` is not a current legal source and is not referenced by live signup code.
+Public offer revision **11.09.2026** is production and includes §1.19 `Недобросовестное использование`. Privacy policy is **PRODUCTION / ACCEPTED**. PD and marketing consents are separate documents; marketing remains voluntary.
 
-### Public offer
-
-Revision **11.09.2026** is production. It includes §1.19 `Недобросовестное использование` and the current separate-consent model.
-
-On 2026-09-11 the offer page regressed visually because DOCX-derived `offer-meta` header rows remained in HTML while their presentation CSS was absent. Read-only baseline SHA was `e489c95b196127a0cd3079251243dde6992dd8793df7d7bedd381a9e2aff3651`. A header-only CSS repair hid duplicated metadata rows and restored the intended visible subtitle `Публичная оферта · Редакция от 11.09.2026`. User confirmed: **«все получилось, супер!»**. Final post-fix SHA/output was not pasted; re-read production before future mutation.
-
-### Privacy / consent documents
-
-Privacy policy is **PRODUCTION / ACCEPTED**. Standalone concise `Согласие на обработку персональных данных` and separate marketing consent are the current legal model. The former “additional personal data” concept is superseded and must not be reintroduced.
-
-## 4. Signup consent implementation — production installed 2026-09-11
+## 4. Signup consent implementation — PRODUCTION
 
 Active template:
 `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/templates/eurasia/components/eurasia/signup/main/template.php`
@@ -62,61 +51,90 @@ Active template:
 Active backend:
 `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/components/eurasia/signup/class.php`
 
-Current checkbox contract:
+Signup contract:
 1. required offer acceptance;
-2. required PD consent + Policy acknowledgement;
+2. required PD consent + Privacy Policy acknowledgement;
 3. optional marketing consent.
-
-Old separate `dispatch1`/`dispatch2` signup controls are removed. One marketing choice maps to both existing `UF_SMS` and `UF_SUBSCRIBE` state fields for new registrations.
 
 Installed SHA values:
 - template `0baba7a1d994616848c5e8d7ad39cf0929d251250bda9c2f64396e4240ff921f`
 - backend `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84`
-- backup `/home/site_evrasia/web/evrasia.spb.ru/backups/signup-consents/20260911-131502`
-- install verification 12 PASS / 0 FAIL; no rollback.
+- backup `/home/site_evrasia/web/evrasia.spb.ru/backups/signup-consents/20260911-131502`.
 
 ## 5. Native Bitrix consent subsystem
 
-Production inspection before implementation found the native tables present but empty:
-- `b_consent_agreement` = 0
-- `b_consent_field` = 0
-- `b_consent_user_consent` = 0
-- `b_consent_user_consent_item` = 0
-- `b_sender_agreement` = 0
-
-Installed API signatures/source were inspected. Consent events use `Bitrix\Main\UserConsent\Consent::addByContext(...)`; no custom ledger/table was created.
-
-Three active custom versioned agreements now exist:
+Current active custom versioned agreements:
 - ID 1 `EVRASIA_OFFER_20260911` → `/legal/public-offer/`
 - ID 2 `EVRASIA_PD_20260911` → `/legal/personal-data-consent/`
-- ID 3 `EVRASIA_MARKETING_20260911` → `/legal/marketing-consent/`
+- ID 3 `EVRASIA_MARKETING_20260911` → `/legal/marketing-consent/`.
 
-The first agreement-create attempt failed because `TYPE` was required; its transaction rolled back and left zero rows. Installed metadata then confirmed `C` = custom, after which the corrected transaction created exactly the three agreements.
+Consent persistence uses `Bitrix\Main\UserConsent\Consent::addByContext(...)`; no custom ledger was created.
 
-The registration backend now records offer + PD consent for every successful new registration and marketing consent only when selected. User creation and consent creation are transactionally coupled; required-consent persistence failure rolls back the registration.
+Historical inspection found no native Bitrix offer/PD consent-event ledger in the inspected mechanisms. Existing `UF_SMS` and `UF_SUBSCRIBE` values are mailing/subscription state, not historical versioned legal acceptance records.
 
-Historical users were not modified or backfilled.
+## 6. Existing-user personal-account consent popup — PRODUCTION / CONTROLLED E2E ACCEPTED
 
-### Important historical finding
+A mandatory popup is implemented for authenticated existing users who are missing the current offer and/or PD agreement acceptance.
 
-Before this implementation, the inspected native Bitrix consent/event subsystem contained no agreement or consent-event rows, and `b_sender_agreement` was also empty. Historical `UF_SMS` and `UF_SUBSCRIBE` values existed, but these are boolean mailing/subscription state, not a versioned legal acceptance ledger.
+**Current rollout scope is intentionally limited to Bitrix USER_ID 880339. It is not yet enabled for all historical users.**
 
-Therefore we found no native auditable Bitrix record of historical offer acceptance or PD consent in the inspected subsystem. This conclusion is limited to mechanisms actually inspected and does not prove that no evidence exists in an unrelated external archive/system.
+Popup behavior:
+- checks current offer agreement ID 1 and PD agreement ID 2;
+- requires only missing required agreement(s);
+- links to current offer, PD consent and Privacy Policy;
+- does not include marketing;
+- does not modify existing `UF_SMS` or `UF_SUBSCRIBE` preferences;
+- writes native Bitrix consent events only for required offer/PD acceptance;
+- version-aware agreement IDs/codes provide the basis for future re-consent when a new legal version is created.
 
-## 6. Consent acceptance status
+Controlled production E2E on USER_ID 880339 succeeded after the user accepted the popup:
+- consent ID 57 → agreement 1 / `EVRASIA_OFFER_20260911`;
+- consent ID 58 → agreement 2 / `EVRASIA_PD_20260911`;
+- timestamp 11.09.2026 14:16:11;
+- `ORIGINATOR_ID=evrasia_account_gate`;
+- `ORIGIN_ID=account_880339`;
+- agreement 1 count = 1;
+- agreement 2 count = 1;
+- agreement 3 count = 0.
 
-Three-checkbox UI/backend and native persistence code are **PRODUCTION INSTALLED**. The deployment itself passed structural/syntax/contract checks.
+The user confirmed the popup itself works correctly. This account-gate path is therefore **E2E ACCEPTED for the controlled user**.
 
-A controlled end-to-end registration is still pending. Before marking consent persistence **E2E ACCEPTED**, verify:
-- marketing OFF → exactly offer + PD consent events, expected `UF_SMS`/`UF_SUBSCRIBE` state;
-- marketing ON → offer + PD + marketing consent events, expected `UF_SMS`/`UF_SUBSCRIBE` state.
+### Logout button styling
 
-Do not backfill historical users as accepted without evidence.
+The popup logout action was corrected to use the site's existing personal-account classes exactly:
+`btn border_inverse exit_btn`.
 
-## 7. Continuation point
+Custom `.evrasia-consent-gate__logout` styling was removed, so typography, border and sizing come from the established Evrasia UI rather than custom popup CSS.
 
-Bot PR #46 remains accepted and untouched by this website work.
+Current known production `/account/index.php` SHA after that correction:
+`cb2a01f0462308c69953695e4db3306252ebf586b28f8581022dca76c0013efc`
 
-Next website step is controlled signup E2E verification. After factual PASS, update this checkpoint and `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` from **PRODUCTION INSTALLED / E2E PENDING** to **PRODUCTION / ACCEPTED**.
+Backup:
+`/home/site_evrasia/web/evrasia.spb.ru/backups/account-consent-button/20260911-143102`
 
-For all production scripts continue using `docs/SERVER_SCRIPT_RULES.md`: one guarded copy-paste wrapper, syntax check, automatic execution, structured PASS/FAIL result, no secrets printed.
+Deployment: **13 PASS / 0 FAIL**, rollback not required. Consent logic and the single-user test gate remained unchanged.
+
+## 7. SamZaberu legacy offer link — OPEN
+
+The «Самзаберу» application was identified as still using legacy URL:
+`https://evrasia.spb.ru/upload/docs/protection_personal_data.pdf`.
+
+The user supplied an up-to-date 9-page PDF of the public offer, revision 11.09.2026, intended to replace the bytes served under that legacy filename for compatibility. **Production replacement was not confirmed in this chat. Do not assume it is deployed.**
+
+Future work should verify actual production before replacement. Longer term, inspect SamZaberu code and migrate it to the canonical public-offer URL rather than relying on the obsolete filename.
+
+## 8. Continuation point for new chat
+
+Confirmed:
+- Anti-Fraud PR #46: **PRODUCTION / ACCEPTED**;
+- website legal catalog: **PRODUCTION**;
+- offer 11.09.2026: **PRODUCTION**;
+- privacy policy: **PRODUCTION / ACCEPTED**;
+- signup consent implementation: **PRODUCTION**;
+- native Bitrix agreements: **PRODUCTION**;
+- existing-user account popup: **PRODUCTION / E2E ACCEPTED for USER_ID 880339**;
+- account popup native button style: **PRODUCTION**;
+- rollout to all historical users: **NOT DONE**;
+- SamZaberu legacy PDF replacement: **OPEN / NOT CONFIRMED DEPLOYED**.
+
+Next chat: read this file and `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`, then inspect factual production state before any mutation. Continue using `docs/SERVER_SCRIPT_RULES.md` for production operations.
