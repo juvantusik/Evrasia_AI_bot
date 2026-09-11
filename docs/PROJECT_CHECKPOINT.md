@@ -2,215 +2,121 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-11** after production acceptance of PR #46 and the latest website legal-document alignment.
+> Updated: **2026-09-11** after production signup-consent implementation and visual acceptance of the repaired public-offer header.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
----
-
-## 1. Production baseline — current accepted state
+## 1. Bot production baseline
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Current accepted deployed application:
-
+Current accepted deployed bot application:
 - repo: `juvantusik/Evrasia_AI_bot`
-- PR: **#46 — Anti-Fraud: surface new accounts and Trusted Device progress**
-- application revision: `555e19f0b9d0a76d629962d538c66df6ec9a4000`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:531eff8c80a91a707abf51d5b2c51f8fc8f8bb8e29336a9b493364a8f9f170a3`
-- image config ID: `sha256:94e3575d8c92f88328ec0d638e66b00ff0069d6c2ea7df8144ccd99bfe9664cb`
-- app container: `evrasia-ai-bot-app`
-- DB container: `evrasia-ai-bot-db`
-- Compose project: `evrasia-prod`
-- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- DB / role: `evrasia_ai_bot`
-- direct app port: `127.0.0.1:18080`
-- migrations: **20**
-- latest migration journal timestamp: `1788769200000`
-- Anti-Fraud bonus threshold: **40000**
-- scheduler: enabled, **15 minutes**, no error at acceptance
-- accepted PR #46 deployment backup: `/opt/evrasia-ai-bot/backups/pr46-redeploy-20260910-101450-gCNdgw`
+- PR #46 application revision: `555e19f0b9d0a76d629962d538c66df6ec9a4000`
+- image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:531eff8c80a91a707abf51d5b2c51f8fc8f8bb8e29336a9b493364a8f9f170a3`
+- config: `sha256:94e3575d8c92f88328ec0d638e66b00ff0069d6c2ea7df8144ccd99bfe9664cb`
+- migrations: 20; latest journal timestamp `1788769200000`
+- Anti-Fraud threshold: 40000
+- scheduler: enabled / 15 min
+- PR #46 deployment backup: `/opt/evrasia-ai-bot/backups/pr46-redeploy-20260910-101450-gCNdgw`
 
-Production deployment acceptance on 2026-09-10: **34 PASS / 0 FAIL**, rollback not required. DB container remained untouched, migration state remained unchanged, HTTP route contract passed, threshold remained 40000, scheduler remained healthy.
+PR #46 is **PRODUCTION / ACCEPTED**. Trusted Device KPI and case-level `Новый` behavior remain accepted. Do not redeploy/retest merely for reassurance.
 
-Operator subsequently confirmed: **«по антифрауд все работает»**. Treat PR #46 as **PRODUCTION / ACCEPTED**.
+## 2. Anti-Fraud invariants
 
----
+- advisory/investigative; risk is not proof of fraud; blocking is operator-controlled;
+- grouping evidence is distinct from risk evidence;
+- Bitrix is account-state source of truth;
+- `ACTIVE=Y,BLOCKED=N` = Активен; `ACTIVE=N,BLOCKED=N` = Неактивен; any `BLOCKED=Y` = Заблокирован;
+- blocked/inactive excluded from operational views by default while retaining distinct state;
+- consent choices must not become fraud/risk/grouping evidence merely because they exist;
+- public legal documents must not expose internal Anti-Fraud/device-linking mechanics.
 
-## 2. PR #46 — accepted Anti-Fraud behavior
+## 3. Website legal / consent production state
 
-### Trusted Device KPI
+Website host: `evrasia.spb.ru`; docroot `/home/site_evrasia/web/evrasia.spb.ru/public_html`.
 
-Anti-Fraud summary now exposes `trustedDeviceHashes` and the web UI shows a fifth KPI card:
+Canonical legal catalog:
+- `/legal/public-offer/`
+- `/legal/personal-data-consent/`
+- `/legal/privacy-policy/`
+- `/legal/marketing-consent/`
 
-- label: **Trusted Device**
-- meaning: count of unique accumulated Trusted Device identifiers in the bot-side full synchronized snapshot
-- calculation: `COUNT(DISTINCT device_hash)` over `anti_fraud_device_links`
-- this KPI is deliberately distinct from operational `sharedDevices`, which continues to apply active/unblocked-account filtering
-- no direct website DB access was added to `eur-bot-01`; existing protected Trusted Device synchronization remains the architecture boundary
+Legacy legal URLs redirect to canonical pages. The obsolete `protection_personal_data.pdf` is not a current legal source and is not referenced by live signup code.
 
-Production API acceptance value immediately after PR #46 deployment:
+### Public offer
 
-- `TRUSTED_DEVICE_HASHES=9375`
-- JSON type: `number`
+Revision **11.09.2026** is production. It includes §1.19 `Недобросовестное использование` and the current separate-consent model.
 
-This is a count of unique Trusted Device identifiers/device hashes, not a guaranteed count of physical devices.
+On 2026-09-11 the offer page regressed visually because DOCX-derived `offer-meta` header rows remained in HTML while their presentation CSS was absent. Read-only baseline SHA was `e489c95b196127a0cd3079251243dde6992dd8793df7d7bedd381a9e2aff3651`. A header-only CSS repair hid duplicated metadata rows and restored the intended visible subtitle `Публичная оферта · Редакция от 11.09.2026`. User confirmed: **«все получилось, супер!»**. Final post-fix SHA/output was not pasted; re-read production before future mutation.
 
-Historical authoritative website-side snapshot earlier on 2026-09-10 was `9363` unique `DEVICE_ID_HASH`; the production bot-side KPI later showed 9375 after synchronization/data accumulation.
+### Privacy / consent documents
 
-### `Новый` case status
+Privacy policy is **PRODUCTION / ACCEPTED**. Standalone concise `Согласие на обработку персональных данных` and separate marketing consent are the current legal model. The former “additional personal data” concept is superseded and must not be reintroduced.
 
-PR #46 makes newly added accounts visible at case-row level using the already established `addedAccountIds` case-dynamics semantics.
+## 4. Signup consent implementation — production installed 2026-09-11
 
-When an existing case has newly added accounts:
+Active template:
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/templates/eurasia/components/eurasia/signup/main/template.php`
 
-- the row displays **`● Новый`** in the case dynamics/status area;
-- it becomes the single visible row-level dynamics status rather than appearing beside `усилился` / `без изменений` etc.;
-- the underlying actual case trend remains in the data and remains available inside the expanded case for investigation;
-- the existing account-level `Новый` marker is retained.
+Active backend:
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/components/eurasia/signup/class.php`
 
-This is a structural case-dynamics marker, not a risk score or Bitrix account state.
+Current checkbox contract:
+1. required offer acceptance;
+2. required PD consent + Policy acknowledgement;
+3. optional marketing consent.
 
----
+Old separate `dispatch1`/`dispatch2` signup controls are removed. One marketing choice maps to both existing `UF_SMS` and `UF_SUBSCRIBE` state fields for new registrations.
 
-## 3. Anti-Fraud settings — accepted
+Installed SHA values:
+- template `0baba7a1d994616848c5e8d7ad39cf0929d251250bda9c2f64396e4240ff921f`
+- backend `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84`
+- backup `/home/site_evrasia/web/evrasia.spb.ru/backups/signup-consents/20260911-131502`
+- install verification 12 PASS / 0 FAIL; no rollback.
 
-- operator label: `Порог бонусного баланса`
-- persisted key: `anti_fraud_bonus_balance_threshold`
-- storage: existing `bot_settings`
-- current/default production value: `40000`
-- strict rule remains `bonus_balance > threshold`
-- equality does not trigger
-- saving does not itself trigger refresh
-- setting does not change grouping logic and never auto-blocks
+## 5. Native Bitrix consent subsystem
 
-Settings modal remains the PR #45 portal implementation rendered into `document.body`; its accepted viewport/mobile behavior must not be regressed.
+Production inspection before implementation found the native tables present but empty:
+- `b_consent_agreement` = 0
+- `b_consent_field` = 0
+- `b_consent_user_consent` = 0
+- `b_consent_user_consent_item` = 0
+- `b_sender_agreement` = 0
 
----
+Installed API signatures/source were inspected. Consent events use `Bitrix\Main\UserConsent\Consent::addByContext(...)`; no custom ledger/table was created.
 
-## 4. Account-state contract
+Three active custom versioned agreements now exist:
+- ID 1 `EVRASIA_OFFER_20260911` → `/legal/public-offer/`
+- ID 2 `EVRASIA_PD_20260911` → `/legal/personal-data-consent/`
+- ID 3 `EVRASIA_MARKETING_20260911` → `/legal/marketing-consent/`
 
-Bitrix remains source of truth:
+The first agreement-create attempt failed because `TYPE` was required; its transaction rolled back and left zero rows. Installed metadata then confirmed `C` = custom, after which the corrected transaction created exactly the three agreements.
 
-- `ACTIVE=Y`, `BLOCKED=N` → **Активен**
-- `ACTIVE=N`, `BLOCKED=N` → **Неактивен**
-- any `BLOCKED=Y` → **Заблокирован**
+The registration backend now records offer + PD consent for every successful new registration and marketing consent only when selected. User creation and consent creation are transactionally coupled; required-consent persistence failure rolls back the registration.
 
-Only `BLOCKED=Y` is a true Bitrix block.
+Historical users were not modified or backfilled.
 
-Operational views exclude blocked and inactive accounts by default while preserving their distinct state. Toggle: **`Показать заблокированных и неактивных`**.
+### Important historical finding
 
-Group bulk block targets active unblocked accounts only. Group risk/bonus evidence may still include all case members.
+Before this implementation, the inspected native Bitrix consent/event subsystem contained no agreement or consent-event rows, and `b_sender_agreement` was also empty. Historical `UF_SMS` and `UF_SUBSCRIBE` values existed, but these are boolean mailing/subscription state, not a versioned legal acceptance ledger.
 
----
+Therefore we found no native auditable Bitrix record of historical offer acceptance or PD consent in the inspected subsystem. This conclusion is limited to mechanisms actually inspected and does not prove that no evidence exists in an unrelated external archive/system.
 
-## 5. Manual block / unblock — production-proven
+## 6. Consent acceptance status
 
-Bot routes:
+Three-checkbox UI/backend and native persistence code are **PRODUCTION INSTALLED**. The deployment itself passed structural/syntax/contract checks.
 
-- `POST /api/anti-fraud/block`
-- `POST /api/anti-fraud/unblock`
+A controlled end-to-end registration is still pending. Before marking consent persistence **E2E ACCEPTED**, verify:
+- marketing OFF → exactly offer + PD consent events, expected `UF_SMS`/`UF_SUBSCRIBE` state;
+- marketing ON → offer + PD + marketing consent events, expected `UF_SMS`/`UF_SUBSCRIBE` state.
 
-Site-side routes:
+Do not backfill historical users as accepted without evidence.
 
-- `POST /api/internal/anti-fraud/block`
-- `POST /api/internal/anti-fraud/unblock`
+## 7. Continuation point
 
-Controlled USER_ID `880339` already completed the proven round-trip with 27 PASS / 0 FAIL / 0 WARN. Do not repeat merely for reassurance and never mutate a real customer to manufacture a visual fixture.
+Bot PR #46 remains accepted and untouched by this website work.
 
----
+Next website step is controlled signup E2E verification. After factual PASS, update this checkpoint and `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` from **PRODUCTION INSTALLED / E2E PENDING** to **PRODUCTION / ACCEPTED**.
 
-## 6. Performance baseline
-
-PR #38 similarity hotfix remains accepted:
-
-- protected cycle before: 206 s
-- after: 53 s
-- health 24/24 HTTP 200, max 3 ms
-- scheduler 24/24 HTTP 200, max 6 ms
-- app restart count 0
-
-Do not rerun performance refresh merely for reassurance.
-
----
-
-## 7. Trusted Device source-of-truth distinction
-
-For authentication / future SMS decision, authoritative website source remains:
-
-- host: `evrasia` (`192.168.103.141`)
-- Bitrix table: `ev_trusted_devices`
-- identifier column: `DEVICE_ID_HASH`
-- user column: `USER_ID`
-- DB access through Bitrix bootstrap / `Bitrix\Main\Application::getConnection()`
-
-Fresh website-side read-only snapshot on 2026-09-10:
-
-- `TOTAL_TRUST_ROWS=9446`
-- `UNIQUE_DEVICE_IDS=9363`
-- `UNIQUE_USERS=7187`
-- `DEVICES_LINKED_TO_MULTIPLE_USERS=54`
-- `MAX_USERS_ON_ONE_DEVICE=11`
-
-Do not confuse this website-side source of truth with the bot-side synchronized KPI. The latter is intended for convenient progress monitoring in Anti-Fraud UI.
-
----
-
-## 8. Production continuity
-
-One production application contains:
-
-1. Phonebook — `/phonebook`
-2. Anti-Fraud — `/antifraud` + scheduler
-3. SamZaberu — Telegram scenario inside `EvrasiaTelegramBotV2`
-4. Corporate communications / MegaFon — same production application
-
-Canonical route contract:
-
-- `/phonebook` → current Phonebook UI
-- `/antifraud` → current Anti-Fraud UI
-- `/directory` → expected 404
-- `/api/directory/...` → expected 404
-
-Legacy `evrasia-ai-bot-v17-test` remains exited/archival. Do not restart blindly.
-
----
-
-## 9. Deployment note from PR #46
-
-The first PR #46 cutover successfully started the target image, but the deployment verifier incorrectly checked JSON field `.trustedDeviceCount` instead of the implemented `.trustedDeviceHashes`. That verifier failure triggered a successful automatic rollback to PR #45. No DB/schema/settings mutation occurred.
-
-The corrected redeployment checked the actual API contract `trustedDeviceHashes` and passed completely: **34 PASS / 0 FAIL**. This was a verifier error, not an application defect.
-
-Future deployment checks must use the actual implemented API contract and must not reintroduce `.trustedDeviceCount`.
-
----
-
-## 10. Website legal / consent state — accepted 2026-09-11
-
-The website legal work is related to Anti-Fraud because it defines the participant-facing legal/data-processing perimeter for the loyalty program whose data is analyzed by Anti-Fraud. Detailed history is in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`.
-
-Current accepted state:
-
-- loyalty-program offer: **PRODUCTION / ACCEPTED**;
-- personal-data policy page `https://evrasia.rest/privacypolicy/`: **PRODUCTION / ACCEPTED**, including desktop/mobile presentation and latest content alignment;
-- the old concept **«Согласие на обработку дополнительных персональных данных»** is **SUPERSEDED / DO NOT USE**;
-- target standalone document is **«Согласие на обработку персональных данных»**, concise version accepted;
-- date of birth and gender are included in the main/core participant data set;
-- the former `Дополнительные цели` policy section was removed;
-- advertising remains a separate consent/action;
-- public Policy/Consent must not describe device hashes, Trusted Device identifiers, fingerprinting or internal Anti-Fraud linking/detection mechanics;
-- target required registration checkbox combines PD consent + acknowledgement of the Policy while linking to the two separate documents;
-- registration persistence/versioning/audit remains **PLANNED / DESIGN REQUIRED**.
-
-The latest policy production patch was visually confirmed successful by the user. Its final resulting SHA was not pasted into chat; re-read production before any future mutation and do not invent it.
-
----
-
-## 11. Next continuation point
-
-PR #46 is **PRODUCTION / ACCEPTED**. Do not redeploy or re-test it merely for reassurance.
-
-Website Policy and the concise PD Consent are the current accepted legal-document direction. The next website implementation step is the registration checkbox + auditable per-user consent/version persistence, after factual inspection of the current Bitrix registration flow.
-
-Future Trusted Device source segmentation (website / SamZaberu app / mobile waiter) remains a future Anti-Fraud task and must not be invented until authoritative source persistence exists.
+For all production scripts continue using `docs/SERVER_SCRIPT_RULES.md`: one guarded copy-paste wrapper, syntax check, automatic execution, structured PASS/FAIL result, no secrets printed.
