@@ -35,4 +35,19 @@ export const antiFraudCaseStateTable = pgTable(
   }),
 );
 
+// Добавлено 11.09.2026 ИТ Директор Евразии
+// Операторская web-метка первого появления USER_ID в текущем интерфейсе Anti-Fraud.
+// Она не является risk/grouping evidence и используется только для 24-часового бейджа «Новый».
+export const antiFraudWebAccountStateTable = pgTable(
+  "anti_fraud_web_account_state",
+  {
+    bitrixUserId: integer("bitrix_user_id").primaryKey(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    firstSeenIdx: index("anti_fraud_web_account_state_first_seen_idx").on(table.firstSeenAt),
+  }),
+);
+
 export type AntiFraudCaseState = typeof antiFraudCaseStateTable.$inferSelect;
+export type AntiFraudWebAccountState = typeof antiFraudWebAccountStateTable.$inferSelect;

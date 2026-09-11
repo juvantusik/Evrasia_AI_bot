@@ -173,7 +173,7 @@ jobs:
             http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-restore.json
           test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-restore.json)" = "40000"
 
-          # Обновлено 08.09.2026: 0018/0019 добавляют статус блокировки и внутренний аудит.
+          # Обновлено 11.09.2026: 0020 добавляет web first-seen state для 24-часового бейджа «Новый».
           # Также проверяем signed NUMERIC и loyalty resolution через psql,
           # не полагаясь на наличие standalone pg package в runtime image.
           migration_rows="$(
@@ -184,7 +184,38 @@ jobs:
               psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
                 -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
           )"
-          test "$migration_rows" = "20"
+          test "$migration_rows" = "21"
+
+          web_state_schema="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT CASE WHEN to_regclass('public.anti_fraud_web_account_state') IS NOT NULL THEN 1 ELSE 0 END, count(*) FROM anti_fraud_web_account_state;"
+          )"
+          test "$web_state_schema" = "1|0"
+
+          new_window_semantics="$(
+            docker run --rm -i \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu \
+                -v ON_ERROR_STOP=1 -Atq <<'SQL'
+          BEGIN;
+          INSERT INTO anti_fraud_web_account_state (bitrix_user_id, first_seen_at)
+          VALUES
+            (2147482998, now() - interval '23 hours 59 minutes'),
+            (2147482999, now() - interval '25 hours');
+          SELECT string_agg(bitrix_user_id::text, ',' ORDER BY bitrix_user_id)
+          FROM anti_fraud_web_account_state
+          WHERE first_seen_at >= now() - interval '24 hours'
+            AND bitrix_user_id IN (2147482998, 2147482999);
+          ROLLBACK;
+          SQL
+          )"
+          test "$new_window_semantics" = "2147482998"
 
           block_schema="$(
             docker run --rm \

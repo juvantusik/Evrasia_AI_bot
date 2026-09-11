@@ -24,10 +24,15 @@ export type AntiFraudCaseDynamics = {
     devices: AntiFraudCaseMetricChange;
     reasons: AntiFraudCaseMetricChange;
   };
+  // Для совместимости текущего web-клиента addedAccountIds теперь означает
+  // USER_ID, впервые появившиеся в web Anti-Fraud менее 24 часов назад.
   addedAccountIds: number[];
+  // Точная историческая дельта последнего изменившегося состояния кейса сохранена отдельно.
+  forensicAddedAccountIds: number[];
   removedAccountIds: number[];
   addedReasonCodes: string[];
   removedReasonCodes: string[];
+  recentAccountIds: number[];
 };
 
 type Snapshot = {
@@ -119,10 +124,6 @@ const isStrictSubset = (left: number[], right: number[]): boolean => {
   return leftIds.length > 0 && leftIds.length < rightIds.size && leftIds.every((id) => rightIds.has(id));
 };
 
-// caseId сейчас строится от минимального USER_ID. Поэтому новый аккаунт с меньшим USER_ID
-// меняет caseId, хотя логически это та же связка. Продолжаем lineage только при однозначном
-// сценарии: ровно один недавно наблюдавшийся старый кейс является строгим подмножеством нового.
-// При merge нескольких старых кейсов ничего не угадываем и считаем новый caseId новым кейсом.
 export const resolveAntiFraudCaseLineageRenames = (
   currentSnapshots: AntiFraudCaseLineageSnapshot[],
   persistedSnapshots: AntiFraudCaseLineageSnapshot[],
@@ -157,9 +158,6 @@ const snapshotForCase = (item: AntiFraudCase): Snapshot => {
     item.accounts.flatMap((account) => account.reasons.map((reason) => reason.code)),
   );
 
-  // Причины могут суммарно значительно превысить 100. Именно это нам и нужно для
-  // внутреннего сравнения saturated-кейсов. Если у risk-аккаунта причины отсутствуют,
-  // overallRisk используется как безопасный fallback.
   const evidenceScore = item.accounts.reduce((caseTotal, account) => {
     const reasonTotal = account.reasons.reduce(
       (sum, reason) => sum + Math.max(0, Math.round(Number(reason.score) || 0)),
@@ -350,13 +348,24 @@ const persistSnapshots = async (snapshots: Snapshot[], bootstrapOnly: boolean): 
   }
 };
 
-// Вызывается после законченного Anti-Fraud расчёта. Повторный расчёт без изменений
-// не сдвигает previous/current snapshot, а только увеличивает observed_runs.
+const persistWebVisibleAccountFirstSeen = async (snapshots: Snapshot[]): Promise<void> => {
+  const accountIds = uniqueSortedNumbers(snapshots.flatMap((snapshot) => snapshot.accountIds));
+  if (!accountIds.length) return;
+
+  await pool.query(
+    `INSERT INTO anti_fraud_web_account_state (bitrix_user_id, first_seen_at)
+     SELECT unnest($1::int[]), now()
+     ON CONFLICT (bitrix_user_id) DO NOTHING`,
+    [accountIds],
+  );
+};
+
 export const captureAntiFraudCaseDynamics = async (): Promise<void> => {
   const cases = await listAntiFraudCases();
   const snapshots = cases.map(snapshotForCase);
   await reconcileSnapshotCaseLineage(snapshots);
   await persistSnapshots(snapshots, false);
+  await persistWebVisibleAccountFirstSeen(snapshots);
 };
 
 const trendFor = (
@@ -397,9 +406,6 @@ const trendFor = (
   return "unchanged";
 };
 
-// Read API лениво создаёт baseline для ранее не встречавшегося caseId. Если caseId сменился
-// только из-за добавления меньшего USER_ID, сначала восстанавливаем однозначный lineage и
-// фиксируем это как обычное изменение состава, чтобы новый аккаунт попал в addedAccountIds.
 export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics[]> => {
   const cases = await listAntiFraudCases();
   const snapshots = cases.map(snapshotForCase);
@@ -419,30 +425,42 @@ export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics
   const caseIds = snapshots.map((snapshot) => snapshot.caseId);
   if (!caseIds.length) return [];
 
-  const result = await pool.query<StateRow>(
-    `SELECT
-       case_id,
-       current_evidence_score,
-       current_overall_risk,
-       current_account_count,
-       current_device_count,
-       current_reason_count,
-       current_account_ids,
-       current_reason_codes,
-       current_changed_at,
-       previous_evidence_score,
-       previous_overall_risk,
-       previous_account_count,
-       previous_device_count,
-       previous_reason_count,
-       previous_account_ids,
-       previous_reason_codes,
-       previous_changed_at,
-       observed_runs
-     FROM anti_fraud_case_state
-     WHERE case_id = ANY($1::text[])`,
-    [caseIds],
-  );
+  const allCurrentAccountIds = uniqueSortedNumbers(snapshots.flatMap((snapshot) => snapshot.accountIds));
+  const [result, recentResult] = await Promise.all([
+    pool.query<StateRow>(
+      `SELECT
+         case_id,
+         current_evidence_score,
+         current_overall_risk,
+         current_account_count,
+         current_device_count,
+         current_reason_count,
+         current_account_ids,
+         current_reason_codes,
+         current_changed_at,
+         previous_evidence_score,
+         previous_overall_risk,
+         previous_account_count,
+         previous_device_count,
+         previous_reason_count,
+         previous_account_ids,
+         previous_reason_codes,
+         previous_changed_at,
+         observed_runs
+       FROM anti_fraud_case_state
+       WHERE case_id = ANY($1::text[])`,
+      [caseIds],
+    ),
+    pool.query<{ bitrix_user_id: number }>(
+      `SELECT bitrix_user_id
+       FROM anti_fraud_web_account_state
+       WHERE first_seen_at >= now() - interval '24 hours'
+         AND bitrix_user_id = ANY($1::int[])`,
+      [allCurrentAccountIds],
+    ),
+  ]);
+
+  const recentAccountIds = new Set(recentResult.rows.map((row) => Number(row.bitrix_user_id)));
 
   return result.rows.map((row) => {
     const currentAccounts = parseNumberCsv(row.current_account_ids);
@@ -473,6 +491,11 @@ export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics
         ? Number(row.current_reason_count)
         : null;
 
+    const forensicAddedAccountIds = hasPrevious
+      ? differenceNumbers(currentAccounts, previousAccounts)
+      : [];
+    const recentForCase = currentAccounts.filter((id) => recentAccountIds.has(id));
+
     return {
       caseId: row.case_id,
       trend: trendFor(row, currentAccounts, previousAccounts, currentReasons, previousReasons),
@@ -485,10 +508,12 @@ export const listAntiFraudCaseDynamics = async (): Promise<AntiFraudCaseDynamics
         devices: metric(beforeDevices, Number(row.current_device_count)),
         reasons: metric(beforeReasons, Number(row.current_reason_count)),
       },
-      addedAccountIds: hasPrevious ? differenceNumbers(currentAccounts, previousAccounts) : [],
+      addedAccountIds: recentForCase,
+      forensicAddedAccountIds,
       removedAccountIds: hasPrevious ? differenceNumbers(previousAccounts, currentAccounts) : [],
       addedReasonCodes: hasPrevious ? differenceStrings(currentReasons, previousReasons) : [],
       removedReasonCodes: hasPrevious ? differenceStrings(previousReasons, currentReasons) : [],
+      recentAccountIds: recentForCase,
     };
   });
 };
