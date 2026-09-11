@@ -1,139 +1,120 @@
 # Website legal documents and consent integration
 
-> Status: website legal catalog, offer, privacy policy, standalone consents and registration consent persistence are **PRODUCTION**. Registration UI/backend was installed on 2026-09-11; final end-to-end test registration remains a separate acceptance step.
+> Status: website legal catalog, offer, privacy policy, standalone consents, registration consent persistence and the existing-user account consent gate are **PRODUCTION**.
 >
-> Updated: **2026-09-11** after production registration-consent implementation and offer-header repair.
+> Updated: **2026-09-11** after controlled production E2E of the existing-user account consent gate.
 
 ## 1. Scope and production website
 
-This work belongs to the Evrasia AI Bot project because the website is the participant-facing legal/consent perimeter for the loyalty program whose data is used by Anti-Fraud. Anti-Fraud remains advisory; consent state is not fraud/grouping evidence.
+Production website host: `evrasia.spb.ru`.
+Document root: `/home/site_evrasia/web/evrasia.spb.ru/public_html`.
 
-Production website host:
-- hostname: `evrasia.spb.ru`
-- document root: `/home/site_evrasia/web/evrasia.spb.ru/public_html`
-- do not confuse with bot host `eur-bot-01`.
-
-## 2. Canonical legal catalog
-
-Canonical public pages:
+Canonical legal pages:
 - `/legal/public-offer/`
 - `/legal/personal-data-consent/`
 - `/legal/privacy-policy/`
 - `/legal/marketing-consent/`
 
-Legacy root URLs are retained as 301 redirects to canonical `/legal/...` pages. Signup/footer links use canonical URLs.
+Current public-offer revision: **11.09.2026**. It includes §1.19 `Недобросовестное использование`. PD consent is separate from the offer; advertising consent is separate and voluntary.
 
-The obsolete `/upload/docs/protection_personal_data.pdf` is not a legal source and is no longer referenced by live signup code. Do not reintroduce it.
+## 2. Registration consent implementation — PRODUCTION
 
-## 3. Public offer — current state
-
-Canonical page: `/legal/public-offer/`.
-
-Current legal revision: **11.09.2026**. It includes §1.19 `Недобросовестное использование` and removes the obsolete concept of “additional personal data/additional processing”. PD consent is separate from the offer; advertising consent is separate and voluntary.
-
-The offer header presentation was repaired on 2026-09-11 after a regression exposed duplicated DOCX-derived header lines. The accepted visible header is:
-- H1: `Договор об участии в программе лояльности «Бонусный Клуб Евразия»`
-- subtitle: `Публичная оферта · Редакция от 11.09.2026`
-
-The repair is presentation-only: duplicated `offer-meta-small/title/subtitle` lines are hidden and the existing revision line receives the `Публичная оферта · ` prefix. The user visually confirmed: **«все получилось, супер!»**. Do not redo the rest of the document styling merely for reassurance.
-
-The read-only baseline immediately before this header-only repair was SHA-256:
-`e489c95b196127a0cd3079251243dde6992dd8793df7d7bedd381a9e2aff3651`
-
-The final post-repair SHA/back-up output was not pasted into chat; re-read production before any future write and do not invent it.
-
-## 4. Privacy policy and standalone consents
-
-Privacy policy canonical page: `/legal/privacy-policy/`.
-
-Accepted policy presentation/content:
-- black text on white;
-- centered title/subtitle;
-- responsive one-column desktop/mobile layout;
-- no public disclosure of device hashes, Trusted Device identifiers, fingerprinting, account-linking mechanics or Anti-Fraud detection implementation;
-- date of birth and gender are part of the agreed core participant-data set;
-- advertising remains separate.
-
-Standalone required PD document: **`Согласие на обработку персональных данных`**.
-
-Standalone voluntary marketing document: `/legal/marketing-consent/`.
-
-The superseded concept `Согласие на обработку дополнительных персональных данных` must not be used.
-
-## 5. Registration checkbox UX — PRODUCTION
-
-Active production template:
+Active signup template:
 `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/templates/eurasia/components/eurasia/signup/main/template.php`
 
 Active backend:
 `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/components/eurasia/signup/class.php`
 
-Production application patch installed successfully on 2026-09-11.
+Signup contract:
+1. required offer acceptance;
+2. required PD consent + Privacy Policy acknowledgement;
+3. optional marketing consent.
 
-Current checkbox contract:
-1. **Required offer acceptance** — links to `/legal/public-offer/`.
-2. **Required PD consent + Policy acknowledgement** — links separately to `/legal/personal-data-consent/` and `/legal/privacy-policy/`.
-3. **Optional marketing consent** — links to `/legal/marketing-consent/`.
+For new registrations the single marketing choice maps to the existing `UF_SMS` and `UF_SUBSCRIBE` delivery-state fields. Marketing remains independent of offer/PD acceptance.
 
-The former separate SMS/e-mail signup checkboxes (`dispatch1`, `dispatch2`) were removed from the active template/backend. One marketing choice now maps to both existing delivery-state fields `UF_SMS` and `UF_SUBSCRIBE` for new registrations.
-
-Installed production SHA values after the signup cutover:
-- active template: `0baba7a1d994616848c5e8d7ad39cf0929d251250bda9c2f64396e4240ff921f`
+Installed production SHA values from signup cutover:
+- template: `0baba7a1d994616848c5e8d7ad39cf0929d251250bda9c2f64396e4240ff921f`
 - backend: `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84`
 - rollback backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/signup-consents/20260911-131502`
 
-Deployment verification: **12 PASS / 0 FAIL**, rollback not required.
+## 3. Native Bitrix consent persistence — PRODUCTION
 
-## 6. Native Bitrix consent persistence — PRODUCTION IMPLEMENTED
+Consent events use `Bitrix\Main\UserConsent\Consent::addByContext(...)`; no custom consent ledger/table was created.
 
-Read-only inspection before implementation established that the installed Bitrix native consent subsystem exists with tables:
-- `b_consent_agreement`
-- `b_consent_field`
-- `b_consent_user_consent`
-- `b_consent_user_consent_item`
-
-Before this implementation all four relevant native consent tables contained **0 rows**; `b_sender_agreement` also contained **0 rows**. Therefore there was no historical native Bitrix consent-event ledger to migrate/backfill.
-
-The installed Bitrix API was inspected directly. Persistence uses `Bitrix\Main\UserConsent\Consent::addByContext(...)`; application code does not write directly to native consent tables.
-
-Three versioned custom (`TYPE=C`) active Bitrix agreements were created:
+Current active versioned agreements:
 - ID 1 / `EVRASIA_OFFER_20260911` → `/legal/public-offer/`
 - ID 2 / `EVRASIA_PD_20260911` → `/legal/personal-data-consent/`
 - ID 3 / `EVRASIA_MARKETING_20260911` → `/legal/marketing-consent/`
 
-The first agreement-creation attempt failed because required `TYPE` was omitted; the transaction rolled back and row count remained zero. Installed Bitrix metadata was then inspected (`C` = custom, `S` = standard), and the corrected transaction created exactly the three agreements above.
+Historical users were not bulk backfilled. Prior production inspection found no historical native Bitrix offer/PD consent-event ledger in the inspected mechanisms. Existing `UF_SMS` and `UF_SUBSCRIBE` values are mailing/subscription state and must not be treated as historical versioned offer/PD consent records.
 
-Registration backend now resolves those active versioned agreements and records:
-- offer consent for every successful new registration;
-- PD consent for every successful new registration;
-- marketing consent only when the optional marketing checkbox is selected.
+## 4. Existing-user personal-account consent gate — PRODUCTION / E2E ACCEPTED
 
-User creation + native consent creation is wrapped in the existing Bitrix DB transaction. Failure to persist required consent causes rollback rather than leaving a registration without the required consent records.
+A mandatory consent popup was implemented for authenticated existing users entering the personal account when the current offer and/or PD agreement event is missing.
 
-No custom consent ledger/table was created. Historical users were not modified or backfilled.
+Initial rollout remains hard-gated to the controlled production test user **Bitrix USER_ID 880339**. Do not infer that the gate has been enabled for all historical users yet.
 
-### Acceptance still required
+Current behavior:
+- checks current versioned offer agreement ID 1 and PD agreement ID 2;
+- popup requests only missing required agreements;
+- offer links to `/legal/public-offer/`;
+- PD text links to `/legal/personal-data-consent/` and `/legal/privacy-policy/`;
+- marketing is deliberately absent from this popup;
+- existing `UF_SMS` and `UF_SUBSCRIBE` preferences are not modified;
+- acceptance writes only native Bitrix consent events for the missing required agreements;
+- no duplicate consent event is required when an agreement is already present;
+- user may accept or leave/logout rather than continue through the account without the required current-version acceptance.
 
-The code/install verification passed, but a controlled end-to-end registration has not yet been recorded in this checkpoint. Before marking persistence **E2E ACCEPTED**, verify with test registrations that:
-- marketing OFF creates exactly offer + PD consent events and sets the expected delivery-state fields;
-- marketing ON creates offer + PD + marketing consent events and sets `UF_SMS`/`UF_SUBSCRIBE` accordingly.
+Controlled E2E on USER_ID 880339 succeeded. After user interaction production contained exactly:
+- consent ID 57 → agreement ID 1 / `EVRASIA_OFFER_20260911`;
+- consent ID 58 → agreement ID 2 / `EVRASIA_PD_20260911`;
+- both inserted 11.09.2026 14:16:11;
+- `ORIGINATOR_ID=evrasia_account_gate`;
+- `ORIGIN_ID=account_880339`;
+- agreement 1 count = 1;
+- agreement 2 count = 1;
+- agreement 3 count = 0.
 
-Do not manufacture consent records for historical users without evidence.
+This verifies the account-gate offer + PD persistence path in production. Marketing was not created by the gate.
 
-## 7. What existed before this implementation
+The user visually confirmed that the popup itself works correctly.
 
-Production inspection established:
-- native Bitrix consent agreement/event tables were empty;
-- `b_sender_agreement` was empty;
-- existing user fields `UF_SMS` and `UF_SUBSCRIBE` held historical boolean state and had large populations of null/0/1 values.
+## 5. Account-gate button style — PRODUCTION
 
-Accordingly, before the 2026-09-11 implementation we found **no auditable native Bitrix record of offer acceptance or PD consent** in the inspected consent subsystem. The existing SMS/e-mail fields represented mailing/subscription state, not a versioned legal consent-event ledger.
+The popup logout action originally had a local custom style. It was corrected to reuse the existing Evrasia personal-account button classes exactly:
 
-This statement is limited to the production mechanisms actually inspected; it does not claim that no historical evidence could exist in some unrelated external archive/system that was not inspected.
+`btn border_inverse exit_btn`
+
+The local `.evrasia-consent-gate__logout` CSS was removed. No custom font size, weight, border or dimensions remain for that action.
+
+Production `/account/index.php` SHA after this correction:
+`cb2a01f0462308c69953695e4db3306252ebf586b28f8581022dca76c0013efc`
+
+Rollback backup:
+`/home/site_evrasia/web/evrasia.spb.ru/backups/account-consent-button/20260911-143102`
+
+Deployment result: **13 PASS / 0 FAIL**, no rollback. Consent endpoint reference and test-user restriction remained unchanged.
+
+## 6. Public legal documents
+
+Public offer revision 11.09.2026 is production. The repaired offer header was visually accepted earlier on 2026-09-11.
+
+Privacy policy is **PRODUCTION / ACCEPTED**. Standalone PD consent and standalone voluntary marketing consent are production.
+
+Public legal documents must not disclose internal Anti-Fraud/device-linking mechanics.
+
+## 7. SamZaberu legacy PDF compatibility — NOT YET DEPLOYED IN THIS CHECKPOINT
+
+The application «Самзаберу» was identified as still referencing the legacy URL:
+`/upload/docs/protection_personal_data.pdf`.
+
+The user supplied the current 9-page public-offer PDF, revision 11.09.2026, for use at that legacy filename. At the time of this checkpoint, replacement of the production legacy PDF was discussed but **not confirmed as deployed**. Do not mark it complete without a production verification.
+
+Longer term, application code should point to the canonical public-offer URL rather than relying on the legacy filename; do not perform that application change without inspecting the current SamZaberu implementation.
 
 ## 8. Anti-Fraud constraints
 
-- consent choices must not become risk/grouping evidence merely because they exist;
+- consent choices are not fraud/risk/grouping evidence;
 - do not auto-block based on consent state;
 - Anti-Fraud remains advisory/operator-controlled;
 - public legal documents must not reveal internal detection mechanics;
@@ -141,16 +122,15 @@ This statement is limited to the production mechanisms actually inspected; it do
 
 ## 9. Continuation point
 
-Current website/legal work:
-- legal catalog and canonical URLs: **PRODUCTION**;
-- offer revision 11.09.2026: **PRODUCTION**;
-- offer header presentation repair: **VISUALLY ACCEPTED**;
+Confirmed production state:
+- legal catalog/canonical pages: **PRODUCTION**;
+- public offer revision 11.09.2026: **PRODUCTION**;
 - privacy policy: **PRODUCTION / ACCEPTED**;
-- standalone PD consent: **PRODUCTION**;
-- marketing consent: **PRODUCTION**;
-- three-checkbox active signup UI/backend: **PRODUCTION INSTALLED**;
-- native versioned Bitrix agreement definitions: **PRODUCTION**;
-- native per-registration consent persistence: **PRODUCTION INSTALLED; E2E TEST PENDING**;
-- historical consent backfill: **NOT DONE / DO NOT INFER ACCEPTANCE**.
+- signup three-checkbox implementation: **PRODUCTION**;
+- native Bitrix versioned agreements: **PRODUCTION**;
+- existing-user personal-account offer/PD popup: **PRODUCTION / CONTROLLED E2E ACCEPTED for USER_ID 880339**;
+- popup native button styling: **PRODUCTION**;
+- rollout of account gate to all historical users: **NOT DONE**;
+- SamZaberu legacy PDF replacement: **NOT CONFIRMED / DO NOT ASSUME DEPLOYED**.
 
-Next consent step: perform controlled test registration(s), inspect resulting native consent events and `UF_SMS`/`UF_SUBSCRIBE`, then mark E2E acceptance if factual results pass.
+Next chat should restore context from this document and `docs/PROJECT_CHECKPOINT.md`, then inspect factual production state before any further mutation.
