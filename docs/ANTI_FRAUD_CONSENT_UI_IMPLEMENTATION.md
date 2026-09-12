@@ -118,7 +118,9 @@ Implemented in branch:
 - gateway tests updated for the new contract;
 - collector persistence;
 - web API propagation;
-- compact React badges and CSS.
+- compact React badges and CSS;
+- CI migration expectation updated from 21 to 22;
+- CI schema-smoke now verifies all six consent columns in `anti_fraud_accounts`.
 
 Production deployment status:
 - NOT DEPLOYED;
@@ -138,7 +140,30 @@ Before production cutover:
 8. Verify UI visually shows green accepted badges and source/time.
 9. Confirm risk scores/case membership are unchanged by the consent fields.
 
-## 9. DO NOT REPEAT
+## 9. CI / migration rule
+
+Confirmed failure mode on PR #48, run 347:
+- code typecheck passed;
+- all 75 automated tests passed;
+- API and frontend builds passed;
+- smoke-test failed because the workflow still expected 21 migrations after migration `0021` had been added.
+
+Rule for all future migrations:
+- when a migration is added, update the CI expected migration count in the same change;
+- add a schema-level smoke assertion for the structures created or changed by that migration;
+- do not treat a successful image build alone as proof that the migration contract is correct;
+- a PR with a stale migration-count smoke check is not ready for merge even if application tests are green.
+
+For `0021`, CI must verify:
+- migration count = 22;
+- `anti_fraud_accounts.offer_accepted` exists;
+- `anti_fraud_accounts.offer_accepted_at` exists;
+- `anti_fraud_accounts.offer_source` exists;
+- `anti_fraud_accounts.pd_accepted` exists;
+- `anti_fraud_accounts.pd_accepted_at` exists;
+- `anti_fraud_accounts.pd_source` exists.
+
+## 10. DO NOT REPEAT
 
 - Do not derive consent from USER_ID age/range. Use ledger time/source.
 - Do not confuse all `anti_fraud_accounts` rows with web-visible Anti-Fraud accounts.
@@ -147,3 +172,4 @@ Before production cutover:
 - Do not default new consent snapshot booleans to FALSE; NULL has a distinct `not synchronized` meaning.
 - Do not collapse offer and PD permanently into one source/time field; they are separate legal events.
 - Do not let consent state affect scoring, grouping or blocking unless a future explicit business decision changes that rule.
+- Do not add a DB migration without updating both the CI migration-count expectation and a schema-smoke for the new database contract.
