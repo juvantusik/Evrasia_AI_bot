@@ -4,6 +4,8 @@ const DEFAULT_API_URL = "https://evrasia.rest/api/internal/anti-fraud/account-ma
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_USERS = 500;
 
+type ConsentSource = "signup" | "account_gate" | "other";
+
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export type BitrixAntiFraudAccountRecord = {
   bitrixUserId: number;
@@ -14,6 +16,12 @@ export type BitrixAntiFraudAccountRecord = {
   bitrixActive: boolean;
   bitrixBlocked: boolean;
   bitrixBlockReason: string | null;
+  offerAccepted: boolean;
+  offerAcceptedAt: Date | null;
+  offerSource: ConsentSource | null;
+  pdAccepted: boolean;
+  pdAcceptedAt: Date | null;
+  pdSource: ConsentSource | null;
 };
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -97,16 +105,29 @@ const parseEmail = (value: unknown): string | null => {
   return email;
 };
 
-const parseDate = (value: unknown): Date | null => {
+const parseNullableDate = (value: unknown, field: string): Date | null => {
   if (value === null) return null;
   if (typeof value !== "string" || value.length > 64) {
-    throw new Error("Bitrix Anti-Fraud account-map вернул некорректное поле registered_at");
+    throw new Error(`Bitrix Anti-Fraud account-map вернул некорректное поле ${field}`);
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new Error("Bitrix Anti-Fraud account-map вернул некорректное поле registered_at");
+    throw new Error(`Bitrix Anti-Fraud account-map вернул некорректное поле ${field}`);
   }
   return date;
+};
+
+const parseBoolean = (value: unknown, field: string): boolean => {
+  if (typeof value !== "boolean") {
+    throw new Error(`Bitrix Anti-Fraud account-map вернул некорректное поле ${field}`);
+  }
+  return value;
+};
+
+const parseConsentSource = (value: unknown, field: string): ConsentSource | null => {
+  if (value === null) return null;
+  if (value === "signup" || value === "account_gate" || value === "other") return value;
+  throw new Error(`Bitrix Anti-Fraud account-map вернул некорректное поле ${field}`);
 };
 
 const parseResponse = (
@@ -149,22 +170,21 @@ const parseResponse = (
     }
     seen.add(bitrixUserId);
 
-    if (typeof row.bitrix_active !== "boolean") {
-      throw new Error("Bitrix Anti-Fraud account-map вернул некорректное поле bitrix_active");
-    }
-    if (typeof row.bitrix_blocked !== "boolean") {
-      throw new Error("Bitrix Anti-Fraud account-map вернул некорректное поле bitrix_blocked");
-    }
-
     return {
       bitrixUserId,
       phoneNormalized: parsePhone(row.phone_normalized),
       emailNormalized: parseEmail(row.email_normalized),
       displayName: parseNullableText(row.display_name, "display_name", 255),
-      registeredAt: parseDate(row.registered_at),
-      bitrixActive: row.bitrix_active,
-      bitrixBlocked: row.bitrix_blocked,
+      registeredAt: parseNullableDate(row.registered_at, "registered_at"),
+      bitrixActive: parseBoolean(row.bitrix_active, "bitrix_active"),
+      bitrixBlocked: parseBoolean(row.bitrix_blocked, "bitrix_blocked"),
       bitrixBlockReason: parseNullableText(row.block_reason, "block_reason", 1000),
+      offerAccepted: parseBoolean(row.offer_accepted, "offer_accepted"),
+      offerAcceptedAt: parseNullableDate(row.offer_accepted_at, "offer_accepted_at"),
+      offerSource: parseConsentSource(row.offer_source, "offer_source"),
+      pdAccepted: parseBoolean(row.pd_accepted, "pd_accepted"),
+      pdAcceptedAt: parseNullableDate(row.pd_accepted_at, "pd_accepted_at"),
+      pdSource: parseConsentSource(row.pd_source, "pd_source"),
     };
   });
 
@@ -192,6 +212,7 @@ const parseResponse = (
 // Добавлено 03.09.2026 ИТ Директор Евразии
 // Gateway принимает только адресный список USER_ID, не умеет выгружать всю пользовательскую базу Bitrix.
 // Loyalty balance намеренно вынесен в отдельный защищённый /anti-fraud/loyalty endpoint.
+// Обновлено 12.09.2026: account-map также возвращает read-only snapshot актуальных Оферты/ПД.
 export class BitrixAntiFraudAccountGateway {
   private readonly fetchImpl: typeof fetch;
 
