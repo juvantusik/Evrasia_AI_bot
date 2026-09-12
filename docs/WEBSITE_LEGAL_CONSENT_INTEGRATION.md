@@ -2,7 +2,7 @@
 
 > Status: website legal catalog, offer, privacy policy, standalone consents, registration consent persistence and the existing-user account consent gate are **PRODUCTION**.
 >
-> Updated: **2026-09-12** after global rollout of the existing-user consent gate and production extension of Anti-Fraud account-map with consent fields.
+> Updated: **2026-09-12** after global rollout of the existing-user consent gate, production extension of Anti-Fraud account-map with consent fields, and removal of the stale test-user restriction from the consent save handler.
 
 ## 1. Scope and production website
 
@@ -63,7 +63,7 @@ Historical consent lookup must use this table, not USER `UF_*` fields. Existing 
 
 A mandatory consent popup is implemented for authenticated existing users entering the personal account when the current offer and/or PD agreement event is missing.
 
-Initial rollout was hard-gated to controlled USER_ID `880339`. On **2026-09-12** that single-user restriction was removed in production while preserving `$USER->IsAuthorized()`.
+Initial rollout was hard-gated to controlled USER_ID `880339`. On **2026-09-12** that single-user restriction was removed from `/account/index.php` while preserving `$USER->IsAuthorized()`.
 
 Current behavior:
 - applies to all authenticated users;
@@ -76,14 +76,58 @@ Current behavior:
 - acceptance writes only native Bitrix consent events for missing required agreements;
 - no duplicate consent event is required when an agreement is already present.
 
-Production rollout result:
-- `/account/index.php` final SHA256: `9bf6ec5eb1ecf4435131ffe488037f60ba13bcee2b1a795dd5478179493ff94b`;
+Production rollout result for `/account/index.php`:
+- final SHA256: `9bf6ec5eb1ecf4435131ffe488037f60ba13bcee2b1a795dd5478179493ff94b`;
 - backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/account-consent-rollout/20260912-052122/index.php`;
 - 14 PASS / 0 FAIL;
 - rollback not required;
 - marketing change: NO;
 - `UF_SMS` change: NO;
 - `UF_SUBSCRIBE` change: NO.
+
+### 4.1 Production incident: stale test restriction in save handler
+
+After the popup was globally enabled, users other than controlled USER_ID `880339` received HTTP 403 from the save handler and saw:
+
+`Функция пока недоступна для этого пользователя.`
+
+Root cause was a stale controlled-rollout guard in:
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/ajax/account_legal_consents.php`
+
+The stale production code was:
+
+```php
+if ($userId !== 880339) {
+    http_response_code(403);
+    evrasiaConsentResponse('error', 'Функция пока недоступна для этого пользователя.');
+}
+```
+
+This created an inconsistent rollout state: the UI gate was global, but the POST handler still accepted only USER_ID 880339.
+
+Hotfix on **2026-09-12** removed only those four test-guard lines. The rest of the handler logic was preserved unchanged, including:
+- POST-only enforcement;
+- `check_bitrix_sessid()`;
+- authenticated-user check;
+- active/current agreement validation for IDs 1 and 2;
+- request validation for missing offer/PD confirmations;
+- `Bitrix\Main\UserConsent\Consent::addByContext(...)`;
+- `ORIGINATOR_ID=evrasia_account_gate`;
+- transaction, duplicate avoidance and final persistence verification.
+
+Hotfix production facts:
+- baseline handler SHA256: `95b1dbf90312dfeb83aca1a0502cba9bf71a5ba0fdb5c2e86ec92b767e2e6602`;
+- final handler SHA256: `b0f982fbc8962ce785cc5435d0083efca1c1342b59c35c642a50460d09898436`;
+- ownership preserved: UID 1005 / GID 1005 / mode 664;
+- backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/account-consent-handler-hotfix/20260912-140738/account_legal_consents.php`;
+- exact diff: deletion of the four test-user restriction lines only;
+- PHP syntax valid after cutover;
+- 8 PASS / 0 FAIL;
+- rollback not required;
+- database write by the hotfix script: NO;
+- Bitrix write by the hotfix script: NO.
+
+**DO NOT REPEAT:** when changing a feature from controlled E2E to global rollout, audit both the presentation/gate code and every server-side save/action handler for user allowlists, feature flags or test-only guards. A global UI with a restricted POST handler is not a valid rollout.
 
 Controlled forensic reference USER_ID `880339`:
 - registered `2022-02-06 15:47:53`;
@@ -195,10 +239,13 @@ Confirmed production state:
 - signup consent implementation: **PRODUCTION**;
 - native Bitrix versioned agreements: **PRODUCTION**;
 - existing-user personal-account offer/PD popup: **PRODUCTION / GLOBAL ROLLOUT**;
+- account consent save-handler test whitelist: **REMOVED IN PRODUCTION**;
 - popup native button styling: **PRODUCTION**;
 - protected `account-map` consent export: **PRODUCTION**;
 - current `account-map` final SHA: `5705d7586c35ced55975a3d228ed2acc148fff7bc9fbc7c217b7337368141a77`;
-- legacy compatibility PDF replacement: **PRODUCTION**;
-- Anti-Fraud bot/UI still needs propagation of the six consent fields from gateway through persistence/API to React UI.
+- legacy compatibility PDF replacement: **PRODUCTION**.
+
+Required final incident acceptance step:
+- confirm with one real historical user other than 880339 that POST save succeeds, popup closes, and agreement 1/2 events are written with `ORIGINATOR_ID=evrasia_account_gate`.
 
 Next chat should restore context from this document, `docs/PROJECT_CHECKPOINT.md`, `docs/ANTI_FRAUD_CONSENT_DATA_MAP.md` and `docs/SERVER_SCRIPT_RULES.md`, then inspect factual production state before any further mutation.
