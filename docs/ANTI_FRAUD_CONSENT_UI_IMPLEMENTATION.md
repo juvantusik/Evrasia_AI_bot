@@ -4,7 +4,7 @@
 
 ## 1. Confirmed architecture
 
-The protected website endpoint is already production-verified:
+The protected website endpoint is production-verified:
 
 `Bitrix b_consent_user_consent -> POST /api/internal/anti-fraud/account-map`
 
@@ -110,39 +110,59 @@ Accepted badges are green. Missing consent is intentionally neutral rather than 
 Feature branch:
 `feature/v1.7-antifraud-consent-ui`
 
-Implemented in branch:
-- migration `0021`;
-- Drizzle schema fields;
-- Drizzle journal entry idx 21;
-- strict gateway parsing;
-- gateway tests updated for the new contract;
-- collector persistence;
-- web API propagation;
-- compact React badges and CSS;
-- CI migration expectation updated from 21 to 22;
-- CI schema-smoke now verifies all six consent columns in `anti_fraud_accounts`.
+PR #48 was merged into `main`.
 
-Production deployment status:
-- NOT DEPLOYED;
-- production bot DB is still at migration count 21 through `0020` until this branch is reviewed/merged/deployed;
-- website account-map production endpoint is already deployed and verified independently.
+Merge revision:
+`397a06adbeb9b8cde9ed4c088da7e3b820b0eba9`
+
+Production immutable image:
+`ghcr.io/juvantusik/evrasia_ai_bot@sha256:6230a8a198cefe39a5ef0e3f6934f74660ce7e4629d0486cd46f0859a4cc2830`
+
+Production deployment on `eur-bot-01` completed successfully on 2026-09-12.
+
+Confirmed production facts:
+- predeploy runtime image matched the previous immutable baseline `sha256:3defaa7388f2278dfa7767e1ea79d2c12c1f0121f73eb208c034b153ade2d280`;
+- predeploy DB migration count was 21;
+- PostgreSQL backup was created and verified readable;
+- deployment used existing GHCR authorization of console user `tech` while deployment itself ran as `root`;
+- new image OCI revision matched merge revision `397a06adbeb9b8cde9ed4c088da7e3b820b0eba9`;
+- new runtime image is the exact immutable digest above;
+- application health is `healthy`;
+- restart count after deploy was 0;
+- migration `0021` applied successfully and migration count is now 22;
+- all six consent snapshot columns exist in `anti_fraud_accounts`;
+- `/api/healthz` returned `{"status":"ok"}`;
+- `/api/anti-fraud/case-dynamics` returned HTTP 200;
+- scheduler is enabled and idle after deploy;
+- rollback was not needed.
+
+Production backup:
+- directory: `/opt/evrasia-ai-bot/backups/pr48-consent-ui-20260912-081533`
+- database dump: `/opt/evrasia-ai-bot/backups/pr48-consent-ui-20260912-081533/evrasia_ai_bot.dump`
+- DB dump size at creation: `2134177` bytes
+
+Immediately after container recreation, `CONSENT_POPULATED_ROWS=0`. This is an expected pre-refresh state because the new container had not yet completed the first account-map scheduler refresh. It is a warning requiring follow-up verification, not a deployment failure.
 
 ## 8. Deployment verification requirements
 
-Before production cutover:
-1. PR CI/build must pass.
-2. Confirm migration count baseline and backup production PostgreSQL.
-3. Deploy immutable image by digest using the established root/tech-GHCR procedure.
-4. Verify migration count increments from 21 to 22 and columns exist.
-5. Run/await one successful account-map refresh.
-6. Verify known users in `anti_fraud_accounts`, including at least one `signup` and USER_ID 880339 `account_gate` control.
-7. Verify `/api/anti-fraud/cases` or `/accounts` exposes the six fields.
-8. Verify UI visually shows green accepted badges and source/time.
-9. Confirm risk scores/case membership are unchanged by the consent fields.
+Completed:
+1. PR CI/build passed.
+2. Production PostgreSQL backup created and verified.
+3. Immutable image deployed by digest using the established root/tech-GHCR procedure.
+4. Migration count incremented from 21 to 22 and all six columns were verified.
+5. Application health/API/scheduler post-check passed.
+
+Still required for final feature acceptance:
+1. Run or await one successful account-map refresh after deployment.
+2. Verify consent snapshot population in `anti_fraud_accounts`.
+3. Verify known users, including at least one `signup` record and USER_ID 880339 `account_gate` control.
+4. Verify `/api/anti-fraud/cases` or `/accounts` exposes the six fields from the local PostgreSQL snapshot.
+5. Verify UI visually shows green accepted badges and source/time.
+6. Confirm risk scores/case membership are unchanged by the consent fields.
 
 ## 9. CI / migration rule
 
-Confirmed failure mode on PR #48, run 347:
+Confirmed failure mode on PR #48 before CI correction:
 - code typecheck passed;
 - all 75 automated tests passed;
 - API and frontend builds passed;
@@ -154,7 +174,7 @@ Rule for all future migrations:
 - do not treat a successful image build alone as proof that the migration contract is correct;
 - a PR with a stale migration-count smoke check is not ready for merge even if application tests are green.
 
-For `0021`, CI must verify:
+For `0021`, CI verifies:
 - migration count = 22;
 - `anti_fraud_accounts.offer_accepted` exists;
 - `anti_fraud_accounts.offer_accepted_at` exists;
@@ -173,3 +193,4 @@ For `0021`, CI must verify:
 - Do not collapse offer and PD permanently into one source/time field; they are separate legal events.
 - Do not let consent state affect scoring, grouping or blocking unless a future explicit business decision changes that rule.
 - Do not add a DB migration without updating both the CI migration-count expectation and a schema-smoke for the new database contract.
+- Do not treat `CONSENT_POPULATED_ROWS=0` immediately after application recreation as proof of broken consent sync when the scheduler has not yet completed its first post-deploy refresh. Verify scheduler timing/status first, then verify the snapshot after a successful refresh.
