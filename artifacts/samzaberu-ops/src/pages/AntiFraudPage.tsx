@@ -22,6 +22,7 @@ import './anti-fraud-ui-next.css';
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
 type CaseTrend = 'new' | 'strengthened' | 'unchanged' | 'weakened';
+type ConsentSource = 'signup' | 'account_gate' | 'other';
 type Reason = { code: string; score: number; details: string };
 
 type Account = {
@@ -37,6 +38,12 @@ type Account = {
   bitrixBlocked?: boolean;
   bitrixBlockReason?: string | null;
   blockedAt?: string | null;
+  offerAccepted?: boolean | null;
+  offerAcceptedAt?: string | null;
+  offerSource?: ConsentSource | null;
+  pdAccepted?: boolean | null;
+  pdAcceptedAt?: string | null;
+  pdSource?: ConsentSource | null;
   overallRisk: number;
   riskLevel: RiskLevel;
   deviceRisk: number;
@@ -199,10 +206,47 @@ const formatDate = (value: string | null | undefined) => {
 };
 const formatPoints = (value: number | null | undefined) => value == null ? '—' : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
 
+const consentSourceLabel = (value: ConsentSource | null | undefined): string =>
+  value === 'signup' ? 'Регистрация' : value === 'account_gate' ? 'ЛК' : value === 'other' ? 'Другой источник' : '';
+
+const consentBadgeState = (value: boolean | null | undefined): 'accepted' | 'missing' | 'unknown' =>
+  value === true ? 'accepted' : value === false ? 'missing' : 'unknown';
+
+const consentBadgeSymbol = (value: boolean | null | undefined): string =>
+  value === true ? '✓' : value === false ? '—' : '?';
+
+const consentTitle = (
+  label: string,
+  accepted: boolean | null | undefined,
+  acceptedAt: string | null | undefined,
+  source: ConsentSource | null | undefined,
+): string => {
+  if (accepted === null || accepted === undefined) return `${label}: ещё не синхронизировано`;
+  if (!accepted) return `${label}: актуального согласия нет`;
+  return `${label}: подтверждено · ${consentSourceLabel(source) || 'источник неизвестен'} · ${formatDate(acceptedAt)}`;
+};
+
+const ConsentSnapshot = ({ account }: { account: Account }) => {
+  const sameSource = account.offerSource && account.offerSource === account.pdSource ? account.offerSource : null;
+  const sameTime = account.offerAcceptedAt && account.offerAcceptedAt === account.pdAcceptedAt ? account.offerAcceptedAt : null;
+  const acceptedSomewhere = account.offerAccepted === true || account.pdAccepted === true;
+  const meta = sameSource || sameTime
+    ? [sameSource ? consentSourceLabel(sameSource) : '', sameTime ? formatDate(sameTime).replace(',', '') : ''].filter(Boolean).join(' · ')
+    : acceptedSomewhere && (account.offerSource || account.pdSource || account.offerAcceptedAt || account.pdAcceptedAt)
+      ? 'раздельные события'
+      : '';
+
+  return <span className="consent-strip" aria-label="Статус актуальных согласий">
+    <span className={`consent-badge ${consentBadgeState(account.offerAccepted)}`} title={consentTitle('Оферта', account.offerAccepted, account.offerAcceptedAt, account.offerSource)}>Оферта {consentBadgeSymbol(account.offerAccepted)}</span>
+    <span className={`consent-badge ${consentBadgeState(account.pdAccepted)}`} title={consentTitle('ПД', account.pdAccepted, account.pdAcceptedAt, account.pdSource)}>ПД {consentBadgeSymbol(account.pdAccepted)}</span>
+    {meta ? <span className="consent-meta" title={`${consentTitle('Оферта', account.offerAccepted, account.offerAcceptedAt, account.offerSource)}; ${consentTitle('ПД', account.pdAccepted, account.pdAcceptedAt, account.pdSource)}`}>{meta}</span> : null}
+  </span>;
+};
+
 const loyaltyText = (account: Account): string => {
   const count = account.loyaltyActiveCardCount;
   if (count == null) return 'Карты: не загружено · Бонусы: —';
-  if (count === 0) return account.loyaltyIssue === 'no_active_card' ? 'Активных карт: 0 · Бонусы: нет активной карты' : 'Активных карт: 0 · Бонусы: —';
+  if (count === 0) return account.loyaltyIssue === 'no_active_card' ? 'Активных карт: 0 · Бонусы: нет активной карта' : 'Активных карт: 0 · Бонусы: —';
   if (account.bonusBalance === null) return `Активных карт: ${count} · Бонусы: баланс недоступен`;
   if (count > 1) return `⚠ Активных карт: ${count} · Бонусы: ${formatPoints(account.bonusBalance)} суммарно`;
   return `Активных карт: 1 · Бонусы: ${formatPoints(account.bonusBalance)}`;
@@ -390,7 +434,7 @@ export default function AntiFraudPage() {
 
                   <div className="detail-column account-column"><h3>Аккаунты кейса</h3>
                     {visibleAccounts.map((account) => <div className={`account-card ${account.bitrixBlocked ? 'blocked' : ''}`} key={account.bitrixUserId}>
-                      <div className="account-top"><div><strong>{account.displayName || 'Без имени'}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
+                      <div className="account-top"><div><div className="account-name-line"><strong>{account.displayName || 'Без имени'}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><ConsentSnapshot account={account} /></div><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
                       <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>{loyaltyText(account)}</span></div>
                       {account.bitrixBlocked ? <div className="block-info"><strong>Дата блокировки: {account.blockedAt ? formatDate(account.blockedAt) : 'неизвестна'}</strong><span>{account.bitrixBlockReason || 'Основание блокировки не указано'}</span></div> : null}
                       <div className="risk-bars"><span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span></div>
@@ -417,7 +461,7 @@ export default function AntiFraudPage() {
 
         {tab === 'devices' ? <section className="af-panel"><div className="panel-title"><Smartphone /><div><h2>Общие устройства</h2><p>Только устройства с двумя и более активными незаблокированными аккаунтами.</p></div></div><div className="simple-table"><div className="simple-head"><span>Устройство</span><span>Аккаунты</span><span>Тип</span><span>Последняя активность</span></div>{devices.map((device) => <div className="simple-row" key={device.devicePrefix}><strong>{device.devicePrefix}…</strong><span>{device.userIds.join(', ')}</span><span>{device.clientTypes.join(', ') || '—'}</span><span>{formatDate(device.lastSeenAt)}</span></div>)}</div></section> : null}
 
-        {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском</h2><p>{showBlocked ? 'Показаны также заблокированные и неактивные аккаунты.' : 'Заблокированные и неактивные аккаунты скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong>{account.displayName || `ID ${account.bitrixUserId}`}<small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
+        {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском</h2><p>{showBlocked ? 'Показаны также заблокированные и неактивные аккаунты.' : 'Заблокированные и неактивные аккаунты скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong><span className="account-name-line"><span>{account.displayName || `ID ${account.bitrixUserId}`}</span><ConsentSnapshot account={account} /></span><small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
 
         {tab === 'recommendations' ? <section className="af-panel recommendation-panel"><div className="panel-title"><ShieldAlert /><div><h2>Рекомендации</h2><p>Risk остаётся advisory: блокировка выполняется только вручную после проверки кейса.</p></div></div><div className="recommendation-grid"><article><strong>{summary?.historyGateAccounts ?? 0}</strong><span>активных незаблокированных аккаунтов достигли history gate</span></article><article><strong>{summary?.historyEnrichedAccounts ?? 0}</strong><span>обогащены 60-дневной историей</span></article><article><strong>{similarPhone}</strong><span>групп с совпадающим телефоном</span></article><article><strong>{similarEmail}</strong><span>групп с совпадающим email</span></article></div><div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой откройте кейс и проверьте связующие признаки, контакты, бонусы и поведенческие причины. Заблокированные и неактивные аккаунты по умолчанию скрыты, но доступны через переключатель.</p></div></div></section> : null}
       </main>
