@@ -15,3 +15,56 @@
 .case-title-line > .trend-new + .case-trend {
   display: none;
 }
+
+/* Добавлено 12.09.2026: компактный операторский статус актуальных согласий.
+   Это только визуальный read-only snapshot; на risk/grouping/blocking не влияет. */
+.account-name-line,
+.accounts-table .account-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.consent-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.consent-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid #d5d9df;
+  background: #f5f6f8;
+  color: #6a7079;
+  white-space: nowrap;
+}
+
+.consent-badge.accepted {
+  border-color: #b9dfc7;
+  background: #edf8f1;
+  color: #1d7a43;
+}
+
+.consent-badge.unknown {
+  border-style: dashed;
+}
+
+.consent-meta {
+  color: #747b85;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .consent-strip {
+    flex-basis: 100%;
+  }
+}
