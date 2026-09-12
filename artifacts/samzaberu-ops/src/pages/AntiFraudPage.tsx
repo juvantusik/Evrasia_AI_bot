@@ -246,7 +246,7 @@ const ConsentSnapshot = ({ account }: { account: Account }) => {
 const loyaltyText = (account: Account): string => {
   const count = account.loyaltyActiveCardCount;
   if (count == null) return 'Карты: не загружено · Бонусы: —';
-  if (count === 0) return account.loyaltyIssue === 'no_active_card' ? 'Активных карт: 0 · Бонусы: нет активной карта' : 'Активных карт: 0 · Бонусы: —';
+  if (count === 0) return account.loyaltyIssue === 'no_active_card' ? 'Активных карт: 0 · Бонусы: нет активной карты' : 'Активных карт: 0 · Бонусы: —';
   if (account.bonusBalance === null) return `Активных карт: ${count} · Бонусы: баланс недоступен`;
   if (count > 1) return `⚠ Активных карт: ${count} · Бонусы: ${formatPoints(account.bonusBalance)} суммарно`;
   return `Активных карт: 1 · Бонусы: ${formatPoints(account.bonusBalance)}`;
