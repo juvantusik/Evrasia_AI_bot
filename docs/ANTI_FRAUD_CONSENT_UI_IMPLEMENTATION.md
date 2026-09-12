@@ -141,26 +141,57 @@ Production backup:
 - database dump: `/opt/evrasia-ai-bot/backups/pr48-consent-ui-20260912-081533/evrasia_ai_bot.dump`
 - DB dump size at creation: `2134177` bytes
 
-Immediately after container recreation, `CONSENT_POPULATED_ROWS=0`. This is an expected pre-refresh state because the new container had not yet completed the first account-map scheduler refresh. It is a warning requiring follow-up verification, not a deployment failure.
+Immediately after container recreation, `CONSENT_POPULATED_ROWS=0`. This was the expected pre-refresh state before the first account-map refresh.
 
-## 8. Deployment verification requirements
+## 8. Production refresh verification / acceptance
 
-Completed:
-1. PR CI/build passed.
-2. Production PostgreSQL backup created and verified.
-3. Immutable image deployed by digest using the established root/tech-GHCR procedure.
-4. Migration count incremented from 21 to 22 and all six columns were verified.
-5. Application health/API/scheduler post-check passed.
+A manual production account refresh was executed through the built CLI:
 
-Still required for final feature acceptance:
-1. Run or await one successful account-map refresh after deployment.
-2. Verify consent snapshot population in `anti_fraud_accounts`.
-3. Verify known users, including at least one `signup` record and USER_ID 880339 `account_gate` control.
-4. Verify `/api/anti-fraud/cases` or `/accounts` exposes the six fields from the local PostgreSQL snapshot.
-5. Verify UI visually shows green accepted badges and source/time.
-6. Confirm risk scores/case membership are unchanged by the consent fields.
+`/app/dist/anti-fraud-bitrix-account-cli.mjs`
 
-## 9. CI / migration rule
+Refresh result:
+- `runId=791dc45f-56f2-47aa-a643-7892bf78087c`
+- `requestedAccounts=8493`
+- `resolvedAccounts=8490`
+- `unresolvedAccounts=3`
+- `updatedAccounts=8490`
+- CLI exit code 0 / `status=ok`
+
+Consent snapshot population changed:
+- before refresh: `0`
+- after refresh: `8490`
+
+Known production controls verified from local PostgreSQL:
+- USER_ID `880339`: Offer=TRUE, PD=TRUE, source=`account_gate`, both at `2026-09-11 14:34:31` Moscow time;
+- USER_ID `2591066`: Offer=TRUE, PD=TRUE, source=`signup`, both at `2026-09-11 15:50:45`;
+- USER_ID `2591074`: Offer=TRUE, PD=TRUE, source=`signup`, both at `2026-09-11 15:58:24`;
+- USER_ID `2591261`: Offer=TRUE, PD=TRUE, source=`signup`, both at `2026-09-11 18:49:03`;
+- USER_ID `2591291`: Offer=TRUE, PD=TRUE, source=`signup`, both at `2026-09-11 19:22:23`;
+- USER_ID `2591297`: Offer=TRUE, PD=TRUE, source=`signup`, both at `2026-09-11 19:26:57`.
+
+Additional production checks:
+- `/api/anti-fraud/accounts` returned HTTP 200 and exposes consent fields;
+- application health remained OK after refresh;
+- scheduler remained enabled;
+- no warnings or failures in the refresh verification (`PASS_COUNT=10`, `WARN_COUNT=0`, `FAIL_COUNT=0`).
+
+Status:
+- backend consent propagation is `PRODUCTION ACCEPTED`;
+- data path `Bitrix -> account-map -> bot collector -> PostgreSQL -> Anti-Fraud API` is fully verified;
+- remaining acceptance item is visual UI verification in the browser only.
+
+## 9. Final visual verification requirement
+
+Open the production Anti-Fraud web interface and verify visually:
+1. accepted users display green `Оферта ✓` and `ПД ✓` badges;
+2. USER_ID `880339` displays source label `ЛК` with the expected date/time;
+3. at least one known signup control displays `Регистрация` with the expected date/time;
+4. layout remains compact next to the account name on the relevant account views;
+5. no visual regression in account/case layout.
+
+Risk scoring/case membership must remain unaffected by the consent fields.
+
+## 10. CI / migration rule
 
 Confirmed failure mode on PR #48 before CI correction:
 - code typecheck passed;
@@ -183,7 +214,7 @@ For `0021`, CI verifies:
 - `anti_fraud_accounts.pd_accepted_at` exists;
 - `anti_fraud_accounts.pd_source` exists.
 
-## 10. DO NOT REPEAT
+## 11. DO NOT REPEAT
 
 - Do not derive consent from USER_ID age/range. Use ledger time/source.
 - Do not confuse all `anti_fraud_accounts` rows with web-visible Anti-Fraud accounts.
