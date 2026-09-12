@@ -24,6 +24,8 @@ const router: IRouter = Router();
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Не удалось загрузить данные Anti-Fraud.";
 
+type ConsentSource = "signup" | "account_gate" | "other";
+
 type ContactTarget = {
   bitrixUserId: number;
   phoneMasked: string | null;
@@ -36,6 +38,12 @@ type ContactTarget = {
   loyaltyActiveCardCount?: number | null;
   loyaltyIssue?: string | null;
   loyaltySyncedAt?: string | null;
+  offerAccepted?: boolean | null;
+  offerAcceptedAt?: string | null;
+  offerSource?: ConsentSource | null;
+  pdAccepted?: boolean | null;
+  pdAcceptedAt?: string | null;
+  pdSource?: ConsentSource | null;
 };
 
 type ContactValue = {
@@ -49,6 +57,12 @@ type ContactValue = {
   loyaltyActiveCardCount: number | null;
   loyaltyIssue: string | null;
   loyaltySyncedAt: string | null;
+  offerAccepted: boolean | null;
+  offerAcceptedAt: string | null;
+  offerSource: ConsentSource | null;
+  pdAccepted: boolean | null;
+  pdAcceptedAt: string | null;
+  pdSource: ConsentSource | null;
 };
 
 const displayPhone = (value: unknown): string | null => {
@@ -67,6 +81,9 @@ const iso = (value: unknown): string | null => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+const consentSource = (value: unknown): ConsentSource | null =>
+  value === "signup" || value === "account_gate" || value === "other" ? value : null;
+
 const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactValue>> => {
   const ids = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
   if (!ids.length) return new Map();
@@ -84,6 +101,12 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     loyalty_active_card_count: number | null;
     loyalty_issue: string | null;
     loyalty_synced_at: Date | null;
+    offer_accepted: boolean | null;
+    offer_accepted_at: Date | null;
+    offer_source: string | null;
+    pd_accepted: boolean | null;
+    pd_accepted_at: Date | null;
+    pd_source: string | null;
   }>(`
     SELECT
       a.bitrix_user_id,
@@ -97,7 +120,13 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       a.bonus_balance,
       a.loyalty_active_card_count,
       a.loyalty_issue,
-      a.loyalty_synced_at
+      a.loyalty_synced_at,
+      a.offer_accepted,
+      a.offer_accepted_at,
+      a.offer_source,
+      a.pd_accepted,
+      a.pd_accepted_at,
+      a.pd_source
     FROM anti_fraud_accounts a
     LEFT JOIN LATERAL (
       SELECT
@@ -131,6 +160,12 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
           row.loyalty_active_card_count === null ? null : Number(row.loyalty_active_card_count),
         loyaltyIssue: row.loyalty_issue ?? null,
         loyaltySyncedAt: iso(row.loyalty_synced_at),
+        offerAccepted: row.offer_accepted === null ? null : row.offer_accepted === true,
+        offerAcceptedAt: iso(row.offer_accepted_at),
+        offerSource: consentSource(row.offer_source),
+        pdAccepted: row.pd_accepted === null ? null : row.pd_accepted === true,
+        pdAcceptedAt: iso(row.pd_accepted_at),
+        pdSource: consentSource(row.pd_source),
       },
     ]),
   );
@@ -139,6 +174,7 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
 // В Anti-Fraud оператор должен видеть полный телефон/email: они нужны для ручной
 // проверки аккаунта в Bitrix и последующей блокировки. Названия contact-полей оставлены
 // прежними для обратной совместимости текущего web-клиента.
+// Обновлено 12.09.2026: здесь же отдаётся read-only snapshot актуальных Оферты/ПД.
 const exposeFullContacts = <T extends ContactTarget>(
   records: T[],
   contacts: Map<number, ContactValue>,
@@ -158,6 +194,12 @@ const exposeFullContacts = <T extends ContactTarget>(
       loyaltyActiveCardCount: contact.loyaltyActiveCardCount,
       loyaltyIssue: contact.loyaltyIssue,
       loyaltySyncedAt: contact.loyaltySyncedAt,
+      offerAccepted: contact.offerAccepted,
+      offerAcceptedAt: contact.offerAcceptedAt,
+      offerSource: contact.offerSource,
+      pdAccepted: contact.pdAccepted,
+      pdAcceptedAt: contact.pdAcceptedAt,
+      pdSource: contact.pdSource,
     };
   });
 

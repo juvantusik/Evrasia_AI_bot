@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BitrixAntiFraudAccountGateway } from "./bitrix-antifraud-account-gateway";
 
+const consentFields = {
+  offer_accepted: true,
+  offer_accepted_at: "2026-09-11T19:22:23+03:00",
+  offer_source: "signup",
+  pd_accepted: true,
+  pd_accepted_at: "2026-09-11T19:22:23+03:00",
+  pd_source: "signup",
+};
+
 // Добавлено 03.09.2026 ИТ Директор Евразии
 test("Bitrix Anti-Fraud account gateway sends token and parses only requested users", async () => {
   let tokenHeader = "";
@@ -25,6 +34,7 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
               bitrix_active: true,
               bitrix_blocked: true,
               block_reason: "Нарушение правил программы лояльности",
+              ...consentFields,
               // Старое поле может присутствовать в legacy response, но account-map его намеренно игнорирует.
               bonus_balance: 45678,
             },
@@ -50,12 +60,18 @@ test("Bitrix Anti-Fraud account gateway sends token and parses only requested us
   assert.equal(result.records[0]?.bitrixActive, true);
   assert.equal(result.records[0]?.bitrixBlocked, true);
   assert.equal(result.records[0]?.bitrixBlockReason, "Нарушение правил программы лояльности");
+  assert.equal(result.records[0]?.offerAccepted, true);
+  assert.equal(result.records[0]?.offerSource, "signup");
+  assert.equal(result.records[0]?.offerAcceptedAt?.toISOString(), "2026-09-11T16:22:23.000Z");
+  assert.equal(result.records[0]?.pdAccepted, true);
+  assert.equal(result.records[0]?.pdSource, "signup");
+  assert.equal(result.records[0]?.pdAcceptedAt?.toISOString(), "2026-09-11T16:22:23.000Z");
   assert.deepEqual(result.unresolved, [415307]);
   assert.equal(Object.prototype.hasOwnProperty.call(result.records[0] ?? {}, "bonusBalance"), false);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
-test("Bitrix Anti-Fraud account gateway accepts nullable PII and block reason fields", async () => {
+test("Bitrix Anti-Fraud account gateway accepts nullable PII and explicit missing consent", async () => {
   const gateway = new BitrixAntiFraudAccountGateway({
     token: "x".repeat(64),
     fetchImpl: async () =>
@@ -72,6 +88,12 @@ test("Bitrix Anti-Fraud account gateway accepts nullable PII and block reason fi
               bitrix_active: false,
               bitrix_blocked: false,
               block_reason: null,
+              offer_accepted: false,
+              offer_accepted_at: null,
+              offer_source: null,
+              pd_accepted: false,
+              pd_accepted_at: null,
+              pd_source: null,
             },
           ],
           unresolved: [],
@@ -88,6 +110,12 @@ test("Bitrix Anti-Fraud account gateway accepts nullable PII and block reason fi
   assert.equal(result.records[0]?.bitrixActive, false);
   assert.equal(result.records[0]?.bitrixBlocked, false);
   assert.equal(result.records[0]?.bitrixBlockReason, null);
+  assert.equal(result.records[0]?.offerAccepted, false);
+  assert.equal(result.records[0]?.offerAcceptedAt, null);
+  assert.equal(result.records[0]?.offerSource, null);
+  assert.equal(result.records[0]?.pdAccepted, false);
+  assert.equal(result.records[0]?.pdAcceptedAt, null);
+  assert.equal(result.records[0]?.pdSource, null);
 });
 
 // Добавлено 07.09.2026 ИТ Директор Евразии
@@ -108,6 +136,7 @@ test("Bitrix Anti-Fraud account gateway rejects malformed blocked status", async
               bitrix_active: true,
               bitrix_blocked: "Y",
               block_reason: null,
+              ...consentFields,
             },
           ],
           unresolved: [],
@@ -119,6 +148,39 @@ test("Bitrix Anti-Fraud account gateway rejects malformed blocked status", async
   });
 
   await assert.rejects(gateway.resolveAccounts([120445]), /bitrix_blocked/);
+});
+
+// Добавлено 12.09.2026 ИТ Директор Евразии
+test("Bitrix Anti-Fraud account gateway rejects unknown consent source", async () => {
+  const gateway = new BitrixAntiFraudAccountGateway({
+    token: "x".repeat(64),
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          records: [
+            {
+              bitrix_user_id: 120445,
+              phone_normalized: null,
+              email_normalized: null,
+              display_name: null,
+              registered_at: null,
+              bitrix_active: true,
+              bitrix_blocked: false,
+              block_reason: null,
+              ...consentFields,
+              offer_source: "unexpected",
+            },
+          ],
+          unresolved: [],
+          requested: 1,
+          resolved: 1,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  await assert.rejects(gateway.resolveAccounts([120445]), /offer_source/);
 });
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -140,6 +202,7 @@ test("Bitrix Anti-Fraud account gateway rejects duplicate classification without
               bitrix_active: true,
               bitrix_blocked: false,
               block_reason: null,
+              ...consentFields,
             },
           ],
           unresolved: [120445],

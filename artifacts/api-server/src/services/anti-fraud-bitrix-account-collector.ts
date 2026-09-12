@@ -48,6 +48,7 @@ const chunk = <T>(values: T[], size: number): T[][] => {
 // текущий TotalSum приходит только через защищённый loyalty endpoint.
 // Обновлено 07.09.2026: ACTIVE/BLOCKED/основание каждый refresh перечитываются из Bitrix;
 // Bitrix является master/source of truth для фактического статуса пользователя.
+// Обновлено 12.09.2026: актуальные Оферта/ПД синхронизируются как операторский read-only snapshot.
 export const syncBitrixAccountsOnce = async (
   options: CollectorOptions = {},
 ): Promise<AntiFraudBitrixAccountCollectorResult> => {
@@ -143,9 +144,15 @@ export const syncBitrixAccountsOnce = async (
            bitrix_active,
            bitrix_blocked,
            bitrix_block_reason,
+           offer_accepted,
+           offer_accepted_at,
+           offer_source,
+           pd_accepted,
+           pd_accepted_at,
+           pd_source,
            last_synced_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
          ON CONFLICT (bitrix_user_id) DO UPDATE SET
            phone_normalized = EXCLUDED.phone_normalized,
            email_normalized = EXCLUDED.email_normalized,
@@ -154,6 +161,12 @@ export const syncBitrixAccountsOnce = async (
            bitrix_active = EXCLUDED.bitrix_active,
            bitrix_blocked = EXCLUDED.bitrix_blocked,
            bitrix_block_reason = EXCLUDED.bitrix_block_reason,
+           offer_accepted = EXCLUDED.offer_accepted,
+           offer_accepted_at = EXCLUDED.offer_accepted_at,
+           offer_source = EXCLUDED.offer_source,
+           pd_accepted = EXCLUDED.pd_accepted,
+           pd_accepted_at = EXCLUDED.pd_accepted_at,
+           pd_source = EXCLUDED.pd_source,
            last_synced_at = now()
          WHERE
            anti_fraud_accounts.phone_normalized IS DISTINCT FROM EXCLUDED.phone_normalized OR
@@ -162,7 +175,13 @@ export const syncBitrixAccountsOnce = async (
            anti_fraud_accounts.registered_at IS DISTINCT FROM EXCLUDED.registered_at OR
            anti_fraud_accounts.bitrix_active IS DISTINCT FROM EXCLUDED.bitrix_active OR
            anti_fraud_accounts.bitrix_blocked IS DISTINCT FROM EXCLUDED.bitrix_blocked OR
-           anti_fraud_accounts.bitrix_block_reason IS DISTINCT FROM EXCLUDED.bitrix_block_reason
+           anti_fraud_accounts.bitrix_block_reason IS DISTINCT FROM EXCLUDED.bitrix_block_reason OR
+           anti_fraud_accounts.offer_accepted IS DISTINCT FROM EXCLUDED.offer_accepted OR
+           anti_fraud_accounts.offer_accepted_at IS DISTINCT FROM EXCLUDED.offer_accepted_at OR
+           anti_fraud_accounts.offer_source IS DISTINCT FROM EXCLUDED.offer_source OR
+           anti_fraud_accounts.pd_accepted IS DISTINCT FROM EXCLUDED.pd_accepted OR
+           anti_fraud_accounts.pd_accepted_at IS DISTINCT FROM EXCLUDED.pd_accepted_at OR
+           anti_fraud_accounts.pd_source IS DISTINCT FROM EXCLUDED.pd_source
          RETURNING bitrix_user_id`,
         [
           record.bitrixUserId,
@@ -173,6 +192,12 @@ export const syncBitrixAccountsOnce = async (
           record.bitrixActive,
           record.bitrixBlocked,
           record.bitrixBlockReason,
+          record.offerAccepted,
+          record.offerAcceptedAt,
+          record.offerSource,
+          record.pdAccepted,
+          record.pdAcceptedAt,
+          record.pdSource,
         ],
       );
 
