@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-11** after production deployment of PR #47 Anti-Fraud `Новый` 24h semantics and consent-ledger structure inspection.
+> Updated: **2026-09-12** after production forensic verification of consent origins for web-visible Anti-Fraud users.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -53,10 +53,18 @@ Deployment/auth invariant:
 - public legal documents must not expose internal Anti-Fraud/device-linking mechanics.
 
 Current Anti-Fraud DB relevant objects:
-- `anti_fraud_accounts` — account identity/state cache; does **not** store current legal-consent events;
+- `anti_fraud_accounts` — account identity/state cache; does **not** equal current web-visible Anti-Fraud rows and must not be used as a proxy for UI population;
 - `anti_fraud_case_state` — case dynamics snapshots;
-- `anti_fraud_web_account_state` — first appearance in web Anti-Fraud for 24h `Новый` semantics;
+- `anti_fraud_web_account_state` — first appearance in web Anti-Fraud for 24h `Новый` semantics and the correct source for web-visible USER_ID continuity checks;
 - `anti_fraud_sync_runs` / `anti_fraud_sync_state` — authoritative protected-cycle/sync state.
+
+Read-only production check on 2026-09-12:
+- `anti_fraud_accounts`: 8318 cached account rows;
+- `anti_fraud_web_account_state`: 139 web-visible account rows at inspection time.
+
+Important diagnostic rule:
+- never compare consent coverage against all `anti_fraud_accounts` when the question is about accounts visible in the Anti-Fraud web UI;
+- first obtain the web-visible USER_ID set from `anti_fraud_web_account_state`, then intersect with Bitrix consent events.
 
 ## 3. Website legal production state
 
@@ -100,13 +108,19 @@ Installed SHA values:
 - backend `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84`
 - backup `/home/site_evrasia/web/evrasia.spb.ru/backups/signup-consents/20260911-131502`.
 
+Forensic production verification on 2026-09-12 confirmed that signup-created consent events use:
+- `ORIGINATOR_ID=evrasia_signup`
+- `ORIGIN_ID=<USER_ID>`
+- agreement IDs 1 and 2 always for successful new signup;
+- agreement ID 3 only when optional marketing was accepted.
+
 ## 5. Native Bitrix consent subsystem — exact storage map
 
-Bitrix production DB inspected read-only on 2026-09-11:
+Bitrix production DB inspected read-only:
 - database: `eurasia_new`
 - consent subsystem uses native Bitrix tables, not custom `UF_*` fields.
 
-Current active agreements:
+Current active agreements were created at `2026-09-11 13:09:00`:
 - ID 1 `EVRASIA_OFFER_20260911` — Договор об участии в программе лояльности «Бонусный Клуб Евразия» — редакция 11.09.2026;
 - ID 2 `EVRASIA_PD_20260911` — Согласие на обработку персональных данных — редакция 11.09.2026;
 - ID 3 `EVRASIA_MARKETING_20260911` — Согласие на получение рекламных и информационных сообщений — редакция 11.09.2026.
@@ -115,7 +129,7 @@ Consent definitions table:
 - `b_consent_agreement`
 - important columns: `ID`, `CODE`, `DATE_INSERT`, `ACTIVE`, `NAME`, `TYPE`, `LANGUAGE_ID`, `DATA_PROVIDER`, `AGREEMENT_TEXT`, `LABEL_TEXT`, `SECURITY_CODE`, `USE_URL`, `URL`, `IS_AGREEMENT_TEXT_HTML`.
 
-Consent events table (this is the key table for answering “who accepted what and when”):
+Consent events table (key table for “who accepted what, when, and by which mechanism”):
 - `b_consent_user_consent`
 - columns:
   - `ID`
@@ -125,26 +139,40 @@ Consent events table (this is the key table for answering “who accepted what a
   - `IP`
   - `URL`
   - `ORIGIN_ID`
-  - `ORIGINATOR_ID`
-- production row count at inspection: 337.
+  - `ORIGINATOR_ID`.
 
 Other consent tables:
-- `b_consent_field` — columns `ID`, `AGREEMENT_ID`, `CODE`, `VALUE`; currently 0 rows;
-- `b_consent_user_consent_item` — columns `ID`, `USER_CONSENT_ID`, `VALUE`; currently 0 rows.
+- `b_consent_field` — columns `ID`, `AGREEMENT_ID`, `CODE`, `VALUE`; 0 rows at inspection;
+- `b_consent_user_consent_item` — columns `ID`, `USER_CONSENT_ID`, `VALUE`; 0 rows at inspection.
 
 Important search rule:
 - do **not** look for current legal acceptance in USER `UF_*` fields; read `b_consent_user_consent` by `AGREEMENT_ID` and `USER_ID`;
+- use `DATE_INSERT`, `ORIGINATOR_ID` and `ORIGIN_ID` before inferring how a consent was created;
 - consent lookup is read-only unless explicitly approved otherwise;
 - do not expose IP addresses, phones or other unnecessary personal data in diagnostic output;
 - for current mandatory acceptance use agreement IDs 1 and 2; agreement 3 is optional marketing consent.
 
 Consent persistence uses `Bitrix\Main\UserConsent\Consent::addByContext(...)`; no custom ledger was created.
 
+### Verified consent origins for web-visible Anti-Fraud users
+
+At the 2026-09-12 read-only check, 139 USER_ID were present in `anti_fraud_web_account_state`.
+
+Five of those web-visible USER_ID also had both current mandatory agreements 1+2. Forensic inspection proved all five were **new registrations after the consent rollout**, not existing-user popup acceptances:
+
+- USER_ID `2591066`: registered `2026-09-11 15:50:44`; agreements 1+2 written `15:50:45`; `ORIGINATOR_ID=evrasia_signup`;
+- USER_ID `2591074`: registered `2026-09-11 15:58:24`; agreements 1+2 written `15:58:24`; `ORIGINATOR_ID=evrasia_signup`;
+- USER_ID `2591261`: registered `2026-09-11 18:49:03`; agreements 1+2 written `18:49:03`; `ORIGINATOR_ID=evrasia_signup`;
+- USER_ID `2591291`: registered `2026-09-11 19:22:23`; agreements 1+2+3 written `19:22:23`; `ORIGINATOR_ID=evrasia_signup`;
+- USER_ID `2591297`: registered `2026-09-11 19:26:57`; agreements 1+2+3 written `19:26:57`; `ORIGINATOR_ID=evrasia_signup`.
+
+Therefore these five are expected and do **not** indicate that the existing-user account gate was enabled globally.
+
 ## 6. Existing-user personal-account consent popup — PRODUCTION / CONTROLLED E2E ACCEPTED
 
 A mandatory popup is implemented for authenticated existing users who are missing the current offer and/or PD agreement acceptance.
 
-**Current rollout scope is intentionally limited to Bitrix USER_ID 880339. It is not yet enabled for all historical users.**
+**Current rollout scope remains intentionally limited to Bitrix USER_ID 880339. It is not enabled for all historical users.**
 
 Popup behavior:
 - checks current offer agreement ID 1 and PD agreement ID 2;
@@ -155,17 +183,17 @@ Popup behavior:
 - writes native Bitrix consent events only for required offer/PD acceptance;
 - version-aware agreement IDs/codes provide the basis for future re-consent when a new legal version is created.
 
-Controlled production E2E on USER_ID 880339 succeeded after the user accepted the popup:
-- consent ID 57 → agreement 1 / `EVRASIA_OFFER_20260911`;
-- consent ID 58 → agreement 2 / `EVRASIA_PD_20260911`;
-- timestamp 11.09.2026 14:16:11;
+Latest forensic production state for controlled USER_ID `880339`:
+- registered `2022-02-06 15:47:53`;
+- consent ID 79 → agreement 1 / `EVRASIA_OFFER_20260911`;
+- consent ID 80 → agreement 2 / `EVRASIA_PD_20260911`;
+- timestamp `2026-09-11 14:34:31`;
 - `ORIGINATOR_ID=evrasia_account_gate`;
-- `ORIGIN_ID=account_880339`;
-- agreement 1 count = 1;
-- agreement 2 count = 1;
-- agreement 3 count = 0.
+- `ORIGIN_ID=account_880339`.
 
-The user confirmed the popup itself works correctly. This account-gate path is therefore **E2E ACCEPTED for the controlled user**.
+These are the currently verified physical rows in `b_consent_user_consent`; they supersede earlier checkpoint values 57/58 at 14:16:11.
+
+The user confirmed the popup itself works correctly. This account-gate path is therefore **E2E ACCEPTED for the controlled user only**.
 
 ### Logout button styling
 
@@ -203,22 +231,25 @@ Confirmed:
 - Anti-Fraud PR #47 `Новый` 24h semantics: **PRODUCTION / ACCEPTED**;
 - bot production image: `sha256:3defaa7388f2278dfa7767e1ea79d2c12c1f0121f73eb208c034b153ade2d280`;
 - bot DB migrations: **21**;
+- web-visible Anti-Fraud set must be read from `anti_fraud_web_account_state`, not inferred from all `anti_fraud_accounts`;
 - website legal catalog: **PRODUCTION**;
 - offer 11.09.2026: **PRODUCTION**;
 - privacy policy: **PRODUCTION / ACCEPTED**;
 - signup consent implementation: **PRODUCTION**;
 - native Bitrix agreements: **PRODUCTION**;
 - native consent event location: `eurasia_new.b_consent_user_consent`;
-- existing-user account popup: **PRODUCTION / E2E ACCEPTED for USER_ID 880339**;
+- existing-user account popup: **PRODUCTION / E2E ACCEPTED for USER_ID 880339 only**;
 - rollout to all historical users: **NOT DONE**;
+- five web-visible Anti-Fraud users with agreements 1+2 were verified as post-rollout `evrasia_signup` registrations, not account-gate acceptances;
 - legacy compatibility PDF replacement: **PRODUCTION**;
 - `/club/` bonus-program link points to current compatibility PDF.
 
 For future consent inspection:
-1. Anti-Fraud USER_ID source is on `eur-bot-01` / PostgreSQL `anti_fraud_accounts`;
+1. obtain web-visible USER_ID from `eur-bot-01` PostgreSQL table `anti_fraud_web_account_state`;
 2. legal consent events are on website host `evrasia` / MySQL DB `eurasia_new` / table `b_consent_user_consent`;
 3. required current agreements are IDs 1 and 2;
 4. join logically by Bitrix `USER_ID` / `bitrix_user_id`;
-5. keep diagnostics read-only and do not output unnecessary personal data.
+5. inspect `DATE_INSERT`, `ORIGINATOR_ID`, `ORIGIN_ID` before classifying the consent source;
+6. keep diagnostics read-only and do not output unnecessary personal data.
 
 Next chat: read this file, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` and `docs/SERVER_SCRIPT_RULES.md`, then inspect factual production state before any mutation.
