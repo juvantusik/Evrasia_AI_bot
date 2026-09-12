@@ -1,6 +1,6 @@
 # Evrasia AI Bot — Anti-Fraud / Consent Data Map
 
-> Updated 2026-09-12 from live production inspection.
+> Updated 2026-09-12 from live production inspection and successful account-map consent extension.
 
 ## 1. Systems and hosts
 
@@ -158,44 +158,74 @@ Route registration:
 Service:
 `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/AntiFraudAccountMapService.php`
 
-Production service SHA inspected before consent extension work:
-`c6832c1d16f496d6c7afc8bac64a111ec3c60860a8cf80e889fd0fef7061ab18`
-
-File state at inspection:
-- size: 10836 bytes
-- mode: 664
-- owner UID/GID: 1005/1005
-- lines: 423
-- PHP syntax: valid.
-
-Current request contract:
+Request contract:
 - protected by `X-Anti-Fraud-Token` / Bearer fallback;
 - accepts address list `user_ids`;
 - max 500 USER_ID;
 - validates positive integer USER_ID;
 - does not dump the whole Bitrix user table.
 
-Current `loadUsers()` behavior before consent extension:
+`loadUsers()` behavior:
 - gets one Bitrix DB connection via `Application::getConnection()`;
 - builds one validated integer `idList`;
 - attempts canonical phones from `b_user_phone_auth`;
 - loads block reason via `UF_AF_BLOCK_REASON` using `Bitrix\Main\UserTable`;
 - loads base user rows from `b_user`;
-- returns identity/account-state fields.
+- loads current consent rows in one additional batch query for the entire `idList`;
+- does not do one consent query per user.
 
-Response fields before consent extension:
-- `bitrix_user_id`
-- `phone_normalized`
-- `email_normalized`
-- `display_name`
-- `registered_at`
-- `bitrix_active`
-- `bitrix_blocked`
-- `block_reason`
+### Production consent extension — DEPLOYED 2026-09-12
 
-At inspection there were **no consent references inside `AntiFraudAccountMapService.php`**.
+Baseline service SHA before extension:
+`c6832c1d16f496d6c7afc8bac64a111ec3c60860a8cf80e889fd0fef7061ab18`
 
-## 7. Planned consent-display extension
+Production service SHA after extension:
+`5705d7586c35ced55975a3d228ed2acc148fff7bc9fbc7c217b7337368141a77`
+
+Rollback backup:
+`/home/site_evrasia/web/evrasia.spb.ru/backups/account-map-consent/20260912-053811/AntiFraudAccountMapService.php`
+
+Deployment result:
+- 15 PASS / 0 FAIL;
+- rollback not required;
+- database write: NO;
+- Bitrix DB write: NO;
+- marketing change: NO;
+- Anti-Fraud scoring change: NO;
+- production PHP syntax: valid.
+
+Current response fields now include the original account-state fields plus:
+- `offer_accepted` — boolean, current agreement ID 1 exists;
+- `offer_accepted_at` — latest agreement 1 `DATE_INSERT` as ISO-8601 / Europe-Moscow, or null;
+- `offer_source` — normalized source or null;
+- `pd_accepted` — boolean, current agreement ID 2 exists;
+- `pd_accepted_at` — latest agreement 2 `DATE_INSERT` as ISO-8601 / Europe-Moscow, or null;
+- `pd_source` — normalized source or null.
+
+Source normalization in production:
+- `evrasia_signup` -> `signup`
+- `evrasia_account_gate` -> `account_gate`
+- any other originator -> `other`
+
+Consent query contract:
+- queries only `b_consent_user_consent`;
+- only `AGREEMENT_ID IN (1,2)`;
+- only requested USER_ID from current validated `idList`;
+- orders by `USER_ID, AGREEMENT_ID, DATE_INSERT DESC, ID DESC`;
+- first row per user/agreement is therefore the latest physical event;
+- IP and URL are not exposed to the bot API.
+
+Functional production verification succeeded for six known users and returned 12 expected agreement rows:
+- USER_ID `880339`: agreements 1+2 at `2026-09-11T14:34:31+03:00`, source `account_gate`;
+- USER_ID `2591066`: agreements 1+2 at `2026-09-11T15:50:45+03:00`, source `signup`;
+- USER_ID `2591074`: agreements 1+2 at `2026-09-11T15:58:24+03:00`, source `signup`;
+- USER_ID `2591261`: agreements 1+2 at `2026-09-11T18:49:03+03:00`, source `signup`;
+- USER_ID `2591291`: agreements 1+2 at `2026-09-11T19:22:23+03:00`, source `signup`;
+- USER_ID `2591297`: agreements 1+2 at `2026-09-11T19:26:57+03:00`, source `signup`.
+
+The consent fields are informational only and must not affect scoring, grouping, blocking or case membership.
+
+## 7. Planned bot/UI propagation
 
 Operator requirement for Anti-Fraud UI: compactly show to the right of account name:
 - current offer accepted / not accepted;
@@ -203,33 +233,15 @@ Operator requirement for Anti-Fraud UI: compactly show to the right of account n
 - source (`Регистрация` / `ЛК` in UI);
 - acceptance time.
 
-Data must remain informational only:
-- no scoring impact;
-- no grouping impact;
-- no auto-block impact.
-
 Preferred protected data flow:
 
 `Bitrix b_consent_user_consent -> existing protected account-map -> bot sync/API -> Anti-Fraud UI`
 
+The site-side `account-map` part is now production-ready. Next work is bot-side propagation of the six fields through gateway -> persistence/API -> React UI.
+
 Do not give the bot direct MySQL access to the website DB merely for consent display.
 
-Recommended API fields per agreement:
-- `offer_accepted`
-- `offer_accepted_at`
-- `offer_source`
-- `pd_accepted`
-- `pd_accepted_at`
-- `pd_source`
-
 Do not collapse offer and PD into one timestamp/source because they are independent legal events even when they currently occur together.
-
-Source normalization:
-- `evrasia_signup` -> `signup`
-- `evrasia_account_gate` -> `account_gate`
-- any other originator -> `other`
-
-For multiple events for the same current agreement/user, use the latest event after confirming that this matches the actual desired contract.
 
 ## 8. Errors / lessons — DO NOT REPEAT
 
@@ -260,3 +272,7 @@ For multiple events for the same current agreement/user, use the latest event af
 7. **Root/GHCR auth confusion**
    - Production deployment runs as root, but GHCR credentials are intentionally owned by `tech`.
    - Reuse `tech` auth without exposing token values; do not request/recreate credentials unnecessarily.
+
+8. **Do not infer success from planned code**
+   - Documentation may mark a structure or deployment as current only after successful production output or direct verification.
+   - Planned fields belong under planned state until production SHA, syntax, functional checks and final status are confirmed.
