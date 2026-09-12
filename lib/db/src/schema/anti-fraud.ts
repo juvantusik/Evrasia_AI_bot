@@ -23,6 +23,14 @@ export const antiFraudAccountsTable = pgTable(
     // Обновлено 07.09.2026: Bitrix — master/source of truth для статуса блокировки.
     bitrixBlocked: boolean("bitrix_blocked").notNull().default(false),
     bitrixBlockReason: text("bitrix_block_reason"),
+    // Обновлено 12.09.2026: read-only snapshot актуальных обязательных согласий.
+    // NULL означает, что account-map ещё не синхронизировал поле после миграции.
+    offerAccepted: boolean("offer_accepted"),
+    offerAcceptedAt: timestamp("offer_accepted_at", { withTimezone: true }),
+    offerSource: text("offer_source"),
+    pdAccepted: boolean("pd_accepted"),
+    pdAcceptedAt: timestamp("pd_accepted_at", { withTimezone: true }),
+    pdSource: text("pd_source"),
     // Обновлено 05.09.2026 ИТ Директор Евразии
     // RestIS TotalSum содержит копейки, поэтому используем точный NUMERIC(14,2), а не integer/float.
     bonusBalance: numeric("bonus_balance", { precision: 14, scale: 2 }),
