@@ -111,6 +111,7 @@ const parseExisting = (text) => {
 };
 
 const normalized = (value) => String(value ?? "").trim();
+const normalizedNameKey = (value) => normalized(value).toLocaleLowerCase("ru-RU").replace(/\s+/gu, " ");
 
 const diffFields = (existing, canonical) => {
   const changes = [];
@@ -124,21 +125,52 @@ const diffFields = (existing, canonical) => {
 
 const buildPlan = (canonicalRows, existingRows) => {
   const byInn = new Map();
+  const activeByName = new Map();
+
   for (const row of existingRows) {
-    if (!row.inn) continue;
-    const bucket = byInn.get(row.inn) ?? [];
-    bucket.push(row);
-    byInn.set(row.inn, bucket);
+    if (row.inn) {
+      const bucket = byInn.get(row.inn) ?? [];
+      bucket.push(row);
+      byInn.set(row.inn, bucket);
+    }
+
+    if (row.active) {
+      const key = normalizedNameKey(row.name);
+      const bucket = activeByName.get(key) ?? [];
+      bucket.push(row);
+      activeByName.set(key, bucket);
+    }
   }
 
   return canonicalRows.map((canonical) => {
     if (!canonical.inn) return { action: "SKIP", canonical, reason: "MISSING_INN_REQUIRES_MANUAL_REVIEW" };
+
     const matches = byInn.get(canonical.inn) ?? [];
     if (matches.length > 1) return { action: "CONFLICT", canonical, reason: `DUPLICATE_EXISTING_INN:${matches.length}` };
+
     const existing = matches[0];
     if (existing && !existing.active) return { action: "CONFLICT", canonical, existing, reason: "INACTIVE_EXISTING_INN_MATCH" };
     if (canonical.status === "NEEDS_REVIEW") return { action: "SKIP", canonical, existing, reason: "CANONICAL_STATUS_NEEDS_REVIEW" };
-    if (!existing) return { action: "CREATE", canonical, reason: "VERIFIED_INN_NOT_FOUND" };
+
+    if (!existing) {
+      const sameNameActive = activeByName.get(normalizedNameKey(canonical.name)) ?? [];
+      if (sameNameActive.length > 0) {
+        const nullInnMatches = sameNameActive.filter((row) => !row.inn);
+        const differentInnMatches = sameNameActive.filter((row) => row.inn && row.inn !== canonical.inn);
+        const detail = nullInnMatches.length > 0
+          ? `ACTIVE_SAME_NAME_MISSING_INN:${nullInnMatches.length}`
+          : `ACTIVE_SAME_NAME_DIFFERENT_INN:${differentInnMatches.length}`;
+        return {
+          action: "CONFLICT",
+          canonical,
+          existingCandidates: sameNameActive,
+          reason: detail,
+        };
+      }
+
+      return { action: "CREATE", canonical, reason: "VERIFIED_INN_NOT_FOUND" };
+    }
+
     const changes = diffFields(existing, canonical);
     if (!changes.length) return { action: "MATCH", canonical, existing, reason: "ALREADY_CURRENT" };
     return { action: "UPDATE", canonical, existing, reason: "VERIFIED_FIELDS_DIFFER", changes };
@@ -170,6 +202,7 @@ const main = () => {
   console.log(`SOURCE=${sourcePath}`);
   console.log("MATCH_KEY=INN");
   console.log("NAME_ONLY_MERGE=NO");
+  console.log("SAME_NAME_WITHOUT_INN_MATCH=CONFLICT");
   console.log("NEEDS_REVIEW_AUTO_WRITE=NO");
   console.log("SECRET_VALUES_PRINTED=NO");
 
@@ -180,6 +213,10 @@ const main = () => {
   const schemaCount = Number(runPsql(`SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='corporate_legal_entities' AND column_name IN ('id','name','inn','kpp','ogrn','general_director','source','verification_status','active','updated_at');`));
   if (schemaCount !== 10) throw new Error("Required v1.8 master schema is absent; migration 0022 must be applied first");
   console.log("PASS: required master schema present");
+
+  const duplicateInnCount = Number(runPsql(`SELECT count(*) FROM (SELECT inn FROM corporate_legal_entities WHERE inn IS NOT NULL AND trim(inn) <> '' GROUP BY inn HAVING count(*) > 1) d;`));
+  console.log(`EXISTING_DUPLICATE_INN_GROUPS=${duplicateInnCount}`);
+  if (apply && duplicateInnCount > 0) throw new Error("Write mode blocked because duplicate INN groups remain in master");
 
   const canonical = parseCanonicalReview(readFileSync(sourcePath, "utf8"));
   console.log(`CANONICAL_ROWS=${canonical.length}`);
