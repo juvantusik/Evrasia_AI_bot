@@ -71,8 +71,53 @@ export const corporatePhoneDirectoryTable = pgTable("corporate_phone_directory",
 export const corporateLegalEntitiesTable = pgTable("corporate_legal_entities", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  fullName: text("full_name"),
   inn: text("inn"),
+  kpp: text("kpp"),
+  ogrn: text("ogrn"),
+  legalAddress: text("legal_address"),
+  actualAddress: text("actual_address"),
+  postalAddress: text("postal_address"),
+  generalDirector: text("general_director"),
+  source: text("source"),
+  verificationStatus: text("verification_status").notNull().default("UNVERIFIED"),
+  notes: text("notes"),
   active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const corporateLegalEntityBankAccountsTable = pgTable("corporate_legal_entity_bank_accounts", {
+  id: text("id").primaryKey(),
+  legalEntityId: text("legal_entity_id").notNull(),
+  bankName: text("bank_name"),
+  bik: text("bik"),
+  accountNumber: text("account_number").notNull(),
+  correspondentAccount: text("correspondent_account"),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  source: text("source"),
+  verificationStatus: text("verification_status").notNull().default("UNVERIFIED"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const corporateLegalEntityOperatorAccountsTable = pgTable("corporate_legal_entity_operator_accounts", {
+  id: text("id").primaryKey(),
+  legalEntityId: text("legal_entity_id").notNull(),
+  operator: text("operator").notNull(),
+  accountNumber: text("account_number").notNull(),
+  contractNumber: text("contract_number"),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  source: text("source"),
+  verificationStatus: text("verification_status").notNull().default("UNVERIFIED"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -96,4 +141,6 @@ export type BotModuleAccess = typeof botModuleAccessTable.$inferSelect;
 export type BotSetting = typeof botSettingsTable.$inferSelect;
 export type CorporatePhoneDirectoryRecord = typeof corporatePhoneDirectoryTable.$inferSelect;
 export type CorporateLegalEntity = typeof corporateLegalEntitiesTable.$inferSelect;
+export type CorporateLegalEntityBankAccount = typeof corporateLegalEntityBankAccountsTable.$inferSelect;
+export type CorporateLegalEntityOperatorAccount = typeof corporateLegalEntityOperatorAccountsTable.$inferSelect;
 export type CorporatePhoneAudit = typeof corporatePhoneAuditTable.$inferSelect;

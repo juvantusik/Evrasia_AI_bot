@@ -8,6 +8,7 @@ import {
   refreshCorporatePhoneDirectoryCache,
 } from "./services/corporate-directory-admin-service";
 import { ensureDirectoryWebSchema } from "./services/directory-web-service";
+import { synchronizeLegalEntityReferences } from "./services/legal-entity-master-service";
 import {
   startEvrasiaTelegramBotV2,
   stopEvrasiaTelegramBotV2,
@@ -36,6 +37,7 @@ await migrateDatabase(
 );
 await initializeCorporatePhoneDirectory();
 await ensureDirectoryWebSchema();
+await synchronizeLegalEntityReferences();
 
 const directoryRefreshTimer = setInterval(() => {
   void refreshCorporatePhoneDirectoryCache().catch((err) => {
