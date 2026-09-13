@@ -312,6 +312,20 @@ export const archiveLegalEntityMaster = async (
   const before = await getLegalEntity(id);
   if (!before) throw new Error("Юридическое лицо не найдено или уже архивировано.");
 
+  const references = await pool.query<{ phoneCount: string; restaurantCount: string }>(
+    `SELECT
+       (SELECT count(*)::text FROM corporate_phone_directory WHERE active = true AND legal_entity_id = $1) AS "phoneCount",
+       (SELECT count(*)::text FROM corporate_directory_restaurants WHERE active = true AND legal_entity_id = $1) AS "restaurantCount"`,
+    [id],
+  );
+  const phoneCount = Number(references.rows[0]?.phoneCount ?? 0);
+  const restaurantCount = Number(references.rows[0]?.restaurantCount ?? 0);
+  if (phoneCount > 0 || restaurantCount > 0) {
+    throw new Error(
+      `Организация используется в активном справочнике: номеров ${phoneCount}, ресторанов ${restaurantCount}. Сначала переназначьте или закройте эти связи.`,
+    );
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
