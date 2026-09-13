@@ -115,7 +115,7 @@ const buildLegalEntitySeed = (): Array<{ id: string; name: string; inn: string |
     const name = record.legalEntity.trim();
     if (!name) continue;
     const inn = normalizeNullable(record.inn);
-    const key = `${name.toLocaleLowerCase("ru-RU")}|${inn ?? ""}`;
+    const key = inn ? `inn:${inn}` : `name:${name.toLocaleLowerCase("ru-RU")}`;
     if (!entities.has(key)) {
       entities.set(key, {
         id: stableId("le", key),
