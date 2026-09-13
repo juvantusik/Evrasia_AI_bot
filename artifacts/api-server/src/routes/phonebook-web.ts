@@ -8,6 +8,14 @@ import {
   updateDirectoryPhone,
   upsertDirectoryRestaurant,
 } from "../services/directory-web-service";
+import {
+  addLegalEntityMaster,
+  archiveLegalEntityMaster,
+  listLegalEntityBankAccounts,
+  listLegalEntityMaster,
+  listLegalEntityOperatorAccounts,
+  updateLegalEntityMaster,
+} from "../services/legal-entity-master-service";
 
 const router: IRouter = Router();
 
@@ -34,6 +42,68 @@ const requireEditor = (req: Request, res: Response): { actor: string } | null =>
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Не удалось выполнить операцию со справочником.";
+
+router.get("/phonebook/legal-entities", async (req, res): Promise<void> => {
+  try {
+    res.json({ records: await listLegalEntityMaster() });
+  } catch (error) {
+    req.log.error({ error }, "Failed to list phonebook legal entities");
+    res.status(500).json({ error: errorMessage(error) });
+  }
+});
+
+router.post("/phonebook/legal-entities", async (req, res): Promise<void> => {
+  const editor = requireEditor(req, res);
+  if (!editor) return;
+  try {
+    const record = await addLegalEntityMaster(editor.actor, req.body ?? {});
+    res.status(201).json({ record });
+  } catch (error) {
+    req.log.warn({ error }, "Failed to add phonebook legal entity");
+    res.status(400).json({ error: errorMessage(error) });
+  }
+});
+
+router.put("/phonebook/legal-entities/:id", async (req, res): Promise<void> => {
+  const editor = requireEditor(req, res);
+  if (!editor) return;
+  try {
+    res.json({ record: await updateLegalEntityMaster(editor.actor, req.params.id, req.body ?? {}) });
+  } catch (error) {
+    req.log.warn({ error }, "Failed to update phonebook legal entity");
+    res.status(400).json({ error: errorMessage(error) });
+  }
+});
+
+router.delete("/phonebook/legal-entities/:id", async (req, res): Promise<void> => {
+  const editor = requireEditor(req, res);
+  if (!editor) return;
+  try {
+    res.json({ record: await archiveLegalEntityMaster(editor.actor, req.params.id) });
+  } catch (error) {
+    req.log.warn({ error }, "Failed to archive phonebook legal entity");
+    res.status(400).json({ error: errorMessage(error) });
+  }
+});
+
+router.get("/phonebook/legal-entity-operator-accounts", async (req, res): Promise<void> => {
+  try {
+    const legalEntityId = String(req.query.legalEntityId ?? "").trim() || undefined;
+    res.json({ records: await listLegalEntityOperatorAccounts(legalEntityId) });
+  } catch (error) {
+    req.log.error({ error }, "Failed to list phonebook legal entity operator accounts");
+    res.status(500).json({ error: errorMessage(error) });
+  }
+});
+
+router.get("/phonebook/legal-entities/:id/bank-accounts", async (req, res): Promise<void> => {
+  try {
+    res.json({ records: await listLegalEntityBankAccounts(req.params.id) });
+  } catch (error) {
+    req.log.error({ error }, "Failed to list phonebook legal entity bank accounts");
+    res.status(500).json({ error: errorMessage(error) });
+  }
+});
 
 router.get("/phonebook/phones", async (req, res): Promise<void> => {
   try {
