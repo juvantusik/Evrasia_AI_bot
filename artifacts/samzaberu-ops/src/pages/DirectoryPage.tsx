@@ -3,6 +3,7 @@ import {
   Building2,
   Columns3,
   History,
+  Landmark,
   Pencil,
   Plus,
   RefreshCw,
@@ -17,10 +18,12 @@ import {
   DIRECTORY_OU_ORDER,
   type DirectoryRestaurantSeed,
 } from '../data/directory-preview-data';
+import { LegalEntitiesPanel } from './LegalEntitiesPanel';
+import type { LegalEntityMaster, LegalEntityOperatorAccount } from './legal-entity-types';
 
 type Operator = 'MEGAFON' | 'T2';
 type PhoneMode = 'AUTO' | 'PERSONAL' | 'NONE';
-type Tab = 'restaurants' | 'megafon' | 't2' | 'history';
+type Tab = 'restaurants' | 'requisites' | 'megafon' | 't2' | 'history';
 type T2Section = 'employees' | 'm2m' | 'city';
 type MegafonColumn = 'cityPhone' | 'federalPhone' | 'legalEntity' | 'inn' | 'accountNumber' | 'restaurantName' | 'lineType' | 'subscriberName';
 
@@ -30,6 +33,7 @@ type CorporatePhone = {
   cityPhone: string | null;
   federalPhone: string | null;
   operator: Operator;
+  legalEntityId: string | null;
   legalEntity: string;
   inn: string | null;
   accountNumber: string | null;
@@ -39,6 +43,7 @@ type CorporatePhone = {
 };
 
 type EditableRestaurant = DirectoryRestaurantSeed & {
+  legalEntityId: string | null;
   actualPhoneMode: PhoneMode;
   actualPersonalPhone: string;
   generalPhoneMode: PhoneMode;
@@ -47,7 +52,7 @@ type EditableRestaurant = DirectoryRestaurantSeed & {
 
 type AuditRecord = {
   id: string;
-  entityType: 'PHONE' | 'RESTAURANT';
+  entityType: 'PHONE' | 'RESTAURANT' | 'LEGAL_ENTITY';
   entityId: string;
   action: 'ADD' | 'UPDATE' | 'DELETE';
   actor: string;
@@ -67,6 +72,7 @@ const blankPhone = (operator: Operator): CorporatePhone => ({
   cityPhone: '',
   federalPhone: '',
   operator,
+  legalEntityId: null,
   legalEntity: '',
   inn: '',
   accountNumber: '',
@@ -313,31 +319,50 @@ function PhoneBadge({ value }: { value: ReturnType<typeof phonePresentation> }) 
 
 function PhoneEditor({
   record,
+  legalEntities,
+  operatorAccounts,
   onClose,
   onSave,
 }: {
   record: CorporatePhone;
+  legalEntities: LegalEntityMaster[];
+  operatorAccounts: LegalEntityOperatorAccount[];
   onClose: () => void;
   onSave: (record: CorporatePhone) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(record);
   const [saving, setSaving] = useState(false);
-  const update = (key: keyof CorporatePhone, value: string) => setDraft((row) => ({ ...row, [key]: value }));
+  const update = (key: keyof CorporatePhone, value: string | null) => setDraft((row) => ({ ...row, [key]: value }));
   const usesNumberAliases = draft.operator === 'MEGAFON' || t2SectionOf(draft) === 'city';
+  const accountChoices = operatorAccounts.filter((account) => account.legalEntityId === draft.legalEntityId && account.operator === draft.operator);
+  const selectLegalEntity = (id: string) => {
+    const entity = legalEntities.find((item) => item.id === id) ?? null;
+    const firstAccount = entity
+      ? operatorAccounts.find((account) => account.legalEntityId === entity.id && account.operator === draft.operator && account.isPrimary)
+        ?? operatorAccounts.find((account) => account.legalEntityId === entity.id && account.operator === draft.operator)
+      : null;
+    setDraft((row) => ({
+      ...row,
+      legalEntityId: entity?.id ?? null,
+      legalEntity: entity?.name ?? '',
+      inn: entity?.inn ?? '',
+      accountNumber: firstAccount?.accountNumber ?? '',
+    }));
+  };
   return (
     <div className="directory-modal-backdrop" onMouseDown={onClose}>
       <section className="directory-editor" onMouseDown={(event) => event.stopPropagation()}>
         <button className="directory-modal-close" type="button" onClick={onClose}><X size={20} /></button>
         <h2>{record.id ? 'Редактирование номера' : 'Добавление номера'}</h2>
         <div className="directory-form-grid">
-          <label><span>Оператор</span><select value={draft.operator} onChange={(e) => update('operator', e.target.value)}><option value="MEGAFON">МегаФон</option><option value="T2">T2</option></select></label>
+          <label><span>Оператор</span><select value={draft.operator} onChange={(e) => setDraft((row) => ({ ...row, operator: e.target.value as Operator, accountNumber: '' }))}><option value="MEGAFON">МегаФон</option><option value="T2">T2</option></select></label>
           {usesNumberAliases ? <>
             <label><span>Городской номер</span><input value={draft.cityPhone ?? ''} onChange={(e) => update('cityPhone', e.target.value)} placeholder="+7 812 900-00-00" /></label>
             <label><span>Федеральный (мобильный) номер</span><input value={draft.federalPhone ?? ''} onChange={(e) => update('federalPhone', e.target.value)} placeholder="+7 952 123-45-67" /></label>
           </> : <label><span>Номер телефона</span><input value={draft.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+7 921 123-45-67" /></label>}
-          <label className="wide"><span>Юридическое лицо</span><input value={draft.legalEntity} onChange={(e) => update('legalEntity', e.target.value)} /></label>
-          <label><span>ИНН</span><input value={draft.inn ?? ''} onChange={(e) => update('inn', e.target.value)} /></label>
-          <label><span>Лицевой счёт</span><input value={draft.accountNumber ?? ''} onChange={(e) => update('accountNumber', e.target.value)} /></label>
+          <label className="wide"><span>Юридическое лицо</span><select value={draft.legalEntityId ?? ''} onChange={(e) => selectLegalEntity(e.target.value)}><option value="">Выберите организацию</option>{legalEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name}{entity.inn ? ` · ИНН ${entity.inn}` : ''}</option>)}</select></label>
+          <label><span>ИНН</span><input readOnly value={draft.inn ?? ''} /></label>
+          <label><span>Лицевой счёт</span>{accountChoices.length ? <select value={draft.accountNumber ?? ''} onChange={(e) => update('accountNumber', e.target.value)}><option value="">Не выбран</option>{accountChoices.map((account) => <option key={account.id} value={account.accountNumber}>{account.accountNumber}{account.contractNumber ? ` · договор ${account.contractNumber}` : ''}</option>)}</select> : <input value={draft.accountNumber ?? ''} onChange={(e) => update('accountNumber', e.target.value)} placeholder="Нет master-счёта — временный ввод" />}</label>
           <label className="wide"><span>Ресторан / адрес</span><input value={draft.restaurantName ?? ''} onChange={(e) => update('restaurantName', e.target.value)} /></label>
           <label><span>Тип линии</span><input value={draft.lineType ?? ''} onChange={(e) => update('lineType', e.target.value)} /></label>
           <label><span>Абонент</span><input value={draft.subscriberName ?? ''} onChange={(e) => update('subscriberName', e.target.value)} /></label>
@@ -353,10 +378,12 @@ function PhoneEditor({
 
 function RestaurantEditor({
   restaurant,
+  legalEntities,
   onClose,
   onSave,
 }: {
   restaurant: EditableRestaurant;
+  legalEntities: LegalEntityMaster[];
   onClose: () => void;
   onSave: (restaurant: EditableRestaurant) => Promise<void>;
 }) {
@@ -364,6 +391,15 @@ function RestaurantEditor({
   const [saving, setSaving] = useState(false);
   const update = <K extends keyof EditableRestaurant>(key: K, value: EditableRestaurant[K]) =>
     setDraft((row) => ({ ...row, [key]: value }));
+  const selectLegalEntity = (id: string) => {
+    const entity = legalEntities.find((item) => item.id === id) ?? null;
+    setDraft((row) => ({
+      ...row,
+      legalEntityId: entity?.id ?? null,
+      legalEntity: entity?.name ?? '',
+      generalDirector: entity?.generalDirector ?? '',
+    }));
+  };
   return (
     <div className="directory-modal-backdrop" onMouseDown={onClose}>
       <section className="directory-editor" onMouseDown={(event) => event.stopPropagation()}>
@@ -371,12 +407,12 @@ function RestaurantEditor({
         <h2>Редактирование ресторана</h2><p>{draft.address}</p>
         <div className="directory-form-grid">
           <label><span>ОУ</span><select value={draft.ou} onChange={(e) => update('ou', e.target.value)}>{DIRECTORY_OU_ORDER.map((ou) => <option key={ou}>{ou}</option>)}</select></label>
-          <label className="wide"><span>Юридическое лицо</span><input value={draft.legalEntity} onChange={(e) => update('legalEntity', e.target.value)} /></label>
-          <label className="wide"><span>Адрес</span><input value={draft.address} onChange={(e) => update('address', e.target.value)} /></label>
+          <label className="wide"><span>Юридическое лицо</span><select value={draft.legalEntityId ?? ''} onChange={(e) => selectLegalEntity(e.target.value)}><option value="">Выберите организацию</option>{legalEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name}{entity.inn ? ` · ИНН ${entity.inn}` : ''}</option>)}</select></label>
+          <label className="wide"><span>Короткий адрес ресторана</span><input value={draft.address} onChange={(e) => update('address', e.target.value)} /><small>Компактный display-адрес сохраняется отдельно от официального фактического адреса ЮЛ.</small></label>
           <label className="wide"><span>Фактический директор</span><input value={draft.actualDirector} onChange={(e) => update('actualDirector', e.target.value)} /></label>
           <label><span>Номер директора</span><select value={draft.actualPhoneMode} onChange={(e) => update('actualPhoneMode', e.target.value as PhoneMode)}><option value="AUTO">Корпоративный / авто</option><option value="PERSONAL">Личный</option><option value="NONE">Не указан</option></select></label>
           <label><span>Личный номер</span><input disabled={draft.actualPhoneMode !== 'PERSONAL'} value={draft.actualPersonalPhone} onChange={(e) => update('actualPersonalPhone', e.target.value)} /></label>
-          <label className="wide"><span>Генеральный директор</span><input value={draft.generalDirector} onChange={(e) => update('generalDirector', e.target.value)} /></label>
+          <label className="wide"><span>Генеральный директор</span><input readOnly value={draft.generalDirector} /><small>Берётся из master-карточки юридического лица.</small></label>
           <label><span>Номер ген. директора</span><select value={draft.generalPhoneMode} onChange={(e) => update('generalPhoneMode', e.target.value as PhoneMode)}><option value="AUTO">Корпоративный / авто</option><option value="PERSONAL">Личный</option><option value="NONE">Не указан</option></select></label>
           <label><span>Личный номер</span><input disabled={draft.generalPhoneMode !== 'PERSONAL'} value={draft.generalPersonalPhone} onChange={(e) => update('generalPersonalPhone', e.target.value)} /></label>
           <label className="wide"><span>Корпоративная почта</span><input value={draft.email} onChange={(e) => update('email', e.target.value)} /></label>
@@ -393,11 +429,11 @@ function RestaurantEditor({
 export function DirectoryPage() {
   const [tab, setTab] = useState<Tab>('restaurants');
   const [t2Section, setT2Section] = useState<T2Section>('employees');
-  const [megafonColumns, setMegafonColumns] = useState<Set<MegafonColumn>>(
-    () => new Set(DEFAULT_MEGAFON_COLUMNS),
-  );
+  const [megafonColumns, setMegafonColumns] = useState<Set<MegafonColumn>>(() => new Set(DEFAULT_MEGAFON_COLUMNS));
   const [phones, setPhones] = useState<CorporatePhone[]>([]);
   const [persistedRestaurants, setPersistedRestaurants] = useState<EditableRestaurant[]>([]);
+  const [legalEntities, setLegalEntities] = useState<LegalEntityMaster[]>([]);
+  const [operatorAccounts, setOperatorAccounts] = useState<LegalEntityOperatorAccount[]>([]);
   const [audit, setAudit] = useState<AuditRecord[]>([]);
   const [search, setSearch] = useState('');
   const [ouFilter, setOuFilter] = useState('ALL');
@@ -411,19 +447,27 @@ export function DirectoryPage() {
   const loadAll = async () => {
     setLoading(true); setError('');
     try {
-      const [phonesResponse, restaurantsResponse, auditResponse] = await Promise.all([
+      const [phonesResponse, restaurantsResponse, legalEntitiesResponse, operatorAccountsResponse, auditResponse] = await Promise.all([
         fetch('/api/phonebook/phones'),
         fetch('/api/phonebook/restaurants'),
+        fetch('/api/phonebook/legal-entities'),
+        fetch('/api/phonebook/legal-entity-operator-accounts'),
         fetch('/api/phonebook/audit?limit=100'),
       ]);
       if (!phonesResponse.ok) throw new Error(await readError(phonesResponse));
       if (!restaurantsResponse.ok) throw new Error(await readError(restaurantsResponse));
+      if (!legalEntitiesResponse.ok) throw new Error(await readError(legalEntitiesResponse));
+      if (!operatorAccountsResponse.ok) throw new Error(await readError(operatorAccountsResponse));
       if (!auditResponse.ok) throw new Error(await readError(auditResponse));
       const phoneData = await phonesResponse.json() as { records: CorporatePhone[] };
       const restaurantData = await restaurantsResponse.json() as { records: EditableRestaurant[] };
+      const legalEntityData = await legalEntitiesResponse.json() as { records: LegalEntityMaster[] };
+      const operatorAccountData = await operatorAccountsResponse.json() as { records: LegalEntityOperatorAccount[] };
       const auditData = await auditResponse.json() as { records: AuditRecord[] };
       setPhones(phoneData.records ?? []);
       setPersistedRestaurants(restaurantData.records ?? []);
+      setLegalEntities(legalEntityData.records ?? []);
+      setOperatorAccounts(operatorAccountData.records ?? []);
       setAudit(auditData.records ?? []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить справочник');
@@ -450,10 +494,8 @@ export function DirectoryPage() {
     return phones.filter((row) => {
       if (row.operator !== operator) return false;
       if (operator === 'T2' && t2SectionOf(row) !== t2Section) return false;
-      return !needle || [
-        row.phone, row.cityPhone, row.federalPhone, row.legalEntity, row.inn, row.accountNumber,
-        row.restaurantName, row.lineType, row.subscriberName,
-      ].some((value) => clean(value).includes(needle));
+      return !needle || [row.phone, row.cityPhone, row.federalPhone, row.legalEntity, row.inn, row.accountNumber, row.restaurantName, row.lineType, row.subscriberName]
+        .some((value) => clean(value).includes(needle));
     });
   }, [phones, search, tab, t2Section]);
 
@@ -466,11 +508,7 @@ export function DirectoryPage() {
   const toggleMegafonColumn = (column: MegafonColumn) => {
     setMegafonColumns((current) => {
       const next = new Set(current);
-      if (next.has(column)) {
-        if (next.size > 1) next.delete(column);
-      } else {
-        next.add(column);
-      }
+      if (next.has(column)) { if (next.size > 1) next.delete(column); } else next.add(column);
       return next;
     });
   };
@@ -482,11 +520,7 @@ export function DirectoryPage() {
     const headers = editorHeaders();
     if (!headers) return;
     const isNew = !draft.id;
-    const response = await fetch(isNew ? '/api/phonebook/phones' : `/api/phonebook/phones/${encodeURIComponent(draft.id)}`, {
-      method: isNew ? 'POST' : 'PUT',
-      headers,
-      body: JSON.stringify(draft),
-    });
+    const response = await fetch(isNew ? '/api/phonebook/phones' : `/api/phonebook/phones/${encodeURIComponent(draft.id)}`, { method: isNew ? 'POST' : 'PUT', headers, body: JSON.stringify(draft) });
     if (!response.ok) { setError(await readError(response)); return; }
     setPhoneEditor(null);
     await loadAll();
@@ -504,9 +538,7 @@ export function DirectoryPage() {
   const saveRestaurant = async (draft: EditableRestaurant) => {
     const headers = editorHeaders();
     if (!headers) return;
-    const response = await fetch(`/api/phonebook/restaurants/${encodeURIComponent(draft.id)}`, {
-      method: 'PUT', headers, body: JSON.stringify(draft),
-    });
+    const response = await fetch(`/api/phonebook/restaurants/${encodeURIComponent(draft.id)}`, { method: 'PUT', headers, body: JSON.stringify(draft) });
     if (!response.ok) { setError(await readError(response)); return; }
     setRestaurantEditorId(null);
     await loadAll();
@@ -521,18 +553,19 @@ export function DirectoryPage() {
   return (
     <div className="directory-shell">
       <header className="directory-topbar">
-        <div className="directory-brand"><Building2 size={21} /><div><strong>Евразия · Корпоративный справочник</strong><span>v1.6.9 · отдельный веб-модуль</span></div></div>
+        <div className="directory-brand"><Building2 size={21} /><div><strong>Евразия · Корпоративный справочник</strong><span>v1.8 · master-data / документы</span></div></div>
         <button className="directory-secondary-button" type="button" onClick={activateEditor}><ShieldCheck size={17} /> Режим редактора</button>
       </header>
 
       <main className="directory-main">
         <div className="directory-title-row">
-          <div><h1>Корпоративная связь</h1><p>Рестораны, директора и номера МегаФон / T2 из единого справочника.</p></div>
+          <div><h1>Корпоративный справочник</h1><p>Рестораны, юридические реквизиты и корпоративная связь из единого master-data контура.</p></div>
           <button className="directory-secondary-button" type="button" onClick={() => void loadAll()}><RefreshCw size={17} /> Обновить</button>
         </div>
 
         <div className="directory-tabs">
           <button className={tab === 'restaurants' ? 'active' : ''} onClick={() => setTab('restaurants')}><Building2 size={17} /> Рестораны и директора</button>
+          <button className={tab === 'requisites' ? 'active' : ''} onClick={() => setTab('requisites')}><Landmark size={17} /> Реквизиты</button>
           <button className={tab === 'megafon' ? 'active' : ''} onClick={() => setTab('megafon')}><Smartphone size={17} /> МегаФон</button>
           <button className={tab === 't2' ? 'active' : ''} onClick={() => setTab('t2')}><Smartphone size={17} /> T2</button>
           <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}><History size={17} /> История</button>
@@ -545,23 +578,16 @@ export function DirectoryPage() {
         </div>}
 
         <div className="directory-toolbar">
-          {tab !== 'history' && <label className="directory-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по номеру, ООО, адресу, ФИО…" /></label>}
+          {tab !== 'history' && <label className="directory-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === 'requisites' ? 'Поиск по ООО, ИНН, КПП, ОГРН, директору…' : 'Поиск по номеру, ООО, адресу, ФИО…'} /></label>}
           {tab === 'restaurants' && <select value={ouFilter} onChange={(e) => setOuFilter(e.target.value)}><option value="ALL">Все ОУ</option>{DIRECTORY_OU_ORDER.map((ou) => <option key={ou}>{ou}</option>)}</select>}
-          {tab === 'megafon' && <details className="directory-columns">
-            <summary><Columns3 size={17} /> Столбцы</summary>
-            <div className="directory-columns-menu">
-              <strong>Показывать в таблице</strong>
-              {MEGAFON_COLUMNS.map((column) => <label key={column.key}>
-                <input type="checkbox" checked={megafonColumns.has(column.key)} onChange={() => toggleMegafonColumn(column.key)} />
-                <span>{column.label}</span>
-              </label>)}
-            </div>
-          </details>}
+          {tab === 'megafon' && <details className="directory-columns"><summary><Columns3 size={17} /> Столбцы</summary><div className="directory-columns-menu"><strong>Показывать в таблице</strong>{MEGAFON_COLUMNS.map((column) => <label key={column.key}><input type="checkbox" checked={megafonColumns.has(column.key)} onChange={() => toggleMegafonColumn(column.key)} /><span>{column.label}</span></label>)}</div></details>}
           {(tab === 'megafon' || tab === 't2') && <button className="directory-primary-button" type="button" onClick={() => setPhoneEditor(blankPhone(tab === 'megafon' ? 'MEGAFON' : 'T2'))}><Plus size={17} /> Добавить номер</button>}
         </div>
 
         {error && <div className="directory-error">{error}<button type="button" onClick={() => setError('')}>×</button></div>}
         {loading && <div className="directory-empty">Загружаю данные…</div>}
+
+        {!loading && tab === 'requisites' && <LegalEntitiesPanel records={legalEntities} search={search} editorHeaders={editorHeaders} onReload={loadAll} onError={setError} />}
 
         {!loading && tab === 'restaurants' && (
           <div className="directory-groups">
@@ -574,9 +600,7 @@ export function DirectoryPage() {
                     const restaurantNumber = restaurantPhonePresentation(restaurantPhone);
                     const actualMatch = findEmployee(row.actualDirector, row.legalEntity, phones);
                     const sameDirector = Boolean(clean(row.actualDirector) && clean(row.actualDirector) === clean(row.generalDirector));
-                    const generalMatch = sameDirector
-                      ? actualMatch
-                      : findEmployee(row.generalDirector, row.legalEntity, phones);
+                    const generalMatch = sameDirector ? actualMatch : findEmployee(row.generalDirector, row.legalEntity, phones);
                     const actual = phonePresentation(actualMatch, row.actualPhoneMode, row.actualPersonalPhone);
                     const general = phonePresentation(generalMatch, row.generalPhoneMode, row.generalPersonalPhone);
                     return <tr key={row.id}>
@@ -603,22 +627,10 @@ export function DirectoryPage() {
             <div className="directory-table-scroll"><table className="directory-table">
               {tab === 'megafon' ? <>
                 <thead><tr>{MEGAFON_COLUMNS.filter((column) => megafonColumns.has(column.key)).map((column) => <th key={column.key}>{column.label}</th>)}<th /></tr></thead>
-                <tbody>{phoneRows.map((row) => <tr key={row.id}>
-                  {MEGAFON_COLUMNS.filter((column) => megafonColumns.has(column.key)).map((column) => <td key={column.key}>{column.key === 'cityPhone' || column.key === 'federalPhone' ? <strong>{renderMegafonValue(row, column.key)}</strong> : renderMegafonValue(row, column.key)}</td>)}
-                  <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
-                </tr>)}</tbody>
+                <tbody>{phoneRows.map((row) => <tr key={row.id}>{MEGAFON_COLUMNS.filter((column) => megafonColumns.has(column.key)).map((column) => <td key={column.key}>{column.key === 'cityPhone' || column.key === 'federalPhone' ? <strong>{renderMegafonValue(row, column.key)}</strong> : renderMegafonValue(row, column.key)}</td>)}<td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td></tr>)}</tbody>
               </> : <>
-                <thead><tr>
-                  {t2Section === 'city' ? <><th>Городской номер</th><th>Федеральный (мобильный) номер</th></> : <th>Номер</th>}
-                  <th>ООО</th><th>ИНН</th><th>Лицевой счёт</th><th>Ресторан / адрес</th><th>Тип</th><th>Абонент</th><th />
-                </tr></thead>
-                <tbody>{phoneRows.map((row) => <tr key={row.id}>
-                  {t2Section === 'city'
-                    ? <><td><strong>{cityPhoneOf(row) ? formatPhone(cityPhoneOf(row)) : '—'}</strong></td><td><strong>{federalPhoneOf(row) ? formatPhone(federalPhoneOf(row)) : '—'}</strong></td></>
-                    : <td><strong>{formatPhone(row.phone)}</strong></td>}
-                  <td>{row.legalEntity}</td><td>{row.inn || '—'}</td><td>{row.accountNumber || '—'}</td><td>{row.restaurantName || '—'}</td><td>{row.lineType || '—'}</td><td>{row.subscriberName || '—'}</td>
-                  <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td>
-                </tr>)}</tbody>
+                <thead><tr>{t2Section === 'city' ? <><th>Городской номер</th><th>Федеральный (мобильный) номер</th></> : <th>Номер</th>}<th>ООО</th><th>ИНН</th><th>Лицевой счёт</th><th>Ресторан / адрес</th><th>Тип</th><th>Абонент</th><th /></tr></thead>
+                <tbody>{phoneRows.map((row) => <tr key={row.id}>{t2Section === 'city' ? <><td><strong>{cityPhoneOf(row) ? formatPhone(cityPhoneOf(row)) : '—'}</strong></td><td><strong>{federalPhoneOf(row) ? formatPhone(federalPhoneOf(row)) : '—'}</strong></td></> : <td><strong>{formatPhone(row.phone)}</strong></td>}<td>{row.legalEntity}</td><td>{row.inn || '—'}</td><td>{row.accountNumber || '—'}</td><td>{row.restaurantName || '—'}</td><td>{row.lineType || '—'}</td><td>{row.subscriberName || '—'}</td><td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setPhoneEditor(row)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void deletePhone(row)}><Trash2 size={16} /></button></td></tr>)}</tbody>
               </>}
             </table></div>
           </section>
@@ -627,13 +639,13 @@ export function DirectoryPage() {
         {!loading && tab === 'history' && (
           <section className="directory-group">
             <div className="directory-group-title"><strong>История изменений</strong><span>{audit.length}</span></div>
-            {audit.length === 0 ? <div className="directory-empty">Изменений через веб-интерфейс пока нет.</div> : <div className="directory-audit-list">{audit.map((item) => <article key={item.id}><div><b>{item.action === 'ADD' ? 'Добавлено' : item.action === 'DELETE' ? 'Удалено' : 'Изменено'}</b><span>{item.entityType === 'PHONE' ? 'Номер' : 'Ресторан'} · {item.entityId}</span></div><div><strong>{item.actor}</strong><time>{new Date(item.createdAt).toLocaleString('ru-RU')}</time></div></article>)}</div>}
+            {audit.length === 0 ? <div className="directory-empty">Изменений через веб-интерфейс пока нет.</div> : <div className="directory-audit-list">{audit.map((item) => <article key={item.id}><div><b>{item.action === 'ADD' ? 'Добавлено' : item.action === 'DELETE' ? 'Архивировано / удалено' : 'Изменено'}</b><span>{item.entityType === 'PHONE' ? 'Номер' : item.entityType === 'RESTAURANT' ? 'Ресторан' : 'Юридическое лицо'} · {item.entityId}</span></div><div><strong>{item.actor}</strong><time>{new Date(item.createdAt).toLocaleString('ru-RU')}</time></div></article>)}</div>}
           </section>
         )}
       </main>
 
-      {activeRestaurant && <RestaurantEditor restaurant={activeRestaurant} onClose={() => setRestaurantEditorId(null)} onSave={saveRestaurant} />}
-      {phoneEditor && <PhoneEditor record={phoneEditor} onClose={() => setPhoneEditor(null)} onSave={savePhone} />}
+      {activeRestaurant && <RestaurantEditor restaurant={activeRestaurant} legalEntities={legalEntities} onClose={() => setRestaurantEditorId(null)} onSave={saveRestaurant} />}
+      {phoneEditor && <PhoneEditor record={phoneEditor} legalEntities={legalEntities} operatorAccounts={operatorAccounts} onClose={() => setPhoneEditor(null)} onSave={savePhone} />}
     </div>
   );
 }
