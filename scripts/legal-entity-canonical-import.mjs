@@ -116,6 +116,7 @@ const normalizedNameKey = (value) => normalized(value).toLocaleLowerCase("ru-RU"
 const diffFields = (existing, canonical) => {
   const changes = [];
   if (normalized(existing.name) !== normalized(canonical.name)) changes.push("name");
+  if (normalized(existing.inn) !== normalized(canonical.inn)) changes.push("inn");
   if (normalized(existing.kpp) !== normalized(canonical.kpp)) changes.push("kpp");
   if (normalized(existing.ogrn) !== normalized(canonical.ogrn)) changes.push("ogrn");
   if (normalized(existing.generalDirector) !== normalized(canonical.generalDirector)) changes.push("general_director");
@@ -157,6 +158,22 @@ const buildPlan = (canonicalRows, existingRows) => {
       if (sameNameActive.length > 0) {
         const nullInnMatches = sameNameActive.filter((row) => !row.inn);
         const differentInnMatches = sameNameActive.filter((row) => row.inn && row.inn !== canonical.inn);
+
+        if (
+          sameNameActive.length === 1
+          && nullInnMatches.length === 1
+          && differentInnMatches.length === 0
+        ) {
+          const adoptedExisting = nullInnMatches[0];
+          return {
+            action: "UPDATE",
+            canonical,
+            existing: adoptedExisting,
+            reason: "ACTIVE_SAME_NAME_MISSING_INN_ADOPTED",
+            changes: diffFields(adoptedExisting, canonical),
+          };
+        }
+
         const detail = nullInnMatches.length > 0
           ? `ACTIVE_SAME_NAME_MISSING_INN:${nullInnMatches.length}`
           : `ACTIVE_SAME_NAME_DIFFERENT_INN:${differentInnMatches.length}`;
@@ -188,7 +205,7 @@ const buildApplySql = (plan) => {
     }
     if (item.action === "UPDATE") {
       const c = item.canonical;
-      statements.push(`UPDATE corporate_legal_entities SET name=${sqlLiteral(c.name)},kpp=${sqlLiteral(c.kpp)},ogrn=${sqlLiteral(c.ogrn)},general_director=${sqlLiteral(c.generalDirector)},source=${sqlLiteral(SOURCE_LABEL)},verification_status='VERIFIED',updated_at=now() WHERE id=${sqlLiteral(item.existing.id)} AND active=true;`);
+      statements.push(`UPDATE corporate_legal_entities SET name=${sqlLiteral(c.name)},inn=${sqlLiteral(c.inn)},kpp=${sqlLiteral(c.kpp)},ogrn=${sqlLiteral(c.ogrn)},general_director=${sqlLiteral(c.generalDirector)},source=${sqlLiteral(SOURCE_LABEL)},verification_status='VERIFIED',updated_at=now() WHERE id=${sqlLiteral(item.existing.id)} AND active=true;`);
     }
   }
   statements.push("COMMIT;");
@@ -202,7 +219,7 @@ const main = () => {
   console.log(`SOURCE=${sourcePath}`);
   console.log("MATCH_KEY=INN");
   console.log("NAME_ONLY_MERGE=NO");
-  console.log("SAME_NAME_WITHOUT_INN_MATCH=CONFLICT");
+  console.log("SAME_NAME_WITHOUT_INN_MATCH=UPDATE_IF_UNIQUE_ACTIVE_NULL_INN");
   console.log("NEEDS_REVIEW_AUTO_WRITE=NO");
   console.log("SECRET_VALUES_PRINTED=NO");
 
