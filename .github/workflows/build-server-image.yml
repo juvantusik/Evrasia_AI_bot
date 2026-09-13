@@ -141,10 +141,16 @@ jobs:
           curl -fsS http://127.0.0.1:18080/api/phonebook/phones | grep -Fq '"records"'
           curl -fsS http://127.0.0.1:18080/api/phonebook/restaurants >/tmp/phonebook-restaurants.json
           test "$(jq '.records | length' /tmp/phonebook-restaurants.json)" = "62"
+          curl -fsS http://127.0.0.1:18080/api/phonebook/legal-entities >/tmp/phonebook-legal-entities.json
+          test "$(jq '.records | type' /tmp/phonebook-legal-entities.json)" = '"array"'
           test "$(curl -sS -o /tmp/phonebook-unauthorized.json -w '%{http_code}' -X POST \
             -H 'content-type: application/json' \
             -d '{"phone":"+7 921 000-00-01","operator":"MEGAFON","legalEntity":"ООО Тест"}' \
             http://127.0.0.1:18080/api/phonebook/phones)" = "401"
+          test "$(curl -sS -o /tmp/legal-entity-unauthorized.json -w '%{http_code}' -X POST \
+            -H 'content-type: application/json' \
+            -d '{"name":"ООО Тест ЮЛ","inn":"7800000000"}' \
+            http://127.0.0.1:18080/api/phonebook/legal-entities)" = "401"
 
           # Добавлено 03.09.2026 ИТ Директор Евразии
           curl -fsS http://127.0.0.1:18080/antifraud | grep -Fq 'id="root"'
@@ -173,9 +179,9 @@ jobs:
             http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-restore.json
           test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-restore.json)" = "40000"
 
-          # Обновлено 12.09.2026: 0021 добавляет snapshot актуальных согласий Оферта/ПД.
-          # При добавлении каждой новой миграции этот expected count и schema-smoke
-          # должны обновляться вместе с самой миграцией.
+          # Обновлено 13.09.2026: 0022 расширяет единый master ЮЛ /phonebook.
+          # При добавлении каждой новой миграции expected count и feature schema-smoke
+          # обновляются одновременно с самой миграцией.
           migration_rows="$(
             docker run --rm \
               --network host \
@@ -184,7 +190,27 @@ jobs:
               psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
                 -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
           )"
-          test "$migration_rows" = "22"
+          test "$migration_rows" = "23"
+
+          legal_entity_schema="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT count(*) FILTER (WHERE column_name='kpp'), count(*) FILTER (WHERE column_name='ogrn'), count(*) FILTER (WHERE column_name='actual_address'), count(*) FILTER (WHERE column_name='general_director'), CASE WHEN to_regclass('public.corporate_legal_entity_bank_accounts') IS NOT NULL THEN 1 ELSE 0 END, CASE WHEN to_regclass('public.corporate_legal_entity_operator_accounts') IS NOT NULL THEN 1 ELSE 0 END FROM information_schema.columns WHERE table_schema='public' AND table_name='corporate_legal_entities';"
+          )"
+          test "$legal_entity_schema" = "1|1|1|1|1|1"
+
+          legal_entity_links="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT count(*) FILTER (WHERE column_name='legal_entity_id') FROM information_schema.columns WHERE table_schema='public' AND table_name='corporate_phone_directory';"
+          )"
+          test "$legal_entity_links" = "1"
 
           consent_schema="$(
             docker run --rm \
