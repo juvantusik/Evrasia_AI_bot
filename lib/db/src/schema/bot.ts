@@ -130,7 +130,6 @@ export const corporatePhoneAuditTable = pgTable("corporate_phone_audit", {
   id: text("id").primaryKey(),
   action: text("action").notNull(),
   adminTelegramUserId: text("admin_telegram_user_id").notNull(),
-  targetTelegramUserId: text("target_telegram_user_id").notNull().default(""),
   phoneRecordId: text("phone_record_id"),
   phone: text("phone").notNull(),
   beforeState: text("before_state"),
