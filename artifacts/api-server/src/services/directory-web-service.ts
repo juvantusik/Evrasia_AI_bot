@@ -239,16 +239,33 @@ export const ensureDirectoryWebSchema = async (): Promise<void> => {
   await seedDirectoryRestaurants();
 };
 
-const phoneSelect = `SELECT id, phone, city_phone AS "cityPhone", federal_phone AS "federalPhone", operator, legal_entity_id AS "legalEntityId", legal_entity AS "legalEntity", inn, account_number AS "accountNumber", restaurant_name AS "restaurantName", line_type AS "lineType", subscriber_name AS "subscriberName" FROM corporate_phone_directory`;
+const phoneSelect = `
+  SELECT p.id,
+         p.phone,
+         p.city_phone AS "cityPhone",
+         p.federal_phone AS "federalPhone",
+         p.operator,
+         p.legal_entity_id AS "legalEntityId",
+         coalesce(le.name, p.legal_entity) AS "legalEntity",
+         coalesce(le.inn, p.inn) AS inn,
+         p.account_number AS "accountNumber",
+         p.restaurant_name AS "restaurantName",
+         p.line_type AS "lineType",
+         p.subscriber_name AS "subscriberName"
+  FROM corporate_phone_directory p
+  LEFT JOIN corporate_legal_entities le
+    ON le.id = p.legal_entity_id
+   AND le.active = true
+`;
 
 export const listDirectoryPhones = async (): Promise<DirectoryPhoneRecord[]> => {
-  const result = await pool.query<DirectoryPhoneRecord>(`${phoneSelect} WHERE active = true ORDER BY operator, phone, legal_entity`);
+  const result = await pool.query<DirectoryPhoneRecord>(`${phoneSelect} WHERE p.active = true ORDER BY p.operator, p.phone, coalesce(le.name, p.legal_entity)`);
   const pairedFederalPhones = new Set(result.rows.filter((record) => record.operator === "T2" && record.cityPhone && record.federalPhone).map((record) => record.federalPhone));
   return result.rows.filter((record) => !(record.operator === "T2" && record.lineType === "Федеральный номер" && !record.cityPhone && pairedFederalPhones.has(record.phone)));
 };
 
 const getPhone = async (id: string): Promise<DirectoryPhoneRecord | null> => {
-  const result = await pool.query<DirectoryPhoneRecord>(`${phoneSelect} WHERE id = $1 AND active = true LIMIT 1`, [id]);
+  const result = await pool.query<DirectoryPhoneRecord>(`${phoneSelect} WHERE p.id = $1 AND p.active = true LIMIT 1`, [id]);
   return result.rows[0] ?? null;
 };
 
@@ -317,13 +334,33 @@ export const deleteDirectoryPhone = async (actor: string, id: string): Promise<D
   return before;
 };
 
+const restaurantSelect = `
+  SELECT r.id,
+         r.number,
+         r.ou,
+         r.legal_entity_id AS "legalEntityId",
+         coalesce(le.name, r.legal_entity) AS "legalEntity",
+         r.address,
+         r.actual_director AS "actualDirector",
+         r.actual_phone_mode AS "actualPhoneMode",
+         r.actual_personal_phone AS "actualPersonalPhone",
+         coalesce(le.general_director, r.general_director) AS "generalDirector",
+         r.general_phone_mode AS "generalPhoneMode",
+         r.general_personal_phone AS "generalPersonalPhone",
+         r.email
+  FROM corporate_directory_restaurants r
+  LEFT JOIN corporate_legal_entities le
+    ON le.id = r.legal_entity_id
+   AND le.active = true
+`;
+
 export const listDirectoryRestaurants = async (): Promise<DirectoryRestaurantRecord[]> => {
-  const result = await pool.query<DirectoryRestaurantRecord>(`SELECT id, number, ou, legal_entity_id AS "legalEntityId", legal_entity AS "legalEntity", address, actual_director AS "actualDirector", actual_phone_mode AS "actualPhoneMode", actual_personal_phone AS "actualPersonalPhone", general_director AS "generalDirector", general_phone_mode AS "generalPhoneMode", general_personal_phone AS "generalPersonalPhone", email FROM corporate_directory_restaurants WHERE active = true ORDER BY number`);
+  const result = await pool.query<DirectoryRestaurantRecord>(`${restaurantSelect} WHERE r.active = true ORDER BY r.number`);
   return result.rows;
 };
 
 const getRestaurant = async (id: string): Promise<DirectoryRestaurantRecord | null> => {
-  const result = await pool.query<DirectoryRestaurantRecord>(`SELECT id, number, ou, legal_entity_id AS "legalEntityId", legal_entity AS "legalEntity", address, actual_director AS "actualDirector", actual_phone_mode AS "actualPhoneMode", actual_personal_phone AS "actualPersonalPhone", general_director AS "generalDirector", general_phone_mode AS "generalPhoneMode", general_personal_phone AS "generalPersonalPhone", email FROM corporate_directory_restaurants WHERE id=$1 AND active=true LIMIT 1`, [id]);
+  const result = await pool.query<DirectoryRestaurantRecord>(`${restaurantSelect} WHERE r.id=$1 AND r.active=true LIMIT 1`, [id]);
   return result.rows[0] ?? null;
 };
 
