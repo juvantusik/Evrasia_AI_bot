@@ -2,15 +2,54 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-12** after production forensic verification of consent origins for web-visible Anti-Fraud users.
+> Updated: **2026-09-15** after `/phonebook` v1.8 production follow-up, PR #50 delete-UX deployment and stale phone cleanup.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
-## 1. Bot production baseline
+## 0. Latest bot production override — 15.09.2026
+
+This section supersedes older bot runtime values later in this file where they conflict.
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Current accepted bot application:
+Current deployed bot application:
+
+- repo: `juvantusik/Evrasia_AI_bot`;
+- production revision: `1ed726927c5064198d769bb998597889c6ad07d1`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:f86c59983ef1857cf26b9763cd019d809ff821a8e2b01904c2b3b408f8f0eb5c`;
+- app status: `running / healthy`;
+- restart count: `0`;
+- DB: `evrasia_ai_bot`, healthy;
+- production migrations: **23**.
+
+Phonebook v1.8 is production-applied and accepted. PR #50 changed only legal-entity delete/archive UX: DELETE no longer requests `PHONEBOOK_WEB_WRITE_TOKEN`, while create/edit protection remains unchanged.
+
+Stale-link cleanup completed on 15.09.2026:
+
+- 18 stale active phone rows for `ООО "А-15 Новое Колпино`, `ООО "Век"`, `ООО "Евразия2008"`, `ООО "Кайхон"` were retired with `active=false` after `NOT_FOUND_OUTSIDE_AGGREGATE`, no-duplicate and no-restaurant-reference checks;
+- backup: `/opt/evrasia-ai-bot/backups/stale-phone-retire/20260915-081631/evrasia_ai_bot.pre-stale-phone-retire.dump`;
+- all four ended with zero active phone links and zero active restaurant links;
+- 7 stale legacy T2 rows for `ООО "Евразия-Большевиков"` were separately verified by the same logic and successfully retired; user confirmed the production script succeeded.
+
+Operational rule: stale phone rows are deactivated, not physically deleted. In current PostgreSQL schema discovery, no separate MegaFon/T2 source tables were found; the exact verified statement is `NOT_FOUND_OUTSIDE_AGGREGATE` among accessible phone/source-like tables.
+
+Immediate open Phonebook item:
+
+- restaurant №28 `Большевиков 18` remains `active=true` at last inspection;
+- linked master is `ООО "Евразия-Манхеттен"` (`legal_entity_id=le-b534bcce3b02ace0d23bfac2`, INN `7805576103`);
+- user states restaurant closed in May 2026;
+- 8 active phone rows were linked to `Евразия-Манхеттен` at last diagnostic point;
+- these 8 were **not** touched by the 7-row cleanup of old `ООО "Евразия-Большевиков"` and must be investigated separately before any deactivation.
+
+Canonical continuation document: `docs/PHONEBOOK_PRODUCTION_FOLLOWUP_2026-09-15.md`.
+
+## 1. Bot production baseline — historical checkpoint from 12.09.2026
+
+The values below record the prior Anti-Fraud checkpoint and are retained for history. Use section 0 for current bot runtime identity.
+
+Host: `eur-bot-01` (`192.168.103.200`).
+
+Prior accepted bot application at that checkpoint:
 - repo: `juvantusik/Evrasia_AI_bot`
 - production revision: `1ee4540150ef4aaba1e5c121a75e1c12b965dba2`
 - image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:3defaa7388f2278dfa7767e1ea79d2c12c1f0121f73eb208c034b153ade2d280`
@@ -227,29 +266,22 @@ Longer term, inspect SamZaberu code and migrate it to the canonical public-offer
 
 ## 8. Continuation point for new chat
 
-Confirmed:
-- Anti-Fraud PR #47 `Новый` 24h semantics: **PRODUCTION / ACCEPTED**;
-- bot production image: `sha256:3defaa7388f2278dfa7767e1ea79d2c12c1f0121f73eb208c034b153ade2d280`;
-- bot DB migrations: **21**;
-- web-visible Anti-Fraud set must be read from `anti_fraud_web_account_state`, not inferred from all `anti_fraud_accounts`;
-- website legal catalog: **PRODUCTION**;
-- offer 11.09.2026: **PRODUCTION**;
-- privacy policy: **PRODUCTION / ACCEPTED**;
-- signup consent implementation: **PRODUCTION**;
-- native Bitrix agreements: **PRODUCTION**;
-- native consent event location: `eurasia_new.b_consent_user_consent`;
-- existing-user account popup: **PRODUCTION / E2E ACCEPTED for USER_ID 880339 only**;
-- rollout to all historical users: **NOT DONE**;
-- five web-visible Anti-Fraud users with agreements 1+2 were verified as post-rollout `evrasia_signup` registrations, not account-gate acceptances;
-- legacy compatibility PDF replacement: **PRODUCTION**;
-- `/club/` bonus-program link points to current compatibility PDF.
+Confirmed current bot state:
 
-For future consent inspection:
-1. obtain web-visible USER_ID from `eur-bot-01` PostgreSQL table `anti_fraud_web_account_state`;
-2. legal consent events are on website host `evrasia` / MySQL DB `eurasia_new` / table `b_consent_user_consent`;
-3. required current agreements are IDs 1 and 2;
-4. join logically by Bitrix `USER_ID` / `bitrix_user_id`;
-5. inspect `DATE_INSERT`, `ORIGINATOR_ID`, `ORIGIN_ID` before classifying the consent source;
-6. keep diagnostics read-only and do not output unnecessary personal data.
+- production runtime: revision `1ed726927c5064198d769bb998597889c6ad07d1`;
+- image: `sha256:f86c59983ef1857cf26b9763cd019d809ff821a8e2b01904c2b3b408f8f0eb5c`;
+- DB migrations: **23**;
+- Phonebook v1.8: **PRODUCTION / ACCEPTED**;
+- PR #50 delete UX: **PRODUCTION**;
+- 18-row four-entity stale cleanup: **DONE**;
+- 7-row `Евразия-Большевиков` stale cleanup: **DONE**;
+- restaurant №28 `Большевиков 18`: **OPEN / needs separate investigation**.
 
-Next chat: read this file, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` and `docs/SERVER_SCRIPT_RULES.md`, then inspect factual production state before any mutation.
+Anti-Fraud/legal continuity remains as documented above:
+
+- PR #47 `Новый` 24h semantics accepted;
+- web-visible Anti-Fraud set comes from `anti_fraud_web_account_state`;
+- website legal catalog/offer/privacy/signup/native consent implementation remain production;
+- existing-user account popup remains controlled rollout for USER_ID 880339 unless newer factual evidence says otherwise.
+
+Next chat: read this file, `docs/PHONEBOOK_PRODUCTION_FOLLOWUP_2026-09-15.md`, `docs/PHONEBOOK_LEGAL_ENTITY_MASTER.md`, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` and `docs/SERVER_SCRIPT_RULES.md`, then inspect factual production state before any mutation.

@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-10** after documenting the production-proven Trusted Device device-hash counting method, in addition to the previously accepted PR #45 / Anti-Fraud state.
+> **Updated: 2026-09-15** after `/phonebook` v1.8 production rollout, delete-UX fix and stale phone-link cleanup.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -12,16 +12,17 @@
 
 Сначала полностью прочитай:
 
-1. `docs/PROJECT_CHECKPOINT.md` — самый свежий authoritative checkpoint;
+1. `docs/PROJECT_CHECKPOINT.md` — authoritative checkpoint;
 2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
 3. `docs/CURRENT_ARCHITECTURE.md` — актуальная архитектура;
-4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
-5. `SERVER_UPDATES.md` — фактическая история production/server updates;
-6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
-7. `docs/ANTI_FRAUD_UI_NEXT.md` — следующий запланированный UI-этап Anti-Fraud (`Новый` в dynamics + device_hash_id progress);
-8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
-9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-10. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+4. `docs/PHONEBOOK_LEGAL_ENTITY_MASTER.md` — master-data contract `/phonebook` v1.8;
+5. `docs/PHONEBOOK_LEGAL_ENTITY_PRODUCTION_ACCEPTANCE_2026-09-13.md` — initial production acceptance;
+6. `docs/PHONEBOOK_PRODUCTION_FOLLOWUP_2026-09-15.md` — текущая точка Phonebook cleanup и открытая задача;
+7. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
+8. `SERVER_UPDATES.md` — production/server update history;
+9. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative Trusted Device counting method;
+10. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — website/legal/consent perimeter;
+11. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
 
@@ -33,194 +34,213 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Accepted deployed application baseline after PR #45:
+Current deployed application after PR #50:
 
-- application revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- image config: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
-- app: `evrasia-ai-bot-app`
-- DB: `evrasia-ai-bot-db`
-- DB name/role: `evrasia_ai_bot`
-- Compose project: `evrasia-prod`
-- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- app port: `127.0.0.1:18080`
-- migrations: **20**
-- latest migration timestamp: `1788769200000`
-- current confirmed Anti-Fraud bonus threshold: **40000**
+- application revision: `1ed726927c5064198d769bb998597889c6ad07d1`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:f86c59983ef1857cf26b9763cd019d809ff821a8e2b01904c2b3b408f8f0eb5c`;
+- app: `evrasia-ai-bot-app`;
+- DB: `evrasia-ai-bot-db`;
+- DB name/role: `evrasia_ai_bot`;
+- Compose project: `evrasia-prod`;
+- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`;
+- app status: `running`;
+- app health: `healthy`;
+- app restart count: `0`;
+- DB health: `healthy`;
+- migrations: **23**;
+- current confirmed Anti-Fraud bonus threshold remains **40000** unless factual production says otherwise.
 
-PR #45 was UI-only relative to PR #44: no DB schema change, no new migration, no scheduler semantics change, no Bitrix state write and no threshold-rule change.
-
-Operator final production visual acceptance on 2026-09-09: **«все супер, отображение как надо»**.
-
-The exact final PR #45 server backup path was not pasted back into chat; therefore do not invent it. Existing retained PR #44 backup recorded before the final PR #45 cutover is `/opt/evrasia-ai-bot/backups/pr44-modal-fix-20260909-111032`; re-read factual server state before any cleanup.
+PR #50 changed only the legal-entity delete/archive UX in `/phonebook`: ordinary confirmation instead of editor-key prompt for DELETE. Create/edit protection remains unchanged.
 
 ---
 
-## 2. Latest Anti-Fraud operator milestone — DONE / PRODUCTION ACCEPTED
+## 2. `/phonebook` v1.8 — PRODUCTION / ACCEPTED
 
-Relevant lineage:
+Migration `0022_phonebook_legal_entity_master.sql` is production-applied.
 
-- PR #41 — inactive operational exclusion + localization → `a156db2e30dd2a31d7bd4126410f9f513382adaa`
-- PR #43 — configurable bonus threshold + `Новый` badge → `3ce9f8c1904351d77696e70314bba3c60afeffa5`
-- PR #44 — first settings-modal viewport/overflow fix → `a45554b25a820615c95b3a3148a38640a4a27507`; deployed but visually unsatisfactory
-- PR #45 — final modal viewport regression fix via React portal → `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`; deployed and visually accepted
+Accepted core state:
 
-### Operator setting
+- `corporate_legal_entities`: `91 -> 68` after safe dedupe;
+- duplicate INN groups: `23 -> 0`;
+- v1.8 columns present;
+- all matchable phone links and all 62 restaurants were linked during rollout;
+- canonical legal-entity import was applied under guarded transaction;
+- subsequent requisites/director/address backfills were performed in controlled production steps;
+- two same-name `Евразия-Триумф` legal entities remain distinct by INN;
+- `Евразия-Премиум` preserved one existing master row and safely adopted canonical INN/requisites.
 
-Button **`Настройка`** is immediately to the left of **`Обновить сейчас`**.
+Important master rule: consumers with `legal_entity_id` read current name/INN/general director from `corporate_legal_entities`; legacy text fields are fallback/backward compatibility.
 
-Current setting:
+Restaurant form rule: selecting a ЮЛ must also populate the general-director field from master data.
 
-- name: `Порог бонусного баланса`
-- persisted key: `anti_fraud_bonus_balance_threshold`
-- storage: existing `bot_settings`
-- default/current confirmed value: `40000`
-- no migration
-- strict rule: balance **>`threshold`** adds +50 and opens targeted 60-day history gate; equality does not trigger
-- saving does not itself start a refresh
-- next scheduled/manual scoring cycle reads the value
-- setting never auto-blocks and does not alter grouping rules.
-
-### `Новый` badge
-
-An account is marked **`Новый`** when it appears in the latest `addedAccountIds` for a previously observed Anti-Fraud case. A case seen for the first time does not label all members as new.
-
-### Final modal behavior
-
-PR #45 fixes the root UI issue rather than only adjusting overflow:
-
-- modal is rendered via React portal into `document.body`;
-- fixed positioning is viewport-relative and no longer constrained by the sticky header/backdrop-filter containing block;
-- one internal vertical scroll container is retained;
-- desktop dialog fits the viewport and lower controls remain reachable;
-- mobile behavior is preserved.
-
-Do not reopen PR #44's intermediate layout approach; PR #45 supersedes it.
+Address rule: `legal_address` and `actual_address` are independent and may differ completely; restaurant display address remains a separate short address.
 
 ---
 
-## 3. Next Anti-Fraud UI iteration — PLANNED
+## 3. Delete/archive UX and guard
 
-Two operator requirements are queued for the next session:
+Current UX:
 
-1. **Make `Новый` visible in the established case-dynamics/status area.** The current PR #43 semantics remain authoritative (`addedAccountIds` for a previously observed case), but the operator does not see newly appeared users clearly enough in the table. `Новый` should be presented where the UI already shows dynamics such as `усилился`, `без изменений`, etc. Before implementing, inspect the exact current status set/priorities and decide how `Новый` composes with existing dynamics instead of guessing.
+- delete/archive of legal-entity requisites shows only ordinary confirmation `Уверены, что хотите удалить?`;
+- DELETE legal-entity does **not** require `PHONEBOOK_WEB_WRITE_TOKEN`;
+- create/edit remain protected as before.
 
-2. **Add visual progress for accumulated Anti-Fraud `device_hash_id`.** This is distinct from the authentication Trusted Device count. The operator wants to see how much Anti-Fraud device-hash data has already been collected. First inspect the real DB/schema/query path and expose only a meaningful factual count. Design the UI so it can later split by authoritative source: website / SamZaberu application / mobile waiter application. If source is not currently persisted, do not fake the split — record the required future data-model/integration change.
+Archive guard remains mandatory:
 
-For the **authentication Trusted Device / SMS trust mechanism**, use `docs/TRUSTED_DEVICE_DIAGNOSTICS.md`: host `evrasia` (`192.168.103.141`), table `ev_trusted_devices`, primary metric `COUNT(DISTINCT DEVICE_ID_HASH)`. Do not answer that question from `eur-bot-01` or `anti_fraud_device_links`.
+- active `corporate_phone_directory.legal_entity_id` links block archive;
+- active `corporate_directory_restaurants.legal_entity_id` links block archive.
 
-See `docs/ANTI_FRAUD_UI_NEXT.md` before implementation.
-
----
-
-## 4. Existing Anti-Fraud status semantics — still current
-
-Bitrix is source of truth:
-
-- `ACTIVE=Y`, `BLOCKED=N` → **Активен**
-- `ACTIVE=N`, `BLOCKED=N` → **Неактивен**
-- any `BLOCKED=Y` → **Заблокирован**
-
-Only `BLOCKED=Y` is a true Bitrix block.
-
-Operational UI:
-
-- blocked and inactive hidden by default;
-- toggle: **`Показать заблокированных и неактивных`**;
-- inactive stays **Неактивен**;
-- KPI/shared-device/duplicate-contact summaries exclude both;
-- group bulk block targets active unblocked accounts only;
-- risk/group evidence semantics remain unchanged.
-
-Localization remains accepted, including Russian rendering of `max_devices_for_same_pair=2` and related generated reason keys.
+Do not remove the guard merely because a phone is not visible in the UI. First inspect factual DB links.
 
 ---
 
-## 5. Blocking / unblock acceptance — completed, do not repeat
+## 4. Stale phone cleanup rule — accepted
 
-Safe test USER_ID `880339` completed the controlled backend round-trip:
+If a phone row exists only in `corporate_phone_directory`, is not found in accessible phone/source-like tables outside the aggregate, has no restaurant personal-phone reference, and has no other active owner row for the same phone, it can be treated as stale legacy and retired with `active=false`.
 
-`ACTIVE=Y/BLOCKED=N` → block `ACTIVE=N/BLOCKED=Y` → unblock `ACTIVE=Y/BLOCKED=N`.
+Do not physically delete by default. Preserve history.
 
-Final acceptance: 27 PASS / 0 FAIL / 0 WARN; state restored; reason preserved; two audit transitions only; no risk/history/bonus mutation; no real customer mutation.
+Production schema discovery on 15.09.2026 found phone-like tables:
 
-Do not repeat it merely for reassurance or fabricate/mutate a risky customer to create a visual fixture.
+- `corporate_directory_restaurants`;
+- `corporate_phone_audit`;
+- `corporate_phone_directory`.
 
----
-
-## 6. Similarity performance — completed
-
-PR #38 acceptance remains valid:
-
-- protected cycle before: 206 s
-- after: 53 s
-- `/api/healthz`: 24/24 HTTP 200, max 3 ms
-- scheduler probes: 24/24 HTTP 200, max 6 ms
-- app restart count 0.
-
-`anti_fraud_risk_scoring` ~3.1 s is not the similarity-hotfix gate because that timing does not include the later similarity overlay.
+No separate MegaFon/T2 source tables were found inside this PostgreSQL DB, so the verified statement is `NOT_FOUND_OUTSIDE_AGGREGATE` in accessible tables — not that external operator systems were independently queried.
 
 ---
 
-## 7. Current product architecture
+## 5. Completed stale cleanup on 15.09.2026
 
-One production app/container contains:
+### Four old legal entities
 
-1. Phonebook — `/phonebook`
-2. Anti-Fraud — `/antifraud` + 15-minute scheduler
-3. SamZaberu — Telegram scenario inside `EvrasiaTelegramBotV2`
-4. Corporate communications / MegaFon — Telegram scenario/workflow inside the same application
+18 stale active phone rows were found and retired:
 
-`/directory` and `/api/directory/...` are removed and expected 404.
+- `ООО "А-15 Новое Колпино` — 5;
+- `ООО "Век"` — 5;
+- `ООО "Евразия2008"` — 4;
+- `ООО "Кайхон"` — 4.
 
-Legacy TEST container `evrasia-ai-bot-v17-test` is exited/archival. Do not restart blindly.
+Checks before write:
 
-### Website legal/consent perimeter
+- no duplicate/current owner rows;
+- all 18 `NOT_FOUND_OUTSIDE_AGGREGATE`;
+- no restaurant personal-phone references;
+- active restaurant links = 0 for all four.
 
-On 2026-09-09 the loyalty-program offer and personal-data policy on `evrasia.rest` were updated and visually accepted in production in support of the Anti-Fraud/legal-processing perimeter. The privacy page was converted to a responsive text layout and linked below `Договор оферты` in the site footer.
+Action:
 
-The next planned cross-system task is the registration form: separate checkboxes/choices and auditable per-user persistence/versioning of what was accepted or declined. This is not implemented yet. Before implementation inspect the factual Bitrix registration/persistence mechanisms; do not invent fields. See `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` for the complete handoff and production paths/backups.
+- `UPDATE 18`, `active=false`;
+- no physical DELETE;
+- backup: `/opt/evrasia-ai-bot/backups/stale-phone-retire/20260915-081631/evrasia_ai_bot.pre-stale-phone-retire.dump`;
+- post-check: active phone links = 0 and active restaurant links = 0 for all four;
+- app remained healthy.
 
----
+### `ООО "Евразия-Большевиков"`
 
-## 8. Mandatory deployment/script lessons
+Old master:
 
-Read `docs/SERVER_SCRIPT_RULES.md` before any server work.
+- ID `le-e6748431e3df3ddd16c8a04c`;
+- INN `7811360046`.
 
-Especially important after the PR #44 → #45 deployment sequence:
+Seven active legacy T2 rows were separately checked. All seven were `NOT_FOUND_OUTSIDE_AGGREGATE`, had no restaurant refs and no other owner rows. User also confirmed Гречко О.П. had long ago moved to `Евразия Южная` and these numbers no longer belonged to Большевиков.
 
-- generate one complete copy/paste block;
-- for a long script use quoted-heredoc wrapper, `bash -n`, execute only on successful syntax check, then remove the temp file;
-- guards must use the **factual current production baseline**, not an older remembered revision;
-- if an exact-revision guard finds a newer healthy production baseline before `CUTOVER_STARTED=YES`, stop without rollback and update the planned source baseline only after confirming why production advanced;
-- a guard correctly stopping on a stale baseline is a safety success, not a reason to bypass the guard;
-- scheduler race → bounded idle wait + revalidation;
-- use existing GHCR auth owned by user `tech`;
-- no unrelated Telegram/RestIS gates for Anti-Fraud-only work;
-- no secrets in output;
-- backups/rollback/post-check for production mutation;
-- terminal stays open.
+User confirmed production cleanup succeeded: **«все ок, получилось»**. Treat the seven rows as successfully retired with `active=false`; history preserved.
 
 ---
 
-## 9. Immediate continuation point
+## 6. Immediate Phonebook continuation point — IMPORTANT
 
-The latest Anti-Fraud operator-settings/modal work is **implemented, merged, deployed and visually accepted**.
+Restaurant №28:
 
-The next Anti-Fraud UI session should begin from `docs/ANTI_FRAUD_UI_NEXT.md`: first inspect current code/data, then implement `Новый` visibility in the dynamics/status area and a factual Anti-Fraud `device_hash_id` progress metric.
+- address: `Большевиков 18`;
+- active: `true` at last inspection;
+- linked ЮЛ: `ООО "Евразия-Манхеттен"`;
+- legal_entity_id: `le-b534bcce3b02ace0d23bfac2`;
+- INN: `7805576103`;
+- user reports the restaurant closed in **May 2026**.
 
-If the user instead asks how many hashes have accumulated for **Trusted Device authentication / SMS bypass**, do not use the Anti-Fraud DB. Read `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` and query `ev_trusted_devices` on Bitrix host `evrasia`.
+At the last diagnostic point `ООО "Евразия-Манхеттен"` had 8 active phone rows. They were **not** touched by the cleanup of the seven legacy `ООО "Евразия-Большевиков"` rows.
 
-The website offer/privacy-policy update described in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` is also **production / visually accepted**. Do not redo that styling unless a new defect is reported.
+Next step is not to bulk-disable all 8 blindly. First determine which of those 8 belong specifically to the closed restaurant №28 and whether any are still valid for another `Евразия-Манхеттен` use. Then retire only obsolete links and close/deactivate the restaurant row with exact guards and backup.
 
-Registration consent checkboxes and per-user consent persistence/versioning/audit are **planned, not implemented**.
+See `docs/PHONEBOOK_PRODUCTION_FOLLOWUP_2026-09-15.md`.
 
-Do not automatically resume:
+---
 
-- PR #43/#44/#45 modal implementation
-- USER_ID 880339 block/unblock acceptance
-- similarity performance refresh
-- archival TEST
-- paused full-Bitrix email/anomaly investigations.
+## 7. Anti-Fraud state still current unless superseded by factual production
 
-Before changing production, inspect current GitHub/CI **and factual current production runtime** first.
+Anti-Fraud remains advisory/investigative; risk does not auto-block.
+
+Bitrix source-of-truth account state:
+
+- `ACTIVE=Y`, `BLOCKED=N` → **Активен**;
+- `ACTIVE=N`, `BLOCKED=N` → **Неактивен**;
+- any `BLOCKED=Y` → **Заблокирован**.
+
+Blocked/inactive are hidden by default from ordinary operational lists; toggle remains `Показать заблокированных и неактивных`.
+
+Current threshold key: `anti_fraud_bonus_balance_threshold`; last confirmed value `40000`; strict `balance > threshold` rule; save does not itself trigger refresh.
+
+The operator-facing `Новый` semantics were later changed from old case-delta semantics to 24h first-seen web semantics under PR #47. For current details read `docs/PROJECT_CHECKPOINT.md` and factual code/DB rather than the older PR #43 notes.
+
+---
+
+## 8. Website legal / consent state
+
+Canonical website legal work remains production. Current source-of-truth details are in `docs/PROJECT_CHECKPOINT.md` and `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md`.
+
+Important current facts from the last accepted checkpoint:
+
+- offer revision 11.09.2026 production;
+- privacy policy production;
+- signup uses required offer + required PD + optional marketing;
+- native Bitrix consent tables are used;
+- existing-user account consent gate is accepted for controlled USER_ID `880339` only unless rollout scope changes later.
+
+Do not infer a global rollout from the controlled acceptance.
+
+---
+
+## 9. Trusted Device distinction
+
+For authentication Trusted Device / SMS bypass counts, use `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` and factual Bitrix-side storage (`ev_trusted_devices`). Do not answer that question from Anti-Fraud PostgreSQL device-link tables.
+
+---
+
+## 10. Mandatory deployment/script lessons
+
+Read `docs/SERVER_SCRIPT_RULES.md` before server work.
+
+Especially important:
+
+- one complete copy/paste block;
+- quoted-heredoc wrapper for large scripts;
+- `bash -n` before execution;
+- current factual production baseline before guards;
+- production mutation as root, GHCR auth reused from user `tech`;
+- never print secret values;
+- exact target set before DB write;
+- backup and backup verification before mutation;
+- transaction + post-check;
+- use `active=false` for stale phone cleanup instead of physical DELETE;
+- keep terminal open.
+
+Compose validation lesson from PR #50 deployment: when validating a staged compose file outside the production directory, use the production project directory so relative env/file paths resolve correctly; do not print resolved `docker compose config` output because it can expose secret values.
+
+---
+
+## 11. Do not redo completed work
+
+Do not automatically repeat:
+
+- v1.8 migration/canonical import;
+- 18-row stale cleanup;
+- 7-row `Евразия-Большевиков` stale cleanup;
+- PR #50 delete-key UX deployment;
+- old PR #43/#44/#45 modal work;
+- controlled USER_ID 880339 block/unblock acceptance;
+- prior similarity performance acceptance;
+- archival TEST recovery.
+
+Continue from the open restaurant №28 `Большевиков 18` investigation unless the user changes priority.
