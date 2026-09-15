@@ -92,10 +92,8 @@ export function LegalEntitiesPanel({ records, search, editorHeaders, onReload, o
   };
 
   const archive = async (record: LegalEntityMaster) => {
-    if (!window.confirm(`Убрать ${record.name}${record.inn ? ` · ИНН ${record.inn}` : ''} из активного справочника? История и связи сохранятся.`)) return;
-    const headers = editorHeaders();
-    if (!headers) return;
-    const response = await fetch(`/api/phonebook/legal-entities/${encodeURIComponent(record.id)}`, { method: 'DELETE', headers });
+    if (!window.confirm('Уверены, что хотите удалить?')) return;
+    const response = await fetch(`/api/phonebook/legal-entities/${encodeURIComponent(record.id)}`, { method: 'DELETE' });
     if (!response.ok) { onError(await readError(response)); return; }
     await onReload();
   };
@@ -113,7 +111,7 @@ export function LegalEntitiesPanel({ records, search, editorHeaders, onReload, o
             <td>{record.generalDirector || '—'}</td>
             <td>{record.actualAddress || '—'}</td>
             <td>{record.verificationStatus === 'VERIFIED' ? 'Проверено' : record.verificationStatus === 'NEEDS_REVIEW' ? 'Требует проверки' : 'Не проверено'}</td>
-            <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setEditor(record)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Архивировать" onClick={() => void archive(record)}><Trash2 size={16} /></button></td>
+            <td className="directory-actions"><button className="directory-icon-button" type="button" title="Редактировать" onClick={() => setEditor(record)}><Pencil size={16} /></button><button className="directory-icon-button danger" type="button" title="Удалить" onClick={() => void archive(record)}><Trash2 size={16} /></button></td>
           </tr>)}</tbody>
         </table></div>
         {filtered.length === 0 ? <div className="directory-empty">Организации не найдены.</div> : null}

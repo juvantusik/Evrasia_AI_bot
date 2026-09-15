@@ -76,10 +76,9 @@ router.put("/phonebook/legal-entities/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/phonebook/legal-entities/:id", async (req, res): Promise<void> => {
-  const editor = requireEditor(req, res);
-  if (!editor) return;
+  const actor = String(req.header("x-phonebook-actor") ?? "phonebook-web").trim().slice(0, 160) || "phonebook-web";
   try {
-    res.json({ record: await archiveLegalEntityMaster(editor.actor, req.params.id) });
+    res.json({ record: await archiveLegalEntityMaster(actor, req.params.id) });
   } catch (error) {
     req.log.warn({ error }, "Failed to archive phonebook legal entity");
     res.status(400).json({ error: errorMessage(error) });
