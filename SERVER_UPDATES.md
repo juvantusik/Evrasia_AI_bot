@@ -2,17 +2,18 @@
 
 > Current production operations note for Evrasia AI Bot.
 >
-> Last updated: **2026-09-09** after PR #45 production visual acceptance.
+> Last updated: **2026-09-15** after PR #50 production deployment and `/phonebook` stale-link cleanup.
 
 ## Current production host
 
 - host: `eur-bot-01`
 - IP: `192.168.103.200`
 - OS: Debian 13 (trixie)
-- Docker Engine: 26.1.5
-- Docker Compose: 2.26.1-4
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
+- app container: `evrasia-ai-bot-app`
+- DB container: `evrasia-ai-bot-db`
+- DB / role: `evrasia_ai_bot`
 
 The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active production topology.
 
@@ -20,234 +21,202 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 
 Application:
 
-- service/container: `evrasia-ai-bot-app`
-- accepted deployed revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- image/config ID: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
-- platform: `linux/amd64`
-- app port: `127.0.0.1:18080 -> 8080`
-- status: production UI operator-accepted after PR #45
+- deployed revision: `1ed726927c5064198d769bb998597889c6ad07d1`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:f86c59983ef1857cf26b9763cd019d809ff821a8e2b01904c2b3b408f8f0eb5c`
+- app status: `running`
+- app health: `healthy`
+- restart count: `0`
+- DB health: `healthy`
+- production migrations: **23**
 
-A later docs-only GitHub commit may advance `main`; it does not by itself change the deployed application identity above. Before any future mutation, re-read factual runtime revision/image from production.
+A later docs-only GitHub commit may advance `main`; it does not by itself change deployed application identity. Before any future mutation, re-read factual runtime revision/image from production.
 
-## PostgreSQL
+## PR #50 — `/phonebook` legal-entity delete UX
 
-- service/container: `evrasia-ai-bot-db`
-- image: `postgres:16-bookworm`
-- role/user: `evrasia_ai_bot`
-- production DB: `evrasia_ai_bot`
-- retained test DB: `evrasia_ai_bot_antifraud_test`
-- volume: `evrasia-postgres-prod-data`
-- network: `evrasia-prod-internal`
-- production migrations: **20**
-- latest migration journal timestamp: `1788769200000`
+Merge/deployed revision:
 
-Migrations 0018/0019 provide Anti-Fraud blocked-state fields and internal block audit.
+`1ed726927c5064198d769bb998597889c6ad07d1`
 
-PR #43/#44/#45 introduced no new migration and no schema change.
+Production image:
 
-## Current Anti-Fraud operator setting
+`ghcr.io/juvantusik/evrasia_ai_bot@sha256:f86c59983ef1857cf26b9763cd019d809ff821a8e2b01904c2b3b408f8f0eb5c`
 
-Production-confirmed setting baseline:
+Behavior change:
 
-- UI button: `Настройка`, immediately left of `Обновить сейчас`
-- setting: `Порог бонусного баланса`
-- persisted key: `anti_fraud_bonus_balance_threshold`
-- storage: existing `bot_settings`
-- current/default value: `40000`
-- strict rule: `bonus_balance > threshold` adds +50 and opens targeted 60-day history gate
-- equality does not trigger
-- save does not itself start refresh
-- next scheduled/manual scoring cycle reads the value
-- no auto-block and no grouping-rule change
+- legal-entity delete/archive no longer prompts for `PHONEBOOK_WEB_WRITE_TOKEN`;
+- UI uses ordinary confirmation `Уверены, что хотите удалить?`;
+- backend DELETE legal-entity no longer uses the editor-token gate;
+- create/edit protection remains unchanged;
+- archive guard for active phone/restaurant references remains unchanged.
 
-`Новый` badge uses case-dynamics `addedAccountIds` and only marks an account newly entering an already observed case. First observation of a whole case does not badge all members.
+Deployment result:
 
-## PR #43 — configurable threshold and `Новый` badge
+- exact immutable image pulled using existing `tech` GHCR credentials;
+- app-only recreation;
+- health became `healthy` after startup;
+- restart count `0`;
+- DB remained healthy;
+- migrations remained `23`;
+- rollback not required;
+- final `FINAL_STATUS=PASS`.
 
-Merge / production revision:
+## PR #50 deployment incident / Compose validation lesson
 
-`3ce9f8c1904351d77696e70314bba3c60afeffa5`
+The first deployment attempt stopped safely before cutover because staged `compose.yml.new` was validated from a backup directory. Relative file/env references were therefore resolved against the wrong directory and `docker compose config` returned nonzero.
 
-Title: `Anti-Fraud: configurable bonus threshold and new-account badge`.
+The staged compose itself was valid and differed only by intended image replacement.
 
-Production deployment result previously recorded:
+Correct validation used production project-directory semantics. After that, cutover succeeded.
 
-- app-only recreation
-- DB container unchanged
-- migrations remained 20
-- threshold API returned/preserved `40000`
-- no setting write by deployment script
-- no refresh triggered by deployment
-- no Bitrix user-state write
-- scheduler enabled/idle/15m/no error
-- production identity matched exact CI artifact
-- deployment `PASS_COUNT=50`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`
+Permanent lesson:
 
-This became the first production baseline with the operator setting and `Новый` marker.
+- when staged Compose is stored outside `/opt/evrasia-ai-bot/prod`, validate using the production project directory so relative paths resolve correctly;
+- never print full resolved `docker compose config` output in diagnostics because it may expose secret environment values;
+- a pre-cutover guard failure is a safety success; do not bypass it blindly.
 
-## PR #44 — intermediate modal viewport fix
+## `/phonebook` v1.8 DB baseline
 
-Merge / deployed revision:
+Migration `0022_phonebook_legal_entity_master.sql` is production-applied.
 
-`a45554b25a820615c95b3a3148a38640a4a27507`
+Current structural baseline:
 
-Title: `Fix Anti-Fraud settings modal viewport overflow`.
+- migrations: `23`;
+- master legal entities after rollout dedupe: `68`;
+- duplicate INN groups: `0`;
+- master v1.8 columns present;
+- canonical legal-entity import completed;
+- subsequent director/requisites/address backfills executed through separate guarded transactions.
 
-Exact deployed image at that stage:
+See:
 
-- digest: `sha256:e8ca3c26a053f4f1943ace9a1df1c498ad0544bdc47f3a80fc0c0b447afb52fc`
-- config: `sha256:32b8d6255ea828fd06cbce73f4fc2410b5ffb8a02f3f56712fbd37eba064f27e`
+- `docs/PHONEBOOK_LEGAL_ENTITY_PRODUCTION_ACCEPTANCE_2026-09-13.md`
+- `docs/PHONEBOOK_PRODUCTION_FOLLOWUP_2026-09-15.md`
 
-Recorded deployment result:
+## 15.09.2026 — stale phone cleanup for four old ЮЛ
 
-- `PASS_COUNT=28`
-- `FAIL_COUNT=0`
-- app-only recreation
-- DB container unchanged
-- migrations remained 20
-- environment/mounts/ports preserved
-- settings API healthy
-- scheduler enabled/idle/clean
-- no refresh, setting write or Bitrix write by deployment
-- fresh backup: `/opt/evrasia-ai-bot/backups/pr44-modal-fix-20260909-111032`
-- `FINAL_STATUS=PASS`
+Archive guard exposed 18 active legacy phone rows for:
 
-However, infrastructure/application health did **not** mean visual acceptance. The operator found the modal layout worse/unsatisfactory. PR #44 is therefore a superseded intermediate UI state, not the final accepted UI.
+- `ООО "А-15 Новое Колпино` — 5;
+- `ООО "Век"` — 5;
+- `ООО "Евразия2008"` — 4;
+- `ООО "Кайхон"` — 4.
 
-## PR #45 — final modal viewport regression fix
+Read-only checks proved:
 
-Merge / accepted deployed revision:
+- each target number had no other active owner row;
+- all 18 were `NOT_FOUND_OUTSIDE_AGGREGATE` among accessible phone/source-like tables;
+- direct restaurant phone references = `0`;
+- active restaurant links for all four ЮЛ = `0`.
 
-`b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
+Backup:
 
-Title: `Fix Anti-Fraud settings modal viewport regression`.
+`/opt/evrasia-ai-bot/backups/stale-phone-retire/20260915-081631/evrasia_ai_bot.pre-stale-phone-retire.dump`
 
-Exact CI artifact selected for production:
+Write:
 
-- immutable digest: `sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- config ID: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
-- platform: `linux/amd64`
+- physical DELETE: `NO`;
+- action: `active=false`;
+- rows updated: `18`;
+- transaction committed;
+- post-check: all four ЮЛ had zero active phone links and zero active restaurant links;
+- app remained healthy.
 
-Root-cause fix:
+## 15.09.2026 — `ООО "Евразия-Большевиков"` legacy cleanup
 
-- settings overlay rendered via React portal into `document.body`
-- fixed positioning becomes viewport-relative instead of being constrained by sticky-header/backdrop-filter containing block
-- one internal vertical scroll container retained
-- existing desktop/mobile design preserved
-- no backend, DB, scheduler, threshold/risk semantics or Bitrix changes
+Target legal entity:
 
-Operator final production visual acceptance on 2026-09-09:
+- ID `le-e6748431e3df3ddd16c8a04c`;
+- INN `7811360046`.
 
-**«все супер, отображение как надо»**.
+Seven active legacy T2 rows were identified and separately investigated.
 
-The exact final PR #45 deployment transcript and generated backup directory were not pasted back into chat. Do not invent that path. Before future rollback/cleanup, inspect current server state and `/opt/evrasia-ai-bot/backups` directly.
+Checks:
 
-## Deployment-guard incident and lesson from PR #45
+- exact active target count = `7`;
+- all 7 `NOT_FOUND_OUTSIDE_AGGREGATE`;
+- restaurant personal-phone references = `0`;
+- each target phone had one row / one owner in phone directory;
+- no other active owner row existed;
+- user confirmed Гречко О.П. had long ago moved to `Евразия Южная` and these numbers no longer belonged to Большевиков.
 
-An initial PR #45 deployment attempt correctly stopped before cutover because the script expected stale production baseline `3ce9f8c...`, while production had already advanced to PR #44 revision `a45554b...`.
+The user then confirmed the guarded cleanup script succeeded: **«все ок, получилось»**.
 
-Observed safe result:
+Accepted result:
 
-- `CUTOVER_STARTED=NO`
-- no rollback attempted
-- production remained healthy on PR #44
-- failure was `unexpected current production revision`
+- 7 legacy rows retired with `active=false`;
+- physical DELETE not used;
+- history retained.
 
-This is now a permanent operational lesson:
+Do not confuse these 7 rows with the separate active restaurant №28 `Большевиков 18` linked to `ООО "Евразия-Манхеттен"`.
 
-- deployment guards must use the factual current production baseline at the time the script is generated/run;
-- never assume the previous known revision is still deployed after an intervening cutover;
-- if exact-revision/image guard finds a different healthy baseline before cutover, stop without rollback;
-- confirm why production advanced and regenerate/resume using the new verified baseline;
-- never weaken or bypass the exact-baseline guard merely to continue deployment.
+## Phone/source discovery boundary
 
-The guard behavior was correct; the stale expected values in the generated script were the mistake.
+Generic production PostgreSQL schema discovery found phone-like tables:
 
-## Current Anti-Fraud account-state behavior
+- `public.corporate_directory_restaurants`;
+- `public.corporate_phone_audit`;
+- `public.corporate_phone_directory`.
 
-Bitrix remains source of truth:
+No separate MegaFon/T2 source tables were discovered inside this DB.
 
-- `ACTIVE=Y`, `BLOCKED=N` → `Активен`
-- `ACTIVE=N`, `BLOCKED=N` → `Неактивен`
-- any `BLOCKED=Y` → `Заблокирован`
+Therefore the accepted wording is:
 
-Only `BLOCKED=Y` is a true Bitrix block.
+`NOT_FOUND_OUTSIDE_AGGREGATE` in accessible phone/source-like tables.
 
-Operationally:
+Do not document these checks as if external operator systems were independently queried unless an actual external query is performed.
 
-- blocked and inactive hidden from ordinary Anti-Fraud lists by default
-- toggle: `Показать заблокированных и неактивных`
-- KPI/shared-device/duplicate-contact summaries exclude both
-- group bulk block targets active unblocked accounts only
-- group risk/bonus evidence still includes all case accounts
-- inactive remains `Неактивен` when shown
+## Immediate open production item — restaurant №28
 
-Localization remains accepted, including Russian rendering of `max_devices_for_same_pair=...` and related generated reason keys.
+At last inspection:
 
-## Manual block/unblock acceptance
+- restaurant number/id: `28`;
+- address: `Большевиков 18`;
+- `active=true`;
+- linked master: `ООО "Евразия-Манхеттен"`;
+- legal_entity_id: `le-b534bcce3b02ace0d23bfac2`;
+- master INN: `7805576103`;
+- user reports restaurant closed in May 2026.
 
-Safe USER_ID `880339` completed a controlled production backend round-trip:
+Eight active phone rows were linked to `ООО "Евразия-Манхеттен"` at that diagnostic point.
 
-- initial `ACTIVE=Y`, `BLOCKED=N`
-- block `ACTIVE=N`, `BLOCKED=Y`
-- unblock restored `ACTIVE=Y`, `BLOCKED=N`
-- block reason preserved
-- exactly two audit transitions
-- risk/history/bonus unchanged
-- 27 PASS / 0 FAIL / 0 WARN
-- no real customer mutation
+These 8 rows were **not** modified by the seven-row cleanup of old `ООО "Евразия-Большевиков"`.
 
-Do not repeat merely for reassurance. The safe account is risk-0 and has no current case; never mutate a real customer or fabricate risk data to create a visual fixture.
+Next production work must first identify which of the 8 belong specifically to the closed restaurant before any deactivation.
 
-## Similarity performance acceptance
+## GHCR authentication invariant
 
-PR #38 performance acceptance remains valid:
+Production mutation runs as root, but GHCR auth belongs to user `tech` in `/home/tech/.docker/config.json`.
 
-- old protected cycle: 206 s
-- optimized cycle: 53 s
-- health probes: 24/24 HTTP 200, max 3 ms
-- scheduler probes: 24/24 HTTP 200, max 6 ms
-- app restart count 0
+Reuse the existing `tech` Docker config for pulls. Do not copy secret values to root and do not print auth material.
 
-`anti_fraud_risk_scoring` ~3.1 s does not include the subsequent similarity overlay and is not a valid performance gate for that optimization.
+## Current Anti-Fraud continuity
 
-Retained similarity backup:
+Anti-Fraud remains advisory/investigative.
 
-`/opt/evrasia-ai-bot/backups/anti-fraud-similarity-hotfix-20260908-090617`
+- risk never auto-blocks;
+- Bitrix remains account-state source of truth;
+- blocked/inactive hidden by default;
+- current configured bonus threshold remains `40000` unless factual production shows otherwise;
+- scheduler remains a protected recurring process inside the same app;
+- operator-facing `Новый` uses PR #47 24h first-seen web semantics.
 
-## Canonical routes / architecture continuity
+Older PR #43/#44/#45 deployment history remains valid historically but is no longer the current deployed application identity.
 
-One production app contains:
-
-1. Phonebook (`/phonebook`)
-2. Anti-Fraud (`/antifraud` + scheduler)
-3. SamZaberu Telegram scenario
-4. Corporate communications / MegaFon Telegram scenario
-
-Canonical routes:
-
-- `/phonebook` = current Phonebook UI
-- `/antifraud` = current Anti-Fraud UI
-- `/directory` = expected 404
-- `/api/directory/...` = expected 404
-
-Legacy `evrasia-ai-bot-v17-test` remains exited/archival.
-
-## Backups to retain
+## Retained backups
 
 Do not clean without explicit operator approval.
 
 Known retained backups include:
 
+- `/opt/evrasia-ai-bot/backups/stale-phone-retire/20260915-081631/evrasia_ai_bot.pre-stale-phone-retire.dump`
+- `/opt/evrasia-ai-bot/backups/v18-canonical-apply/20260913-201035/evrasia_ai_bot.pre-canonical.dump`
+- `/opt/evrasia-ai-bot/backups/v18-phonebook-rollout/20260913-195433`
+- `/opt/evrasia-ai-bot/backups/pr47-new-24h-20260911-201030`
 - `/opt/evrasia-ai-bot/backups/pr44-modal-fix-20260909-111032`
 - `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
 - `/opt/evrasia-ai-bot/backups/anti-fraud-similarity-hotfix-20260908-090617`
-- `/opt/evrasia-ai-bot/backups/production-v17-phase1-20260907-053318`
-- `/opt/evrasia-ai-bot/backups/production-v17-phase2-dbrename-20260907-054218`
-- `/opt/evrasia-ai-bot/backups/app-only-remove-directory-20260907-090654`
 
-Exact PR #45 backup path is intentionally not guessed because its final deployment transcript was not pasted.
+The exact backup path of the successful seven-row `Евразия-Большевиков` cleanup was not pasted back into chat. Do not invent it; inspect server backup inventory if needed.
 
 ## Deployment policy / operational lessons
 
@@ -255,31 +224,24 @@ Use immutable image digest for production cutover.
 
 For server scripts follow `docs/SERVER_SCRIPT_RULES.md`.
 
-Mandatory lessons include:
+Mandatory lessons:
 
-- one complete copy/paste block
-- long script: quoted heredoc wrapper → `bash -n` → execute when valid → remove temp file
-- current production/app/code is source of truth before writing guards
-- exact current production baseline must be checked immediately before cutover
-- no unrelated Telegram/RestIS probes as Anti-Fraud deployment blockers
-- bot container intentionally has no RestIS credentials
-- GHCR auth is owned by user `tech`; do not invent new root credentials first
-- stage Compose in `/opt/evrasia-ai-bot/prod` when relative paths exist
-- scheduler race → bounded wait, then revalidate
-- HTTP 202 plus later timeout is not proof of background-job failure
-- persisted Anti-Fraud run state is authoritative for async work
-- validate performance metric boundaries before using them as gates
-- validate fixture eligibility before production mutation
-- never mutate a real customer just to make a visual fixture convenient
-- create/verify backup before production mutation
-- preserve env/mounts/ports/secrets during app-only recreation
-- never print secret values
-- keep terminal open after operator scripts
+- one complete copy/paste block;
+- long script: quoted heredoc wrapper → `bash -n` → execute if valid → remove temp file;
+- current production/app/code is source of truth before writing guards;
+- exact current production baseline immediately before cutover;
+- existing GHCR auth under `tech`;
+- no secrets in output;
+- DB writes: exact SELECT/target count first, backup, transaction, post-check;
+- stale phone cleanup: `active=false`, not physical DELETE;
+- stage/validate Compose with correct project-directory semantics;
+- never emit resolved Compose environment values in diagnostic output;
+- terminal stays open after scripts.
 
 ## Current release status
 
-The latest operator-settings/UI milestone is complete and production accepted on PR #45 revision `b7402cbe19b14f4d84c77870c8be876fe6f7bf42` with immutable CI digest `sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`.
+Current production release is revision `1ed726927c5064198d769bb998597889c6ad07d1` on immutable image `sha256:f86c59983ef1857cf26b9763cd019d809ff821a8e2b01904c2b3b408f8f0eb5c`.
 
-PR #44 remains an important historical intermediate deployment but is superseded visually by PR #45.
+Phonebook v1.8 core is production accepted. PR #50 delete UX is production. Two stale-phone cleanup batches are complete.
 
-No repeat modal fix, block/unblock acceptance or similarity refresh is pending.
+Next open Phonebook work is restaurant №28 `Большевиков 18` and its relationship to 8 active `ООО "Евразия-Манхеттен"` phone rows.
