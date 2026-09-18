@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-10** after documenting the production-proven Trusted Device device-hash counting method, in addition to the previously accepted PR #45 / Anti-Fraud state.
+> **Updated: 2026-09-18** after adding the TOTP 2FA / protected-profile continuation checkpoint.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -21,7 +21,8 @@
 7. `docs/ANTI_FRAUD_UI_NEXT.md` — следующий запланированный UI-этап Anti-Fraud (`Новый` в dynamics + device_hash_id progress);
 8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
 9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-10. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — planned TOTP 2FA / protected-profile design, production read-only findings and continuation keyword `ПАНДА ДВА`;
+11. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
 
@@ -224,3 +225,37 @@ Do not automatically resume:
 - paused full-Bitrix email/anomaly investigations.
 
 Before changing production, inspect current GitHub/CI **and factual current production runtime** first.
+
+
+---
+
+## 10. Keyword continuation — ПАНДА ДВА
+
+If the operator writes **ПАНДА ДВА**, resume the TOTP 2FA / protected-profile workstream from:
+
+`docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
+
+Do not repeat the already completed production read-only discovery.
+
+The business request is:
+
+- optional TOTP 2FA using Яндекс Ключ / Google Authenticator / compatible TOTP clients;
+- enrollment requires SMS confirmation of the current account phone **before** exposing the TOTP provisioning QR/secret;
+- TOTP protects login; it does not replace the bonus-spending PIN;
+- after safe enrollment, the intended benefit is to show the actual bonus-spending PIN directly in the personal account without waiting for VK/SMS;
+- all ordinary profiles keep current behavior;
+- initial pilot is Bitrix USER_ID `880339` only.
+
+Confirmed production facts:
+
+- native `Bitrix\Security\Mfa\Otp` exists;
+- global `OTP_ENABLED=NO` at the checkpoint;
+- pilot OTP state is clean/uninitialized/unactivated;
+- native tables are `b_sec_user` and `b_sec_recovery_codes`;
+- current web login uses AJAX `eurasia:signin/process` -> `CUser->Login(...)`;
+- current web bonus PIN endpoint is `/local/php_interface/pincode.php`, which gets the RestIS PIN then delivers through VK/SMS;
+- existing logout/revocation code can revoke pre-2FA sessions.
+
+The immediate next step is **not** a blind WRITE. First run the final narrow pre-write audit from the dedicated checkpoint: current `b_sec_user` population, exact OTP option values, optional/mandatory mode, native setup sequence and login event wiring. If safe, proceed with the guarded pilot only.
+
+Critical invariant: direct PIN must require a session that actually passed TOTP; do not grant direct-PIN privilege merely because the account has active OTP.
