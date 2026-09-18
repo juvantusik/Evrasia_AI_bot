@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-12** after production forensic verification of consent origins for web-visible Anti-Fraud users.
+> Updated: **2026-09-18** after documenting the planned TOTP 2FA / protected-profile workstream and its production read-only findings.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -253,3 +253,53 @@ For future consent inspection:
 6. keep diagnostics read-only and do not output unnecessary personal data.
 
 Next chat: read this file, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` and `docs/SERVER_SCRIPT_RULES.md`, then inspect factual production state before any mutation.
+
+
+## 9. TOTP 2FA / protected-profile workstream — PLANNED / READ-ONLY INVESTIGATED
+
+Dedicated authoritative checkpoint:
+
+`docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
+
+Continuation keyword:
+
+`ПАНДА ДВА`
+
+Operator request:
+
+- optional TOTP 2FA for guest profiles using Яндекс Ключ / Google Authenticator / compatible TOTP apps;
+- enrollment must first confirm the current account phone by SMS, so stolen login/password alone cannot enroll an attacker's authenticator;
+- TOTP does **not** replace the bonus-spending PIN;
+- after a profile is safely enrolled in 2FA, the intended benefit is to allow the bonus-spending PIN to be displayed directly in the personal account instead of waiting for VK/SMS delivery;
+- ordinary profiles must keep the current PIN-delivery behavior.
+
+Pilot is restricted to Bitrix `USER_ID=880339`.
+
+Production read-only facts confirmed on 2026-09-18:
+
+- Bitrix native MFA exists: `Bitrix\Security\Mfa\Otp`;
+- global runtime state: `OTP_ENABLED=NO`, recovery codes disabled, Bitrix OTP SMS capability reports enabled;
+- native storage: `b_sec_user`; recovery storage: `b_sec_recovery_codes`;
+- pilot user currently has no initialized/activated OTP and no secret;
+- current website AJAX login uses `CUser->Login(...)` in `local/components/eurasia/signin/class.php`, while the older/general signin component already contains `Mfa\Otp::isOtpRequired()` rendering logic;
+- current web bonus-PIN endpoint is `/local/php_interface/pincode.php`: it obtains the real PIN from RestIS and sends it by VK when available, otherwise by SMS;
+- current V4 mobile PIN controller has analogous VK/SMS behavior;
+- existing global logout/session-revocation logic can revoke Bitrix auth actions and mobile JWT/refresh state.
+
+Security invariants:
+
+- SMS ownership confirmation must happen **before** exposing the TOTP provisioning QR/secret;
+- direct PIN must never be authorized only by `b_sec_user.ACTIVE=Y`;
+- the current session must itself be known to have passed TOTP, or old sessions must be invalidated and a post-TOTP session marker used;
+- after 2FA activation, pre-2FA sessions must be revoked;
+- users without 2FA must continue to log in and receive PINs exactly as before;
+- no custom TOTP store should be created unless native Bitrix MFA proves unsuitable;
+- no 2FA production mutation has happened yet.
+
+Exact continuation:
+
+1. run the final pre-write audit described in `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` to inspect existing `b_sec_user` population, exact Bitrix OTP options, optional/mandatory behavior, native setup call sequence, and login event wiring;
+2. if safe, guarded pilot WRITE for USER_ID 880339 only: optional native Bitrix OTP + profile UI + SMS ownership check + QR + TOTP verify/activate + session revoke + login E2E;
+3. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
+
+When the operator says **ПАНДА ДВА**, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
