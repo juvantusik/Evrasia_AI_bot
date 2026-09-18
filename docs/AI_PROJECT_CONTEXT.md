@@ -2,7 +2,7 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-09
+> **Last updated:** 2026-09-18
 > **Repository:** `juvantusik/Evrasia_AI_bot`
 > **Current accepted deployed app revision:** `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
 > **Current production milestone:** Anti-Fraud operator settings + `Новый` badge + final settings-modal viewport fix are deployed and operator accepted.
@@ -326,3 +326,20 @@ After any material change to deployed revision/image, topology, DB/migrations, s
 - `docs/SERVER_SCRIPT_RULES.md` when a new operational lesson is learned.
 
 When a decision changes, record **Было → Стало → Причина** and keep production application identity separate from docs-only GitHub revisions.
+
+
+---
+
+## 17. TOTP 2FA / protected-profile workstream — PLANNED
+
+Authoritative continuation document:
+
+`docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
+
+Continuation keyword: **ПАНДА ДВА**.
+
+The workstream is read-only investigated and not implemented. It covers optional TOTP 2FA for guest accounts, SMS ownership confirmation before authenticator enrollment, pilot rollout for Bitrix USER_ID `880339`, session revocation after enrollment, and the planned direct bonus-PIN experience for a session that has actually passed the second factor.
+
+Confirmed production facts, file paths, table structures, SHA baselines, current Bitrix MFA state, current signin/PIN flows, security invariants and exact next steps are maintained in the dedicated checkpoint above.
+
+When the operator says **ПАНДА ДВА**, resume from that document and do not repeat the completed discovery audits.
