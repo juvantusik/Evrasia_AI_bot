@@ -1,19 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
+import { BitrixAntiFraudCheckinGateway } from "./bitrix-antifraud-checkin-gateway";
 import {
-  BitrixAntiFraudCheckinGateway,
-  type BitrixAntiFraudCheckinRecord,
-} from "./bitrix-antifraud-checkin-gateway";
-import { enrichRestisHistoryForHighRiskUserOnce } from "./anti-fraud-restis-history-enricher";
-import { summarizeCheckinScoutSnapshot } from "./anti-fraud-checkin-scout-rules";
+  evaluateCheckinScoutPhysicalHistory,
+  summarizeCheckinScoutSnapshot,
+} from "./anti-fraud-checkin-scout-rules";
 
 const SOURCE = "bitrix_checkin_scout";
 const LOCK_NAME = "anti_fraud_checkin_scout_sync";
 const DEFAULT_DAYS = 3;
 const DEFAULT_MAX_DEEP_CHECKS = 10;
 const MAX_DEEP_CHECKS = 50;
-const CONFIRM_3PLUS_DAYS_60D = 3;
-const CONFIRM_2PLUS_DAYS_7D = 3;
 
 type WatchRow = {
   bitrix_user_id: number;
@@ -26,15 +23,63 @@ type WatchRow = {
   last_deep_check_count: number | null;
 };
 
-type ConfirmationRow = {
-  days_2plus_7d: number;
-  days_3plus_60d: number;
-};
-
 type PendingDeepCheckRow = {
   bitrix_user_id: number;
   last_deep_check_day: string;
   last_deep_check_count: number;
+};
+
+export type CheckinScoutSyncResult = {
+  runId: string;
+  fetchedRecords: number;
+  observedAccounts: number;
+  watchedAccounts: number;
+  deepCheckCandidates: number;
+  unresolvedCardCount: number;
+  expiredAccounts: number;
+};
+
+export type CheckinScoutEvaluationResult = {
+  deepCheckCandidates: number;
+  deepChecksAttempted: number;
+  deepChecksSucceeded: number;
+  deepChecksFailed: number;
+  confirmedAccounts: number;
+};
+
+export type CheckinScoutSyncOptions = {
+  gateway?: BitrixAntiFraudCheckinGateway;
+  days?: number;
+};
+
+export type CheckinScoutEvaluationOptions = {
+  gateway?: BitrixAntiFraudCheckinGateway;
+  maxDeepChecks?: number;
+};
+
+const safeErrorMessage = (error: unknown): string =>
+  (error instanceof Error ? error.message : "Неизвестная ошибка Check-in Scout").slice(0, 2000);
+
+const boundedInteger = (
+  value: number,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number => {
+  if (!Number.isInteger(value)) return fallback;
+  return Math.max(minimum, Math.min(maximum, value));
+};
+
+const addDays = (day: string, amount: number): string => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new Error("Check-in Scout получил некорректную календарную дату");
+  }
+  const date = new Date(`${day}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Check-in Scout получил некорректную календарную дату");
+  }
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
 };
 
 const currentMoscowDay = async (): Promise<string> => {
@@ -135,9 +180,9 @@ const deepCheckNeeded = (
   return candidate;
 };
 
-// Snapshot читает ~весь поток посещений, но persistent Anti-Fraud получает только
-// пользователей, у которых уже выполнено бизнес-условие 2+ чекина за московские сутки.
-// Это принципиально не превращает нормальных посетителей с 1 чекином/день в Anti-Fraud accounts.
+// Snapshot читает весь 3-дневный поток, но persistent Anti-Fraud получает только
+// пользователей, у которых выполнено бизнес-условие 2+ чекина за московские сутки.
+// Нормальные 1 чекин/сутки не пишутся ни в anti_fraud_visits, ни в account-map.
 export const syncCheckinScoutSnapshotOnce = async (
   options: CheckinScoutSyncOptions = {},
 ): Promise<CheckinScoutSyncResult> => {
@@ -297,43 +342,13 @@ export const syncCheckinScoutSnapshotOnce = async (
   }
 };
 
-const loadConfirmation = async (userId: number): Promise<ConfirmationRow> => {
-  const result = await pool.query<ConfirmationRow>(
-    `WITH checkins AS (
-       SELECT DISTINCT source_restis_id, visited_at, restaurant
-       FROM anti_fraud_visits
-       WHERE bitrix_user_id=$1
-         AND loyalty_verified IS TRUE
-         AND visited_at >= now() - interval '60 days'
-     ),
-     daily AS (
-       SELECT
-         (visited_at AT TIME ZONE 'Europe/Moscow')::date AS visit_day,
-         count(*)::int AS checkins
-       FROM checkins
-       GROUP BY (visited_at AT TIME ZONE 'Europe/Moscow')::date
-     )
-     SELECT
-       count(*) FILTER (
-         WHERE visit_day >= (now() AT TIME ZONE 'Europe/Moscow')::date - 6
-           AND checkins >= 2
-       )::int AS days_2plus_7d,
-       count(*) FILTER (WHERE checkins >= 3)::int AS days_3plus_60d
-     FROM daily`,
-    [userId],
-  );
-
-  return {
-    days_2plus_7d: Number(result.rows[0]?.days_2plus_7d ?? 0),
-    days_3plus_60d: Number(result.rows[0]?.days_3plus_60d ?? 0),
-  };
-};
-
-// Deep history запускается уже после account-map stage: enricher требует существующий
-// anti_fraud_accounts row. Pending deep_check хранится в БД, поэтому restart между стадиями безопасен.
+// Deep-check читает адресную 60-дневную физическую историю COfflineOrderHl.
+// VIP_HISTORY здесь намеренно не используется: её строки отражают денежные операции
+// и не являются надёжным источником количества физических посещений.
 export const evaluateCheckinScoutOnce = async (
   options: CheckinScoutEvaluationOptions = {},
 ): Promise<CheckinScoutEvaluationResult> => {
+  const gateway = options.gateway ?? new BitrixAntiFraudCheckinGateway();
   const maxDeepChecks = boundedInteger(
     Number(
       options.maxDeepChecks
@@ -369,17 +384,8 @@ export const evaluateCheckinScoutOnce = async (
     deepChecksAttempted += 1;
 
     try {
-      await enrichRestisHistoryForHighRiskUserOnce({
-        bitrixUserId: userId,
-        checkinScoutConfirmed: true,
-        lookbackDays: 60,
-        refreshHours: 0,
-      });
-
-      const confirmation = await loadConfirmation(userId);
-      const confirmed =
-        confirmation.days_3plus_60d >= CONFIRM_3PLUS_DAYS_60D
-        || confirmation.days_2plus_7d >= CONFIRM_2PLUS_DAYS_7D;
+      const history = await gateway.fetchUserHistory(userId, 60);
+      const confirmation = evaluateCheckinScoutPhysicalHistory(history.records);
 
       await pool.query(
         `UPDATE anti_fraud_checkin_watch_state
@@ -395,19 +401,18 @@ export const evaluateCheckinScoutOnce = async (
          WHERE bitrix_user_id=$1`,
         [
           userId,
-          confirmed ? "confirmed" : "watching",
-          confirmation.days_2plus_7d,
-          confirmation.days_3plus_60d,
+          confirmation.confirmed ? "confirmed" : "watching",
+          confirmation.days2Plus7d,
+          confirmation.days3Plus60d,
         ],
       );
 
       deepChecksSucceeded += 1;
-      if (confirmed) confirmedAccounts += 1;
+      if (confirmation.confirmed) confirmedAccounts += 1;
     } catch {
       deepChecksFailed += 1;
 
-      // Сбрасываем marker проверенного day/count только при технической ошибке,
-      // чтобы следующий protected cycle повторил именно эту deep check.
+      // Только техническая ошибка разрешает retry того же trigger на следующем цикле.
       await pool.query(
         `UPDATE anti_fraud_checkin_watch_state
          SET status='watching',
