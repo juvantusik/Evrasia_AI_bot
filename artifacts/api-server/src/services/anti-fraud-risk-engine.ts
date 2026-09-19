@@ -6,10 +6,14 @@ import {
   DEFAULT_ANTI_FRAUD_BONUS_BALANCE_THRESHOLD,
   getAntiFraudSettings,
 } from "./anti-fraud-settings-service";
+import {
+  getAntiFraudOperatorWatchlist,
+  type AntiFraudOperatorWatchEntry,
+} from "./anti-fraud-operator-watchlist-service";
 
 const SOURCE = "anti_fraud_risk_scoring";
 const LOCK_NAME = "anti_fraud_risk_scoring";
-const CALCULATION_VERSION = "v1.3";
+const CALCULATION_VERSION = "v1.4";
 const DEFAULT_HISTORY_THRESHOLD = 50;
 const DEFAULT_MAX_HISTORY_USERS = 10;
 const MAX_HISTORY_USERS = 50;
@@ -138,6 +142,35 @@ const riskLevelFor = (score: number): AntiFraudRiskScore["riskLevel"] => {
   if (score >= 50) return "high";
   if (score >= 25) return "medium";
   return "low";
+};
+
+export const applyAntiFraudOperatorRiskOverride = (
+  score: AntiFraudRiskScore,
+  entry: AntiFraudOperatorWatchEntry | undefined,
+  historyThreshold = DEFAULT_HISTORY_THRESHOLD,
+): AntiFraudRiskScore => {
+  if (!entry || entry.riskOverride === null) return score;
+
+  const override = clamp(entry.riskOverride);
+  const overallRisk = Math.max(score.overallRisk, override);
+  const threshold = boundedInteger(historyThreshold, DEFAULT_HISTORY_THRESHOLD, 1, 100);
+  const reasons = score.reasons.filter((reason) => reason.code !== "operator_confirmed_risk");
+
+  reasons.push({
+    code: "operator_confirmed_risk",
+    score: override,
+    details:
+      `label=${entry.label}; reason=${entry.reason ?? "operator_confirmed"}; ` +
+      `risk_override=${override}; mode=override`,
+  });
+
+  return {
+    ...score,
+    overallRisk,
+    riskLevel: riskLevelFor(overallRisk),
+    historyGate: score.historyGate || overallRisk >= threshold,
+    reasons,
+  };
 };
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
@@ -777,9 +810,19 @@ const calculateAndPersist = async (
   historyThreshold: number,
   bonusBalanceThreshold: number,
 ): Promise<AntiFraudRiskScore[]> => {
-  const signals = await loadRiskSignals();
+  const [signals, operatorWatchlist] = await Promise.all([
+    loadRiskSignals(),
+    getAntiFraudOperatorWatchlist(),
+  ]);
+  const watchByUser = new Map(
+    operatorWatchlist.map((item) => [item.bitrixUserId, item] as const),
+  );
   const scores = signals.map((signal) =>
-    scoreAntiFraudSignals(signal, historyThreshold, bonusBalanceThreshold),
+    applyAntiFraudOperatorRiskOverride(
+      scoreAntiFraudSignals(signal, historyThreshold, bonusBalanceThreshold),
+      watchByUser.get(signal.bitrixUserId),
+      historyThreshold,
+    ),
   );
   await persistScores(scores, runId);
   return scores;
