@@ -523,7 +523,10 @@ export const evaluateCheckinScoutOnce = async (
       deepChecksFailed += 1;
       await pool.query(
         `UPDATE anti_fraud_checkin_watch_state
-         SET status='watching', updated_at=now()
+         SET status='watching',
+             last_deep_check_day=NULL,
+             last_deep_check_count=NULL,
+             updated_at=now()
          WHERE bitrix_user_id=$1
            AND status <> 'confirmed'`,
         [candidate.userId],
