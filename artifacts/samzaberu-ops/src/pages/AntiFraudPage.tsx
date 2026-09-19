@@ -20,7 +20,7 @@ import AntiFraudSettingsButton from './AntiFraudSettingsButton';
 import './anti-fraud-ui-next.css';
 
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
+type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance' | 'operator_confirmed';
 type CaseTrend = 'new' | 'strengthened' | 'unchanged' | 'weakened';
 type ConsentSource = 'signup' | 'account_gate' | 'other';
 type Reason = { code: string; score: number; details: string };
@@ -55,6 +55,8 @@ type Account = {
   computedAt: string;
   reasons: Reason[];
   operatorWatched: boolean;
+  operatorLabel: string | null;
+  operatorRiskOverride: number | null;
 };
 
 type Device = {
@@ -147,6 +149,7 @@ const signalMeta: Record<CaseSignal, { label: string; className: string }> = {
   fast_switch: { label: 'Быстрые переключения', className: 'tag-red' },
   linked_visits: { label: 'Связанные посещения', className: 'tag-orange' },
   bonus_balance: { label: 'Высокий остаток бонусов', className: 'tag-orange' },
+  operator_confirmed: { label: 'Подтверждено оператором', className: 'tag-red' },
 };
 
 const reasonLabels: Record<string, string> = {
@@ -158,6 +161,7 @@ const reasonLabels: Record<string, string> = {
   similar_identity_combo: 'Похожий телефон и email', linked_visit_proximity: 'Близкие посещения связанных аккаунтов',
   high_daily_visit_frequency: 'Высокая частота посещений', repeated_high_visit_days: 'Регулярный паттерн посещений',
   high_bonus_balance: 'Высокий остаток бонусов', similar_identity_corroborated: 'Подтверждённая похожая идентичность',
+  operator_confirmed_risk: 'Подтверждённая оператором продажа чекинов',
 };
 
 const trendMeta: Record<CaseTrend, { label: string; symbol: string }> = {
@@ -270,7 +274,9 @@ const parseDetails = (details: string) => details.split(';').map((part) => part.
     .replace('corroborated_similar_email_links=', 'подтверждённых связей по похожему email: ')
     .replace('similar_phone_links=', 'связей по похожему номеру: ').replace('similar_email_links=', 'связей по похожему email: ')
     .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ').replace('bonus_balance=', 'остаток бонусов: ')
-    .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: '));
+    .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: ')
+    .replace('label=', 'метка: ').replace('reason=confirmed_checkin_sale', 'основание: подтверждена продажа чекинов')
+    .replace('risk_override=', 'ручной Risk: ').replace('mode=override', 'режим: операторский override'));
 
 export default function AntiFraudPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -435,7 +441,7 @@ export default function AntiFraudPage() {
 
                   <div className="detail-column account-column"><h3>Аккаунты кейса</h3>
                     {visibleAccounts.map((account) => <div className={`account-card ${account.bitrixBlocked ? 'blocked' : ''}`} key={account.bitrixUserId}>
-                      <div className="account-top"><div><div className="account-name-line"><strong>{account.displayName || 'Без имени'}{account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><ConsentSnapshot account={account} /></div><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
+                      <div className="account-top"><div><div className="account-name-line"><strong>{account.displayName || 'Без имени'}{account.operatorWatched ? <em className="operator-watch-badge">{account.operatorLabel || 'Наблюдение'}</em> : null}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><ConsentSnapshot account={account} /></div><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
                       <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>{loyaltyText(account)}</span></div>
                       {account.bitrixBlocked ? <div className="block-info"><strong>Дата блокировки: {account.blockedAt ? formatDate(account.blockedAt) : 'неизвестна'}</strong><span>{account.bitrixBlockReason || 'Основание блокировки не указано'}</span></div> : null}
                       <div className="risk-bars"><span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span></div>
