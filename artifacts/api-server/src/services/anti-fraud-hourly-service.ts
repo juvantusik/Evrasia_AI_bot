@@ -178,9 +178,10 @@ const refreshPriorityLoyaltyOnce = async (): Promise<void> => {
 // Защищённый цикл больше НЕ использует прямые RestIS VIP_TODAY/card-map и не требует
 // RestIS credentials в контейнере бота. Каждые 15 минут при включённом scheduler:
 // 1) полный snapshot Trusted Device;
-// 2) Check-in Scout snapshot за последние 3 московских дня;
-// 3) account-map по известным USER_ID, включая пользователей, найденных Scout;
-// 4) Scout state machine: 2 чекина = WATCH, повторные 2+ / 3-й чекин = адресная 60-day history;
+// 2) Check-in Scout snapshot за последние 3 московских дня; 1 чекин/сутки остаётся только в памяти,
+//    а persistent WATCH создаётся исключительно при 2+ чекинах;
+// 3) account-map по известным USER_ID, включая только WATCH/deep/confirmed кандидатов Scout;
+// 4) Scout deep-check stage: повторные 2+ / 3-й чекин = адресная 60-day history;
 // 5) предварительный risk без обычной history — чтобы новые подозрительные аккаунты сразу попали в priority loyalty;
 // 6) свежий loyalty TotalSum/count/issue для рискованных аккаунтов уже с учётом новых USER_ID;
 // 7) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;

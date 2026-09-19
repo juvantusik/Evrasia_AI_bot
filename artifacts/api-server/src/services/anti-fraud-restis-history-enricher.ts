@@ -148,7 +148,7 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
   const refreshHours = boundedInteger(
     Number(options.refreshHours ?? process.env.ANTI_FRAUD_HISTORY_REFRESH_HOURS ?? DEFAULT_REFRESH_HOURS),
     DEFAULT_REFRESH_HOURS,
-    0,
+    1,
     MAX_REFRESH_HOURS,
   );
   const now = options.now ?? new Date();

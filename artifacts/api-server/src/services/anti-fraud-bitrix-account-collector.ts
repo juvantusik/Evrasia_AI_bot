@@ -44,8 +44,8 @@ const chunk = <T>(values: T[], size: number): T[][] => {
 // Добавлено 03.09.2026 ИТ Директор Евразии
 // В Bitrix запрашиваются только USER_ID, уже попавшие в Anti-Fraud через карты, устройства или ранее известные аккаунты.
 // Массовая выгрузка всей базы пользователей Bitrix этим collector не поддерживается.
-// Обновлено 19.09.2026: USER_ID из Check-in Scout попадает сюда через anti_fraud_visits,
-// поэтому новый частотный кандидат получает account-map в том же protected cycle.
+// Обновлено 19.09.2026: Check-in Scout добавляет сюда только USER_ID, уже достигшие
+// порога WATCH (2+ чекина за московские сутки). Нормальные 1 чекин/день не становятся Anti-Fraud accounts.
 // Обновлено 05.09.2026: bonus_balance здесь больше не читается и не перезаписывается —
 // текущий TotalSum приходит только через защищённый loyalty endpoint.
 // Обновлено 07.09.2026: ACTIVE/BLOCKED/основание каждый refresh перечитываются из Bitrix;
@@ -111,8 +111,8 @@ export const syncBitrixAccountsOnce = async (
          UNION
 
          SELECT bitrix_user_id
-         FROM anti_fraud_visits
-         WHERE bitrix_user_id IS NOT NULL
+         FROM anti_fraud_checkin_watch_state
+         WHERE status IN ('watching','deep_check','confirmed')
 
          UNION
 
