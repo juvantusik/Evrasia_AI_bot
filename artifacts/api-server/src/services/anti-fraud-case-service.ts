@@ -45,7 +45,10 @@ export type AntiFraudCase = {
   signals: Array<
     "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance"
   >;
+  // shared devices are linking evidence and participate in case grouping.
   devices: AntiFraudCaseDevice[];
+  // all Trusted Device identifiers for accounts in the case, including single-account devices.
+  trustedDevices: AntiFraudCaseDevice[];
   identityMatches: AntiFraudCaseIdentityMatch[];
   updatedAt: string;
 };
@@ -322,6 +325,38 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
     };
   });
 
+  // Обновлено 19.09.2026: shared devices выше сохраняют прежнюю семантику
+  // связывания кейсов. Отдельно загружаем все Trusted Device для уже релевантных
+  // аккаунтов, чтобы оператор видел Device ID даже когда устройство пока принадлежит
+  // только одному USER_ID. На scoring/grouping этот display-набор не влияет.
+  const trustedDeviceResult = await pool.query<any>(
+    `
+      WITH relevant_devices AS (
+        SELECT DISTINCT device_hash
+        FROM anti_fraud_device_links
+        WHERE bitrix_user_id = ANY($1::int[])
+      )
+      SELECT
+        left(l.device_hash, 16) AS device_prefix,
+        array_agg(DISTINCT l.bitrix_user_id ORDER BY l.bitrix_user_id) AS user_ids,
+        max(l.last_seen_at) AS last_seen_at
+      FROM anti_fraud_device_links l
+      JOIN relevant_devices d ON d.device_hash = l.device_hash
+      GROUP BY l.device_hash
+      ORDER BY count(DISTINCT l.bitrix_user_id) DESC, max(l.last_seen_at) DESC NULLS LAST
+    `,
+    [[...accounts.keys()]],
+  );
+
+  const trustedDevices: AntiFraudCaseDevice[] = trustedDeviceResult.rows.map((row: any) => {
+    const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
+    return {
+      devicePrefix: String(row.device_prefix ?? ""),
+      userIds,
+      lastSeenAt: nullableIso(row.last_seen_at),
+    };
+  });
+
   const identityMatches: AntiFraudCase["identityMatches"] = identityResult.rows.map((row: any) => {
     const userIds: number[] = Array.isArray(row.user_ids) ? row.user_ids.map(Number) : [];
     return {
@@ -349,6 +384,9 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
 
     const idSet = new Set(ids);
     const caseDevices = devices.filter((device) => device.userIds.some((id) => idSet.has(id)));
+    const caseTrustedDevices = trustedDevices.filter((device) =>
+      device.userIds.some((id) => idSet.has(id)),
+    );
     const caseIdentity = identityMatches.filter((match) => match.userIds.some((id) => idSet.has(id)));
     const reasonCodes = new Set(caseAccounts.flatMap((account) => account.reasons.map((reason) => reason.code)));
     const signals: AntiFraudCase["signals"] = [];
@@ -391,6 +429,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       accounts: caseAccounts,
       signals,
       devices: caseDevices,
+      trustedDevices: caseTrustedDevices,
       identityMatches: caseIdentity,
       updatedAt,
     });
