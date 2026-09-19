@@ -2,8 +2,10 @@ import { readFile } from "node:fs/promises";
 
 const DEFAULT_API_URL = "https://evrasia.rest/api/internal/anti-fraud/checkins";
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_DAYS = 3;
-const MAX_DAYS = 3;
+const DEFAULT_SNAPSHOT_DAYS = 3;
+const MAX_SNAPSHOT_DAYS = 3;
+const DEFAULT_HISTORY_DAYS = 60;
+const MAX_HISTORY_DAYS = 60;
 const MAX_RECORDS = 20_000;
 
 export type BitrixAntiFraudCheckinRecord = {
@@ -29,8 +31,8 @@ export type BitrixAntiFraudCheckinGatewayOptions = {
   fetchImpl?: typeof fetch;
 };
 
-const normalizeDays = (value: number): number => {
-  if (!Number.isInteger(value) || value < 1 || value > MAX_DAYS) return DEFAULT_DAYS;
+const boundedDays = (value: number, fallback: number, maximum: number): number => {
+  if (!Number.isInteger(value) || value < 1 || value > maximum) return fallback;
   return value;
 };
 
@@ -70,7 +72,11 @@ const parseDate = (value: unknown, field: string): Date => {
   return date;
 };
 
-const parseResponse = (body: string, requestedDays: number): BitrixAntiFraudCheckinResult => {
+const parseResponse = (
+  body: string,
+  requestedDays: number,
+  allowedUserIds?: Set<number>,
+): BitrixAntiFraudCheckinResult => {
   let payload: unknown;
   try {
     payload = JSON.parse(body);
@@ -114,9 +120,14 @@ const parseResponse = (body: string, requestedDays: number): BitrixAntiFraudChec
     }
     seen.add(sourceRestisId);
 
+    const bitrixUserId = parsePositiveInteger(row.bitrix_user_id, "records.bitrix_user_id");
+    if (allowedUserIds && !allowedUserIds.has(bitrixUserId)) {
+      throw new Error("Bitrix Anti-Fraud checkins вернул USER_ID вне адресного запроса");
+    }
+
     return {
       sourceRestisId,
-      bitrixUserId: parsePositiveInteger(row.bitrix_user_id, "records.bitrix_user_id"),
+      bitrixUserId,
       occurredAt: parseDate(row.occurred_at, "records.occurred_at"),
       restaurant: parseText(row.restaurant, "records.restaurant", 255),
     };
@@ -135,8 +146,10 @@ const parseResponse = (body: string, requestedDays: number): BitrixAntiFraudChec
 };
 
 // Добавлено 19.09.2026 ИТ Директор Евразии
-// Check-in Scout получает только USER_ID + обезличенный RestIS source ID + время/ресторан.
-// Номер карты и RestIS credentials остаются на evrasia.spb.ru.
+// Check-in Scout использует один protected endpoint в двух режимах:
+// - без user_ids: полный snapshot максимум за 3 московских дня;
+// - с user_ids: адресная физическая история максимум за 60 дней.
+// Номер карты, raw RestIS ID и RestIS credentials остаются на evrasia.spb.ru.
 export class BitrixAntiFraudCheckinGateway {
   private readonly fetchImpl: typeof fetch;
 
@@ -144,12 +157,41 @@ export class BitrixAntiFraudCheckinGateway {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async fetchRecentCheckins(days = DEFAULT_DAYS): Promise<BitrixAntiFraudCheckinResult> {
-    const normalizedDays = normalizeDays(Number(days));
+  async fetchRecentCheckins(
+    days = DEFAULT_SNAPSHOT_DAYS,
+  ): Promise<BitrixAntiFraudCheckinResult> {
+    const normalizedDays = boundedDays(
+      Number(days),
+      DEFAULT_SNAPSHOT_DAYS,
+      MAX_SNAPSHOT_DAYS,
+    );
+    return this.request({ days: normalizedDays });
+  }
+
+  async fetchUserHistory(
+    bitrixUserId: number,
+    days = DEFAULT_HISTORY_DAYS,
+  ): Promise<BitrixAntiFraudCheckinResult> {
+    const userId = Number(bitrixUserId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new Error("Bitrix Anti-Fraud checkins history требует положительный USER_ID");
+    }
+    const normalizedDays = boundedDays(
+      Number(days),
+      DEFAULT_HISTORY_DAYS,
+      MAX_HISTORY_DAYS,
+    );
+    return this.request({ days: normalizedDays, userIds: [userId] });
+  }
+
+  private async request(input: {
+    days: number;
+    userIds?: number[];
+  }): Promise<BitrixAntiFraudCheckinResult> {
     const apiUrl = (
-      this.options.apiUrl ??
-      process.env.BITRIX_ANTI_FRAUD_CHECKIN_API_URL ??
-      DEFAULT_API_URL
+      this.options.apiUrl
+      ?? process.env.BITRIX_ANTI_FRAUD_CHECKIN_API_URL
+      ?? DEFAULT_API_URL
     ).trim();
 
     let parsedUrl: URL;
@@ -164,7 +206,9 @@ export class BitrixAntiFraudCheckinGateway {
 
     const token = await this.resolveToken();
     const timeoutCandidate = Number(
-      this.options.timeoutMs ?? process.env.BITRIX_ANTI_FRAUD_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS,
+      this.options.timeoutMs
+      ?? process.env.BITRIX_ANTI_FRAUD_TIMEOUT_MS
+      ?? DEFAULT_TIMEOUT_MS,
     );
     const timeoutMs =
       Number.isInteger(timeoutCandidate) && timeoutCandidate > 0
@@ -174,20 +218,27 @@ export class BitrixAntiFraudCheckinGateway {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const bodyPayload: Record<string, unknown> = { days: input.days };
+      if (input.userIds) bodyPayload.user_ids = input.userIds;
+
       const response = await this.fetchImpl(parsedUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Anti-Fraud-Token": token,
         },
-        body: JSON.stringify({ days: normalizedDays }),
+        body: JSON.stringify(bodyPayload),
         signal: controller.signal,
       });
       const body = await response.text();
       if (!response.ok) {
         throw new Error(`Bitrix Anti-Fraud checkins отклонил запрос: HTTP ${response.status}`);
       }
-      return parseResponse(body, normalizedDays);
+      return parseResponse(
+        body,
+        input.days,
+        input.userIds ? new Set(input.userIds) : undefined,
+      );
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error("Превышено время ожидания ответа Bitrix Anti-Fraud checkins");
