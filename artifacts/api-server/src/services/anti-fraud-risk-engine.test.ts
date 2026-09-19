@@ -7,7 +7,7 @@ import test from "node:test";
 // чистую scoring-логику без зависимости от production/runtime окружения.
 process.env.DATABASE_URL ??= "postgresql://test:test@127.0.0.1:5432/test";
 
-const { scoreAntiFraudSignals } = await import("./anti-fraud-risk-engine");
+const { scoreAntiFraudSignals, applyAntiFraudOperatorRiskOverride } = await import("./anti-fraud-risk-engine");
 const { resolveAntiFraudCaseLineageRenames } = await import(
   "./anti-fraud-case-dynamics-service"
 );
@@ -204,6 +204,37 @@ test("40000.01 bonuses add 50 risk and trigger 60-day history gate", () => {
   assert.match(reason.details, /bonus_balance=40000\.01/);
   assert.match(reason.details, /threshold=40000\.00/);
   assert.match(reason.details, /history_window_days=60/);
+});
+
+test("operator-confirmed Avito sale overrides risk to 100 and opens history gate", () => {
+  const base = scoreAntiFraudSignals(baseSignals());
+
+  const score = applyAntiFraudOperatorRiskOverride(
+    base,
+    {
+      bitrixUserId: 27987,
+      label: "Авито",
+      riskOverride: 100,
+      reason: "confirmed_checkin_sale",
+    },
+  );
+
+  assert.equal(base.overallRisk, 0);
+  assert.equal(score.overallRisk, 100);
+  assert.equal(score.riskLevel, "critical");
+  assert.equal(score.historyGate, true);
+  assert.equal(score.deviceRisk, 0);
+  assert.equal(score.linkedAccountRisk, 0);
+  assert.equal(score.identitySimilarityRisk, 0);
+  assert.equal(score.visitBehaviorRisk, 0);
+  assert.equal(score.historicalBehaviorRisk, 0);
+
+  const reason = score.reasons.find((item) => item.code === "operator_confirmed_risk");
+  assert.ok(reason);
+  assert.equal(reason.score, 100);
+  assert.match(reason.details, /label=Авито/);
+  assert.match(reason.details, /reason=confirmed_checkin_sale/);
+  assert.match(reason.details, /mode=override/);
 });
 
 test("custom 30000.00 threshold preserves strict greater-than boundary", () => {
