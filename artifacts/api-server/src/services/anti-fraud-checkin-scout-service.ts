@@ -5,6 +5,7 @@ import {
   type BitrixAntiFraudCheckinRecord,
 } from "./bitrix-antifraud-checkin-gateway";
 import { enrichRestisHistoryForHighRiskUserOnce } from "./anti-fraud-restis-history-enricher";
+import { summarizeCheckinScoutSnapshot } from "./anti-fraud-checkin-scout-rules";
 
 const SOURCE = "bitrix_checkin_scout";
 const LOCK_NAME = "anti_fraud_checkin_scout_sync";
@@ -34,112 +35,6 @@ type PendingDeepCheckRow = {
   bitrix_user_id: number;
   last_deep_check_day: string;
   last_deep_check_count: number;
-};
-
-export type CheckinScoutDailySummary = {
-  bitrixUserId: number;
-  days: Array<{ day: string; checkins: number }>;
-};
-
-export type CheckinScoutSyncResult = {
-  runId: string;
-  fetchedRecords: number;
-  observedAccounts: number;
-  watchedAccounts: number;
-  deepCheckCandidates: number;
-  unresolvedCardCount: number;
-  expiredAccounts: number;
-};
-
-export type CheckinScoutEvaluationResult = {
-  deepCheckCandidates: number;
-  deepChecksAttempted: number;
-  deepChecksSucceeded: number;
-  deepChecksFailed: number;
-  confirmedAccounts: number;
-};
-
-export type CheckinScoutSyncOptions = {
-  gateway?: BitrixAntiFraudCheckinGateway;
-  days?: number;
-};
-
-export type CheckinScoutEvaluationOptions = {
-  maxDeepChecks?: number;
-};
-
-const safeErrorMessage = (error: unknown): string =>
-  (error instanceof Error ? error.message : "Неизвестная ошибка Check-in Scout").slice(0, 2000);
-
-const boundedInteger = (
-  value: number,
-  fallback: number,
-  minimum: number,
-  maximum: number,
-): number => {
-  if (!Number.isInteger(value)) return fallback;
-  return Math.max(minimum, Math.min(maximum, value));
-};
-
-const addDays = (day: string, amount: number): string => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    throw new Error("Check-in Scout получил некорректную календарную дату");
-  }
-  const date = new Date(`${day}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error("Check-in Scout получил некорректную календарную дату");
-  }
-  date.setUTCDate(date.getUTCDate() + amount);
-  return date.toISOString().slice(0, 10);
-};
-
-const moscowDay = (date: Date): string => {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone: "Europe/Moscow",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  const day = `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    throw new Error("Check-in Scout не смог определить московскую календарную дату");
-  }
-  return day;
-};
-
-// Добавлено 19.09.2026 ИТ Директор Евразии
-// Ключевой guard: 1 чекин в сутки является нормой и вообще не попадает в persistent
-// Anti-Fraud storage. Snapshot группируется в памяти; в БД пишется только WATCH для 2+.
-export const summarizeCheckinScoutSnapshot = (
-  records: BitrixAntiFraudCheckinRecord[],
-): CheckinScoutDailySummary[] => {
-  const byUser = new Map<number, Map<string, Set<string>>>();
-
-  for (const record of records) {
-    const userId = Number(record.bitrixUserId);
-    if (!Number.isInteger(userId) || userId <= 0) continue;
-    const day = moscowDay(record.occurredAt);
-
-    if (!byUser.has(userId)) byUser.set(userId, new Map());
-    const days = byUser.get(userId)!;
-    if (!days.has(day)) days.set(day, new Set());
-    days.get(day)!.add(record.sourceRestisId);
-  }
-
-  const summaries: CheckinScoutDailySummary[] = [];
-  for (const [bitrixUserId, days] of byUser) {
-    const suspiciousDays = [...days.entries()]
-      .map(([day, ids]) => ({ day, checkins: ids.size }))
-      .filter((item) => item.checkins >= 2)
-      .sort((a, b) => a.day.localeCompare(b.day));
-
-    if (suspiciousDays.length) {
-      summaries.push({ bitrixUserId, days: suspiciousDays });
-    }
-  }
-
-  return summaries.sort((a, b) => a.bitrixUserId - b.bitrixUserId);
 };
 
 const currentMoscowDay = async (): Promise<string> => {
