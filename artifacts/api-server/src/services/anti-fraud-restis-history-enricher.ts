@@ -16,20 +16,12 @@ const MAX_REFRESH_HOURS = 168;
 
 export type RestisHistoryEnrichmentOptions = {
   bitrixUserId: number;
+  riskGateConfirmed: true;
   lookbackDays?: number;
   refreshHours?: number;
   gateway?: BitrixAntiFraudLoyaltyGateway;
   now?: Date;
-} & (
-  | {
-      riskGateConfirmed: true;
-      checkinScoutConfirmed?: never;
-    }
-  | {
-      checkinScoutConfirmed: true;
-      riskGateConfirmed?: never;
-    }
-);
+};
 
 export type RestisHistoryEnrichmentResult = {
   runId: string;
@@ -138,15 +130,8 @@ const assertExistingVisitsAreStable = (
 export const enrichRestisHistoryForHighRiskUserOnce = async (
   options: RestisHistoryEnrichmentOptions,
 ): Promise<RestisHistoryEnrichmentResult> => {
-  const authorizedByRiskGate = "riskGateConfirmed" in options
-    && options.riskGateConfirmed === true;
-  const authorizedByCheckinScout = "checkinScoutConfirmed" in options
-    && options.checkinScoutConfirmed === true;
-
-  if (!authorizedByRiskGate && !authorizedByCheckinScout) {
-    throw new Error(
-      "Loyalty history запрещён без подтверждённого Anti-Fraud risk gate или Check-in Scout trigger",
-    );
+  if (options.riskGateConfirmed !== true) {
+    throw new Error("Loyalty history запрещён без подтверждённого Anti-Fraud risk gate");
   }
 
   const bitrixUserId = Number(options.bitrixUserId);
@@ -163,7 +148,7 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
   const refreshHours = boundedInteger(
     Number(options.refreshHours ?? process.env.ANTI_FRAUD_HISTORY_REFRESH_HOURS ?? DEFAULT_REFRESH_HOURS),
     DEFAULT_REFRESH_HOURS,
-    0,
+    1,
     MAX_REFRESH_HOURS,
   );
   const now = options.now ?? new Date();
