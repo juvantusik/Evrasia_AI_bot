@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -220,6 +221,35 @@ export const antiFraudRiskReasonsTable = pgTable(
   }),
 );
 
+// Добавлено 19.09.2026 ИТ Директор Евразии
+export const antiFraudCheckinWatchStateTable = pgTable(
+  "anti_fraud_checkin_watch_state",
+  {
+    bitrixUserId: integer("bitrix_user_id").primaryKey(),
+    status: text("status").notNull().default("watching"),
+    watchStartedDay: date("watch_started_day").notNull(),
+    watchUntilDay: date("watch_until_day").notNull(),
+    lastTriggerDay: date("last_trigger_day").notNull(),
+    triggerKind: text("trigger_kind").notNull(),
+    lastDeepCheckDay: date("last_deep_check_day"),
+    lastDeepCheckCount: integer("last_deep_check_count"),
+    deepCheckRequestedAt: timestamp("deep_check_requested_at", { withTimezone: true }),
+    deepCheckCompletedAt: timestamp("deep_check_completed_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    confirmedDays2Plus7d: integer("confirmed_days_2plus_7d").notNull().default(0),
+    confirmedDays3Plus60d: integer("confirmed_days_3plus_60d").notNull().default(0),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index("anti_fraud_checkin_watch_status_idx").on(
+      table.status,
+      table.watchUntilDay,
+    ),
+    updatedIdx: index("anti_fraud_checkin_watch_updated_idx").on(table.updatedAt),
+  }),
+);
+
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export const antiFraudSyncStateTable = pgTable("anti_fraud_sync_state", {
   source: text("source").primaryKey(),
@@ -262,5 +292,6 @@ export type AntiFraudDeviceEvent = typeof antiFraudDeviceEventsTable.$inferSelec
 export type AntiFraudDeviceLink = typeof antiFraudDeviceLinksTable.$inferSelect;
 export type AntiFraudRiskScore = typeof antiFraudRiskScoresTable.$inferSelect;
 export type AntiFraudRiskReason = typeof antiFraudRiskReasonsTable.$inferSelect;
+export type AntiFraudCheckinWatchState = typeof antiFraudCheckinWatchStateTable.$inferSelect;
 export type AntiFraudSyncState = typeof antiFraudSyncStateTable.$inferSelect;
 export type AntiFraudSyncRun = typeof antiFraudSyncRunsTable.$inferSelect;

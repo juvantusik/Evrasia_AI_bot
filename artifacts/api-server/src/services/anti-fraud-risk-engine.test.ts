@@ -28,6 +28,9 @@ const baseSignals = (overrides: Partial<AntiFraudRiskSignals> = {}): AntiFraudRi
   highVisitDays60d: 0,
   longestHighVisitSequence2d: 0,
   maxDistinctRestaurantsOnHighVisitDay: 0,
+  frequencyConfirmed: false,
+  confirmedDays2Plus7d: 0,
+  confirmedDays3Plus60d: 0,
   activeCardCount: 1,
   bitrixActive: true,
   historyEnriched: false,
@@ -177,6 +180,35 @@ test("five visits on repeated high-visit days clamp visit risk to 100", () => {
   assert.equal(score.overallRisk, 100);
   assert.equal(score.riskLevel, "critical");
   assert.equal(score.historyGate, true);
+});
+
+// Добавлено 19.09.2026 ИТ Директор Евразии
+test("confirmed persistent check-in frequency is independently Risk 100", () => {
+  const score = scoreAntiFraudSignals(
+    baseSignals({
+      frequencyConfirmed: true,
+      confirmedDays2Plus7d: 3,
+      confirmedDays3Plus60d: 8,
+      maxAccountsOnDevice: 1,
+      linkedAccountCount: 0,
+      maxVisitsPerDay60d: 0,
+      highVisitDays60d: 0,
+    }),
+  );
+
+  assert.equal(score.visitBehaviorRisk, 100);
+  assert.equal(score.overallRisk, 100);
+  assert.equal(score.riskLevel, "critical");
+  assert.equal(score.historyGate, true);
+
+  const reason = score.reasons.find(
+    (item) => item.code === "persistent_checkin_frequency",
+  );
+  assert.ok(reason);
+  assert.equal(reason.score, 100);
+  assert.match(reason.details, /days_2plus_7d=3/);
+  assert.match(reason.details, /days_3plus_60d=8/);
+  assert.match(reason.details, /source=checkin_scout/);
 });
 
 // Добавлено 05.09.2026 ИТ Директор Евразии

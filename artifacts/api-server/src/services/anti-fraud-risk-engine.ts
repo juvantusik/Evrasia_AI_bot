@@ -9,7 +9,7 @@ import {
 
 const SOURCE = "anti_fraud_risk_scoring";
 const LOCK_NAME = "anti_fraud_risk_scoring";
-const CALCULATION_VERSION = "v1.3";
+const CALCULATION_VERSION = "v1.4";
 const DEFAULT_HISTORY_THRESHOLD = 50;
 const DEFAULT_MAX_HISTORY_USERS = 10;
 const MAX_HISTORY_USERS = 50;
@@ -31,6 +31,9 @@ export type AntiFraudRiskSignals = {
   highVisitDays60d: number;
   longestHighVisitSequence2d: number;
   maxDistinctRestaurantsOnHighVisitDay: number;
+  frequencyConfirmed: boolean;
+  confirmedDays2Plus7d: number;
+  confirmedDays3Plus60d: number;
   activeCardCount: number;
   bitrixActive: boolean;
   historyEnriched: boolean;
@@ -101,6 +104,9 @@ type SignalRow = {
   high_visit_days_60d: string | number | null;
   longest_high_visit_sequence_2d: string | number | null;
   max_distinct_restaurants_on_high_visit_day: string | number | null;
+  frequency_confirmed: boolean | null;
+  confirmed_days_2plus_7d: string | number | null;
+  confirmed_days_3plus_60d: string | number | null;
   active_card_count: string | number | null;
   bitrix_active: boolean | null;
   history_enriched: boolean | null;
@@ -295,6 +301,20 @@ export const scoreAntiFraudSignals = (
     });
   }
 
+  // Добавлено 19.09.2026 ИТ Директор Евразии
+  // Check-in Scout подтверждает устойчивую частоту только после адресной 60-дневной проверки.
+  // Подтверждение независимо от multiaccount/device сигналов и само по себе даёт Risk 100.
+  if (signals.frequencyConfirmed) {
+    visitBehaviorRisk += 100;
+    reasons.push({
+      code: "persistent_checkin_frequency",
+      score: 100,
+      details:
+        `days_2plus_7d=${signals.confirmedDays2Plus7d}; ` +
+        `days_3plus_60d=${signals.confirmedDays3Plus60d}; source=checkin_scout`,
+    });
+  }
+
   // Добавлено 03.09.2026 ИТ Директор Евразии
   // Суточная частота считается независимо от ресторана. Поэтому 3 посещения одного ресторана и
   // 3 посещения трёх разных ресторанов одинаково являются первичным сигналом для адресной истории.
@@ -389,6 +409,8 @@ WITH candidates AS (
   SELECT bitrix_user_id FROM anti_fraud_device_events
   UNION
   SELECT bitrix_user_id FROM anti_fraud_visits WHERE bitrix_user_id IS NOT NULL
+  UNION
+  SELECT bitrix_user_id FROM anti_fraud_checkin_watch_state
 ),
 device_counts AS (
   SELECT device_hash, count(DISTINCT bitrix_user_id)::int AS account_count
@@ -503,8 +525,13 @@ linked_pairs AS (
   SELECT DISTINCT left_user, right_user
   FROM pair_devices
 ),
-active_visits AS (
-  SELECT v.restis_id, v.bitrix_user_id, v.visited_at, v.restaurant
+raw_active_visits AS (
+  SELECT
+    v.restis_id,
+    v.source_restis_id,
+    v.bitrix_user_id,
+    v.visited_at,
+    v.restaurant
   FROM anti_fraud_visits v
   LEFT JOIN anti_fraud_cards c ON c.id = v.card_id
   WHERE v.bitrix_user_id IS NOT NULL
@@ -513,6 +540,19 @@ active_visits AS (
       v.loyalty_verified IS TRUE
       OR (v.card_id IS NOT NULL AND c.is_active IS TRUE)
     )
+),
+-- Обновлено 19.09.2026: protected VIP_HISTORY может содержать несколько денежных
+-- операций одного физического чекина с одинаковым source_restis_id/time/restaurant.
+-- Risk считаем по уникальным чекинам, а не по денежным строкам.
+active_visits AS (
+  SELECT
+    min(restis_id) AS restis_id,
+    source_restis_id,
+    bitrix_user_id,
+    visited_at,
+    restaurant
+  FROM raw_active_visits
+  GROUP BY source_restis_id, bitrix_user_id, visited_at, restaurant
 ),
 near_visit_pairs AS (
   SELECT
@@ -610,6 +650,14 @@ visit_sequence_agg AS (
   FROM high_visit_sequences
   GROUP BY bitrix_user_id
 ),
+frequency_state AS (
+  SELECT
+    bitrix_user_id,
+    status = 'confirmed' AS frequency_confirmed,
+    confirmed_days_2plus_7d,
+    confirmed_days_3plus_60d
+  FROM anti_fraud_checkin_watch_state
+),
 card_agg AS (
   SELECT
     bitrix_user_id,
@@ -634,6 +682,9 @@ SELECT
   COALESCE(vs.longest_high_visit_sequence_2d, 0) AS longest_high_visit_sequence_2d,
   COALESCE(vf.max_distinct_restaurants_on_high_visit_day, 0)
     AS max_distinct_restaurants_on_high_visit_day,
+  COALESCE(fs.frequency_confirmed, false) AS frequency_confirmed,
+  COALESCE(fs.confirmed_days_2plus_7d, 0) AS confirmed_days_2plus_7d,
+  COALESCE(fs.confirmed_days_3plus_60d, 0) AS confirmed_days_3plus_60d,
   COALESCE(ca.active_card_count, 0) AS active_card_count,
   COALESCE(a.bitrix_active, false) AS bitrix_active,
   CASE
@@ -656,6 +707,7 @@ LEFT JOIN identity_agg ia ON ia.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN near_visit_by_user nv ON nv.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN visit_frequency_agg vf ON vf.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN visit_sequence_agg vs ON vs.bitrix_user_id = c.bitrix_user_id
+LEFT JOIN frequency_state fs ON fs.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN card_agg ca ON ca.bitrix_user_id = c.bitrix_user_id
 LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = c.bitrix_user_id
 WHERE c.bitrix_user_id > 0
@@ -682,6 +734,9 @@ const loadRiskSignals = async (): Promise<AntiFraudRiskSignals[]> => {
     maxDistinctRestaurantsOnHighVisitDay: toCount(
       row.max_distinct_restaurants_on_high_visit_day,
     ),
+    frequencyConfirmed: row.frequency_confirmed === true,
+    confirmedDays2Plus7d: toCount(row.confirmed_days_2plus_7d),
+    confirmedDays3Plus60d: toCount(row.confirmed_days_3plus_60d),
     activeCardCount: toCount(row.active_card_count),
     bitrixActive: row.bitrix_active === true,
     historyEnriched: row.history_enriched === true,
