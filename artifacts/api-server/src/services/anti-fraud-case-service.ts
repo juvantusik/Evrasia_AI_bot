@@ -364,7 +364,11 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       || reasonCodes.has("duplicate_email_identity")
       || reasonCodes.has("similar_email_identity")
     ) signals.push("email");
-    if (reasonCodes.has("high_daily_visit_frequency") || reasonCodes.has("repeated_high_visit_days")) signals.push("visits");
+    if (
+      reasonCodes.has("high_daily_visit_frequency")
+      || reasonCodes.has("repeated_high_visit_days")
+      || reasonCodes.has("persistent_checkin_frequency")
+    ) signals.push("visits");
     if (reasonCodes.has("fast_account_switch") || reasonCodes.has("repeated_fast_switches")) signals.push("fast_switch");
     if (reasonCodes.has("linked_visit_proximity")) signals.push("linked_visits");
     if (reasonCodes.has("high_bonus_balance")) signals.push("bonus_balance");
