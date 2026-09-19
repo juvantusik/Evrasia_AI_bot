@@ -26,6 +26,7 @@ export type AntiFraudCaseAccount = {
   reasons: AntiFraudCaseReason[];
   operatorWatched: boolean;
   operatorLabel: string | null;
+  operatorRiskOverride: number | null;
 };
 
 export type AntiFraudCaseDevice = {
@@ -320,6 +321,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
         : [],
       operatorWatched: watchByUser.has(bitrixUserId),
       operatorLabel: watchByUser.get(bitrixUserId)?.label ?? null,
+      operatorRiskOverride: watchByUser.get(bitrixUserId)?.riskOverride ?? null,
     });
   }
 
