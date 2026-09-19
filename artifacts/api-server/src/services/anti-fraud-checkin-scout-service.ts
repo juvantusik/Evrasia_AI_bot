@@ -92,10 +92,10 @@ const addDays = (day: string, amount: number): string => {
 
 const persistScoutRecord = async (
   record: BitrixAntiFraudCheckinRecord,
-  client: Awaited<ReturnType<typeof pool.connect>>,
+  execute: (sql: string, values: unknown[]) => Promise<number>,
 ): Promise<void> => {
   const restisId = `scout:${record.sourceRestisId}`;
-  const inserted = await client.query(
+  const rowCount = await execute(
     `INSERT INTO anti_fraud_visits (
        restis_id, source_restis_id, card_id, bitrix_user_id, visited_at, restaurant,
        amount, bonus_added, bonus_spent, loyalty_verified, synced_at, resolved_at
@@ -117,7 +117,7 @@ const persistScoutRecord = async (
     ],
   );
 
-  if (!inserted.rowCount) {
+  if (rowCount < 1) {
     throw new Error(
       `Check-in Scout source_restis_id=${record.sourceRestisId} повторно пришёл с другими core-данными`,
     );
@@ -171,7 +171,13 @@ export const syncCheckinScoutSnapshotOnce = async (
     transactionOpen = true;
 
     for (const record of snapshot.records) {
-      await persistScoutRecord(record, client);
+      await persistScoutRecord(
+        record,
+        async (sql, values) => {
+          const result = await client.query(sql, values);
+          return result.rowCount ?? 0;
+        },
+      );
     }
 
     const removed = await client.query(
