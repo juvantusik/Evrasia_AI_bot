@@ -157,6 +157,7 @@ const reasonLabels: Record<string, string> = {
   similar_phone_identity: 'Похожий номер телефона', similar_email_identity: 'Похожий email',
   similar_identity_combo: 'Похожий телефон и email', linked_visit_proximity: 'Близкие посещения связанных аккаунтов',
   high_daily_visit_frequency: 'Высокая частота посещений', repeated_high_visit_days: 'Регулярный паттерн посещений',
+  persistent_checkin_frequency: 'Подтверждённая регулярная частота чекинов',
   high_bonus_balance: 'Высокий остаток бонусов', similar_identity_corroborated: 'Подтверждённая похожая идентичность',
 };
 
@@ -270,7 +271,10 @@ const parseDetails = (details: string) => details.split(';').map((part) => part.
     .replace('corroborated_similar_email_links=', 'подтверждённых связей по похожему email: ')
     .replace('similar_phone_links=', 'связей по похожему номеру: ').replace('similar_email_links=', 'связей по похожему email: ')
     .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ').replace('bonus_balance=', 'остаток бонусов: ')
-    .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: '));
+    .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: ')
+    .replace('days_2plus_7d=', 'дней с 2+ чекинами за 7 дней: ')
+    .replace('days_3plus_60d=', 'дней с 3+ чекинами за 60 дней: ')
+    .replace('source=checkin_scout', 'источник: Check-in Scout'));
 
 export default function AntiFraudPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
