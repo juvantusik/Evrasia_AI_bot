@@ -1,4 +1,5 @@
 import { pool } from "@workspace/db";
+import { getAntiFraudOperatorWatchlist } from "./anti-fraud-operator-watchlist-service";
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export type AntiFraudCaseReason = {
@@ -23,6 +24,8 @@ export type AntiFraudCaseAccount = {
   historyEnriched: boolean;
   computedAt: string;
   reasons: AntiFraudCaseReason[];
+  operatorWatched: boolean;
+  operatorLabel: string | null;
 };
 
 export type AntiFraudCaseDevice = {
@@ -43,7 +46,7 @@ export type AntiFraudCase = {
   accountCount: number;
   accounts: AntiFraudCaseAccount[];
   signals: Array<
-    "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance"
+    "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance" | "operator_confirmed"
   >;
   devices: AntiFraudCaseDevice[];
   identityMatches: AntiFraudCaseIdentityMatch[];
@@ -153,6 +156,11 @@ const validIdentityMatchType = (value: unknown): AntiFraudCaseIdentityMatch["typ
 // Поведенческие признаки сами по себе аккаунты не объединяют.
 export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
   await ensureReady();
+
+  const operatorWatchlist = await getAntiFraudOperatorWatchlist();
+  const watchByUser = new Map(
+    operatorWatchlist.map((item) => [item.bitrixUserId, item] as const),
+  );
 
   const [accountResult, deviceResult, identityResult] = await Promise.all([
     pool.query<any>(`
@@ -310,6 +318,8 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
             details: String(reason.details ?? ""),
           }))
         : [],
+      operatorWatched: watchByUser.has(bitrixUserId),
+      operatorLabel: watchByUser.get(bitrixUserId)?.label ?? null,
     });
   }
 
@@ -368,6 +378,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
     if (reasonCodes.has("fast_account_switch") || reasonCodes.has("repeated_fast_switches")) signals.push("fast_switch");
     if (reasonCodes.has("linked_visit_proximity")) signals.push("linked_visits");
     if (reasonCodes.has("high_bonus_balance")) signals.push("bonus_balance");
+    if (reasonCodes.has("operator_confirmed_risk")) signals.push("operator_confirmed");
 
     const overallRisk = Math.max(...caseAccounts.map((account) => account.overallRisk));
     const riskLevel = caseAccounts.reduce<AntiFraudCase["riskLevel"]>(
