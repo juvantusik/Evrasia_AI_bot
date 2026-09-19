@@ -2,18 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   summarizeCheckinScoutSnapshot,
-} from "./anti-fraud-checkin-scout-service";
-import type { BitrixAntiFraudCheckinRecord } from "./bitrix-antifraud-checkin-gateway";
+  type CheckinScoutObservation,
+} from "./anti-fraud-checkin-scout-rules";
 
 const record = (
   bitrixUserId: number,
   sourceRestisId: string,
   occurredAt: string,
-): BitrixAntiFraudCheckinRecord => ({
+): CheckinScoutObservation => ({
   bitrixUserId,
   sourceRestisId,
   occurredAt: new Date(occurredAt),
-  restaurant: "Тест",
 });
 
 // Добавлено 19.09.2026 ИТ Директор Евразии
