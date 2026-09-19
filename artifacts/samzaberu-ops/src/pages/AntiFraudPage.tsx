@@ -90,6 +90,7 @@ type InvestigationCase = {
   accounts: Account[];
   signals: CaseSignal[];
   devices: CaseDevice[];
+  trustedDevices?: CaseDevice[];
   identityMatches: IdentityMatch[];
   updatedAt: string;
   groupBonusBalance?: number | null;
@@ -409,6 +410,7 @@ export default function AntiFraudPage() {
               const dynamics = item.dynamics; const trend = dynamics ? trendMeta[dynamics.trend] : null;
               const hasNewAccounts = (dynamics?.addedAccountIds.length ?? 0) > 0;
               const blockable = item.accounts.filter(isOperationalAccount).map((account) => account.bitrixUserId);
+              const caseTrustedDevices = item.trustedDevices ?? item.devices;
               return <article className={`af-case ${isExpanded ? 'expanded' : ''}`} key={item.caseId}>
                 <button className="af-case-row" type="button" onClick={() => toggleCase(item.caseId)}>
                   <span className={`risk-pill ${item.riskLevel}`}>{item.overallRisk}<small>{levelLabel[item.riskLevel]}</small></span>
@@ -421,7 +423,7 @@ export default function AntiFraudPage() {
                 {isExpanded ? <div className="af-case-details">
                   {dynamics ? <div className={`case-dynamics-card trend-${dynamics.trend}`}>
                     <div className="case-dynamics-head"><div><strong>{trend?.symbol} {trend?.label}</strong><span>{dynamics.trend === 'new' ? `Первое наблюдение: ${formatDate(dynamics.changedAt)}` : `Последнее изменение: ${formatDate(dynamics.changedAt)}`}</span></div><small>Risk остаётся в шкале 0–100; здесь показано, что изменилось в самом кейсе.</small></div>
-                    <div className="case-dynamics-metrics"><span>{metricText('Risk', dynamics.metrics.risk)}</span><span>{metricText('Аккаунты', dynamics.metrics.accounts)}</span><span>{metricText('Устройства', dynamics.metrics.devices)}</span><span>{metricText('Признаки', dynamics.metrics.reasons)}</span></div>
+                    <div className="case-dynamics-metrics"><span>{metricText('Risk', dynamics.metrics.risk)}</span><span>{metricText('Аккаунты', dynamics.metrics.accounts)}</span><span>{metricText('Общие устройства', dynamics.metrics.devices)}</span><span>{metricText('Признаки', dynamics.metrics.reasons)}</span></div>
                     {dynamics.addedAccountIds.length || dynamics.removedAccountIds.length || dynamics.addedReasonCodes.length || dynamics.removedReasonCodes.length ? (
                       <div className="case-dynamics-diff">
                         {dynamics.addedAccountIds.length ? <span><b>Добавлены аккаунты:</b> {dynamics.addedAccountIds.map((id) => `ID ${id}`).join(', ')}</span> : null}
@@ -451,10 +453,13 @@ export default function AntiFraudPage() {
                     </div>)}
                   </div>
 
-                  <div className="detail-column links-column"><h3>Почему аккаунты объединены</h3>
-                    {item.devices.map((device) => <div className="link-card" key={device.devicePrefix}><Smartphone size={18} /><div><strong>Общее устройство {device.devicePrefix}…</strong><span>{device.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span><small>Последняя активность: {formatDate(device.lastSeenAt)}</small></div></div>)}
+                  <div className="detail-column links-column"><h3>Устройства и связи</h3>
+                    {caseTrustedDevices.map((device) => {
+                      const shared = device.userIds.length > 1;
+                      return <div className={`link-card ${shared ? '' : 'solo'}`} key={device.devicePrefix}><Smartphone size={18} /><div><strong>{shared ? 'Общее устройство' : 'Device ID'} {device.devicePrefix}…</strong><span>Аккаунтов на устройстве: {device.userIds.length}{device.userIds.length ? ` · ${device.userIds.map((id) => `ID ${id}`).join(' ↔ ')}` : ''}</span><small>Последняя активность: {formatDate(device.lastSeenAt)}</small></div></div>;
+                    })}
                     {item.identityMatches.map((match, index) => <div className="link-card" key={`${match.type}-${index}`}>{match.type === 'phone' || match.type === 'similar_phone' ? <Link2 size={18} /> : <Mail size={18} />}<div><strong>{identityMatchLabel(match)}</strong><span>{match.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span></div></div>)}
-                    {item.accountCount === 1 && item.signals.includes('visits') ? <div className="link-card solo"><Utensils size={18} /><div><strong>Одиночный поведенческий кейс</strong><span>Связующих признаков с другими аккаунтами не найдено.</span></div></div> : null}
+                    {item.accountCount === 1 && item.signals.includes('visits') && caseTrustedDevices.length === 0 ? <div className="link-card solo"><Utensils size={18} /><div><strong>Trusted Device не найден</strong><span>У аккаунта нет синхронизированного Trusted Device; связующих признаков с другими аккаунтами не найдено.</span></div></div> : null}
                     {item.accountCount === 1 && item.signals.includes('bonus_balance') ? <div className="link-card solo"><AlertTriangle size={18} /><div><strong>Высокий остаток бонусов</strong><span>Баланс выше настроенного порога запускает проверку истории за 60 дней.</span></div></div> : null}
                   </div>
                 </div> : null}
