@@ -1,4 +1,5 @@
 import { pool } from "@workspace/db";
+import { BOT_SETTING_KEYS, getBotSetting } from "./bot-settings-service";
 
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export type AntiFraudWebSummary = {
@@ -39,6 +40,7 @@ export type AntiFraudWebAccount = {
   historyEnriched: boolean;
   computedAt: string;
   reasons: AntiFraudWebReason[];
+  operatorWatched: boolean;
 };
 
 export type AntiFraudWebDevice = {
@@ -93,6 +95,27 @@ const maskEmail = (value: unknown): string | null => {
   const visible = local.slice(0, Math.min(2, local.length));
   return `${visible}${local.length > 2 ? "***" : ""}@${domain}`;
 };
+
+const parseOperatorWatchlist = (value: string | null): number[] => {
+  if (!value) return [];
+
+  let rawValues: unknown[] = [];
+  try {
+    const parsed = JSON.parse(value);
+    rawValues = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    rawValues = value.split(",");
+  }
+
+  return [...new Set(
+    rawValues
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item) && item > 0),
+  )].sort((a, b) => a - b);
+};
+
+const loadOperatorWatchlist = async (): Promise<number[]> =>
+  parseOperatorWatchlist(await getBotSetting(BOT_SETTING_KEYS.antiFraudOperatorWatchlist));
 
 // Обновлено 10.09.2026 ИТ Директор Евразии:
 // operational-счётчики по-прежнему исключают заблокированные и неактивные аккаунты,
@@ -177,6 +200,8 @@ export const listAntiFraudWebAccounts = async (input?: {
   const level = ["low", "medium", "high", "critical"].includes(String(input?.level))
     ? String(input?.level)
     : "";
+  const operatorWatchlist = await loadOperatorWatchlist();
+  const watchedIds = new Set(operatorWatchlist);
   const result = await pool.query<any>(`
     SELECT
       s.bitrix_user_id,
@@ -214,9 +239,9 @@ export const listAntiFraudWebAccounts = async (input?: {
         OR COALESCE(a.display_name, '') ILIKE '%' || $2 || '%'
       )
     GROUP BY s.bitrix_user_id, a.bitrix_user_id
-    ORDER BY s.overall_risk DESC, s.bitrix_user_id
+    ORDER BY (s.bitrix_user_id = ANY($4::int[])) DESC, s.overall_risk DESC, s.bitrix_user_id
     LIMIT $3
-  `, [level, query, limit]);
+  `, [level, query, limit, operatorWatchlist]);
 
   return result.rows.map((row: any) => ({
     bitrixUserId: Number(row.bitrix_user_id),
@@ -241,6 +266,7 @@ export const listAntiFraudWebAccounts = async (input?: {
           details: String(reason.details ?? ""),
         }))
       : [],
+    operatorWatched: watchedIds.has(Number(row.bitrix_user_id)),
   }));
 };
 

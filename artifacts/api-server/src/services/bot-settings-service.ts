@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 export const BOT_SETTING_KEYS = {
   megafonGroupChatId: "megafon_group_chat_id",
   antiFraudBonusBalanceThreshold: "anti_fraud_bonus_balance_threshold",
+  antiFraudOperatorWatchlist: "anti_fraud_operator_watchlist",
 } as const;
 
 export const getBotSetting = async (key: string): Promise<string | null> => {
