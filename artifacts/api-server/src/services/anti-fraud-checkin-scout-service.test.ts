@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  evaluateCheckinScoutPhysicalHistory,
   summarizeCheckinScoutSnapshot,
   type CheckinScoutObservation,
 } from "./anti-fraud-checkin-scout-rules";
@@ -74,4 +75,75 @@ test("Scout groups timestamps by Europe/Moscow calendar day", () => {
       days: [{ day: "2026-09-19", checkins: 2 }],
     },
   ]);
+});
+
+
+test("physical 60-day history confirms 3 days with 2+ in the last 7 days", () => {
+  const history = [
+    record(27987, "n1", "2026-09-15T09:00:00.000Z"),
+    record(27987, "n2", "2026-09-15T10:00:00.000Z"),
+    record(27987, "n3", "2026-09-16T09:00:00.000Z"),
+    record(27987, "n4", "2026-09-16T10:00:00.000Z"),
+    record(27987, "n5", "2026-09-17T09:00:00.000Z"),
+    record(27987, "n6", "2026-09-17T10:00:00.000Z"),
+    record(27987, "n7", "2026-09-17T11:00:00.000Z"),
+  ];
+
+  const result = evaluateCheckinScoutPhysicalHistory(
+    history,
+    new Date("2026-09-19T08:00:00.000Z"),
+  );
+
+  assert.equal(result.days2Plus7d, 3);
+  assert.equal(result.days3Plus60d, 1);
+  assert.equal(result.confirmed, true);
+});
+
+test("physical 60-day history keeps a single 2-checkin day unconfirmed", () => {
+  const history = [
+    record(1969724, "k1", "2026-09-18T18:00:00.000Z"),
+    record(1969724, "k2", "2026-09-18T19:30:00.000Z"),
+  ];
+
+  const result = evaluateCheckinScoutPhysicalHistory(
+    history,
+    new Date("2026-09-19T08:00:00.000Z"),
+  );
+
+  assert.equal(result.days2Plus7d, 1);
+  assert.equal(result.days3Plus60d, 0);
+  assert.equal(result.confirmed, false);
+});
+
+test("physical history confirms three 3+ days even outside the last 7 days", () => {
+  const history = [
+    record(500, "x1", "2026-08-01T08:00:00.000Z"),
+    record(500, "x2", "2026-08-01T09:00:00.000Z"),
+    record(500, "x3", "2026-08-01T10:00:00.000Z"),
+    record(500, "y1", "2026-08-10T08:00:00.000Z"),
+    record(500, "y2", "2026-08-10T09:00:00.000Z"),
+    record(500, "y3", "2026-08-10T10:00:00.000Z"),
+    record(500, "z1", "2026-08-20T08:00:00.000Z"),
+    record(500, "z2", "2026-08-20T09:00:00.000Z"),
+    record(500, "z3", "2026-08-20T10:00:00.000Z"),
+  ];
+
+  const result = evaluateCheckinScoutPhysicalHistory(
+    history,
+    new Date("2026-09-19T08:00:00.000Z"),
+  );
+
+  assert.equal(result.days2Plus7d, 0);
+  assert.equal(result.days3Plus60d, 3);
+  assert.equal(result.confirmed, true);
+});
+
+test("physical history rejects mixed USER_ID payloads", () => {
+  assert.throws(
+    () => evaluateCheckinScoutPhysicalHistory([
+      record(1, "a", "2026-09-18T09:00:00.000Z"),
+      record(2, "b", "2026-09-18T10:00:00.000Z"),
+    ]),
+    /одному USER_ID/,
+  );
 });
