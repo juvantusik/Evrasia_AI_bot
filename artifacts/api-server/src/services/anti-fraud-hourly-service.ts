@@ -9,6 +9,10 @@ import {
 } from "./anti-fraud-loyalty-balance-service";
 import { analyzeAntiFraudWithSimilarityOnce } from "./anti-fraud-identity-similarity-service";
 import { captureAntiFraudCaseDynamics } from "./anti-fraud-case-dynamics-service";
+import {
+  evaluateCheckinScoutOnce,
+  syncCheckinScoutSnapshotOnce,
+} from "./anti-fraud-checkin-scout-service";
 
 const SOURCE = "anti_fraud_protected_cycle";
 const DEFAULT_INTERVAL_MINUTES = 15;
@@ -174,12 +178,14 @@ const refreshPriorityLoyaltyOnce = async (): Promise<void> => {
 // Защищённый цикл больше НЕ использует прямые RestIS VIP_TODAY/card-map и не требует
 // RestIS credentials в контейнере бота. Каждые 15 минут при включённом scheduler:
 // 1) полный snapshot Trusted Device;
-// 2) account-map по известным USER_ID;
-// 3) предварительный risk без history — чтобы новые подозрительные аккаунты сразу попали в priority loyalty;
-// 4) свежий loyalty TotalSum/count/issue для рискованных аккаунтов уже с учётом новых USER_ID;
-// 5) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;
-// 6) финальный explainable risk + адресная history только для history gate;
-// 7) фиксация case dynamics.
+// 2) Check-in Scout snapshot за последние 3 московских дня;
+// 3) account-map по известным USER_ID, включая пользователей, найденных Scout;
+// 4) Scout state machine: 2 чекина = WATCH, повторные 2+ / 3-й чекин = адресная 60-day history;
+// 5) предварительный risk без обычной history — чтобы новые подозрительные аккаунты сразу попали в priority loyalty;
+// 6) свежий loyalty TotalSum/count/issue для рискованных аккаунтов уже с учётом новых USER_ID;
+// 7) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;
+// 8) финальный explainable risk + обычная адресная history для history gate;
+// 9) фиксация case dynamics.
 //
 // Двухпроходный risk нужен специально для UX ручного refresh: новый аккаунт, найденный
 // Trusted Device/account-map, не должен сначала появляться в кейсе как «Карты: не загружено»
@@ -204,9 +210,13 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
     await persistCycleStart(runId);
 
     stages.push(await runStage("trusted_device_export", () => syncTrustedDeviceOnce()));
+    stages.push(await runStage("checkin_scout_sync", () => syncCheckinScoutSnapshotOnce()));
     stages.push(await runStage("bitrix_account_map", () => syncBitrixAccountsOnce()));
+    stages.push(await runStage("checkin_scout_evaluate", () => evaluateCheckinScoutOnce()));
 
-    // Сначала пересчитываем risk без history. Это даёт risk_score новым аккаунтам,
+    // Сначала пересчитываем risk без обычной history. Scout при частотном триггере
+    // уже мог адресно загрузить 60-дневную историю до этого этапа.
+    // Это даёт risk_score новым аккаунтам,
     // которые только что появились из Trusted Device/account-map, чтобы priority loyalty
     // смог обновить их баланс уже в текущем цикле, а не на следующем.
     stages.push(
