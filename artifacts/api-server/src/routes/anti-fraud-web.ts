@@ -35,6 +35,12 @@ const errorMessage = (error: unknown): string =>
 
 type ConsentSource = "signup" | "account_gate" | "other";
 
+type InvestigationHistoryDay = {
+  day: string;
+  visits: number;
+  restaurants: number;
+};
+
 type ContactTarget = {
   bitrixUserId: number;
   phoneMasked: string | null;
@@ -47,6 +53,19 @@ type ContactTarget = {
   loyaltyActiveCardCount?: number | null;
   loyaltyIssue?: string | null;
   loyaltySyncedAt?: string | null;
+  loyaltyHistoryLoadedFrom?: string | null;
+  loyaltyHistoryLoadedUntil?: string | null;
+  loyaltyHistoryLoadedAt?: string | null;
+  operatorInvestigationHistoryCompletedAt?: string | null;
+  operatorInvestigationCompletedAt?: string | null;
+  operatorHistoryWindowFrom?: string | null;
+  operatorHistoryWindowUntil?: string | null;
+  historyPhysicalVisits?: number;
+  historyVisitDays?: number;
+  historyRestaurantCount?: number;
+  historyFirstVisitAt?: string | null;
+  historyLastVisitAt?: string | null;
+  historyDailyVisits?: InvestigationHistoryDay[];
   offerAccepted?: boolean | null;
   offerAcceptedAt?: string | null;
   offerSource?: ConsentSource | null;
@@ -66,6 +85,19 @@ type ContactValue = {
   loyaltyActiveCardCount: number | null;
   loyaltyIssue: string | null;
   loyaltySyncedAt: string | null;
+  loyaltyHistoryLoadedFrom: string | null;
+  loyaltyHistoryLoadedUntil: string | null;
+  loyaltyHistoryLoadedAt: string | null;
+  operatorInvestigationHistoryCompletedAt: string | null;
+  operatorInvestigationCompletedAt: string | null;
+  operatorHistoryWindowFrom: string | null;
+  operatorHistoryWindowUntil: string | null;
+  historyPhysicalVisits: number;
+  historyVisitDays: number;
+  historyRestaurantCount: number;
+  historyFirstVisitAt: string | null;
+  historyLastVisitAt: string | null;
+  historyDailyVisits: InvestigationHistoryDay[];
   offerAccepted: boolean | null;
   offerAcceptedAt: string | null;
   offerSource: ConsentSource | null;
@@ -110,6 +142,19 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     loyalty_active_card_count: number | null;
     loyalty_issue: string | null;
     loyalty_synced_at: Date | null;
+    loyalty_history_loaded_from: Date | null;
+    loyalty_history_loaded_until: Date | null;
+    loyalty_history_loaded_at: Date | null;
+    operator_history_completed_at: Date | null;
+    operator_completed_at: Date | null;
+    operator_history_window_from: Date | null;
+    operator_history_window_until: Date | null;
+    history_physical_visits: number | string | null;
+    history_visit_days: number | string | null;
+    history_restaurant_count: number | string | null;
+    history_first_visit_at: Date | null;
+    history_last_visit_at: Date | null;
+    history_daily_visits: unknown;
     offer_accepted: boolean | null;
     offer_accepted_at: Date | null;
     offer_source: string | null;
@@ -130,6 +175,22 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       a.loyalty_active_card_count,
       a.loyalty_issue,
       a.loyalty_synced_at,
+      a.loyalty_history_loaded_from,
+      a.loyalty_history_loaded_until,
+      a.loyalty_history_loaded_at,
+      oi.history_completed_at AS operator_history_completed_at,
+      oi.completed_at AS operator_completed_at,
+      CASE
+        WHEN oi.requested_at IS NOT NULL THEN oi.requested_at - interval '60 days'
+        ELSE NULL
+      END AS operator_history_window_from,
+      COALESCE(oi.history_completed_at, oi.requested_at) AS operator_history_window_until,
+      history.physical_visits AS history_physical_visits,
+      history.visit_days AS history_visit_days,
+      history.restaurant_count AS history_restaurant_count,
+      history.first_visit_at AS history_first_visit_at,
+      history.last_visit_at AS history_last_visit_at,
+      history.daily_visits AS history_daily_visits,
       a.offer_accepted,
       a.offer_accepted_at,
       a.offer_source,
@@ -148,6 +209,59 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       ORDER BY b.created_at DESC, b.id DESC
       LIMIT 1
     ) audit ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        i.requested_at,
+        i.history_completed_at,
+        i.completed_at
+      FROM anti_fraud_operator_investigations i
+      WHERE i.bitrix_user_id = a.bitrix_user_id
+      ORDER BY i.requested_at DESC
+      LIMIT 1
+    ) oi ON true
+    LEFT JOIN LATERAL (
+      WITH physical AS (
+        SELECT DISTINCT
+          v.source_restis_id,
+          v.visited_at,
+          v.restaurant
+        FROM anti_fraud_visits v
+        WHERE v.bitrix_user_id = a.bitrix_user_id
+          AND v.loyalty_verified IS TRUE
+          AND oi.requested_at IS NOT NULL
+          AND oi.history_completed_at IS NOT NULL
+          AND v.visited_at >= oi.requested_at - interval '60 days'
+          AND v.visited_at <= oi.history_completed_at
+      ),
+      daily AS (
+        SELECT
+          (visited_at AT TIME ZONE 'Europe/Moscow')::date AS day,
+          count(*)::int AS visits,
+          count(DISTINCT restaurant)::int AS restaurants
+        FROM physical
+        GROUP BY 1
+      )
+      SELECT
+        (SELECT count(*)::int FROM physical) AS physical_visits,
+        (SELECT count(*)::int FROM daily) AS visit_days,
+        (SELECT count(DISTINCT restaurant)::int FROM physical) AS restaurant_count,
+        (SELECT min(visited_at) FROM physical) AS first_visit_at,
+        (SELECT max(visited_at) FROM physical) AS last_visit_at,
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'day', day::text,
+                'visits', visits,
+                'restaurants', restaurants
+              )
+              ORDER BY day DESC
+            )
+            FROM daily
+          ),
+          '[]'::json
+        ) AS daily_visits
+    ) history ON true
     WHERE a.bitrix_user_id = ANY($1::int[])
   `, [ids]);
 
@@ -169,6 +283,25 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
           row.loyalty_active_card_count === null ? null : Number(row.loyalty_active_card_count),
         loyaltyIssue: row.loyalty_issue ?? null,
         loyaltySyncedAt: iso(row.loyalty_synced_at),
+        loyaltyHistoryLoadedFrom: iso(row.loyalty_history_loaded_from),
+        loyaltyHistoryLoadedUntil: iso(row.loyalty_history_loaded_until),
+        loyaltyHistoryLoadedAt: iso(row.loyalty_history_loaded_at),
+        operatorInvestigationHistoryCompletedAt: iso(row.operator_history_completed_at),
+        operatorInvestigationCompletedAt: iso(row.operator_completed_at),
+        operatorHistoryWindowFrom: iso(row.operator_history_window_from),
+        operatorHistoryWindowUntil: iso(row.operator_history_window_until),
+        historyPhysicalVisits: Number(row.history_physical_visits ?? 0),
+        historyVisitDays: Number(row.history_visit_days ?? 0),
+        historyRestaurantCount: Number(row.history_restaurant_count ?? 0),
+        historyFirstVisitAt: iso(row.history_first_visit_at),
+        historyLastVisitAt: iso(row.history_last_visit_at),
+        historyDailyVisits: Array.isArray(row.history_daily_visits)
+          ? row.history_daily_visits.map((day: any) => ({
+              day: String(day?.day ?? ""),
+              visits: Number(day?.visits ?? 0),
+              restaurants: Number(day?.restaurants ?? 0),
+            })).filter((day: InvestigationHistoryDay) => /^\d{4}-\d{2}-\d{2}$/.test(day.day))
+          : [],
         offerAccepted: row.offer_accepted === null ? null : row.offer_accepted === true,
         offerAcceptedAt: iso(row.offer_accepted_at),
         offerSource: consentSource(row.offer_source),
@@ -203,6 +336,19 @@ const exposeFullContacts = <T extends ContactTarget>(
       loyaltyActiveCardCount: contact.loyaltyActiveCardCount,
       loyaltyIssue: contact.loyaltyIssue,
       loyaltySyncedAt: contact.loyaltySyncedAt,
+      loyaltyHistoryLoadedFrom: contact.loyaltyHistoryLoadedFrom,
+      loyaltyHistoryLoadedUntil: contact.loyaltyHistoryLoadedUntil,
+      loyaltyHistoryLoadedAt: contact.loyaltyHistoryLoadedAt,
+      operatorInvestigationHistoryCompletedAt: contact.operatorInvestigationHistoryCompletedAt,
+      operatorInvestigationCompletedAt: contact.operatorInvestigationCompletedAt,
+      operatorHistoryWindowFrom: contact.operatorHistoryWindowFrom,
+      operatorHistoryWindowUntil: contact.operatorHistoryWindowUntil,
+      historyPhysicalVisits: contact.historyPhysicalVisits,
+      historyVisitDays: contact.historyVisitDays,
+      historyRestaurantCount: contact.historyRestaurantCount,
+      historyFirstVisitAt: contact.historyFirstVisitAt,
+      historyLastVisitAt: contact.historyLastVisitAt,
+      historyDailyVisits: contact.historyDailyVisits,
       offerAccepted: contact.offerAccepted,
       offerAcceptedAt: contact.offerAcceptedAt,
       offerSource: contact.offerSource,

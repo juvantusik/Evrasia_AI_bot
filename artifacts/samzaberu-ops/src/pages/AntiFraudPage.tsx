@@ -35,6 +35,19 @@ type Account = {
   loyaltyActiveCardCount: number | null;
   loyaltyIssue: string | null;
   loyaltySyncedAt: string | null;
+  loyaltyHistoryLoadedFrom?: string | null;
+  loyaltyHistoryLoadedUntil?: string | null;
+  loyaltyHistoryLoadedAt?: string | null;
+  operatorInvestigationHistoryCompletedAt?: string | null;
+  operatorInvestigationCompletedAt?: string | null;
+  operatorHistoryWindowFrom?: string | null;
+  operatorHistoryWindowUntil?: string | null;
+  historyPhysicalVisits?: number;
+  historyVisitDays?: number;
+  historyRestaurantCount?: number;
+  historyFirstVisitAt?: string | null;
+  historyLastVisitAt?: string | null;
+  historyDailyVisits?: Array<{ day: string; visits: number; restaurants: number }>;
   bitrixActive: boolean;
   bitrixBlocked?: boolean;
   bitrixBlockReason?: string | null;
@@ -215,6 +228,19 @@ const formatDate = (value: string | null | undefined) => {
   }).format(new Date(value));
 };
 const formatPoints = (value: number | null | undefined) => value == null ? '—' : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
+const formatHistoryDay = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[3]}.${match[2]}` : value;
+};
+
+const investigationStatusLabel = (value: string | null | undefined): string => {
+  if (value === 'pending') return 'Ожидает проверки';
+  if (value === 'processing') return 'Проверка выполняется';
+  if (value === 'history_ready') return 'История загружена, идёт расчёт';
+  if (value === 'ready') return 'Проверка завершена';
+  if (value === 'failed') return 'Ошибка проверки';
+  return value || 'Статус неизвестен';
+};
 
 const consentSourceLabel = (value: ConsentSource | null | undefined): string =>
   value === 'signup' ? 'Регистрация' : value === 'account_gate' ? 'ЛК' : value === 'other' ? 'Другой источник' : '';
@@ -251,6 +277,103 @@ const ConsentSnapshot = ({ account }: { account: Account }) => {
     <span className={`consent-badge ${consentBadgeState(account.pdAccepted)}`} title={consentTitle('ПД', account.pdAccepted, account.pdAcceptedAt, account.pdSource)}>ПД {consentBadgeSymbol(account.pdAccepted)}</span>
     {meta ? <span className="consent-meta" title={`${consentTitle('Оферта', account.offerAccepted, account.offerAcceptedAt, account.offerSource)}; ${consentTitle('ПД', account.pdAccepted, account.pdAcceptedAt, account.pdSource)}`}>{meta}</span> : null}
   </span>;
+};
+
+const OperatorInvestigationSummary = ({
+  account,
+  devices,
+  identityMatches,
+}: {
+  account: Account;
+  devices: CaseDevice[];
+  identityMatches: IdentityMatch[];
+}) => {
+  if (!account.operatorInvestigationId) return null;
+
+  const accountDevices = devices.filter((device) => device.userIds.includes(account.bitrixUserId));
+  const linkedAccountIds = [...new Set([
+    ...accountDevices.flatMap((device) => device.userIds),
+    ...identityMatches
+      .filter((match) => match.userIds.includes(account.bitrixUserId))
+      .flatMap((match) => match.userIds),
+  ])]
+    .filter((id) => id !== account.bitrixUserId)
+    .sort((a, b) => a - b);
+
+  const historyCovered = Boolean(
+    account.operatorInvestigationHistoryCompletedAt
+      && account.operatorHistoryWindowFrom
+      && account.operatorHistoryWindowUntil
+      && account.loyaltyHistoryLoadedAt,
+  );
+  const dailyVisits = account.historyDailyVisits ?? [];
+  const completion = account.operatorInvestigationCompletedAt
+    ?? account.operatorInvestigationHistoryCompletedAt;
+
+  return <div className="operator-investigation-info">
+    <div className="operator-investigation-heading">
+      <strong>Ручная проверка · {account.operatorSource || 'источник не указан'}</strong>
+      <em className={account.operatorInvestigationStatus === 'failed' ? 'failed' : 'ready'}>
+        {investigationStatusLabel(account.operatorInvestigationStatus)}
+      </em>
+    </div>
+    <span>
+      {account.operatorReason || 'Комментарий не указан'}
+      {account.operatorInvestigationRequestedAt ? ` · добавлено ${formatDate(account.operatorInvestigationRequestedAt)}` : ''}
+      {completion ? ` · завершено ${formatDate(completion)}` : ''}
+    </span>
+
+    {historyCovered ? <div className="operator-history-result">
+      <div className="operator-history-head">
+        <div>
+          <strong>60-дневная история проверена ✓</strong>
+          <span>
+            период {formatDate(account.operatorHistoryWindowFrom)} — {formatDate(account.operatorHistoryWindowUntil)}
+            {account.loyaltyHistoryLoadedAt ? ` · загружено ${formatDate(account.loyaltyHistoryLoadedAt)}` : ''}
+          </span>
+        </div>
+      </div>
+
+      <div className="operator-history-metrics">
+        <span><b>{account.historyPhysicalVisits ?? 0}</b><small>физ. посещений</small></span>
+        <span><b>{account.historyVisitDays ?? 0}</b><small>дней посещений</small></span>
+        <span><b>{account.historyRestaurantCount ?? 0}</b><small>ресторанов</small></span>
+      </div>
+
+      {(account.historyFirstVisitAt || account.historyLastVisitAt) ? <div className="operator-history-range">
+        События: {account.historyFirstVisitAt ? formatDate(account.historyFirstVisitAt) : '—'}
+        {' — '}
+        {account.historyLastVisitAt ? formatDate(account.historyLastVisitAt) : '—'}
+      </div> : <div className="operator-history-range">За период физических посещений не найдено.</div>}
+
+      {dailyVisits.length ? <details className="operator-history-days">
+        <summary>Посещения по дням ({dailyVisits.length})</summary>
+        <div>
+          {dailyVisits.map((day) => <span key={day.day}>
+            <b>{formatHistoryDay(day.day)}</b>
+            <small>{day.visits} посещ. · {day.restaurants} рест.</small>
+          </span>)}
+        </div>
+      </details> : null}
+    </div> : account.loyaltyIssue === 'no_active_card'
+      ? <div className="operator-history-result warning"><strong>60-дневная история не загружена</strong><span>У аккаунта нет активной карты.</span></div>
+      : account.operatorInvestigationStatus === 'ready'
+        ? <div className="operator-history-result warning"><strong>Проверка завершена без подтверждённого покрытия истории</strong><span>Нужно проверить enrichment этого аккаунта.</span></div>
+        : null}
+
+    {(accountDevices.length > 0 || linkedAccountIds.length > 0) ? <div className="operator-investigation-relations">
+      {accountDevices.map((device) => <span key={device.devicePrefix}>
+        <Smartphone size={14} />
+        ID устройства: <b>{device.devicePrefix}…</b>
+      </span>)}
+      {linkedAccountIds.length ? <span>
+        <Users size={14} />
+        Связанные аккаунты: <b>{linkedAccountIds.map((id) => `ID ${id}`).join(', ')}</b>
+      </span> : null}
+    </div> : null}
+
+    <div className="operator-risk-caption">Risk по категориям</div>
+  </div>;
 };
 
 const loyaltyText = (account: Account): string => {
@@ -450,7 +573,7 @@ export default function AntiFraudPage() {
                     {visibleAccounts.map((account) => <div className={`account-card ${account.bitrixBlocked ? 'blocked' : ''}`} key={account.bitrixUserId}>
                       <div className="account-top"><div><div className="account-name-line"><strong>{account.displayName || 'Без имени'}{account.operatorInvestigationId ? <em className="operator-watch-badge">Проверка{account.operatorSource ? `: ${account.operatorSource}` : ''}</em> : account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><ConsentSnapshot account={account} /></div><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
                       <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>{loyaltyText(account)}</span></div>
-                      {account.operatorInvestigationId ? <div className="operator-investigation-info"><strong>Ручная проверка · {account.operatorSource || 'источник не указан'}</strong><span>{account.operatorReason || 'Комментарий не указан'} · статус: {account.operatorInvestigationStatus || '—'}{account.operatorInvestigationRequestedAt ? ` · добавлено ${formatDate(account.operatorInvestigationRequestedAt)}` : ''}</span></div> : null}
+                      <OperatorInvestigationSummary account={account} devices={caseTrustedDevices} identityMatches={item.identityMatches} />
                       {account.bitrixBlocked ? <div className="block-info"><strong>Дата блокировки: {account.blockedAt ? formatDate(account.blockedAt) : 'неизвестна'}</strong><span>{account.bitrixBlockReason || 'Основание блокировки не указано'}</span></div> : null}
                       <div className="risk-bars"><span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span></div>
                       <div className="account-actions">{account.bitrixBlocked
