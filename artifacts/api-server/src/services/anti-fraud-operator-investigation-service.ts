@@ -184,7 +184,7 @@ const recoverStaleProcessing = async (): Promise<void> => {
   );
 };
 
-const claimPending = async (): Promise<InvestigationRow | null> => {
+const claimPending = async (investigationId?: string): Promise<InvestigationRow | null> => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -192,9 +192,11 @@ const claimPending = async (): Promise<InvestigationRow | null> => {
       `SELECT *
        FROM anti_fraud_operator_investigations
        WHERE status IN ('pending','history_ready')
+         AND ($1::text IS NULL OR investigation_id = $1)
        ORDER BY requested_at
        FOR UPDATE SKIP LOCKED
        LIMIT 1`,
+      [investigationId ?? null],
     );
     const row = selected.rows[0];
     if (!row) {
@@ -268,6 +270,23 @@ const processInvestigation = async (
       [investigation.investigation_id, safeError(error)],
     );
   }
+};
+
+export const processAntiFraudOperatorInvestigationById = async (
+  investigationIdValue: string,
+  options?: { gateway?: BitrixAntiFraudAccountGateway },
+): Promise<{ processed: boolean }> => {
+  const investigationId = String(investigationIdValue ?? "").trim();
+  if (!investigationId || investigationId.length > 100) {
+    throw new Error("Некорректный investigation_id");
+  }
+
+  await recoverStaleProcessing();
+  const investigation = await claimPending(investigationId);
+  if (!investigation) return { processed: false };
+
+  await processInvestigation(investigation, options?.gateway);
+  return { processed: true };
 };
 
 export const processPendingAntiFraudOperatorInvestigationsOnce = async (options?: {
