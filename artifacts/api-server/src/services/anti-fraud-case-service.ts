@@ -244,8 +244,10 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       ORDER BY COALESCE(s.overall_risk, 0) DESC, u.bitrix_user_id
     `),
     pool.query<any>(`
-      WITH risky AS (
+      WITH seeds AS (
         SELECT bitrix_user_id FROM anti_fraud_risk_scores WHERE overall_risk > 0
+        UNION
+        SELECT bitrix_user_id FROM anti_fraud_operator_investigations
       ), relevant_devices AS (
         SELECT DISTINCT l.device_hash
         FROM anti_fraud_device_links l
@@ -262,8 +264,10 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       ORDER BY count(DISTINCT l.bitrix_user_id) DESC, max(l.last_seen_at) DESC NULLS LAST
     `),
     pool.query<any>(`
-      WITH risky AS (
+      WITH seeds AS (
         SELECT bitrix_user_id FROM anti_fraud_risk_scores WHERE overall_risk > 0
+        UNION
+        SELECT bitrix_user_id FROM anti_fraud_operator_investigations
       ), matches AS (
         SELECT 'phone'::text AS match_type, phone_normalized AS match_key, bitrix_user_id
         FROM anti_fraud_accounts
