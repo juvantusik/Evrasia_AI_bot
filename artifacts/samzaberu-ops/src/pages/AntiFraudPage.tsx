@@ -273,7 +273,7 @@ const parseDetails = (details: string) => details.split(';').map((part) => part.
     .replace('similar_phone_links=', 'связей по похожему номеру: ').replace('similar_email_links=', 'связей по похожему email: ')
     .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ').replace('bonus_balance=', 'остаток бонусов: ')
     .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: ')
-    .replace('days_2plus_7d=', 'дней с 2+ чекинами за 7 дней: ')
+    .replace('days_2plus_7d=', 'дней с 3 чекинами за 7 дней: ')
     .replace('days_3plus_60d=', 'дней с 3+ чекинами за 60 дней: ')
     .replace('source=checkin_scout', 'источник: Check-in Scout'));
 
@@ -456,7 +456,7 @@ export default function AntiFraudPage() {
                   <div className="detail-column links-column"><h3>Устройства и связи</h3>
                     {caseTrustedDevices.map((device) => {
                       const shared = device.userIds.length > 1;
-                      return <div className={`link-card ${shared ? '' : 'solo'}`} key={device.devicePrefix}><Smartphone size={18} /><div><strong>{shared ? 'Общее устройство' : 'Device ID'} {device.devicePrefix}…</strong><span>Аккаунтов на устройстве: {device.userIds.length}{device.userIds.length ? ` · ${device.userIds.map((id) => `ID ${id}`).join(' ↔ ')}` : ''}</span><small>Последняя активность: {formatDate(device.lastSeenAt)}</small></div></div>;
+                      return <div className={`link-card ${shared ? '' : 'solo'}`} key={device.devicePrefix}><Smartphone size={18} /><div><strong>{shared ? 'Общее устройство' : 'Устройство'} {device.devicePrefix}…</strong><span>Аккаунтов на устройстве: {device.userIds.length}{device.userIds.length ? ` · ${device.userIds.map((id) => `ID ${id}`).join(' ↔ ')}` : ''}</span><small>Последняя активность: {formatDate(device.lastSeenAt)}</small></div></div>;
                     })}
                     {item.identityMatches.map((match, index) => <div className="link-card" key={`${match.type}-${index}`}>{match.type === 'phone' || match.type === 'similar_phone' ? <Link2 size={18} /> : <Mail size={18} />}<div><strong>{identityMatchLabel(match)}</strong><span>{match.userIds.map((id) => `ID ${id}`).join(' ↔ ')}</span></div></div>)}
                     {item.accountCount === 1 && item.signals.includes('visits') && caseTrustedDevices.length === 0 ? <div className="link-card solo"><Utensils size={18} /><div><strong>Trusted Device не найден</strong><span>У аккаунта нет синхронизированного Trusted Device; связующих признаков с другими аккаунтами не найдено.</span></div></div> : null}
