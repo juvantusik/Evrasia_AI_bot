@@ -115,27 +115,35 @@ Do not reopen PR #44's intermediate layout approach; PR #45 supersedes it.
 
 The old UI-plan items from `docs/ANTI_FRAUD_UI_NEXT.md` are no longer the continuation point. Device-hash visibility and device labeling were implemented through PR #57/#58, and the 24-hour `Новый` semantics were implemented earlier through PR #47.
 
-Current next task:
+Current continuation:
 
-**«Добавить на проверку» by phone.**
+**finish and review draft PR #60 for «Добавить на проверку» by phone.**
 
-Already done:
+Already production and unchanged:
 
-- protected Bitrix phone resolver in production;
-- unique/invalid/not-found/ambiguous/error contracts verified;
+- protected Bitrix phone resolver;
+- unique/invalid/not-found/ambiguous/error contracts;
 - no account write and no blocking.
 
-Pending bot work:
+Read-only production inspection on 2026-09-20 reconfirmed the accepted resolver SHAs and exact request field:
 
-1. gateway to the protected resolver;
-2. persistent operator-investigation DB state;
-3. explicit operator-authorized 60-day history enrichment;
-4. normal scoring;
-5. visibility even when automatic Risk remains 0;
-6. UI action with phone as primary input;
-7. separate operator source/reason such as `Авито`;
-8. no auto-block;
-9. tests, rollout and documentation.
+`phone`
+
+Implemented in PR #60 but **not merged / not production**:
+
+1. protected bot phone-resolver gateway;
+2. migration `0024_anti_fraud_operator_investigation`;
+3. persistent operator-investigation state;
+4. explicit operator-authorized 60-day history without fake risk gate;
+5. normal scoring;
+6. persistent visibility at automatic Risk 0;
+7. phone-first UI action;
+8. separate operator source/reason such as `Авито`;
+9. restart-safe worker and scheduler resume;
+10. no auto-block;
+11. gateway tests and CI migration/schema checks.
+
+Next action: require green CI on the final PR #60 head, do final diff/review, then plan a guarded production rollout.
 
 Use `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for the full design and exact production state.
 
