@@ -320,7 +320,6 @@ router.post("/anti-fraud/investigations", async (req, res): Promise<void> => {
       ok: true,
       resolved: {
         bitrixUserId: resolved.bitrixUserId,
-        active: resolved.active,
       },
       investigation,
     });
