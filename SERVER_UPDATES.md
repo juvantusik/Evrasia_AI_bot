@@ -374,8 +374,18 @@ Mandatory lessons include:
 
 ## Current release status
 
-The latest operator-settings/UI milestone is complete and production accepted on PR #45 revision `b7402cbe19b14f4d84c77870c8be876fe6f7bf42` with immutable CI digest `sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`.
+Current accepted production application is PR #58:
 
-PR #44 remains an important historical intermediate deployment but is superseded visually by PR #45.
+- revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`;
+- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`;
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`;
+- migrations: 24;
+- runtime: healthy at acceptance;
+- deployment backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`.
 
-No repeat modal fix, block/unblock acceptance or similarity refresh is pending.
+The current Anti-Fraud continuation is **manual investigation by phone, Step 2 bot side**. Bitrix phone resolution is already production. See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+
+Earlier PR #44/#45 modal work remains historical and accepted but is no longer the latest release state.
+
+No repeat modal fix, block/unblock acceptance, Check-in Scout deployment, PR #57/#58 UI deployment or phone-resolver deployment is pending.
+
