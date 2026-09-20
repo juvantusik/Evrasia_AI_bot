@@ -2,7 +2,7 @@
 
 > Current production operations note for Evrasia AI Bot.
 >
-> Last updated: **2026-09-09** after PR #45 production visual acceptance.
+> Last updated: **2026-09-20** after PR #58 production acceptance, Check-in Scout rollout and protected phone resolver deployment.
 
 ## Current production host
 
@@ -21,12 +21,23 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 Application:
 
 - service/container: `evrasia-ai-bot-app`
-- accepted deployed revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- image/config ID: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
-- platform: `linux/amd64`
+- accepted deployed revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
 - app port: `127.0.0.1:18080 -> 8080`
-- status: production UI operator-accepted after PR #45
+- status: running healthy / PR #58 operator accepted.
+
+PR #58 deployment backup:
+
+`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
+
+PR #58 deployment result:
+
+- migration count remained 24;
+- no Bitrix data write;
+- no account blocking;
+- rollback not required;
+- 7 PASS / 0 FAIL.
 
 A later docs-only GitHub commit may advance `main`; it does not by itself change the deployed application identity above. Before any future mutation, re-read factual runtime revision/image from production.
 
@@ -39,12 +50,97 @@ A later docs-only GitHub commit may advance `main`; it does not by itself change
 - retained test DB: `evrasia_ai_bot_antifraud_test`
 - volume: `evrasia-postgres-prod-data`
 - network: `evrasia-prod-internal`
-- production migrations: **20**
-- latest migration journal timestamp: `1788769200000`
+- production migrations: **24**
+- latest relevant Anti-Fraud migration tag: `0023_anti_fraud_checkin_scout`
 
-Migrations 0018/0019 provide Anti-Fraud blocked-state fields and internal block audit.
+Current Scout tables/state were introduced through PR #56. PR #57/#58 did not add migrations.
 
-PR #43/#44/#45 introduced no new migration and no schema change.
+## 2026-09-19 → 2026-09-20 — Check-in Scout, phone resolver, Trusted Device display
+
+### Check-in Scout corrected rollout
+
+PR #56 is the accepted Scout implementation.
+
+Key facts:
+
+- physical source is the protected Bitrix check-in endpoint backed by the offline-order/VIP_TODAY path;
+- 1 check-in/day is normal and does not persist as Scout state;
+- WATCH/deep/confirmed state is stored separately;
+- Scout physical snapshot does not write into `anti_fraud_visits`;
+- confirmation can independently produce Risk 100 / Critical;
+- no auto-block.
+
+Initial corrected production cycle:
+
+- fetched: 5758;
+- persisted Scout candidates: 332;
+- confirmed: 2;
+- deep_check: 31;
+- watching: 299;
+- `SCOUT_ROWS_IN_ANTI_FRAUD_VISITS=0`.
+
+PR #55's first Scout image is unsafe/superseded and must never be deployed.
+
+### Bitrix protected phone resolver
+
+Production route:
+
+`/api/internal/anti-fraud/phone-resolve`
+
+Actual routes file:
+
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/routes/api.php`
+
+Current route SHA:
+
+`39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`
+
+Resolver service SHA:
+
+`2a9ed0b8b8e87d7965d9e9f1ff474121e4605d0fa4c399dbdcee6f30bc5c8d8e`
+
+Accepted response contract:
+
+- 401 unauthorized;
+- 200 unique;
+- 400 invalid;
+- 404 not found;
+- 409 ambiguous, no USER_ID selection;
+- 503 resolver/candidate-limit error.
+
+Successful resolver backup:
+
+`/home/site_evrasia/backups/anti-fraud-phone-resolver-20260919-195427`
+
+No Bitrix account write, DB write or block was performed by the resolver deployment.
+
+### PR #57 / PR #58 Trusted Device case display
+
+PR #57 exposed all case Trusted Device hashes as display context while retaining shared devices separately as grouping evidence.
+
+PR #58 corrected the operator-facing labels:
+
+- one linked USER_ID → `Устройство`;
+- multiple USER_ID → `Общее устройство`.
+
+Both are the same hash type.
+
+PR #58 also changed the first Scout display phrase from `2+` to `3 чекинами` per operator request. This was display-only; the backend `days_2plus_7d >= 2` calculation did not change.
+
+### PR #58 Compose deployment lesson
+
+Two attempts stopped safely before mutation because a staged Compose file was outside the production Compose directory.
+
+Production Compose uses relative resources. The accepted pattern is:
+
+- stage temporary Compose in `/opt/evrasia-ai-bot/prod`;
+- validate there;
+- only then replace canonical Compose;
+- verify immutable image/revision/digest and migration count.
+
+Full current continuation:
+
+`docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`
 
 ## Current Anti-Fraud operator setting
 
