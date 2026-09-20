@@ -517,7 +517,8 @@ Visibility:
 - operator investigations are first-class Anti-Fraud candidates;
 - the account/case remains visible even when automatic Risk is 0;
 - operator investigation is shown separately in account/case UI;
-- USER_ID remains a technical fallback endpoint, not the normal workflow.
+- USER_ID remains a technical fallback endpoint, not the normal workflow;
+- creation atomically inserts `anti_fraud_web_account_state` with `ON CONFLICT DO NOTHING`, so the existing **«Новый = 24 hours from first web appearance»** rule starts immediately and repeated manual checks do not extend it.
 
 ### G. Tests / current CI
 
@@ -530,7 +531,8 @@ Added protected phone-gateway regression coverage for:
 - 409 ambiguity and safe match count;
 - 401/unexpected upstream failures → safe 503;
 - malformed success response;
-- no protected response-body leak.
+- no protected response-body leak;
+- route-level smoke: empty investigation list, local invalid phone → 400, invalid USER_ID fallback → 400.
 
 CI run #421 became fully green after updating the migration count/schema-smoke. A newer run for the completed phone-first implementation must be green before PR #60 leaves draft/review state.
 
