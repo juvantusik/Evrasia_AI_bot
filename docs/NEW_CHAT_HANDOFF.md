@@ -68,7 +68,7 @@ For the full current Anti-Fraud state and next continuation point, read `docs/AN
 
 ---
 
-## 2. Latest Anti-Fraud operator milestone — DONE / PRODUCTION ACCEPTED
+## 2. Earlier Anti-Fraud operator-settings milestone — HISTORICAL / STILL VALID
 
 Relevant lineage:
 
@@ -95,7 +95,7 @@ Current setting:
 
 ### `Новый` badge
 
-An account is marked **`Новый`** when it appears in the latest `addedAccountIds` for a previously observed Anti-Fraud case. A case seen for the first time does not label all members as new.
+Current operator-facing **`Новый`** semantics come from PR #47: a USER_ID is shown as new for 24 hours from its first appearance in the web Anti-Fraud interface. Repeated refreshes do not extend that window. Forensic case-delta `addedAccountIds` remains separate.
 
 ### Final modal behavior
 
@@ -111,17 +111,33 @@ Do not reopen PR #44's intermediate layout approach; PR #45 supersedes it.
 
 ---
 
-## 3. Next Anti-Fraud UI iteration — PLANNED
+## 3. Current Anti-Fraud next iteration — Step 2 manual investigation
 
-Two operator requirements are queued for the next session:
+The old UI-plan items from `docs/ANTI_FRAUD_UI_NEXT.md` are no longer the continuation point. Device-hash visibility and device labeling were implemented through PR #57/#58, and the 24-hour `Новый` semantics were implemented earlier through PR #47.
 
-1. **Make `Новый` visible in the established case-dynamics/status area.** The current PR #43 semantics remain authoritative (`addedAccountIds` for a previously observed case), but the operator does not see newly appeared users clearly enough in the table. `Новый` should be presented where the UI already shows dynamics such as `усилился`, `без изменений`, etc. Before implementing, inspect the exact current status set/priorities and decide how `Новый` composes with existing dynamics instead of guessing.
+Current next task:
 
-2. **Add visual progress for accumulated Anti-Fraud `device_hash_id`.** This is distinct from the authentication Trusted Device count. The operator wants to see how much Anti-Fraud device-hash data has already been collected. First inspect the real DB/schema/query path and expose only a meaningful factual count. Design the UI so it can later split by authoritative source: website / SamZaberu application / mobile waiter application. If source is not currently persisted, do not fake the split — record the required future data-model/integration change.
+**«Добавить на проверку» by phone.**
 
-For the **authentication Trusted Device / SMS trust mechanism**, use `docs/TRUSTED_DEVICE_DIAGNOSTICS.md`: host `evrasia` (`192.168.103.141`), table `ev_trusted_devices`, primary metric `COUNT(DISTINCT DEVICE_ID_HASH)`. Do not answer that question from `eur-bot-01` or `anti_fraud_device_links`.
+Already done:
 
-See `docs/ANTI_FRAUD_UI_NEXT.md` before implementation.
+- protected Bitrix phone resolver in production;
+- unique/invalid/not-found/ambiguous/error contracts verified;
+- no account write and no blocking.
+
+Pending bot work:
+
+1. gateway to the protected resolver;
+2. persistent operator-investigation DB state;
+3. explicit operator-authorized 60-day history enrichment;
+4. normal scoring;
+5. visibility even when automatic Risk remains 0;
+6. UI action with phone as primary input;
+7. separate operator source/reason such as `Авито`;
+8. no auto-block;
+9. tests, rollout and documentation.
+
+Use `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for the full design and exact production state.
 
 ---
 
