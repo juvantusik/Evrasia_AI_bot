@@ -88,3 +88,28 @@
   line-height: 1;
   white-space: nowrap;
 }
+
+
+/* Добавлено 20.09.2026: операторское основание хранится и показывается отдельно
+   от automatic risk reasons. */
+.operator-investigation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #d8e4ff;
+  border-radius: 10px;
+  background: #f5f8ff;
+}
+
+.operator-investigation-info strong {
+  color: #344f8a;
+  font-size: 12px;
+}
+
+.operator-investigation-info span {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
