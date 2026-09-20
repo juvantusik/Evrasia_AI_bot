@@ -173,6 +173,17 @@ export const listAntiFraudOperatorInvestigations = async (
   return result.rows.map(mapInvestigation);
 };
 
+const recoverStaleProcessing = async (): Promise<void> => {
+  await pool.query(
+    `UPDATE anti_fraud_operator_investigations
+     SET status = CASE WHEN history_completed_at IS NULL THEN 'pending' ELSE 'history_ready' END,
+         last_error = 'Восстановлено после прерванной обработки',
+         updated_at = now()
+     WHERE status = 'processing'
+       AND updated_at < now() - interval '60 minutes'`,
+  );
+};
+
 const claimPending = async (): Promise<InvestigationRow | null> => {
   const client = await pool.connect();
   try {
@@ -180,7 +191,7 @@ const claimPending = async (): Promise<InvestigationRow | null> => {
     const selected = await client.query<InvestigationRow>(
       `SELECT *
        FROM anti_fraud_operator_investigations
-       WHERE status = 'pending'
+       WHERE status IN ('pending','history_ready')
        ORDER BY requested_at
        FOR UPDATE SKIP LOCKED
        LIMIT 1`,
@@ -220,18 +231,20 @@ const processInvestigation = async (
     }
     await upsertAccount(account);
 
-    await enrichRestisHistoryForOperatorInvestigationOnce({
-      bitrixUserId: Number(investigation.bitrix_user_id),
-      investigationId: investigation.investigation_id,
-      lookbackDays: 60,
-    });
+    if (!investigation.history_completed_at) {
+      await enrichRestisHistoryForOperatorInvestigationOnce({
+        bitrixUserId: Number(investigation.bitrix_user_id),
+        investigationId: investigation.investigation_id,
+        lookbackDays: 60,
+      });
 
-    await pool.query(
-      `UPDATE anti_fraud_operator_investigations
-       SET status='history_ready', history_completed_at=now(), updated_at=now()
-       WHERE investigation_id=$1`,
-      [investigation.investigation_id],
-    );
+      await pool.query(
+        `UPDATE anti_fraud_operator_investigations
+         SET status='history_ready', history_completed_at=now(), updated_at=now()
+         WHERE investigation_id=$1`,
+        [investigation.investigation_id],
+      );
+    }
 
     // Операторская причина не превращается в automatic risk reason.
     // После ручного 60-day enrichment применяется обычный explainable scoring.
@@ -266,6 +279,7 @@ export const processPendingAntiFraudOperatorInvestigationsOnce = async (options?
     ? Math.max(1, Math.min(MAX_BATCH_LIMIT, requested))
     : DEFAULT_BATCH_LIMIT;
   let processed = 0;
+  await recoverStaleProcessing();
 
   for (let index = 0; index < limit; index += 1) {
     const investigation = await claimPending();
