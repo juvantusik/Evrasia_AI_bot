@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-18** after documenting the planned TOTP 2FA / protected-profile workstream and its production read-only findings.
+> Updated: **2026-09-20** after PR #58 production acceptance, Check-in Scout production verification and Bitrix phone-resolver completion for Anti-Fraud Step 2.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -11,36 +11,52 @@
 Host: `eur-bot-01` (`192.168.103.200`).
 
 Current accepted bot application:
+
 - repo: `juvantusik/Evrasia_AI_bot`
-- production revision: `1ee4540150ef4aaba1e5c121a75e1c12b965dba2`
-- image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:3defaa7388f2278dfa7767e1ea79d2c12c1f0121f73eb208c034b153ade2d280`
-- image config: `sha256:0b16a8d6af7b1bd1e4b71c6ce5a02fb6933995350d074a1def022ded68bbd525`
-- platform: `linux/amd64`
+- production revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
 - Anti-Fraud threshold: 40000
 - scheduler: enabled, 15 min
-- production migrations: 21
-- app container healthy, restart count 0 at acceptance.
+- production migrations: **24**
+- app container: **running healthy** at acceptance.
 
-PR #47 is **PRODUCTION / ACCEPTED**.
+PR #58 is **PRODUCTION / OPERATOR ACCEPTED**.
 
-PR #47 Anti-Fraud `Новый` semantics:
-- `Новый` means the account first appeared in the **web Anti-Fraud interface** less than 24 hours ago;
-- repeated scheduler refreshes do not extend/reset that 24h window;
-- existing visible accounts were bootstrapped as old during migration so the UI did not light up all historical accounts;
-- table: `anti_fraud_web_account_state(bitrix_user_id, first_seen_at)`;
-- production bootstrap after migration: 132 rows, 0 recent rows;
-- dynamics API exposes `recentAccountIds`;
-- forensic case delta remains separately available and is not the operator-facing 24h definition.
+PR #58 UI semantics:
 
-Production deployment backup for PR #47:
-- `/opt/evrasia-ai-bot/backups/pr47-new-24h-20260911-201030`
-- DB dump: `/opt/evrasia-ai-bot/backups/pr47-new-24h-20260911-201030/evrasia_ai_bot.dump`
+- one USER_ID on a Trusted Device hash → **Устройство**;
+- multiple USER_ID on the same hash → **Общее устройство**;
+- both labels are the same Trusted Device hash type; the count of linked accounts is the distinction;
+- if a second USER_ID later appears on the same hash, after sync/scoring it can become shared grouping evidence.
+
+Scout UI wording after PR #58:
+
+- first field renders as `дней с 3 чекинами за 7 дней`;
+- second remains `дней с 3+ чекинами за 60 дней`.
+
+Critical nuance: the first change is **display-only**. Backend `days_2plus_7d` still counts days with `>=2` physical check-ins. Do not infer a backend threshold change from the label.
+
+Production deployment backup for PR #58:
+
+- `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
 
 Deployment/auth invariant:
+
 - production mutation on `eur-bot-01` is performed as `root`;
 - GHCR credentials belong to user `tech` in `/home/tech/.docker/config.json`;
-- root intentionally has no GHCR auth entry;
-- for image pull, reuse `tech` auth (for example `runuser -u tech -- env HOME=/home/tech DOCKER_CONFIG=/home/tech/.docker docker pull ...`), never copy token to root and never ask for a new token unless existing auth is proven unusable.
+- root intentionally has no copied GHCR token;
+- pull with the existing `tech` Docker config; never print/copy the credential.
+
+Compose staging invariant confirmed by PR #58:
+
+- the canonical Compose uses relative paths;
+- stage temporary Compose in `/opt/evrasia-ai-bot/prod`, not `/tmp`;
+- validate before replacing the canonical file.
+
+Full current Anti-Fraud continuation:
+
+`docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`
 
 ## 2. Anti-Fraud invariants
 
@@ -65,6 +81,69 @@ Read-only production check on 2026-09-12:
 Important diagnostic rule:
 - never compare consent coverage against all `anti_fraud_accounts` when the question is about accounts visible in the Anti-Fraud web UI;
 - first obtain the web-visible USER_ID set from `anti_fraud_web_account_state`, then intersect with Bitrix consent events.
+
+## 2A. Anti-Fraud / Check-in Scout / manual investigation — current continuation
+
+Check-in Scout Step 1 is **DONE / PRODUCTION / VERIFIED**.
+
+Authoritative physical source:
+
+- Bitrix offline-order/check-in store fed by `VIP_TODAY`;
+- `VIP_HISTORY` is not a reliable physical-visit counter because one physical visit can produce multiple monetary/event rows.
+
+Current Scout code semantics:
+
+- 1 physical check-in/day = normal;
+- 2+ in one Moscow calendar day = persistent WATCH;
+- 3rd check-in/day = immediate targeted deep check;
+- another WATCH day with 2+ = deep check;
+- WATCH persists through current day + two subsequent calendar days;
+- deep confirmation = 3 different days with 2+ in 7d OR 3 different days with 3+ in 60d;
+- confirmed frequency independently gives Risk 100 / Critical;
+- no auto-block.
+
+PR #56 is the corrected Scout implementation. PR #55's unsafe image must never be deployed.
+
+Bitrix protected Scout endpoint is production:
+
+- route: `/api/internal/anti-fraud/checkins`;
+- actual route file: `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/routes/api.php`;
+- Scout service SHA: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`.
+
+Manual-investigation Step 2 status:
+
+- requirement: **«Добавить на проверку»** by phone;
+- protected Bitrix phone resolver: **DONE / PRODUCTION / VERIFIED**;
+- route: `/api/internal/anti-fraud/phone-resolve`;
+- current Bitrix route SHA after resolver deployment: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- resolver service SHA: `2a9ed0b8b8e87d7965d9e9f1ff474121e4605d0fa4c399dbdcee6f30bc5c8d8e`;
+- unique → HTTP 200;
+- invalid → 400;
+- not found → 404;
+- ambiguous → 409 without choosing a USER_ID;
+- internal/candidate-limit problem → 503;
+- no Bitrix write / no blocking.
+
+Bot-side Step 2 remains pending:
+
+1. protected gateway;
+2. persistent operator-investigation state;
+3. operator-authorized 60-day enrichment without faking automatic risk gate;
+4. normal scoring;
+5. visibility even at automatic Risk 0;
+6. separate operator source/reason, e.g. `Авито`;
+7. no auto-block;
+8. tests and rollout.
+
+Hard evidence boundary:
+
+- operator-confirmed control purchase is operator evidence;
+- do not present it as if automatic telemetry discovered it;
+- automatic device/frequency/contact reasons remain separate.
+
+The current migration journal ends at `0023_anti_fraud_checkin_scout`; production migration count is 24. Inspect current main before creating the next migration, expected to be `0024_...` if nothing else has landed.
+
+See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for the full handoff.
 
 ## 3. Website legal production state
 
