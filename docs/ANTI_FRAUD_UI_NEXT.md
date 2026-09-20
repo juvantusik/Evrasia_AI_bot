@@ -1,99 +1,68 @@
-# Anti-Fraud UI — next planned improvements
+# Anti-Fraud UI — historical plan and current continuation
 
-> Status: **PLANNED**, not implemented.
+> Updated: **2026-09-20**
 >
-> Captured on 2026-09-09 for the next working session.
+> The UI plan captured on 2026-09-09 is no longer the active continuation point.
 
-## Why this document exists
+## Status of the previously planned items
 
-The current Anti-Fraud UI milestone through PR #45 is production accepted. The next iteration is not a bugfix to that modal work; it is a separate operator-visibility improvement focused on case dynamics and device-hash accumulation.
+### `Новый`
 
-Do not implement from memory alone. Before changing code, inspect current `main`, current production runtime and the exact UI/data structures that drive case-dynamics labels and device-hash statistics.
+The earlier plan asked to make newly appeared accounts more visible.
 
----
+Current production semantics were later changed and finalized through PR #47:
 
-## 1. New accounts should be visible as a case-dynamics status
+- source: `anti_fraud_web_account_state`;
+- `Новый` means the USER_ID first appeared in the web Anti-Fraud interface less than 24 hours ago;
+- refreshes do not reset/extend the window;
+- forensic case-delta history remains separate.
 
-### Current problem
+Status: **IMPLEMENTED / PRODUCTION**.
 
-PR #43 added the structural `Новый` account marker based on the latest `addedAccountIds` for a previously observed case, but in practical operator use newly appeared users are not visible enough in the current table/workflow.
+### Trusted Device / accumulated device-hash visibility
 
-### Desired behavior
+The earlier plan asked to expose factual device-hash accumulation and make device identity visible in cases.
 
-The operator wants **`Новый`** to appear in the same visual/status area where case dynamics such as `усилился`, `без изменений`, etc. are shown — effectively as another clearly visible dynamics state.
+This evolved through PR #57 and PR #58.
 
-Important semantic constraint:
+Current case-detail display:
 
-- `Новый` is not a Bitrix account-state value;
-- `Новый` is not a risk score;
-- it means the account appeared in the latest `addedAccountIds` for a previously observed case;
-- a newly observed case must not mark all of its members as new;
-- preserve the already accepted PR #43 membership-delta semantics.
+- one linked USER_ID on a Trusted Device hash → **Устройство**;
+- multiple linked USER_ID values on the same hash → **Общее устройство**;
+- both labels refer to the same Trusted Device hash type;
+- shared devices remain the linking/grouping evidence;
+- single-account Trusted Device hashes are display context and do not group accounts by themselves.
 
-Before implementation, verify the exact existing set/names/priorities of case-dynamics statuses in current code. Do not guess a status enum or overwrite another dynamics state without first understanding how multiple conditions should be represented.
+Status: **IMPLEMENTED / PRODUCTION / OPERATOR ACCEPTED**.
 
-The UX goal is operator visibility: a newly added account should be immediately obvious in the same place the operator already looks for case change/dynamics.
+For authentication/Trusted Device accumulation counts, continue to use `docs/TRUSTED_DEVICE_DIAGNOSTICS.md`; do not confuse those counts with Anti-Fraud linking metrics.
 
----
+## Current Anti-Fraud continuation
 
-## 2. Visual progress for accumulated `device_hash_id`
+The next work is no longer a generic UI cleanup.
 
-### Current need
+Current task:
 
-Add an operator-visible indicator showing how much `device_hash_id` data has already been accumulated, so the operator can see collection progress over time.
+**Step 2 — manual operator investigation by phone: «Добавить на проверку».**
 
-The first useful version should answer at minimum:
+Already done:
 
-- how many device hashes are currently known/accumulated;
-- ideally how many are unique versus raw records, depending on the actual current data model;
-- enough context that the number is meaningful as progress rather than an unexplained counter.
+- protected Bitrix phone resolver is production and verified.
 
-Do not invent the SQL/table/column source. Inspect the factual current schema and the Anti-Fraud collection pipeline first.
+Pending:
 
-### Future segmentation
+1. bot gateway;
+2. persistent operator-investigation state;
+3. explicit operator-authorized 60-day enrichment;
+4. normal risk scoring;
+5. persistent visibility even when automatic Risk is 0;
+6. phone-first UI action;
+7. explicit operator source/reason, e.g. `Авито`;
+8. no auto-block;
+9. tests and staged rollout.
 
-The visualization should be designed so it can later split device hashes by origin/source:
+Authoritative continuation:
 
-1. website;
-2. SamZaberu application;
-3. mobile waiter application.
+`docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`
 
-This source split is a **future requirement**. First inspect whether source/origin is already persisted for each `device_hash_id`. If it is not, adding the visual split will require a data-model/integration change before the UI can report it honestly.
-
-Do not infer source from unreliable heuristics if the system does not currently persist an authoritative source attribute.
-
----
-
-## 3. UX direction
-
-The next iteration should remain consistent with the accepted Anti-Fraud design. Do not redesign the page globally.
-
-Preferred approach:
-
-- make `Новый` visible in the established case-dynamics/status presentation rather than adding another unrelated badge location;
-- add a compact device-hash progress/KPI element in an existing summary/operator-information area;
-- keep the first version simple and factual;
-- design the progress widget so future source segmentation can be added without reworking the whole page.
-
-Desktop/mobile behavior must both be checked.
-
----
-
-## 4. Investigation order for the next session
-
-1. Read `docs/PROJECT_CHECKPOINT.md`, `docs/NEW_CHAT_HANDOFF.md`, `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` and this document.
-2. Inspect current GitHub `main` and current production runtime before mutation.
-3. Find the exact code that renders case-dynamics labels/statuses and the existing `addedAccountIds` / `Новый` marker.
-4. Determine how status priority/composition currently works before introducing `Новый` into that area.
-5. Inspect the factual DB/schema/query path for `device_hash_id` and determine what count(s) can be reported accurately now.
-6. Determine whether device-hash source/origin is already stored. If not, document the required future data-model change rather than faking source segmentation.
-7. Implement minimal UI changes, test desktop/mobile, then stage/deploy using the normal production guards.
-
----
-
-## 5. Status summary
-
-- PR #43 `Новый` membership-delta semantics: **IMPLEMENTED / PRODUCTION**
-- `Новый` as clearly visible case-dynamics status: **PLANNED**
-- total `device_hash_id` accumulation/progress visualization: **PLANNED**
-- device-hash segmentation by website / SamZaberu / mobile waiter: **FUTURE / DATA-SOURCE CHECK REQUIRED**
+Do not implement the old 2026-09-09 plan as if it were still pending.
