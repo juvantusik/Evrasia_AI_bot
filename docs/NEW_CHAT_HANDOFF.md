@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-20** after PR #58 production acceptance and completion of the Bitrix phone-resolver part of Anti-Fraud Step 2.
+> **Updated: 2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -35,17 +35,17 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Accepted deployed application baseline after PR #58:
+Accepted deployed application baseline after PR #62:
 
-- application revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
+- application revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
 - app: `evrasia-ai-bot-app`
 - DB: `evrasia-ai-bot-db`
 - DB name/role: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- production migrations: **24**
+- production migrations: **25**
 - app state at acceptance: **running healthy**
 - PR #58 deployment backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
 
@@ -65,6 +65,34 @@ Current Scout display wording:
 **Important:** PR #58 changed the first phrase only in the UI. Backend field `days_2plus_7d` and its `>=2` calculation were not changed. Do not silently change Scout business logic based on the label.
 
 For the full current Anti-Fraud state and next continuation point, read `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+
+---
+
+## 1A. Latest Anti-Fraud operator-visible acceptance — PR #62
+
+PR #62 is **MERGED / PRODUCTION / VERIFIED**.
+
+The expanded manual-investigation account card now shows the result of the latest operator-authorized 60-day history load rather than forcing the operator to infer it from risk scores:
+
+- exact 60-day window;
+- physical visit count;
+- visit-day count;
+- restaurant count;
+- first / last event;
+- expandable daily summary;
+- Trusted Device prefix when available;
+- linked Bitrix USER_ID values when they exist;
+- explicit `Risk по категориям` caption.
+
+Acceptance fixture USER_ID `1969724`:
+
+- 10 physical visits;
+- 9 visit days;
+- 8 restaurants;
+- one Trusted Device prefix `3578df691292f7bc…`;
+- no linked accounts at acceptance.
+
+Do not interpret `Посещения 0` or `История/бонусы 0` as event counts. They remain risk scores.
 
 ---
 
