@@ -2,7 +2,7 @@
 
 > Current production operations note for Evrasia AI Bot.
 >
-> Last updated: **2026-09-20** after PR #58 production acceptance, Check-in Scout rollout and protected phone resolver deployment.
+> Last updated: **2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
 
 ## Current production host
 
@@ -21,23 +21,39 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 Application:
 
 - service/container: `evrasia-ai-bot-app`
-- accepted deployed revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
+- accepted deployed revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`
 - app port: `127.0.0.1:18080 -> 8080`
-- status: running healthy / PR #58 operator accepted.
+- production migrations: **25**
+- status: running healthy / PR #62 production accepted.
 
-PR #58 deployment backup:
+PR #62 acceptance facts:
 
-`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
+- PR #62 makes the real result of manual operator investigation visible in the Anti-Fraud case card;
+- exact latest manual-investigation window is shown rather than accumulated historical coverage;
+- UI shows physical visit count, visit-day count, restaurant count, first/last event and an expandable day summary;
+- Trusted Device is shown as the existing safe 16-character prefix plus `…`;
+- linked accounts are shown as Bitrix USER_ID values when such links actually exist;
+- the five existing numeric categories are explicitly labeled `Risk по категориям`;
+- no DB migration, scoring rule, grouping rule or blocking behavior changed.
 
-PR #58 deployment result:
+Production read-only acceptance on USER_ID `1969724`:
 
-- migration count remained 24;
-- no Bitrix data write;
-- no account blocking;
-- rollback not required;
-- 7 PASS / 0 FAIL.
+- operator status: `ready`;
+- 60-day manual window present;
+- physical visits: **10**;
+- visit days: **9**;
+- restaurants: **8**;
+- day rows: **9**;
+- Trusted Device count: **1**;
+- displayed Device ID prefix: `3578df691292f7bc…`;
+- linked-account count: **0** at acceptance, which is valid factual state;
+- deployed frontend bundle contains all PR #62 operator labels;
+- acceptance result: **15 PASS / 0 FAIL / 1 WARN**; the WARN was only that this account currently has no linked accounts.
+
+The production runtime was already on the PR #62 target when the guarded deployment script was attempted. The exact guard stopped before mutation (`CUTOVER_STARTED=NO`), so that script did not perform a second cutover and no rollback was required. The prior cutover actor/mechanism was not established by that diagnostic and must not be guessed.
 
 A later docs-only GitHub commit may advance `main`; it does not by itself change the deployed application identity above. Before any future mutation, re-read factual runtime revision/image from production.
 
