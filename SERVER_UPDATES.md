@@ -374,16 +374,20 @@ Mandatory lessons include:
 
 ## Current release status
 
-Current accepted production application is PR #58:
+Current accepted production application is PR #60:
 
-- revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`;
-- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`;
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`;
-- migrations: 24;
+- revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`;
+- immutable digest: `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`;
+- image ID: `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`;
+- migrations: 25;
 - runtime: healthy at acceptance;
-- deployment backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`.
+- migration `0024_anti_fraud_operator_investigation`: applied and schema verified;
+- deployment backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`;
+- backup DB SHA256: `f164b6adb75d615488a1e7124f1bdfecd47e3f57af3464a14a2a8a4a1f44e201`;
+- deployment result: 13 PASS / 0 FAIL / 0 WARN;
+- rollback: not required.
 
-The current Anti-Fraud continuation is **manual investigation by phone, Step 2 bot side**. Bitrix phone resolution is already production. See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+Manual investigation by phone is now production. Remaining work is operator-visible end-to-end acceptance on an account intentionally selected for investigation. See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
 
 Earlier PR #44/#45 modal work remains historical and accepted but is no longer the latest release state.
 
