@@ -217,7 +217,7 @@ Resolver behavior:
 - 409 ambiguous without choosing a USER_ID;
 - 503 internal/candidate-limit problem.
 
-Bot-side Step 2 is implemented in PR #60 on `feature/anti-fraud-manual-investigation`; the PR is **Ready for review**, but is **not merged and not production**.
+Bot-side Step 2 from PR #60 is **MERGED / DEPLOYED / VERIFIED** in production.
 
 Implemented in PR #60:
 
@@ -234,7 +234,9 @@ Implemented in PR #60:
 
 Read-only production inspection reconfirmed the Bitrix resolver SHAs and showed `$payload['phone'] ?? null` as the exact input field. Production resolver itself was not modified.
 
-Do not describe PR #60 as production until a separate merge/deployment/acceptance is completed.
+Production acceptance on 2026-09-20: revision `f98d10c327e14b6dd5a34a9117ce25310ed6180e`, immutable digest `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`, image ID `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`, migrations 25, deployment 13 PASS / 0 FAIL / 0 WARN, rollback not required. Backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`.
+
+Do not repeat deployment or backend smoke merely for reassurance. The remaining acceptance step is a deliberate operator-visible end-to-end use of **«Добавить на проверку»** on an account the operator actually intends to investigate.
 
 See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for hashes, routes, backup paths and deployment proof.
 
