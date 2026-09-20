@@ -375,69 +375,130 @@ Backup from successful resolver deployment:
 
 ---
 
-## 9. Step 2 bot-side design — accepted direction, not yet implemented
+## 9. Step 2 bot-side implementation — PR #60 / NOT MERGED / NOT PRODUCTION
+
+Current branch:
+
+`feature/anti-fraud-manual-investigation`
+
+Draft PR:
+
+`#60 Anti-Fraud: manual investigation by phone`
+
+Production remains on the previously accepted PR #58 application image until a separate rollout is performed. Nothing in this section should be read as production acceptance.
 
 ### A. Bitrix protected phone resolver
 
-**DONE / PRODUCTION**.
+**DONE / PRODUCTION / VERIFIED**; unchanged by PR #60.
 
-### B. Bot resolver gateway
+Protected route:
 
-Pending.
+`POST /api/internal/anti-fraud/phone-resolve`
 
-Must:
+Read-only production contract inspection on 2026-09-20 reconfirmed the accepted SHAs:
 
-- call the protected site endpoint;
-- normalize and validate response contract;
-- never leak protected HTTP body/secrets;
-- preserve clear 400/404/409/503 semantics for the web layer.
+- route SHA: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- resolver service SHA: `2a9ed0b8b8e87d7965d9e9f1ff474121e4605d0fa4c399dbdcee6f30bc5c8d8e`.
+
+Exact request field confirmed from production resolver source:
+
+`payload['phone']`
+
+Confirmed response semantics:
+
+- 200 → `status=unique` + `bitrix_user_id`;
+- 400 → invalid request;
+- 404 → not found;
+- 409 → `status=ambiguous` + `match_count`, no selected USER_ID;
+- 503 → resolver/candidate-limit/internal problem.
+
+No Bitrix mutation was performed by this verification.
+
+### B. Bot protected phone gateway
+
+**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+
+File:
+
+`artifacts/api-server/src/services/bitrix-antifraud-phone-resolver-gateway.ts`
+
+Behavior:
+
+- exact request body uses `{"phone": ...}`;
+- reuses existing `BITRIX_ANTI_FRAUD_TOKEN` / token-file mechanism;
+- never exposes protected HTTP body or token;
+- web-safe operator semantics remain 400/404/409/503;
+- protected 401 and unexpected upstream failures are converted to safe 503;
+- ambiguous response exposes only safe `matchCount`;
+- result used by bot is only authoritative `bitrix_user_id`; ACTIVE/BLOCKED is re-read through the existing account-map.
 
 ### C. Persistent operator investigation model
 
-Pending.
+**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
 
-Current migration journal ends at:
+Migration:
 
-- index/tag `0023_anti_fraud_checkin_scout`;
-- production migration count 24.
+`0024_anti_fraud_operator_investigation`
 
-Therefore the next bot migration is expected to be `0024_...`, but inspect current GitHub `main` immediately before implementation; documentation-only commits do not add a migration but another application change might.
+Table:
 
-Persistent state must survive refresh/restart and must not rely on the generic bot-setting watchlist.
+`anti_fraud_operator_investigations`
 
-### D. Operator-authorized 60-day history
+Persistent fields include:
 
-Pending.
+- investigation ID;
+- Bitrix USER_ID;
+- operator source;
+- optional operator reason/comment;
+- pending/processing/history_ready/ready/failed state;
+- request/start/history/scoring/completion timestamps;
+- last error.
 
-Current `anti-fraud-restis-history-enricher.ts` explicitly requires:
+Operator evidence remains separate from automatic risk reasons.
+
+CI migration contract is updated from 24 to 25 and includes a dedicated schema-smoke for this table.
+
+### D. Explicit operator-authorized 60-day history
+
+**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+
+The automatic path still requires real:
 
 `riskGateConfirmed: true`
 
-and refuses enrichment otherwise.
+Manual investigation does **not** fake that value.
 
-For manual investigation, **do not lie** by passing a fake automatic risk gate.
+A separate export:
 
-Implement an explicit operator-authorized path/contract or a separate orchestrator with auditable semantics.
+`enrichRestisHistoryForOperatorInvestigationOnce(...)`
 
-### E. Scoring and visibility
+authorizes history only when:
 
-Pending.
+- the investigation exists;
+- USER_ID matches;
+- investigation is in an allowed processing state.
 
-After phone resolution and account mapping:
+### E. Worker / restart safety / scoring
 
-- persist operator investigation;
-- collect/sync the resolved Anti-Fraud account as needed;
-- trigger the explicitly authorized 60-day enrichment;
-- run the normal risk engine;
-- show the account in Anti-Fraud even if automatic Risk remains 0;
-- display operator-confirmed source/reason separately from automatic reasons;
-- no automatic block.
+**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
 
-### F. UI
+Flow:
 
-Pending.
+`resolved USER_ID → persistent investigation → address-specific account-map → 60-day history → normal explainable scoring → ready/failed`
 
-Required action:
+Important details:
+
+- HTTP-created investigation is processed by its exact `investigation_id`, not by whichever pending row happens to be oldest;
+- scheduler still resumes pending/history-ready work in batches;
+- stale `processing` state is recoverable after interruption;
+- completed history is not unnecessarily reloaded after a restart;
+- no auto-block.
+
+### F. Web visibility and UI
+
+**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+
+Action:
 
 **«Добавить на проверку»**
 
@@ -445,22 +506,48 @@ Primary input:
 
 - phone.
 
-Operator evidence/source examples:
+Operator source/reason:
 
-- `Авито`.
+- source defaults to `Авито` in the UI;
+- reason/comment is optional;
+- both are stored separately from automatic telemetry.
 
-USER_ID:
+Visibility:
 
-- optional fallback/admin use only.
+- operator investigations are first-class Anti-Fraud candidates;
+- the account/case remains visible even when automatic Risk is 0;
+- operator investigation is shown separately in account/case UI;
+- USER_ID remains a technical fallback endpoint, not the normal workflow.
 
-Ambiguous phone:
+### G. Tests / current CI
 
-- clear error;
-- do not choose an account.
+Added protected phone-gateway regression coverage for:
 
-### G/H. Tests / rollout / docs
+- exact `phone` request field and token header;
+- unique USER_ID;
+- local invalid input;
+- 404 not found;
+- 409 ambiguity and safe match count;
+- 401/unexpected upstream failures → safe 503;
+- malformed success response;
+- no protected response-body leak.
 
-Pending.
+CI run #421 became fully green after updating the migration count/schema-smoke. A newer run for the completed phone-first implementation must be green before PR #60 leaves draft/review state.
+
+### H. Rollout status
+
+**NOT MERGED / NOT PRODUCTION**.
+
+Before production:
+
+1. require green CI on the final PR head;
+2. final diff/review;
+3. verify factual production app revision/image/migration count;
+4. backup and immutable-image rollout using the current Compose-directory rule;
+5. apply migration 0024;
+6. verify API/UI and one controlled manual-investigation flow;
+7. verify no auto-block and no unrelated module regressions;
+8. update production documentation only after factual acceptance.
 
 ---
 
