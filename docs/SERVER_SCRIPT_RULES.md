@@ -188,36 +188,34 @@ Always verify a factual output marker such as `DIAGNOSTIC_COMPLETE=YES` when STD
 
 ## Current production invariants
 
-Latest accepted factual application baseline from PR #58 production deployment on 2026-09-20:
+Latest accepted factual application baseline after PR #62 production acceptance on 2026-09-20:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- accepted deployed application revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
+- accepted deployed application revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable digest: `sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role / production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
-- production migrations: **24**
-- current migration stream includes `0023_anti_fraud_checkin_scout`
+- production migrations: **25**
+- current migration stream includes `0024_anti_fraud_operator_investigation`
 - Anti-Fraud scheduler: enabled, 15 minutes
 - confirmed operator bonus threshold: `40000`
 - PR #56 Check-in Scout: production verified
-- PR #57 Trusted Device display: production
-- PR #58 Russian device labels + Scout display wording: production/operator accepted
-- Bitrix protected phone resolver: production/verified
-- bot-side manual-investigation Step 2: pending
+- PR #57/#58 Trusted Device display/labels: production
+- PR #60 manual investigation by phone: production verified
+- PR #62 operator-visible 60-day history / Device ID / linked USER_ID results: production verified
 - controlled block/unblock on safe USER_ID 880339 remains completed; do not repeat merely for reassurance
 - Phonebook canonical route: `/phonebook`
 - `/directory` and `/api/directory/...`: expected 404
 - TEST `evrasia-ai-bot-v17-test`: exited/archival.
 
-PR #58 deployment backup:
-
-`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
+PR #62 read-only acceptance on USER_ID `1969724`: 15 PASS / 0 FAIL / 1 informational WARN; 10 physical visits, 9 visit days, 8 restaurants, one Trusted Device prefix, zero linked accounts.
 
 These documented invariants are not substitutes for fresh guards before a future mutation. Documentation-only commits may advance GitHub `main` without advancing the production image.
 
