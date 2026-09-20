@@ -570,6 +570,64 @@ Without `-i`, a Node/PHP/Python command reading STDIN can exit 0 while never rec
 
 ---
 
+## 13A. Historical failed attempts that must not be repeated blindly
+
+### Phone resolver V1
+
+The first WRITE attempt failed safely before lasting change because a local curl verification used the public hostname path incorrectly from the Bitrix host.
+
+Correct production verification pattern used the internal vhost resolution:
+
+`--resolve evrasia.rest:443:192.168.103.141`
+
+The first attempt rolled back successfully.
+
+Backup:
+
+`/home/site_evrasia/backups/anti-fraud-phone-resolver-20260919-144021`
+
+### Phone resolver V2
+
+The endpoint behavior itself was correct, but the deployment script incorrectly assumed a chosen synthetic phone would be `not_found`.
+
+That phone actually resolved to **two real profiles**, so the endpoint correctly returned HTTP 409 ambiguous.
+
+The script treated that expected-safe ambiguity as a failed test and rolled back.
+
+Backup:
+
+`/home/site_evrasia/backups/anti-fraud-phone-resolver-20260919-144452`
+
+Lesson:
+
+- never assume a synthetic-looking phone is absent from a production customer DB;
+- ambiguous is a valid safety outcome;
+- do not choose a USER_ID when multiple exact normalized profile matches exist.
+
+### Scout deployment first continuation attempt
+
+An early deployment wrapper failed before mutation because of a Python syntax error in Compose generation.
+
+Observed:
+
+- deployment not started;
+- production unchanged;
+- backup already existed and remained valid.
+
+Relevant retained backup:
+
+`/opt/evrasia-ai-bot/backups/checkin-scout-deploy-20260919-120910`
+
+DB dump in that backup was verified before the successful continuation.
+
+### PR #58 deployment attempts
+
+Two attempts stopped before mutation because staged Compose validation ran against a temporary file outside the production Compose directory.
+
+This was a tooling/staging-path problem, not an application/config defect.
+
+The successful continuation fixed the staging location and did not repeat already-proven image-pull facts unnecessarily.
+
 ## 14. Protected files / safety invariants
 
 Never delete, move or modify:
