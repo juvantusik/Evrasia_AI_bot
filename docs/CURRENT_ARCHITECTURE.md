@@ -2,7 +2,7 @@
 
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: **2026-09-20** after PR #60 manual Anti-Fraud investigation production acceptance.
+> Last updated: **2026-09-20** after PR #62 operator-visible manual-investigation evidence production acceptance.
 
 ## 1. Main rule
 
@@ -108,9 +108,11 @@ Flow:
 
 Operator source/reason remains separate from automatic evidence. Ambiguous phone never selects a USER_ID. Manual authorization does not fake `riskGateConfirmed`. Accounts remain visible even when automatic Risk is 0. There is no automatic blocking.
 
-Production revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`.
+PR #62 adds the operator-visible result layer: exact latest 60-day investigation window, physical visit/day/restaurant counts, first/last event, daily summary, Trusted Device prefix and linked USER_ID values when present. The five existing numeric categories remain risk scores and are explicitly labeled as such.
 
-Production immutable digest: `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`.
+Current production revision after PR #62: `dfde4c39b3821f6946d3be05448d11aea1fcc441`.
+
+Current production immutable digest: `sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`.
 
 Production migrations: **25**.
 
