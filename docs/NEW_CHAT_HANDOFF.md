@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-18** after adding the TOTP 2FA / protected-profile continuation checkpoint.
+> **Updated: 2026-09-20** after PR #58 production acceptance and completion of the Bitrix phone-resolver part of Anti-Fraud Step 2.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -12,7 +12,8 @@
 
 Сначала полностью прочитай:
 
-1. `docs/PROJECT_CHECKPOINT.md` — самый свежий authoritative checkpoint;
+0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — **самый свежий authoritative handoff для текущей ветки Anti-Fraud / Check-in Scout / ручной проверки по телефону**;
+1. `docs/PROJECT_CHECKPOINT.md` — общий authoritative checkpoint;
 2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
 3. `docs/CURRENT_ARCHITECTURE.md` — актуальная архитектура;
 4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
@@ -34,26 +35,36 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Accepted deployed application baseline after PR #45:
+Accepted deployed application baseline after PR #58:
 
-- application revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- image config: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
+- application revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
 - app: `evrasia-ai-bot-app`
 - DB: `evrasia-ai-bot-db`
 - DB name/role: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- app port: `127.0.0.1:18080`
-- migrations: **20**
-- latest migration timestamp: `1788769200000`
-- current confirmed Anti-Fraud bonus threshold: **40000**
+- production migrations: **24**
+- app state at acceptance: **running healthy**
+- PR #58 deployment backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
 
-PR #45 was UI-only relative to PR #44: no DB schema change, no new migration, no scheduler semantics change, no Bitrix state write and no threshold-rule change.
+PR #58 is UI-only relative to the PR #57 application baseline: no DB migration, no scoring/grouping change and no Bitrix write.
 
-Operator final production visual acceptance on 2026-09-09: **«все супер, отображение как надо»**.
+Current device labels in case details:
 
-The exact final PR #45 server backup path was not pasted back into chat; therefore do not invent it. Existing retained PR #44 backup recorded before the final PR #45 cutover is `/opt/evrasia-ai-bot/backups/pr44-modal-fix-20260909-111032`; re-read factual server state before any cleanup.
+- one USER_ID on a Trusted Device hash → **Устройство**;
+- multiple USER_ID on the same hash → **Общее устройство**;
+- both labels refer to the same kind of Trusted Device hash; the difference is only the linked-account count.
+
+Current Scout display wording:
+
+- `дней с 3 чекинами за 7 дней`;
+- `дней с 3+ чекинами за 60 дней`.
+
+**Important:** PR #58 changed the first phrase only in the UI. Backend field `days_2plus_7d` and its `>=2` calculation were not changed. Do not silently change Scout business logic based on the label.
+
+For the full current Anti-Fraud state and next continuation point, read `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
 
 ---
 
@@ -206,26 +217,30 @@ Especially important after the PR #44 → #45 deployment sequence:
 
 ## 9. Immediate continuation point
 
-The latest Anti-Fraud operator-settings/modal work is **implemented, merged, deployed and visually accepted**.
+Current status on 2026-09-20:
 
-The next Anti-Fraud UI session should begin from `docs/ANTI_FRAUD_UI_NEXT.md`: first inspect current code/data, then implement `Новый` visibility in the dynamics/status area and a factual Anti-Fraud `device_hash_id` progress metric.
+- Check-in Scout Step 1: **DONE / MERGED / DEPLOYED / VERIFIED**;
+- PR #57 Trusted Device display: **DONE / DEPLOYED**;
+- PR #58 Russian device labels + Scout display wording: **DONE / DEPLOYED / OPERATOR ACCEPTED**;
+- Bitrix protected phone resolver for manual Anti-Fraud investigation: **DONE / PRODUCTION / VERIFIED**;
+- bot-side Step 2 manual investigation: **NOT YET IMPLEMENTED**.
 
-If the user instead asks how many hashes have accumulated for **Trusted Device authentication / SMS bypass**, do not use the Anti-Fraud DB. Read `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` and query `ev_trusted_devices` on Bitrix host `evrasia`.
+The next Anti-Fraud implementation should continue with the **bot side of “Добавить на проверку” by phone**:
 
-The website offer/privacy-policy update described in `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` is also **production / visually accepted**. Do not redo that styling unless a new defect is reported.
+1. protected bot gateway to `/api/internal/anti-fraud/phone-resolve`;
+2. persistent operator-investigation table/state;
+3. explicit operator-authorized 60-day enrichment without faking `riskGateConfirmed`;
+4. normal scoring;
+5. UI action **«Добавить на проверку»**, phone-first;
+6. separate persistent operator source/reason such as `Авито`;
+7. no auto-block;
+8. tests → staged rollout → production verification.
 
-Registration consent checkboxes and per-user consent persistence/versioning/audit are **planned, not implemented**.
+Do not redo phone-resolver research/deployment or Check-in Scout deployment.
 
-Do not automatically resume:
+Use `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` as the detailed continuation source.
 
-- PR #43/#44/#45 modal implementation
-- USER_ID 880339 block/unblock acceptance
-- similarity performance refresh
-- archival TEST
-- paused full-Bitrix email/anomaly investigations.
-
-Before changing production, inspect current GitHub/CI **and factual current production runtime** first.
-
+If the operator writes **ПАНДА ДВА**, switch to the paused TOTP workstream instead; otherwise do not mix TOTP into the current Anti-Fraud continuation.
 
 ---
 
