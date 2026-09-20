@@ -145,16 +145,38 @@ export const createAntiFraudOperatorInvestigationForUser = async (input: {
   const source = normalizeText(input.source, "Источник проверки", 80, true) as string;
   const reason = normalizeText(input.reason, "Комментарий", 500, false);
   const investigationId = randomUUID();
+  const client = await pool.connect();
 
-  const result = await pool.query<InvestigationRow>(
-    `INSERT INTO anti_fraud_operator_investigations (
-       investigation_id, bitrix_user_id, source, reason, status, requested_at, updated_at
-     )
-     VALUES ($1,$2,$3,$4,'pending',now(),now())
-     RETURNING *`,
-    [investigationId, bitrixUserId, source, reason],
-  );
-  return mapInvestigation(result.rows[0]);
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<InvestigationRow>(
+      `INSERT INTO anti_fraud_operator_investigations (
+         investigation_id, bitrix_user_id, source, reason, status, requested_at, updated_at
+       )
+       VALUES ($1,$2,$3,$4,'pending',now(),now())
+       RETURNING *`,
+      [investigationId, bitrixUserId, source, reason],
+    );
+
+    // Ручная проверка немедленно делает USER_ID web-visible. Текущая семантика
+    // «Новый» = 24 часа от первого появления в web Anti-Fraud, поэтому first_seen
+    // фиксируется атомарно при создании investigation. Повторная проверка не
+    // продлевает окно благодаря ON CONFLICT DO NOTHING.
+    await client.query(
+      `INSERT INTO anti_fraud_web_account_state (bitrix_user_id, first_seen_at)
+       VALUES ($1, now())
+       ON CONFLICT (bitrix_user_id) DO NOTHING`,
+      [bitrixUserId],
+    );
+
+    await client.query("COMMIT");
+    return mapInvestigation(result.rows[0]);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const listAntiFraudOperatorInvestigations = async (
