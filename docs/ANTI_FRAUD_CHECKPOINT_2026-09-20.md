@@ -375,17 +375,13 @@ Backup from successful resolver deployment:
 
 ---
 
-## 9. Step 2 bot-side implementation — PR #60 READY FOR REVIEW / NOT MERGED / NOT PRODUCTION
+## 9. Step 2 bot-side implementation — PR #60 MERGED / DEPLOYED / VERIFIED
 
-Current branch:
-
-`feature/anti-fraud-manual-investigation`
-
-PR (Ready for review):
+Merged PR:
 
 `#60 Anti-Fraud: manual investigation by phone`
 
-Production remains on the previously accepted PR #58 application image until a separate rollout is performed. Nothing in this section should be read as production acceptance.
+Production deployment on 2026-09-20 is accepted at revision `f98d10c327e14b6dd5a34a9117ce25310ed6180e`.
 
 ### A. Bitrix protected phone resolver
 
@@ -416,7 +412,7 @@ No Bitrix mutation was performed by this verification.
 
 ### B. Bot protected phone gateway
 
-**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+**DONE / PRODUCTION / VERIFIED**.
 
 File:
 
@@ -434,7 +430,7 @@ Behavior:
 
 ### C. Persistent operator investigation model
 
-**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+**DONE / PRODUCTION / VERIFIED**.
 
 Migration:
 
@@ -460,7 +456,7 @@ CI migration contract is updated from 24 to 25 and includes a dedicated schema-s
 
 ### D. Explicit operator-authorized 60-day history
 
-**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+**DONE / PRODUCTION / VERIFIED**.
 
 The automatic path still requires real:
 
@@ -480,7 +476,7 @@ authorizes history only when:
 
 ### E. Worker / restart safety / scoring
 
-**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+**DONE / PRODUCTION / VERIFIED**.
 
 Flow:
 
@@ -496,7 +492,7 @@ Important details:
 
 ### F. Web visibility and UI
 
-**IMPLEMENTED IN PR #60 / NOT PRODUCTION**.
+**DONE / PRODUCTION / VERIFIED**.
 
 Action:
 
@@ -538,18 +534,25 @@ CI run #421 became fully green after updating the migration count/schema-smoke. 
 
 ### H. Rollout status
 
-**NOT MERGED / NOT PRODUCTION**.
+**MERGED / PRODUCTION / VERIFIED**.
 
-Before production:
+Production acceptance facts:
 
-1. require green CI on the final PR head;
-2. final diff/review;
-3. verify factual production app revision/image/migration count;
-4. backup and immutable-image rollout using the current Compose-directory rule;
-5. apply migration 0024;
-6. verify API/UI and one controlled manual-investigation flow;
-7. verify no auto-block and no unrelated module regressions;
-8. update production documentation only after factual acceptance.
+- merge commit / deployed revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`;
+- image ID: `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`;
+- production migrations: **25**;
+- migration `0024_anti_fraud_operator_investigation`: applied exactly once;
+- `anti_fraud_operator_investigations` schema: 12/12 expected columns present;
+- health/scheduler/investigations/accounts/cases/Anti-Fraud UI/Phonebook UI post-checks: PASS;
+- invalid phone and invalid USER_ID smoke: HTTP 400 with no investigation row created;
+- scheduler after cutover: enabled, idle, 15 minutes, `lastError=null`;
+- rollback: not required;
+- accepted backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`;
+- backup DB SHA256: `f164b6adb75d615488a1e7124f1bdfecd47e3f57af3464a14a2a8a4a1f44e201`;
+- deployment result: **13 PASS / 0 FAIL / 0 WARN**.
+
+Remaining acceptance step is operator-visible end-to-end use of **«Добавить на проверку»** with an intentionally selected account. This is not a deployment blocker and must not be simulated by mutating an arbitrary customer.
 
 ---
 

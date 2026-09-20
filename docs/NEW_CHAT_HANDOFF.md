@@ -117,7 +117,7 @@ The old UI-plan items from `docs/ANTI_FRAUD_UI_NEXT.md` are no longer the contin
 
 Current continuation:
 
-**review PR #60 (Ready for review) for «Добавить на проверку» by phone.**
+**PR #60 «Добавить на проверку» by phone is MERGED / DEPLOYED / VERIFIED.**
 
 Already production and unchanged:
 
@@ -129,7 +129,7 @@ Read-only production inspection on 2026-09-20 reconfirmed the accepted resolver 
 
 `phone`
 
-Implemented in PR #60 but **not merged / not production**:
+Production functionality from PR #60:
 
 1. protected bot phone-resolver gateway;
 2. migration `0024_anti_fraud_operator_investigation`;
@@ -144,7 +144,17 @@ Implemented in PR #60 but **not merged / not production**:
 11. no auto-block;
 12. gateway tests plus route/migration/schema CI smoke.
 
-Next action: require green CI on the final PR #60 head, do final diff/review, then plan a guarded production rollout.
+Production acceptance on 2026-09-20:
+
+- revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`;
+- immutable digest: `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`;
+- image ID: `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`;
+- migrations: 25;
+- backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`;
+- deployment: 13 PASS / 0 FAIL / 0 WARN;
+- rollback: not required.
+
+Next action: perform one deliberate operator-visible end-to-end **«Добавить на проверку»** on an account the operator actually intends to investigate, then confirm the resulting UI state/history/scoring. Do not create an arbitrary customer fixture.
 
 Use `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for the full design and exact production state.
 

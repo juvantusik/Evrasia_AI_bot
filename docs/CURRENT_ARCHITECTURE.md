@@ -2,7 +2,7 @@
 
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: **2026-09-20** after Check-in Scout, protected phone resolver and PR #58 production acceptance.
+> Last updated: **2026-09-20** after PR #60 manual Anti-Fraud investigation production acceptance.
 
 ## 1. Main rule
 
@@ -95,6 +95,24 @@ Includes:
 - Bitrix factual status synchronization.
 
 Risk is **advisory**. There is **no automatic account blocking** from risk score.
+
+#### Manual investigation by phone
+
+PR #60 is production.
+
+Operator action: **«Добавить на проверку»**.
+
+Flow:
+
+`phone → protected Bitrix resolver → USER_ID → persistent operator investigation → explicit 60-day history → normal Anti-Fraud scoring`
+
+Operator source/reason remains separate from automatic evidence. Ambiguous phone never selects a USER_ID. Manual authorization does not fake `riskGateConfirmed`. Accounts remain visible even when automatic Risk is 0. There is no automatic blocking.
+
+Production revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`.
+
+Production immutable digest: `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`.
+
+Production migrations: **25**.
 
 #### Bitrix account-state contract
 
