@@ -217,7 +217,7 @@ Resolver behavior:
 - 409 ambiguous without choosing a USER_ID;
 - 503 internal/candidate-limit problem.
 
-Bot-side Step 2 is implemented in draft PR #60 on `feature/anti-fraud-manual-investigation`, but is **not merged and not production**.
+Bot-side Step 2 is implemented in PR #60 on `feature/anti-fraud-manual-investigation`; the PR is **Ready for review**, but is **not merged and not production**.
 
 Implemented in PR #60:
 
