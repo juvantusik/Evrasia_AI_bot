@@ -17,10 +17,11 @@ import {
   Utensils,
 } from 'lucide-react';
 import AntiFraudSettingsButton from './AntiFraudSettingsButton';
+import AntiFraudInvestigationButton from './AntiFraudInvestigationButton';
 import './anti-fraud-ui-next.css';
 
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance';
+type CaseSignal = 'multiaccount' | 'phone' | 'email' | 'visits' | 'fast_switch' | 'linked_visits' | 'bonus_balance' | 'operator_investigation';
 type CaseTrend = 'new' | 'strengthened' | 'unchanged' | 'weakened';
 type ConsentSource = 'signup' | 'account_gate' | 'other';
 type Reason = { code: string; score: number; details: string };
@@ -55,6 +56,11 @@ type Account = {
   computedAt: string;
   reasons: Reason[];
   operatorWatched: boolean;
+  operatorInvestigationId?: string | null;
+  operatorSource?: string | null;
+  operatorReason?: string | null;
+  operatorInvestigationStatus?: string | null;
+  operatorInvestigationRequestedAt?: string | null;
 };
 
 type Device = {
@@ -148,6 +154,7 @@ const signalMeta: Record<CaseSignal, { label: string; className: string }> = {
   fast_switch: { label: 'Быстрые переключения', className: 'tag-red' },
   linked_visits: { label: 'Связанные посещения', className: 'tag-orange' },
   bonus_balance: { label: 'Высокий остаток бонусов', className: 'tag-orange' },
+  operator_investigation: { label: 'Ручная проверка', className: 'tag-blue' },
 };
 
 const reasonLabels: Record<string, string> = {
@@ -369,7 +376,7 @@ export default function AntiFraudPage() {
     <div className="af-page">
       <header className="af-header">
         <div className="af-brand"><span className="af-brand-icon"><ShieldAlert size={22} /></span><div><strong>Anti-Fraud</strong><span>Евразия AI Bot</span></div></div>
-        <div className="af-header-actions"><AntiFraudSettingsButton disabled={busy} /><button className="af-refresh" type="button" onClick={() => void refreshNow()} disabled={busy}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Обновляем…' : 'Обновить сейчас'}</button></div>
+        <div className="af-header-actions"><AntiFraudInvestigationButton disabled={busy} onAccepted={load} /><AntiFraudSettingsButton disabled={busy} /><button className="af-refresh" type="button" onClick={() => void refreshNow()} disabled={busy}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Обновляем…' : 'Обновить сейчас'}</button></div>
       </header>
 
       <main className="af-content">
@@ -441,8 +448,9 @@ export default function AntiFraudPage() {
 
                   <div className="detail-column account-column"><h3>Аккаунты кейса</h3>
                     {visibleAccounts.map((account) => <div className={`account-card ${account.bitrixBlocked ? 'blocked' : ''}`} key={account.bitrixUserId}>
-                      <div className="account-top"><div><div className="account-name-line"><strong>{account.displayName || 'Без имени'}{account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><ConsentSnapshot account={account} /></div><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
+                      <div className="account-top"><div><div className="account-name-line"><strong>{account.displayName || 'Без имени'}{account.operatorInvestigationId ? <em className="operator-watch-badge">Проверка{account.operatorSource ? `: ${account.operatorSource}` : ''}</em> : account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}{dynamics?.addedAccountIds.includes(account.bitrixUserId) ? <em className="account-new-badge">Новый</em> : null}</strong><ConsentSnapshot account={account} /></div><span>ID {account.bitrixUserId} · <b className={`account-status ${account.bitrixBlocked ? 'blocked' : account.bitrixActive ? 'active' : 'inactive'}`}>{accountStatus(account)}</b></span></div><b className={account.riskLevel}>{account.overallRisk}</b></div>
                       <div className="account-contact"><span>{account.phoneMasked ?? 'телефон —'}</span><span>{account.emailMasked ?? 'email —'}</span><span>{loyaltyText(account)}</span></div>
+                      {account.operatorInvestigationId ? <div className="operator-investigation-info"><strong>Ручная проверка · {account.operatorSource || 'источник не указан'}</strong><span>{account.operatorReason || 'Комментарий не указан'} · статус: {account.operatorInvestigationStatus || '—'}{account.operatorInvestigationRequestedAt ? ` · добавлено ${formatDate(account.operatorInvestigationRequestedAt)}` : ''}</span></div> : null}
                       {account.bitrixBlocked ? <div className="block-info"><strong>Дата блокировки: {account.blockedAt ? formatDate(account.blockedAt) : 'неизвестна'}</strong><span>{account.bitrixBlockReason || 'Основание блокировки не указано'}</span></div> : null}
                       <div className="risk-bars"><span>Устройства <b>{account.deviceRisk}</b></span><span>Связи <b>{account.linkedAccountRisk}</b></span><span>Контакты <b>{account.identitySimilarityRisk}</b></span><span>Посещения <b>{account.visitBehaviorRisk}</b></span><span>История/бонусы <b>{account.historicalBehaviorRisk}</b></span></div>
                       <div className="account-actions">{account.bitrixBlocked
@@ -471,7 +479,7 @@ export default function AntiFraudPage() {
 
         {tab === 'devices' ? <section className="af-panel"><div className="panel-title"><Smartphone /><div><h2>Общие устройства</h2><p>Только устройства с двумя и более активными незаблокированными аккаунтами.</p></div></div><div className="simple-table"><div className="simple-head"><span>Устройство</span><span>Аккаунты</span><span>Тип</span><span>Последняя активность</span></div>{devices.map((device) => <div className="simple-row" key={device.devicePrefix}><strong>{device.devicePrefix}…</strong><span>{device.userIds.join(', ')}</span><span>{device.clientTypes.join(', ') || '—'}</span><span>{formatDate(device.lastSeenAt)}</span></div>)}</div></section> : null}
 
-        {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском и наблюдением</h2><p>{showBlocked ? 'Показаны также заблокированные и неактивные аккаунты.' : 'Наблюдаемые аккаунты показываются даже при Risk 0; заблокированные и неактивные скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong><span className="account-name-line"><span>{account.displayName || `ID ${account.bitrixUserId}`}{account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}</span><ConsentSnapshot account={account} /></span><small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
+        {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском и наблюдением</h2><p>{showBlocked ? 'Показаны также заблокированные и неактивные аккаунты.' : 'Наблюдаемые аккаунты показываются даже при Risk 0; заблокированные и неактивные скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong><span className="account-name-line"><span>{account.displayName || `ID ${account.bitrixUserId}`}{account.operatorInvestigationId ? <em className="operator-watch-badge">Проверка{account.operatorSource ? `: ${account.operatorSource}` : ''}</em> : account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}</span><ConsentSnapshot account={account} /></span><small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
 
         {tab === 'recommendations' ? <section className="af-panel recommendation-panel"><div className="panel-title"><ShieldAlert /><div><h2>Рекомендации</h2><p>Risk остаётся advisory: блокировка выполняется только вручную после проверки кейса.</p></div></div><div className="recommendation-grid"><article><strong>{summary?.historyGateAccounts ?? 0}</strong><span>активных незаблокированных аккаунтов достигли history gate</span></article><article><strong>{summary?.historyEnrichedAccounts ?? 0}</strong><span>обогащены 60-дневной историей</span></article><article><strong>{similarPhone}</strong><span>групп с совпадающим телефоном</span></article><article><strong>{similarEmail}</strong><span>групп с совпадающим email</span></article></div><div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой откройте кейс и проверьте связующие признаки, контакты, бонусы и поведенческие причины. Заблокированные и неактивные аккаунты по умолчанию скрыты, но доступны через переключатель.</p></div></div></section> : null}
       </main>
