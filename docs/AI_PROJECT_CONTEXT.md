@@ -223,14 +223,17 @@ Do not fake `riskGateConfirmed: true` for an operator-requested history lookup. 
 
 See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for hashes, routes, backup paths and deployment proof.
 
-## 6. `Новый` account badge
+## 6. `Новый` account badge — current semantics
 
-PR #43 uses existing case-dynamics `addedAccountIds`.
+PR #47 changed the operator-facing meaning of `Новый` to a persistent first-seen window:
 
-- account gets `Новый` when it newly enters a previously observed case;
-- first observation of an entire case does not badge all members;
-- badge is structural case-dynamics evidence, not risk/account status;
-- no guessed timestamp/window is introduced.
+- source table: `anti_fraud_web_account_state(bitrix_user_id, first_seen_at)`;
+- a USER_ID is shown as `Новый` for **24 hours** after first appearing in the web Anti-Fraud interface;
+- repeated scheduler/manual refreshes do not reset or extend the 24-hour window;
+- historical accounts were bootstrapped as old during rollout;
+- forensic case-delta history remains separate and is not the operator-facing 24-hour definition.
+
+Do not revert to the older PR #43 interpretation that equated the operator badge directly with the latest case `addedAccountIds`.
 
 ---
 
