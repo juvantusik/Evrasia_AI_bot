@@ -58,6 +58,8 @@ type ContactTarget = {
   loyaltyHistoryLoadedAt?: string | null;
   operatorInvestigationHistoryCompletedAt?: string | null;
   operatorInvestigationCompletedAt?: string | null;
+  operatorHistoryWindowFrom?: string | null;
+  operatorHistoryWindowUntil?: string | null;
   historyPhysicalVisits?: number;
   historyVisitDays?: number;
   historyRestaurantCount?: number;
@@ -88,6 +90,8 @@ type ContactValue = {
   loyaltyHistoryLoadedAt: string | null;
   operatorInvestigationHistoryCompletedAt: string | null;
   operatorInvestigationCompletedAt: string | null;
+  operatorHistoryWindowFrom: string | null;
+  operatorHistoryWindowUntil: string | null;
   historyPhysicalVisits: number;
   historyVisitDays: number;
   historyRestaurantCount: number;
@@ -143,6 +147,8 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     loyalty_history_loaded_at: Date | null;
     operator_history_completed_at: Date | null;
     operator_completed_at: Date | null;
+    operator_history_window_from: Date | null;
+    operator_history_window_until: Date | null;
     history_physical_visits: number | string | null;
     history_visit_days: number | string | null;
     history_restaurant_count: number | string | null;
@@ -174,6 +180,11 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       a.loyalty_history_loaded_at,
       oi.history_completed_at AS operator_history_completed_at,
       oi.completed_at AS operator_completed_at,
+      CASE
+        WHEN oi.requested_at IS NOT NULL THEN oi.requested_at - interval '60 days'
+        ELSE NULL
+      END AS operator_history_window_from,
+      COALESCE(oi.history_completed_at, oi.requested_at) AS operator_history_window_until,
       history.physical_visits AS history_physical_visits,
       history.visit_days AS history_visit_days,
       history.restaurant_count AS history_restaurant_count,
@@ -200,6 +211,7 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     ) audit ON true
     LEFT JOIN LATERAL (
       SELECT
+        i.requested_at,
         i.history_completed_at,
         i.completed_at
       FROM anti_fraud_operator_investigations i
@@ -216,10 +228,10 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
         FROM anti_fraud_visits v
         WHERE v.bitrix_user_id = a.bitrix_user_id
           AND v.loyalty_verified IS TRUE
-          AND a.loyalty_history_loaded_from IS NOT NULL
-          AND a.loyalty_history_loaded_until IS NOT NULL
-          AND v.visited_at >= a.loyalty_history_loaded_from
-          AND v.visited_at <= a.loyalty_history_loaded_until
+          AND oi.requested_at IS NOT NULL
+          AND oi.history_completed_at IS NOT NULL
+          AND v.visited_at >= oi.requested_at - interval '60 days'
+          AND v.visited_at <= oi.history_completed_at
       ),
       daily AS (
         SELECT
@@ -276,6 +288,8 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
         loyaltyHistoryLoadedAt: iso(row.loyalty_history_loaded_at),
         operatorInvestigationHistoryCompletedAt: iso(row.operator_history_completed_at),
         operatorInvestigationCompletedAt: iso(row.operator_completed_at),
+        operatorHistoryWindowFrom: iso(row.operator_history_window_from),
+        operatorHistoryWindowUntil: iso(row.operator_history_window_until),
         historyPhysicalVisits: Number(row.history_physical_visits ?? 0),
         historyVisitDays: Number(row.history_visit_days ?? 0),
         historyRestaurantCount: Number(row.history_restaurant_count ?? 0),
@@ -327,6 +341,8 @@ const exposeFullContacts = <T extends ContactTarget>(
       loyaltyHistoryLoadedAt: contact.loyaltyHistoryLoadedAt,
       operatorInvestigationHistoryCompletedAt: contact.operatorInvestigationHistoryCompletedAt,
       operatorInvestigationCompletedAt: contact.operatorInvestigationCompletedAt,
+      operatorHistoryWindowFrom: contact.operatorHistoryWindowFrom,
+      operatorHistoryWindowUntil: contact.operatorHistoryWindowUntil,
       historyPhysicalVisits: contact.historyPhysicalVisits,
       historyVisitDays: contact.historyVisitDays,
       historyRestaurantCount: contact.historyRestaurantCount,
