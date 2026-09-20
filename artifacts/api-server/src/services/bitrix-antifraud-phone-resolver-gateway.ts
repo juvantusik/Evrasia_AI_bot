@@ -5,7 +5,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 export type BitrixAntiFraudPhoneResolverResult = {
   bitrixUserId: number;
-  active: boolean;
 };
 
 export type BitrixAntiFraudPhoneResolverGatewayOptions = {
@@ -74,14 +73,13 @@ const parseSuccess = (body: string): BitrixAntiFraudPhoneResolverResult => {
       503,
     );
   }
-  const bitrixUserId = Number(data.bitrix_user_id);
-  if (!Number.isInteger(bitrixUserId) || bitrixUserId <= 0 || typeof data.active !== "boolean") {
+  if (!Number.isInteger(data.bitrix_user_id) || Number(data.bitrix_user_id) <= 0) {
     throw new BitrixAntiFraudPhoneResolverError(
       "Сервис определения аккаунта вернул некорректный ответ.",
       503,
     );
   }
-  return { bitrixUserId, active: data.active };
+  return { bitrixUserId: Number(data.bitrix_user_id) };
 };
 
 const parseAmbiguousMatchCount = (body: string): number => {
@@ -100,7 +98,7 @@ const parseAmbiguousMatchCount = (body: string): number => {
 // Точный production contract подтверждён read-only по
 // AntiFraudPhoneResolverService.php:
 // request JSON field = phone;
-// unique = 200 + status=unique + bitrix_user_id + active;
+// unique = 200 + status=unique + bitrix_user_id (ACTIVE is re-read via account-map);
 // invalid=400, not_found=404, ambiguous=409+match_count, resolver error=503.
 // Protected HTTP body и token никогда не пробрасываются в web error.
 export class BitrixAntiFraudPhoneResolverGateway {
