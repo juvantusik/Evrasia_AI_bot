@@ -13,6 +13,7 @@ import {
   evaluateCheckinScoutOnce,
   syncCheckinScoutSnapshotOnce,
 } from "./anti-fraud-checkin-scout-service";
+import { processPendingAntiFraudOperatorInvestigationsOnce } from "./anti-fraud-operator-investigation-service";
 
 const SOURCE = "anti_fraud_protected_cycle";
 const DEFAULT_INTERVAL_MINUTES = 15;
@@ -186,7 +187,8 @@ const refreshPriorityLoyaltyOnce = async (): Promise<void> => {
 // 6) свежий loyalty TotalSum/count/issue для рискованных аккаунтов уже с учётом новых USER_ID;
 // 7) rolling refresh до 200 самых давно не проверявшихся активных аккаунтов;
 // 8) финальный explainable risk + обычная адресная history для history gate;
-// 9) фиксация case dynamics.
+// 9) pending ручные operator investigations: account-map -> 60-day history -> обычный scoring;
+// 10) фиксация case dynamics.
 //
 // Двухпроходный risk нужен специально для UX ручного refresh: новый аккаунт, найденный
 // Trusted Device/account-map, не должен сначала появляться в кейсе как «Карты: не загружено»
@@ -247,6 +249,11 @@ export const runAntiFraudHourlyCycleOnce = async (): Promise<void> => {
     });
     stages.push({ stage: "risk_scoring_final", ok: true });
 
+    stages.push(
+      await runStage("operator_investigations", () =>
+        processPendingAntiFraudOperatorInvestigationsOnce(),
+      ),
+    );
     stages.push(await runStage("case_dynamics", () => captureAntiFraudCaseDynamics()));
 
     const partial = stages.some((stage) => !stage.ok);
