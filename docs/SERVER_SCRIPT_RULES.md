@@ -6,16 +6,13 @@ These rules are mandatory for every server-side diagnostic, deployment, migratio
 
 - Provide **one complete bash block** intended to be copied and run as a whole.
 - Do not split a procedure into many isolated shell commands unless the operator explicitly asks for that.
-- Start the real interactive script with:
+- Start the real interactive script by clearing both terminal contents and scrollback:
 
 ```bash
-clear
-set +e
-set +u
-set +o pipefail 2>/dev/null
+printf '\033[3J\033[2J\033[H'
 ```
 
-`clear` is mandatory by operator preference so output from the previous operation is visually removed before the new result starts.
+This is the current mandatory operator preference for server scripts. Do not rely on plain `clear` alone when the purpose is to return a clean diagnostic transcript.
 
 - Put variables and expected host/container/image values at the top.
 - Use clearly numbered stages: `=== 1. ... ===`, `=== 2. ... ===`, etc.
@@ -130,6 +127,22 @@ A performance gate is valid only if the metric actually covers the changed code 
 - For app-only hotfix with no new migrations, verify migration journal remains unchanged; do not invent schema expectations.
 - Data row-count equality is only a valid guard when background writers are known idle for that measurement window.
 
+## Container STDIN / heredoc rule
+
+When code is piped or supplied through a heredoc to a command inside a Docker container, preserve STDIN explicitly.
+
+Use:
+
+```bash
+docker exec -i CONTAINER ...
+```
+
+not plain `docker exec CONTAINER ...`.
+
+Without `-i`, a Node/PHP/Python command that expects its program on STDIN can exit with RC 0 while receiving no script at all. RC 0 alone is therefore not proof that the intended container-side diagnostic executed.
+
+Always verify a factual output marker such as `DIAGNOSTIC_COMPLETE=YES` when STDIN-fed code is used.
+
 ## Compose staging
 
 - If `compose.yml` uses relative `env_file`, bind mounts or other relative files, do **not** copy only the Compose file to `/tmp` for validation/deployment because relative resolution changes.
@@ -175,33 +188,38 @@ A performance gate is valid only if the metric actually covers the changed code 
 
 ## Current production invariants
 
-As of the accepted PR #45 production state on 2026-09-09:
+Latest accepted factual application baseline from PR #58 production deployment on 2026-09-20:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- accepted deployed application revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-- immutable digest: `sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- image config ID: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
+- accepted deployed application revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role / production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
-- production migrations: 20; latest timestamp `1788769200000`
-- Anti-Fraud scheduler: enabled, 15 minutes, run-on-start false
-- confirmed operator threshold: `40000`
-- PR #43 introduced configurable threshold + `Новый` badge with no schema migration
-- PR #44 is a superseded intermediate modal-layout deployment
-- PR #45 is the final accepted portal-based modal fix; operator confirmed `все супер, отображение как надо`
-- exact final PR #45 backup path was not captured in pasted transcript; re-read server backup inventory before cleanup/rollback planning
-- similarity PR #38 performance acceptance remains valid: 206s → 53s protected cycle, health/scheduler probes responsive, restart count 0
-- controlled block/unblock on safe USER_ID 880339 completed 27 PASS / 0 FAIL / 0 WARN; do not repeat merely for reassurance
+- production migrations: **24**
+- current migration stream includes `0023_anti_fraud_checkin_scout`
+- Anti-Fraud scheduler: enabled, 15 minutes
+- confirmed operator bonus threshold: `40000`
+- PR #56 Check-in Scout: production verified
+- PR #57 Trusted Device display: production
+- PR #58 Russian device labels + Scout display wording: production/operator accepted
+- Bitrix protected phone resolver: production/verified
+- bot-side manual-investigation Step 2: pending
+- controlled block/unblock on safe USER_ID 880339 remains completed; do not repeat merely for reassurance
 - Phonebook canonical route: `/phonebook`
 - `/directory` and `/api/directory/...`: expected 404
 - TEST `evrasia-ai-bot-v17-test`: exited/archival.
 
-These documented invariants are not substitutes for fresh guards before a future mutation.
+PR #58 deployment backup:
+
+`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
+
+These documented invariants are not substitutes for fresh guards before a future mutation. Documentation-only commits may advance GitHub `main` without advancing the production image.
 
 ## Anti-Fraud invariants
 

@@ -2,7 +2,7 @@
 
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: **2026-09-08**.
+> Last updated: **2026-09-20** after Check-in Scout, protected phone resolver and PR #58 production acceptance.
 
 ## 1. Main rule
 
@@ -142,6 +142,80 @@ Anti-Fraud UI
 
 The application re-reads factual state and persists local audit. Customer-facing block reason is generic and must not expose case IDs, risk scores, devices or identity-detection internals.
 
+#### Check-in Scout architecture
+
+Check-in Scout is a separate upstream physical-frequency detector.
+
+```text
+Bitrix VIP_TODAY / offline-order store
+           |
+           v
+protected /api/internal/anti-fraud/checkins
+           |
+           v
+bot Scout snapshot (max 3 days)
+           |
+           +--> 1/day: discard from persistent Scout state
+           |
+           +--> 2+ same Moscow day: WATCH
+                    |
+                    +--> 3rd same day or later WATCH day with 2+
+                              |
+                              v
+                    targeted 60-day physical history
+                              |
+                              v
+             persistent frequency confirmation
+                              |
+                              v
+                      Risk 100 / Critical
+```
+
+The Scout physical source is not `VIP_HISTORY`. `VIP_HISTORY` can contain multiple monetary/event rows for one physical visit.
+
+Current confirmation rule in code:
+
+- 3 different days with 2+ physical check-ins in the last 7 days; OR
+- 3 different days with 3+ physical check-ins in the last 60 days.
+
+No automatic block occurs.
+
+PR #58 changed only the first operator-facing label to `дней с 3 чекинами за 7 дней`; the backend `days_2plus_7d >= 2` calculation remains unchanged.
+
+#### Manual investigation by phone
+
+The site-side protected resolver is already production:
+
+`POST /api/internal/anti-fraud/phone-resolve`
+
+Resolution architecture:
+
+`phone → normalize → FULLTEXT SEARCH_ADMIN_CONTENT candidate lookup → exact normalized b_user.PERSONAL_PHONE verification → 0/1/many`
+
+Response contract:
+
+- unique → 200;
+- invalid → 400;
+- not found → 404;
+- ambiguous → 409 and no USER_ID selection;
+- resolver/candidate-limit problem → 503.
+
+The bot-side operator workflow **«Добавить на проверку»** is the next implementation step. It requires persistent operator-investigation state and an explicit operator-authorized 60-day history path. Do not fake the existing automatic `riskGateConfirmed` requirement.
+
+#### Trusted Device case-display semantics
+
+Case backend separates:
+
+- `devices`: shared device hashes used as linking/grouping evidence;
+- `trustedDevices`: all Trusted Device hashes attached to case accounts, including single-account hashes.
+
+UI labels after PR #58:
+
+- one linked account → **Устройство**;
+- multiple linked accounts → **Общее устройство**.
+
+Both are the same hash type. A single-account hash becomes shared grouping evidence if a second USER_ID later appears on the same hash and the next sync/scoring cycle ingests that relation.
+
 #### Loyalty/history credential boundary
 
 The bot container does **not** hold RestIS credentials. Loyalty/history access goes through the protected site-side integration. This boundary is intentional and must not be “fixed” by copying RestIS credentials into `evrasia-ai-bot-app`.
@@ -203,37 +277,30 @@ PostgreSQL:
 - role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
 - retained test DB: `evrasia_ai_bot_antifraud_test`
-- production migrations: **20**
-- latest migration journal timestamp: `1788769200000`
-- migrations 0018/0019 provide blocked-state fields and block audit.
+- production migrations: **24**
+- latest implemented migration tag in the current Anti-Fraud stream: `0023_anti_fraud_checkin_scout`.
 
 Legacy TEST container `evrasia-ai-bot-v17-test` is exited/archival. Do not restart it blindly.
 
 ## 6. Current production release identity
 
-Current deployed application after PR #41 rollout on 2026-09-08:
+Current accepted deployed application after PR #58 on 2026-09-20:
 
-- deployed revision: `a156db2e30dd2a31d7bd4126410f9f513382adaa`
-- immutable digest: `sha256:ce3b85fe789495f3b5ee4e59fe8eb129a75343d1916f2a7c45483da18d988947`
-- image/config ID: `sha256:cbe989d6375189f9f12d7a0ad6f74f9f5455536838750fd96f0e2e459d9cc145`
-- platform: `linux/amd64`
-- app status after deployment: running / healthy.
+- deployed revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
+- production migrations: **24**
+- app status after deployment: running / healthy
+- backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
+- deployment result: 7 PASS / 0 FAIL / rollback not required.
 
-Production deployment verification:
+PR #58 was application/UI-only relative to the preceding production DB state; migration count remained 24.
 
-- app-only recreation
-- DB container unchanged / not restarted
-- schema and migration state unchanged at 20
-- environment, mounts and ports preserved
-- scheduler enabled, idle, 15 minutes, no last error
-- `/api/healthz`, `/`, `/phonebook`, `/antifraud`, Anti-Fraud APIs = 200
-- `/directory` = 404
-- backup: `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
-- `PASS_COUNT=29`, `FAIL_COUNT=0`, `ROLLBACK_ATTEMPTED=NO`, `FINAL_STATUS=PASS`.
+Two earlier PR #58 attempts failed safely before mutation because a temporary Compose file was staged outside the production Compose directory. The accepted deployment confirmed that relative-path Compose must be staged/validated in `/opt/evrasia-ai-bot/prod`.
 
-Main CI #298 / run ID `34202375971` built the exact image and passed 70/70 tests.
+Later documentation-only commits may advance GitHub `main`; they do not by themselves change the deployed application identity above.
 
-Later documentation-only commits may advance GitHub `main`; they do not change the deployed application identity above.
+Full current Anti-Fraud handoff: `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
 
 ## 7. Anti-Fraud performance architecture
 

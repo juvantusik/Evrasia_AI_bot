@@ -2,10 +2,10 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-18
+> **Last updated:** 2026-09-20
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current accepted deployed app revision:** `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-> **Current production milestone:** Anti-Fraud operator settings + `Новый` badge + final settings-modal viewport fix are deployed and operator accepted.
+> **Current accepted deployed app revision:** `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+> **Current production milestone:** Check-in Scout is production-verified; Trusted Device case display was corrected through PR #58; protected Bitrix phone resolver for manual Anti-Fraud investigation is production; bot-side Step 2 is next.
 
 ---
 
@@ -13,6 +13,7 @@
 
 In a new chat, read in this order:
 
+0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — current Anti-Fraud / Scout / manual-investigation handoff
 1. `docs/PROJECT_CHECKPOINT.md`
 2. `docs/AI_PROJECT_CONTEXT.md`
 3. `docs/CURRENT_ARCHITECTURE.md`
@@ -46,21 +47,33 @@ Host/runtime:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted application baseline after PR #45:
+Accepted application baseline after PR #58:
 
-- revision: `b7402cbe19b14f4d84c77870c8be876fe6f7bf42`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:11b7adfe1fc4c488a85a87c9417afc562707cdc1b034cda7577483a61609aefe`
-- config ID: `sha256:2febff91d52d3ce0481ddaa96dcbee7b3513a8a4d45417e57c20e71204aa479e`
-- platform: `linux/amd64`
-- migrations: **20**
-- latest migration timestamp: `1788769200000`
+- revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
+- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
+- migrations: **24**
 - current confirmed bonus threshold: `40000`
+- accepted runtime state: `running healthy`
 
-PR #45 is UI-only relative to PR #44: no DB/schema/migration changes, no Bitrix write, no scheduler/risk/grouping semantic change.
+PR #58 deployment backup:
 
-Operator final production confirmation on 2026-09-09: **«все супер, отображение как надо»**.
+`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
 
-Evidence boundary: the final PR #45 deployment transcript/backup path was not pasted into chat. Do not invent it. Before a future deployment, re-read the current runtime revision/image and backup inventory from production.
+Current PR #58 UI rules:
+
+- `Устройство` = one linked USER_ID on this Trusted Device hash;
+- `Общее устройство` = two or more linked USER_ID values on this same hash type;
+- if a second USER_ID later appears on the same hash, shared-device grouping can occur after the next sync/scoring cycle.
+
+Current Scout display wording:
+
+- `дней с 3 чекинами за 7 дней`;
+- `дней с 3+ чекинами за 60 дней`.
+
+The first phrase is display-only. Technical `days_2plus_7d` still uses `>=2`. Do not change backend semantics unless the operator separately approves a rule change.
+
+Documentation-only commits after this checkpoint may advance GitHub `main` without changing the deployed application identity. Re-read actual runtime revision/image before every production mutation.
 
 ---
 
@@ -85,6 +98,20 @@ Legacy TEST `evrasia-ai-bot-v17-test` is exited/archival and must not be restart
 ---
 
 ## 4. GitHub / release history relevant to current production
+
+### Current Anti-Fraud release lineage after the earlier UI milestones
+
+The earlier PR #32–#45 lineage below is retained as history. Current continuation additionally depends on:
+
+- PR #47 — operator-facing `Новый` changed to persistent web-first-seen semantics with a 24-hour window; migration/state introduced and deployed earlier;
+- PR #52 — generic operator watchlist support; useful infrastructure but **not** the final manual-investigation persistence model;
+- PR #53 — Avito manual override experiment; **closed unmerged**, never production;
+- PR #55 — first Check-in Scout implementation; unsafe image must **never be deployed**;
+- PR #56 — corrected Check-in Scout; merged/deployed/verified; migration `0023_anti_fraud_checkin_scout`;
+- PR #57 — exposes all case Trusted Device identifiers while keeping shared-device grouping semantics separate;
+- PR #58 — Russian device labels + Scout display wording; merged/deployed/operator accepted at revision `700422b3c9004c2d92092a166e50ac5e8e8a6d33`.
+
+Detailed facts and the exact next step are in `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
 
 Merged application PRs leading to the current state:
 
@@ -148,14 +175,65 @@ Grouping evidence remains separate from risk evidence; behavioral signals alone 
 
 ---
 
-## 6. `Новый` account badge
+## 5A. Check-in Scout and manual investigation — current
 
-PR #43 uses existing case-dynamics `addedAccountIds`.
+Check-in Scout is a separate upstream detector for **physical check-in frequency** because the normal 60-day loyalty-history path sits behind a risk gate.
 
-- account gets `Новый` when it newly enters a previously observed case;
-- first observation of an entire case does not badge all members;
-- badge is structural case-dynamics evidence, not risk/account status;
-- no guessed timestamp/window is introduced.
+Authoritative physical source:
+
+- Bitrix offline-order/check-in data fed by `VIP_TODAY`;
+- do not count `VIP_HISTORY` rows as physical visits.
+
+Production Scout behavior:
+
+- 1 physical check-in/day → normal/no persistent Scout row;
+- 2+ in a Moscow day → WATCH;
+- 3rd same day or a later WATCH day with 2+ → targeted 60-day deep check;
+- WATCH retained through current day + two later calendar days;
+- confirmation: 3 different days with 2+ in 7d OR 3 different days with 3+ in 60d;
+- confirmed frequency → Risk 100 / Critical independently;
+- no auto-block.
+
+Protected site route:
+
+`/api/internal/anti-fraud/checkins`
+
+Manual-investigation Step 2:
+
+- operator action: **«Добавить на проверку»**;
+- primary input: phone;
+- operator source/reason must be persistent and separate from automatic telemetry;
+- no auto-block.
+
+Bitrix phone resolver is already production:
+
+`/api/internal/anti-fraud/phone-resolve`
+
+Resolver behavior:
+
+- 200 unique;
+- 400 invalid;
+- 404 not found;
+- 409 ambiguous without choosing a USER_ID;
+- 503 internal/candidate-limit problem.
+
+Bot-side Step 2 is not implemented yet. Continue with gateway + persistent operator-investigation model + explicit operator-authorized 60-day enrichment + normal scoring + UI.
+
+Do not fake `riskGateConfirmed: true` for an operator-requested history lookup. The current history enricher intentionally rejects calls without a real automatic risk gate; the manual path needs explicit separate authorization semantics.
+
+See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for hashes, routes, backup paths and deployment proof.
+
+## 6. `Новый` account badge — current semantics
+
+PR #47 changed the operator-facing meaning of `Новый` to a persistent first-seen window:
+
+- source table: `anti_fraud_web_account_state(bitrix_user_id, first_seen_at)`;
+- a USER_ID is shown as `Новый` for **24 hours** after first appearing in the web Anti-Fraud interface;
+- repeated scheduler/manual refreshes do not reset or extend the 24-hour window;
+- historical accounts were bootstrapped as old during rollout;
+- forensic case-delta history remains separate and is not the operator-facing 24-hour definition.
+
+Do not revert to the older PR #43 interpretation that equated the operator badge directly with the latest case `addedAccountIds`.
 
 ---
 

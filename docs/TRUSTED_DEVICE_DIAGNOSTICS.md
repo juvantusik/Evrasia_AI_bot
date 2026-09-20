@@ -1,6 +1,6 @@
 # Trusted Device diagnostics — authoritative counting method
 
-> Updated: **2026-09-10**.
+> Updated: **2026-09-20**.
 >
 > Purpose: give any new chat/operator the exact, production-proven method for answering **«сколько уже накопилось device_id / device hash для Trusted Device»** without confusing it with Anti-Fraud device-link statistics.
 
@@ -26,6 +26,19 @@ For Trusted Device accumulation, the authoritative current source is:
 - user column: `USER_ID`.
 
 Do not print raw `DEVICE_ID_HASH` values or trust tokens in routine diagnostics.
+
+## 1A. Anti-Fraud UI labels after PR #58
+
+The case UI now uses two Russian labels for the **same Trusted Device hash type**:
+
+- **Устройство** — this hash is currently linked to one USER_ID in the case data;
+- **Общее устройство** — this hash is linked to two or more USER_ID values.
+
+These labels do not represent two different identifier formats.
+
+If another USER_ID later appears on a hash that was previously single-account, the next sync/scoring cycle can make it a shared device and use it as linking/grouping evidence.
+
+A Trusted Device hash is not a guaranteed physical-hardware serial number. The current web mechanism is based on browser/device identity; another browser/profile or cookie reset can create another identifier for the same physical computer.
 
 ## 2. What exactly to count
 
