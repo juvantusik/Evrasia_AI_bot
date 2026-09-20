@@ -411,6 +411,8 @@ WITH candidates AS (
   SELECT bitrix_user_id FROM anti_fraud_visits WHERE bitrix_user_id IS NOT NULL
   UNION
   SELECT bitrix_user_id FROM anti_fraud_checkin_watch_state
+  UNION
+  SELECT bitrix_user_id FROM anti_fraud_operator_investigations
 ),
 device_counts AS (
   SELECT device_hash, count(DISTINCT bitrix_user_id)::int AS account_count
