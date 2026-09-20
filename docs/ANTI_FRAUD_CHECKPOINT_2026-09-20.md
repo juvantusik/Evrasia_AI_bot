@@ -375,13 +375,13 @@ Backup from successful resolver deployment:
 
 ---
 
-## 9. Step 2 bot-side implementation — PR #60 / NOT MERGED / NOT PRODUCTION
+## 9. Step 2 bot-side implementation — PR #60 READY FOR REVIEW / NOT MERGED / NOT PRODUCTION
 
 Current branch:
 
 `feature/anti-fraud-manual-investigation`
 
-Draft PR:
+PR (Ready for review):
 
 `#60 Anti-Fraud: manual investigation by phone`
 
