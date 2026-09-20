@@ -508,7 +508,7 @@ Primary input:
 
 Operator source/reason:
 
-- source defaults to `Авито` in the UI;
+- source is required and intentionally blank by default; `Авито` is only an example;
 - reason/comment is optional;
 - both are stored separately from automatic telemetry.
 
