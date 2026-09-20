@@ -1,0 +1,159 @@
+.af-investigation-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #253b57;
+  border-radius: 10px;
+  background: #253b57;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.af-investigation-button:hover:not(:disabled) { opacity: .92; }
+.af-investigation-button:disabled { opacity: .55; cursor: not-allowed; }
+
+.af-investigation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 20px;
+  background: rgba(15, 23, 42, .42);
+}
+
+.af-investigation-dialog {
+  width: min(540px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, .2);
+}
+
+.af-investigation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.af-investigation-head > div { display: flex; flex-direction: column; gap: 4px; }
+.af-investigation-head strong { color: #111827; font-size: 18px; }
+.af-investigation-head span { color: #667085; font-size: 13px; }
+
+.af-investigation-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+
+.af-investigation-close:hover:not(:disabled) { background: #f2f4f7; }
+
+.af-investigation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 22px 0;
+}
+
+.af-investigation-field > span { color: #344054; font-size: 14px; font-weight: 700; }
+.af-investigation-field em { color: #98a2b3; font-size: 12px; font-style: normal; font-weight: 500; }
+
+.af-investigation-field input,
+.af-investigation-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #cfd8e5;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.af-investigation-field input { min-height: 44px; }
+.af-investigation-field textarea { resize: vertical; min-height: 82px; }
+.af-investigation-field input:focus,
+.af-investigation-field textarea:focus {
+  border-color: #98a2b3;
+  box-shadow: 0 0 0 3px rgba(152, 162, 179, .14);
+}
+.af-investigation-field small { color: #667085; font-size: 12px; line-height: 1.45; }
+
+.af-investigation-error,
+.af-investigation-note {
+  margin: 14px 22px 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.af-investigation-error { background: #fff1f2; color: #b42318; }
+.af-investigation-note { background: #f8fafc; color: #667085; }
+
+.af-investigation-success {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px;
+}
+.af-investigation-success > strong { color: #027a48; font-size: 17px; }
+.af-investigation-success > span { color: #344054; line-height: 1.5; }
+.af-investigation-success > small { color: #667085; }
+
+.af-investigation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 16px 22px 20px;
+}
+.af-investigation-success .af-investigation-actions { padding: 10px 0 0; }
+
+.af-investigation-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.af-investigation-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.af-investigation-cancel { border: 1px solid #d8e0eb; background: #fff; color: #344054; }
+.af-investigation-primary { border: 1px solid #253b57; background: #253b57; color: #fff; }
+
+@media (max-width: 760px) {
+  .af-investigation-button {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+  }
+  .af-investigation-overlay { align-items: flex-end; padding: 0; }
+  .af-investigation-dialog {
+    width: 100%;
+    max-height: 100dvh;
+    border-radius: 18px 18px 0 0;
+  }
+}
