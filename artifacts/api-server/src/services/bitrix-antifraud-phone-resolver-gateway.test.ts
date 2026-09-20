@@ -30,7 +30,7 @@ test("Phone resolver gateway sends exact production request field and parses uni
 
   assert.deepEqual(requestBody, { phone: "+7 921 903-46-92" });
   assert.equal(tokenHeader, "x".repeat(64));
-  assert.deepEqual(result, { bitrixUserId: 1969724, active: true });
+  assert.deepEqual(result, { bitrixUserId: 1969724 });
 });
 
 test("Phone resolver gateway rejects invalid phone before protected request", async () => {
@@ -131,7 +131,7 @@ test("Phone resolver gateway rejects malformed unique response as 503", async ()
           ok: true,
           status: "unique",
           bitrix_user_id: "1969724",
-          active: "Y",
+          active: true,
         }),
         { status: 200 },
       ),
