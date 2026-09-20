@@ -19,7 +19,7 @@
 4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
 5. `SERVER_UPDATES.md` — фактическая история production/server updates;
 6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
-7. `docs/ANTI_FRAUD_UI_NEXT.md` — следующий запланированный UI-этап Anti-Fraud (`Новый` в dynamics + device_hash_id progress);
+7. `docs/ANTI_FRAUD_UI_NEXT.md` — исторический UI-план с отметкой, что прежние пункты уже реализованы; текущий следующий шаг — Step 2 из checkpoint 2026-09-20;
 8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
 9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
 10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — planned TOTP 2FA / protected-profile design, production read-only findings and continuation keyword `ПАНДА ДВА`;
