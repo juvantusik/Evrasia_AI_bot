@@ -41,6 +41,11 @@ export type AntiFraudWebAccount = {
   computedAt: string;
   reasons: AntiFraudWebReason[];
   operatorWatched: boolean;
+  operatorInvestigationId: string | null;
+  operatorSource: string | null;
+  operatorReason: string | null;
+  operatorInvestigationStatus: string | null;
+  operatorInvestigationRequestedAt: string | null;
 };
 
 export type AntiFraudWebDevice = {
@@ -67,7 +72,8 @@ const ensureReady = async (): Promise<void> => {
     SELECT
       to_regclass('public.anti_fraud_risk_scores') IS NOT NULL
       AND to_regclass('public.anti_fraud_device_links') IS NOT NULL
-      AND to_regclass('public.anti_fraud_accounts') IS NOT NULL AS ready
+      AND to_regclass('public.anti_fraud_accounts') IS NOT NULL
+      AND to_regclass('public.anti_fraud_operator_investigations') IS NOT NULL AS ready
   `);
   if (!result.rows[0]?.ready) {
     throw new Error("Anti-Fraud ещё не инициализирован в этой базе данных.");
@@ -203,22 +209,32 @@ export const listAntiFraudWebAccounts = async (input?: {
   const operatorWatchlist = await loadOperatorWatchlist();
   const watchedIds = new Set(operatorWatchlist);
   const result = await pool.query<any>(`
+    WITH visible_users AS (
+      SELECT bitrix_user_id FROM anti_fraud_risk_scores
+      UNION
+      SELECT bitrix_user_id FROM anti_fraud_operator_investigations
+    )
     SELECT
-      s.bitrix_user_id,
+      u.bitrix_user_id,
       a.display_name,
       a.phone_normalized,
       a.email_normalized,
       COALESCE(a.bitrix_active, true) AS bitrix_active,
-      s.overall_risk,
-      s.risk_level,
-      s.device_risk,
-      s.linked_account_risk,
-      s.identity_similarity_risk,
-      s.visit_behavior_risk,
-      s.historical_behavior_risk,
-      s.history_gate,
-      s.history_enriched,
-      s.computed_at,
+      COALESCE(s.overall_risk, 0) AS overall_risk,
+      COALESCE(s.risk_level, 'low') AS risk_level,
+      COALESCE(s.device_risk, 0) AS device_risk,
+      COALESCE(s.linked_account_risk, 0) AS linked_account_risk,
+      COALESCE(s.identity_similarity_risk, 0) AS identity_similarity_risk,
+      COALESCE(s.visit_behavior_risk, 0) AS visit_behavior_risk,
+      COALESCE(s.historical_behavior_risk, 0) AS historical_behavior_risk,
+      COALESCE(s.history_gate, false) AS history_gate,
+      COALESCE(s.history_enriched, false) AS history_enriched,
+      COALESCE(s.computed_at, oi.requested_at, now()) AS computed_at,
+      oi.investigation_id AS operator_investigation_id,
+      oi.source AS operator_source,
+      oi.reason AS operator_reason,
+      oi.status AS operator_investigation_status,
+      oi.requested_at AS operator_investigation_requested_at,
       COALESCE(
         json_agg(
           json_build_object(
@@ -229,17 +245,28 @@ export const listAntiFraudWebAccounts = async (input?: {
         ) FILTER (WHERE r.id IS NOT NULL),
         '[]'::json
       ) AS reasons
-    FROM anti_fraud_risk_scores s
-    LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = s.bitrix_user_id
-    LEFT JOIN anti_fraud_risk_reasons r ON r.bitrix_user_id = s.bitrix_user_id
-    WHERE ($1::text = '' OR s.risk_level = $1)
+    FROM visible_users u
+    LEFT JOIN anti_fraud_risk_scores s ON s.bitrix_user_id = u.bitrix_user_id
+    LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = u.bitrix_user_id
+    LEFT JOIN anti_fraud_risk_reasons r ON r.bitrix_user_id = u.bitrix_user_id
+    LEFT JOIN LATERAL (
+      SELECT investigation_id, source, reason, status, requested_at
+      FROM anti_fraud_operator_investigations i
+      WHERE i.bitrix_user_id = u.bitrix_user_id
+      ORDER BY i.requested_at DESC
+      LIMIT 1
+    ) oi ON true
+    WHERE ($1::text = '' OR COALESCE(s.risk_level, 'low') = $1)
       AND (
         $2::text = ''
-        OR s.bitrix_user_id::text ILIKE '%' || $2 || '%'
+        OR u.bitrix_user_id::text ILIKE '%' || $2 || '%'
         OR COALESCE(a.display_name, '') ILIKE '%' || $2 || '%'
       )
-    GROUP BY s.bitrix_user_id, a.bitrix_user_id
-    ORDER BY (s.bitrix_user_id = ANY($4::int[])) DESC, s.overall_risk DESC, s.bitrix_user_id
+    GROUP BY u.bitrix_user_id, a.bitrix_user_id, s.bitrix_user_id,
+             oi.investigation_id, oi.source, oi.reason, oi.status, oi.requested_at
+    ORDER BY (oi.investigation_id IS NOT NULL) DESC,
+             (u.bitrix_user_id = ANY($4::int[])) DESC,
+             COALESCE(s.overall_risk, 0) DESC, u.bitrix_user_id
     LIMIT $3
   `, [level, query, limit, operatorWatchlist]);
 
@@ -266,7 +293,13 @@ export const listAntiFraudWebAccounts = async (input?: {
           details: String(reason.details ?? ""),
         }))
       : [],
-    operatorWatched: watchedIds.has(Number(row.bitrix_user_id)),
+    operatorWatched:
+      watchedIds.has(Number(row.bitrix_user_id)) || Boolean(row.operator_investigation_id),
+    operatorInvestigationId: row.operator_investigation_id ?? null,
+    operatorSource: row.operator_source ?? null,
+    operatorReason: row.operator_reason ?? null,
+    operatorInvestigationStatus: row.operator_investigation_status ?? null,
+    operatorInvestigationRequestedAt: iso(row.operator_investigation_requested_at),
   }));
 };
 

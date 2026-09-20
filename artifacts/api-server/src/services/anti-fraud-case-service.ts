@@ -23,6 +23,11 @@ export type AntiFraudCaseAccount = {
   historyEnriched: boolean;
   computedAt: string;
   reasons: AntiFraudCaseReason[];
+  operatorInvestigationId: string | null;
+  operatorSource: string | null;
+  operatorReason: string | null;
+  operatorInvestigationStatus: string | null;
+  operatorInvestigationRequestedAt: string | null;
 };
 
 export type AntiFraudCaseDevice = {
@@ -43,7 +48,7 @@ export type AntiFraudCase = {
   accountCount: number;
   accounts: AntiFraudCaseAccount[];
   signals: Array<
-    "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance"
+    "multiaccount" | "phone" | "email" | "visits" | "fast_switch" | "linked_visits" | "bonus_balance" | "operator_investigation"
   >;
   // shared devices are linking evidence and participate in case grouping.
   devices: AntiFraudCaseDevice[];
@@ -69,7 +74,8 @@ const ensureReady = async (): Promise<void> => {
       AND to_regclass('public.anti_fraud_risk_reasons') IS NOT NULL
       AND to_regclass('public.anti_fraud_device_links') IS NOT NULL
       AND to_regclass('public.anti_fraud_accounts') IS NOT NULL
-      AND to_regclass('public.anti_fraud_identity_links') IS NOT NULL AS ready
+      AND to_regclass('public.anti_fraud_identity_links') IS NOT NULL
+      AND to_regclass('public.anti_fraud_operator_investigations') IS NOT NULL AS ready
   `);
   if (!result.rows[0]?.ready) throw new Error("Anti-Fraud ещё не инициализирован в этой базе данных.");
 };
@@ -159,17 +165,20 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
 
   const [accountResult, deviceResult, identityResult] = await Promise.all([
     pool.query<any>(`
-      WITH risky AS (
+      WITH seeds AS (
         SELECT bitrix_user_id
         FROM anti_fraud_risk_scores
         WHERE overall_risk > 0
+        UNION
+        SELECT bitrix_user_id
+        FROM anti_fraud_operator_investigations
       ), relevant AS (
-        SELECT bitrix_user_id FROM risky
+        SELECT bitrix_user_id FROM seeds
         UNION
         SELECT l2.bitrix_user_id
         FROM anti_fraud_device_links l1
         JOIN anti_fraud_device_links l2 ON l2.device_hash = l1.device_hash
-        JOIN risky r ON r.bitrix_user_id = l1.bitrix_user_id
+        JOIN seeds r ON r.bitrix_user_id = l1.bitrix_user_id
         UNION
         SELECT a2.bitrix_user_id
         FROM anti_fraud_accounts a1
@@ -180,14 +189,14 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
            OR
            (a1.email_normalized IS NOT NULL AND a1.email_normalized <> '' AND a2.email_normalized = a1.email_normalized)
          )
-        JOIN risky r ON r.bitrix_user_id = a1.bitrix_user_id
+        JOIN seeds r ON r.bitrix_user_id = a1.bitrix_user_id
         UNION
         SELECT CASE
           WHEN l.left_user_id = r.bitrix_user_id THEN l.right_user_id
           ELSE l.left_user_id
         END AS bitrix_user_id
         FROM anti_fraud_identity_links l
-        JOIN risky r
+        JOIN seeds r
           ON r.bitrix_user_id = l.left_user_id
           OR r.bitrix_user_id = l.right_user_id
         WHERE l.corroborated IS TRUE
@@ -206,7 +215,12 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
         COALESCE(s.visit_behavior_risk, 0) AS visit_behavior_risk,
         COALESCE(s.historical_behavior_risk, 0) AS historical_behavior_risk,
         COALESCE(s.history_enriched, false) AS history_enriched,
-        COALESCE(s.computed_at, now()) AS computed_at,
+        COALESCE(s.computed_at, oi.requested_at, now()) AS computed_at,
+        oi.investigation_id AS operator_investigation_id,
+        oi.source AS operator_source,
+        oi.reason AS operator_reason,
+        oi.status AS operator_investigation_status,
+        oi.requested_at AS operator_investigation_requested_at,
         COALESCE(
           json_agg(
             json_build_object('code', rr.reason_code, 'score', rr.score, 'details', rr.details)
@@ -218,16 +232,26 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       LEFT JOIN anti_fraud_accounts a ON a.bitrix_user_id = u.bitrix_user_id
       LEFT JOIN anti_fraud_risk_scores s ON s.bitrix_user_id = u.bitrix_user_id
       LEFT JOIN anti_fraud_risk_reasons rr ON rr.bitrix_user_id = u.bitrix_user_id
-      GROUP BY u.bitrix_user_id, a.bitrix_user_id, s.bitrix_user_id
+      LEFT JOIN LATERAL (
+        SELECT investigation_id, source, reason, status, requested_at
+        FROM anti_fraud_operator_investigations i
+        WHERE i.bitrix_user_id = u.bitrix_user_id
+        ORDER BY i.requested_at DESC
+        LIMIT 1
+      ) oi ON true
+      GROUP BY u.bitrix_user_id, a.bitrix_user_id, s.bitrix_user_id,
+               oi.investigation_id, oi.source, oi.reason, oi.status, oi.requested_at
       ORDER BY COALESCE(s.overall_risk, 0) DESC, u.bitrix_user_id
     `),
     pool.query<any>(`
-      WITH risky AS (
+      WITH seeds AS (
         SELECT bitrix_user_id FROM anti_fraud_risk_scores WHERE overall_risk > 0
+        UNION
+        SELECT bitrix_user_id FROM anti_fraud_operator_investigations
       ), relevant_devices AS (
         SELECT DISTINCT l.device_hash
         FROM anti_fraud_device_links l
-        JOIN risky r ON r.bitrix_user_id = l.bitrix_user_id
+        JOIN seeds r ON r.bitrix_user_id = l.bitrix_user_id
       )
       SELECT
         left(l.device_hash, 16) AS device_prefix,
@@ -240,8 +264,10 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       ORDER BY count(DISTINCT l.bitrix_user_id) DESC, max(l.last_seen_at) DESC NULLS LAST
     `),
     pool.query<any>(`
-      WITH risky AS (
+      WITH seeds AS (
         SELECT bitrix_user_id FROM anti_fraud_risk_scores WHERE overall_risk > 0
+        UNION
+        SELECT bitrix_user_id FROM anti_fraud_operator_investigations
       ), matches AS (
         SELECT 'phone'::text AS match_type, phone_normalized AS match_key, bitrix_user_id
         FROM anti_fraud_accounts
@@ -253,7 +279,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       ), relevant_keys AS (
         SELECT DISTINCT m.match_type, m.match_key
         FROM matches m
-        JOIN risky r ON r.bitrix_user_id = m.bitrix_user_id
+        JOIN seeds r ON r.bitrix_user_id = m.bitrix_user_id
       ), exact_matches AS (
         SELECT
           m.match_type,
@@ -276,7 +302,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
           AND v.matched IS TRUE
           AND EXISTS (
             SELECT 1
-            FROM risky r
+            FROM seeds r
             WHERE r.bitrix_user_id = l.left_user_id
                OR r.bitrix_user_id = l.right_user_id
           )
@@ -313,6 +339,11 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
             details: String(reason.details ?? ""),
           }))
         : [],
+      operatorInvestigationId: row.operator_investigation_id ?? null,
+      operatorSource: row.operator_source ?? null,
+      operatorReason: row.operator_reason ?? null,
+      operatorInvestigationStatus: row.operator_investigation_status ?? null,
+      operatorInvestigationRequestedAt: nullableIso(row.operator_investigation_requested_at),
     });
   }
 
@@ -380,7 +411,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
       .filter((value): value is AntiFraudCaseAccount => Boolean(value))
       .sort((a, b) => b.overallRisk - a.overallRisk || a.bitrixUserId - b.bitrixUserId);
 
-    if (!caseAccounts.some((account) => account.overallRisk > 0)) continue;
+    if (!caseAccounts.some((account) => account.overallRisk > 0 || account.operatorInvestigationId)) continue;
 
     const idSet = new Set(ids);
     const caseDevices = devices.filter((device) => device.userIds.some((id) => idSet.has(id)));
@@ -410,6 +441,7 @@ export const listAntiFraudCases = async (): Promise<AntiFraudCase[]> => {
     if (reasonCodes.has("fast_account_switch") || reasonCodes.has("repeated_fast_switches")) signals.push("fast_switch");
     if (reasonCodes.has("linked_visit_proximity")) signals.push("linked_visits");
     if (reasonCodes.has("high_bonus_balance")) signals.push("bonus_balance");
+    if (caseAccounts.some((account) => account.operatorInvestigationId)) signals.push("operator_investigation");
 
     const overallRisk = Math.max(...caseAccounts.map((account) => account.overallRisk));
     const riskLevel = caseAccounts.reduce<AntiFraudCase["riskLevel"]>(

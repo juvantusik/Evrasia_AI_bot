@@ -18,6 +18,15 @@ import {
   getAntiFraudHourlySchedulerStatus,
   runAntiFraudHourlyCycleOnce,
 } from "../services/anti-fraud-hourly-service";
+import {
+  createAntiFraudOperatorInvestigationForUser,
+  listAntiFraudOperatorInvestigations,
+  processAntiFraudOperatorInvestigationById,
+} from "../services/anti-fraud-operator-investigation-service";
+import {
+  BitrixAntiFraudPhoneResolverError,
+  BitrixAntiFraudPhoneResolverGateway,
+} from "../services/bitrix-antifraud-phone-resolver-gateway";
 
 const router: IRouter = Router();
 
@@ -281,6 +290,99 @@ router.post("/anti-fraud/refresh", async (req, res): Promise<void> => {
   } catch (error) {
     req.log.error({ error }, "Failed to start Anti-Fraud refresh");
     res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
+// Step 2: persistent manual investigation. USER_ID is an admin/fallback path;
+// normal operator UI will resolve phone through the protected Bitrix resolver first.
+router.get("/anti-fraud/investigations", async (req, res): Promise<void> => {
+  try {
+    res.json({
+      records: await listAntiFraudOperatorInvestigations(Number(req.query.limit ?? 100)),
+    });
+  } catch (error) {
+    req.log.error({ error }, "Failed to load Anti-Fraud operator investigations");
+    res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
+router.post("/anti-fraud/investigations", async (req, res): Promise<void> => {
+  try {
+    const resolved = await new BitrixAntiFraudPhoneResolverGateway().resolvePhone(req.body?.phone);
+
+    const investigation = await createAntiFraudOperatorInvestigationForUser({
+      bitrixUserId: resolved.bitrixUserId,
+      source: req.body?.source,
+      reason: req.body?.reason,
+    });
+
+    res.status(202).json({
+      ok: true,
+      resolved: {
+        bitrixUserId: resolved.bitrixUserId,
+      },
+      investigation,
+    });
+
+    void processAntiFraudOperatorInvestigationById(investigation.investigationId).catch((error) =>
+      req.log.error(
+        { error, investigationId: investigation.investigationId },
+        "Async Anti-Fraud phone investigation failed",
+      ),
+    );
+  } catch (error) {
+    if (error instanceof BitrixAntiFraudPhoneResolverError) {
+      req.log.warn(
+        { status: error.httpStatus, matchCount: error.matchCount },
+        "Anti-Fraud phone resolver rejected operator request",
+      );
+      res.status(error.httpStatus).json({
+        error: error.message,
+        ...(error.httpStatus === 409 && error.matchCount !== null
+          ? { matchCount: error.matchCount }
+          : {}),
+      });
+      return;
+    }
+
+    const message = errorMessage(error);
+    req.log.error({ error }, "Failed to create phone-first Anti-Fraud investigation");
+    const badInput =
+      message.includes("Источник проверки") ||
+      message.includes("Комментарий");
+    res.status(badInput ? 400 : 503).json({ error: message });
+  }
+});
+
+router.post("/anti-fraud/investigations/by-user-id", async (req, res): Promise<void> => {
+  try {
+    const bitrixUserId = Number(req.body?.userId);
+    if (!Number.isInteger(bitrixUserId) || bitrixUserId <= 0) {
+      res.status(400).json({ error: "Укажите корректный USER_ID." });
+      return;
+    }
+
+    const investigation = await createAntiFraudOperatorInvestigationForUser({
+      bitrixUserId,
+      source: req.body?.source,
+      reason: req.body?.reason,
+    });
+
+    res.status(202).json({ ok: true, investigation });
+    void processAntiFraudOperatorInvestigationById(investigation.investigationId).catch((error) =>
+      req.log.error(
+        { error, investigationId: investigation.investigationId },
+        "Async Anti-Fraud operator investigation failed",
+      ),
+    );
+  } catch (error) {
+    const message = errorMessage(error);
+    req.log.error({ error }, "Failed to create Anti-Fraud operator investigation");
+    const badInput =
+      message.includes("USER_ID") ||
+      message.includes("Источник проверки") ||
+      message.includes("Комментарий");
+    res.status(badInput ? 400 : 503).json({ error: message });
   }
 });
 

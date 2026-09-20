@@ -217,9 +217,24 @@ Resolver behavior:
 - 409 ambiguous without choosing a USER_ID;
 - 503 internal/candidate-limit problem.
 
-Bot-side Step 2 is not implemented yet. Continue with gateway + persistent operator-investigation model + explicit operator-authorized 60-day enrichment + normal scoring + UI.
+Bot-side Step 2 is implemented in PR #60 on `feature/anti-fraud-manual-investigation`; the PR is **Ready for review**, but is **not merged and not production**.
 
-Do not fake `riskGateConfirmed: true` for an operator-requested history lookup. The current history enricher intentionally rejects calls without a real automatic risk gate; the manual path needs explicit separate authorization semantics.
+Implemented in PR #60:
+
+- protected phone gateway using exact production request field `phone`;
+- migration `0024_anti_fraud_operator_investigation`;
+- persistent operator source/reason and state;
+- explicit operator-authorized 60-day history path;
+- address-specific worker + restart recovery;
+- normal scoring without fake `riskGateConfirmed`;
+- persistent Risk-0 visibility;
+- phone-first UI action **«Добавить на проверку»**;
+- no auto-block;
+- gateway regression tests and CI schema-smoke.
+
+Read-only production inspection reconfirmed the Bitrix resolver SHAs and showed `$payload['phone'] ?? null` as the exact input field. Production resolver itself was not modified.
+
+Do not describe PR #60 as production until a separate merge/deployment/acceptance is completed.
 
 See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for hashes, routes, backup paths and deployment proof.
 

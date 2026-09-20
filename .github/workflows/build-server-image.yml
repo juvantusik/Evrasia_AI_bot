@@ -163,6 +163,19 @@ jobs:
           curl -fsS http://127.0.0.1:18080/api/anti-fraud/case-dynamics >/tmp/antifraud-dynamics.json
           test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
 
+          # Добавлено 20.09.2026: Step 2 manual investigation routes доступны,
+          # а локально некорректный input отклоняется до protected Bitrix вызова.
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/investigations >/tmp/antifraud-investigations.json
+          test "$(jq '.records | length' /tmp/antifraud-investigations.json)" = "0"
+          test "$(curl -sS -o /tmp/antifraud-investigation-invalid-phone.json -w '%{http_code}' \
+            -X POST -H 'content-type: application/json' \
+            -d '{"phone":"12","source":"Авито"}' \
+            http://127.0.0.1:18080/api/anti-fraud/investigations)" = "400"
+          test "$(curl -sS -o /tmp/antifraud-investigation-invalid-user.json -w '%{http_code}' \
+            -X POST -H 'content-type: application/json' \
+            -d '{"userId":0,"source":"Авито"}' \
+            http://127.0.0.1:18080/api/anti-fraud/investigations/by-user-id)" = "400"
+
           # Добавлено 09.09.2026: operator setting реально читается/пишется через bot_settings.
           curl -fsS http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-default.json
           test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-default.json)" = "40000"
@@ -179,7 +192,7 @@ jobs:
             http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-restore.json
           test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-restore.json)" = "40000"
 
-          # Обновлено 19.09.2026: 0023 добавляет persistent Check-in Scout watch state.
+          # Обновлено 20.09.2026: 0024 добавляет persistent operator investigation state.
           # При добавлении каждой новой миграции expected count и feature schema-smoke
           # обновляются одновременно с самой миграцией.
           migration_rows="$(
@@ -190,7 +203,17 @@ jobs:
               psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq \
                 -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
           )"
-          test "$migration_rows" = "24"
+          test "$migration_rows" = "25"
+
+          operator_investigation_schema="$(
+            docker run --rm \
+              --network host \
+              -e PGPASSWORD=samzaberu \
+              postgres:16-bullseye \
+              psql -h 127.0.0.1 -U samzaberu -d samzaberu -Atq -F '|' \
+                -c "SELECT CASE WHEN to_regclass('public.anti_fraud_operator_investigations') IS NOT NULL THEN 1 ELSE 0 END, count(*) FILTER (WHERE column_name='investigation_id'), count(*) FILTER (WHERE column_name='bitrix_user_id'), count(*) FILTER (WHERE column_name='source'), count(*) FILTER (WHERE column_name='reason'), count(*) FILTER (WHERE column_name='status'), count(*) FILTER (WHERE column_name='requested_at'), count(*) FILTER (WHERE column_name='started_at'), count(*) FILTER (WHERE column_name='history_completed_at'), count(*) FILTER (WHERE column_name='scoring_completed_at'), count(*) FILTER (WHERE column_name='completed_at'), count(*) FILTER (WHERE column_name='last_error'), count(*) FILTER (WHERE column_name='updated_at') FROM information_schema.columns WHERE table_schema='public' AND table_name='anti_fraud_operator_investigations';"
+          )"
+          test "$operator_investigation_schema" = "1|1|1|1|1|1|1|1|1|1|1|1|1"
 
           checkin_scout_schema="$(
             docker run --rm \

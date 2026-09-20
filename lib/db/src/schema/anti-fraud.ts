@@ -250,6 +250,36 @@ export const antiFraudCheckinWatchStateTable = pgTable(
   }),
 );
 
+// Добавлено 20.09.2026 ИТ Директор Евразии
+// Ручная операторская проверка хранится отдельно от automatic risk telemetry.
+export const antiFraudOperatorInvestigationsTable = pgTable(
+  "anti_fraud_operator_investigations",
+  {
+    investigationId: text("investigation_id").primaryKey(),
+    bitrixUserId: integer("bitrix_user_id").notNull(),
+    source: text("source").notNull(),
+    reason: text("reason"),
+    status: text("status").notNull().default("pending"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    historyCompletedAt: timestamp("history_completed_at", { withTimezone: true }),
+    scoringCompletedAt: timestamp("scoring_completed_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("anti_fraud_operator_investigation_user_idx").on(
+      table.bitrixUserId,
+      table.requestedAt,
+    ),
+    statusIdx: index("anti_fraud_operator_investigation_status_idx").on(
+      table.status,
+      table.updatedAt,
+    ),
+  }),
+);
+
 // Добавлено 03.09.2026 ИТ Директор Евразии
 export const antiFraudSyncStateTable = pgTable("anti_fraud_sync_state", {
   source: text("source").primaryKey(),
@@ -293,5 +323,6 @@ export type AntiFraudDeviceLink = typeof antiFraudDeviceLinksTable.$inferSelect;
 export type AntiFraudRiskScore = typeof antiFraudRiskScoresTable.$inferSelect;
 export type AntiFraudRiskReason = typeof antiFraudRiskReasonsTable.$inferSelect;
 export type AntiFraudCheckinWatchState = typeof antiFraudCheckinWatchStateTable.$inferSelect;
+export type AntiFraudOperatorInvestigation = typeof antiFraudOperatorInvestigationsTable.$inferSelect;
 export type AntiFraudSyncState = typeof antiFraudSyncStateTable.$inferSelect;
 export type AntiFraudSyncRun = typeof antiFraudSyncRunsTable.$inferSelect;
