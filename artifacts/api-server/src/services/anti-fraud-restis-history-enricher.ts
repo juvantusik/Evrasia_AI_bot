@@ -14,13 +14,20 @@ const MAX_LOOKBACK_DAYS = 60;
 const DEFAULT_REFRESH_HOURS = 24;
 const MAX_REFRESH_HOURS = 168;
 
-export type RestisHistoryEnrichmentOptions = {
+type RestisHistoryCoreOptions = {
   bitrixUserId: number;
-  riskGateConfirmed: true;
   lookbackDays?: number;
   refreshHours?: number;
   gateway?: BitrixAntiFraudLoyaltyGateway;
   now?: Date;
+};
+
+export type RestisHistoryEnrichmentOptions = RestisHistoryCoreOptions & {
+  riskGateConfirmed: true;
+};
+
+export type OperatorRestisHistoryEnrichmentOptions = RestisHistoryCoreOptions & {
+  investigationId: string;
 };
 
 export type RestisHistoryEnrichmentResult = {
@@ -127,13 +134,9 @@ const assertExistingVisitsAreStable = (
 // Обновлено 05.09.2026 ИТ Директор Евразии
 // История идёт USER_ID -> active RESTIS_STATE=113 -> protected loyalty endpoint.
 // Raw source restis_id может повторяться; уникальность определяется полным денежным событием.
-export const enrichRestisHistoryForHighRiskUserOnce = async (
-  options: RestisHistoryEnrichmentOptions,
+const enrichRestisHistoryOnce = async (
+  options: RestisHistoryCoreOptions,
 ): Promise<RestisHistoryEnrichmentResult> => {
-  if (options.riskGateConfirmed !== true) {
-    throw new Error("Loyalty history запрещён без подтверждённого Anti-Fraud risk gate");
-  }
-
   const bitrixUserId = Number(options.bitrixUserId);
   if (!Number.isInteger(bitrixUserId) || bitrixUserId <= 0) {
     throw new Error("bitrixUserId для loyalty history должен быть положительным integer");
@@ -415,4 +418,50 @@ export const enrichRestisHistoryForHighRiskUserOnce = async (
     }
     client.release();
   }
+};
+
+
+// Автоматический путь остаётся совместимым с текущим risk engine и требует
+// явного подтверждения automatic risk gate.
+export const enrichRestisHistoryForHighRiskUserOnce = async (
+  options: RestisHistoryEnrichmentOptions,
+): Promise<RestisHistoryEnrichmentResult> => {
+  if (options.riskGateConfirmed !== true) {
+    throw new Error("Loyalty history запрещён без подтверждённого Anti-Fraud risk gate");
+  }
+  return enrichRestisHistoryOnce(options);
+};
+
+// Добавлено 20.09.2026 ИТ Директор Евразии
+// Ручная проверка имеет отдельный auditable authorization contract.
+// Она НЕ подделывает riskGateConfirmed: investigation_id должен существовать,
+// относиться к тому же USER_ID и находиться в состоянии обработки.
+export const enrichRestisHistoryForOperatorInvestigationOnce = async (
+  options: OperatorRestisHistoryEnrichmentOptions,
+): Promise<RestisHistoryEnrichmentResult> => {
+  const investigationId = String(options.investigationId ?? "").trim();
+  if (!investigationId || investigationId.length > 100) {
+    throw new Error("Operator loyalty history требует корректный investigation_id");
+  }
+
+  const bitrixUserId = Number(options.bitrixUserId);
+  if (!Number.isInteger(bitrixUserId) || bitrixUserId <= 0) {
+    throw new Error("Operator loyalty history требует положительный USER_ID");
+  }
+
+  const authorization = await pool.query<{ authorized: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM anti_fraud_operator_investigations
+       WHERE investigation_id = $1
+         AND bitrix_user_id = $2
+         AND status IN ('processing','history_ready','ready')
+     ) AS authorized`,
+    [investigationId, bitrixUserId],
+  );
+  if (authorization.rows[0]?.authorized !== true) {
+    throw new Error("Operator loyalty history не авторизован текущим расследованием");
+  }
+
+  return enrichRestisHistoryOnce(options);
 };
