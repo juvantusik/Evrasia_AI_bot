@@ -40,6 +40,8 @@ type Account = {
   loyaltyHistoryLoadedAt?: string | null;
   operatorInvestigationHistoryCompletedAt?: string | null;
   operatorInvestigationCompletedAt?: string | null;
+  operatorHistoryWindowFrom?: string | null;
+  operatorHistoryWindowUntil?: string | null;
   historyPhysicalVisits?: number;
   historyVisitDays?: number;
   historyRestaurantCount?: number;
@@ -300,8 +302,8 @@ const OperatorInvestigationSummary = ({
 
   const historyCovered = Boolean(
     account.operatorInvestigationHistoryCompletedAt
-      && account.loyaltyHistoryLoadedFrom
-      && account.loyaltyHistoryLoadedUntil
+      && account.operatorHistoryWindowFrom
+      && account.operatorHistoryWindowUntil
       && account.loyaltyHistoryLoadedAt,
   );
   const dailyVisits = account.historyDailyVisits ?? [];
@@ -326,7 +328,7 @@ const OperatorInvestigationSummary = ({
         <div>
           <strong>60-дневная история проверена ✓</strong>
           <span>
-            покрытие {formatDate(account.loyaltyHistoryLoadedFrom)} — {formatDate(account.loyaltyHistoryLoadedUntil)}
+            период {formatDate(account.operatorHistoryWindowFrom)} — {formatDate(account.operatorHistoryWindowUntil)}
             {account.loyaltyHistoryLoadedAt ? ` · загружено ${formatDate(account.loyaltyHistoryLoadedAt)}` : ''}
           </span>
         </div>
