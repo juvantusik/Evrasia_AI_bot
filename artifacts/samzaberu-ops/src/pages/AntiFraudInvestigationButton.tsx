@@ -44,7 +44,7 @@ const postInvestigation = async (input: {
 export default function AntiFraudInvestigationButton({ disabled = false, onAccepted }: Props) {
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState('');
-  const [source, setSource] = useState('Авито');
+  const [source, setSource] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -52,7 +52,7 @@ export default function AntiFraudInvestigationButton({ disabled = false, onAccep
 
   const reset = () => {
     setPhone('');
-    setSource('Авито');
+    setSource('');
     setReason('');
     setError('');
     setAccepted(null);
@@ -159,6 +159,7 @@ export default function AntiFraudInvestigationButton({ disabled = false, onAccep
                 value={source}
                 onChange={(event) => setSource(event.target.value)}
                 disabled={submitting}
+                placeholder="Например, Авито"
               />
               <small>Например: Авито. Источник хранится отдельно от автоматических сигналов риска.</small>
             </label>
