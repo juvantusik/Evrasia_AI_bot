@@ -108,7 +108,7 @@ Important: later documentation-only commits may advance GitHub `main` while prod
 - merged and deployed;
 - backend kept grouping semantics intact:
   - `devices` = shared devices used as linking evidence;
-  - `trustedDevices` = all current Trusted Device identifiers associated with case accounts, including single-account identifiers;
+  - `trustedDevices` = all Trusted Device identifiers currently present in the bot link data for case accounts, including single-account identifiers;
 - grouping still uses shared-linking evidence only;
 - UI exposure made single-account device hashes visible and initially labeled them `Device ID`.
 
