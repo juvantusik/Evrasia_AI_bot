@@ -273,7 +273,7 @@ const parseDetails = (details: string) => details.split(';').map((part) => part.
     .replace('similar_phone_links=', 'связей по похожему номеру: ').replace('similar_email_links=', 'связей по похожему email: ')
     .replace('same_restaurant_pairs_under_15m=', 'пар посещений до 15 минут: ').replace('bonus_balance=', 'остаток бонусов: ')
     .replace('threshold=', 'порог: ').replace('history_window_days=', 'проверка истории, дней: ')
-    .replace('days_2plus_7d=', 'дней с 2+ чекинами за 7 дней: ')
+    .replace('days_2plus_7d=', 'дней с 3 чекинами за 7 дней: ')
     .replace('days_3plus_60d=', 'дней с 3+ чекинами за 60 дней: ')
     .replace('source=checkin_scout', 'источник: Check-in Scout'));
 
