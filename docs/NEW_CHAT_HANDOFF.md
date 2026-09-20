@@ -117,7 +117,7 @@ The old UI-plan items from `docs/ANTI_FRAUD_UI_NEXT.md` are no longer the contin
 
 Current continuation:
 
-**finish and review draft PR #60 for «Добавить на проверку» by phone.**
+**review PR #60 (Ready for review) for «Добавить на проверку» by phone.**
 
 Already production and unchanged:
 
