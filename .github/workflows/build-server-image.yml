@@ -163,6 +163,19 @@ jobs:
           curl -fsS http://127.0.0.1:18080/api/anti-fraud/case-dynamics >/tmp/antifraud-dynamics.json
           test "$(jq '.records | length' /tmp/antifraud-dynamics.json)" = "0"
 
+          # Добавлено 20.09.2026: Step 2 manual investigation routes доступны,
+          # а локально некорректный input отклоняется до protected Bitrix вызова.
+          curl -fsS http://127.0.0.1:18080/api/anti-fraud/investigations >/tmp/antifraud-investigations.json
+          test "$(jq '.records | length' /tmp/antifraud-investigations.json)" = "0"
+          test "$(curl -sS -o /tmp/antifraud-investigation-invalid-phone.json -w '%{http_code}' \
+            -X POST -H 'content-type: application/json' \
+            -d '{"phone":"12","source":"Авито"}' \
+            http://127.0.0.1:18080/api/anti-fraud/investigations)" = "400"
+          test "$(curl -sS -o /tmp/antifraud-investigation-invalid-user.json -w '%{http_code}' \
+            -X POST -H 'content-type: application/json' \
+            -d '{"userId":0,"source":"Авито"}' \
+            http://127.0.0.1:18080/api/anti-fraud/investigations/by-user-id)" = "400"
+
           # Добавлено 09.09.2026: operator setting реально читается/пишется через bot_settings.
           curl -fsS http://127.0.0.1:18080/api/anti-fraud/settings >/tmp/antifraud-settings-default.json
           test "$(jq -r '.bonusBalanceThreshold' /tmp/antifraud-settings-default.json)" = "40000"
