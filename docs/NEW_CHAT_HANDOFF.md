@@ -140,8 +140,9 @@ Implemented in PR #60 but **not merged / not production**:
 7. phone-first UI action;
 8. separate operator source/reason such as `Авито`;
 9. restart-safe worker and scheduler resume;
-10. no auto-block;
-11. gateway tests and CI migration/schema checks.
+10. immediate first-seen persistence for the existing 24-hour «Новый» rule without window extension on repeats;
+11. no auto-block;
+12. gateway tests plus route/migration/schema CI smoke.
 
 Next action: require green CI on the final PR #60 head, do final diff/review, then plan a guarded production rollout.
 
