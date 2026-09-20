@@ -21,8 +21,12 @@ import {
 import {
   createAntiFraudOperatorInvestigationForUser,
   listAntiFraudOperatorInvestigations,
-  processPendingAntiFraudOperatorInvestigationsOnce,
+  processAntiFraudOperatorInvestigationById,
 } from "../services/anti-fraud-operator-investigation-service";
+import {
+  BitrixAntiFraudPhoneResolverError,
+  BitrixAntiFraudPhoneResolverGateway,
+} from "../services/bitrix-antifraud-phone-resolver-gateway";
 
 const router: IRouter = Router();
 
@@ -302,6 +306,55 @@ router.get("/anti-fraud/investigations", async (req, res): Promise<void> => {
   }
 });
 
+router.post("/anti-fraud/investigations", async (req, res): Promise<void> => {
+  try {
+    const resolved = await new BitrixAntiFraudPhoneResolverGateway().resolvePhone(req.body?.phone);
+
+    const investigation = await createAntiFraudOperatorInvestigationForUser({
+      bitrixUserId: resolved.bitrixUserId,
+      source: req.body?.source,
+      reason: req.body?.reason,
+    });
+
+    res.status(202).json({
+      ok: true,
+      resolved: {
+        bitrixUserId: resolved.bitrixUserId,
+        active: resolved.active,
+      },
+      investigation,
+    });
+
+    void processAntiFraudOperatorInvestigationById(investigation.investigationId).catch((error) =>
+      req.log.error(
+        { error, investigationId: investigation.investigationId },
+        "Async Anti-Fraud phone investigation failed",
+      ),
+    );
+  } catch (error) {
+    if (error instanceof BitrixAntiFraudPhoneResolverError) {
+      req.log.warn(
+        { status: error.httpStatus, matchCount: error.matchCount },
+        "Anti-Fraud phone resolver rejected operator request",
+      );
+      res.status(error.httpStatus).json({
+        error: error.message,
+        ...(error.httpStatus === 409 && error.matchCount !== null
+          ? { matchCount: error.matchCount }
+          : {}),
+      });
+      return;
+    }
+
+    const message = errorMessage(error);
+    req.log.error({ error }, "Failed to create phone-first Anti-Fraud investigation");
+    const badInput =
+      message.includes("Источник проверки") ||
+      message.includes("Комментарий");
+    res.status(badInput ? 400 : 503).json({ error: message });
+  }
+});
+
 router.post("/anti-fraud/investigations/by-user-id", async (req, res): Promise<void> => {
   try {
     const bitrixUserId = Number(req.body?.userId);
@@ -317,8 +370,11 @@ router.post("/anti-fraud/investigations/by-user-id", async (req, res): Promise<v
     });
 
     res.status(202).json({ ok: true, investigation });
-    void processPendingAntiFraudOperatorInvestigationsOnce({ limit: 1 }).catch((error) =>
-      req.log.error({ error }, "Async Anti-Fraud operator investigation failed"),
+    void processAntiFraudOperatorInvestigationById(investigation.investigationId).catch((error) =>
+      req.log.error(
+        { error, investigationId: investigation.investigationId },
+        "Async Anti-Fraud operator investigation failed",
+      ),
     );
   } catch (error) {
     const message = errorMessage(error);
