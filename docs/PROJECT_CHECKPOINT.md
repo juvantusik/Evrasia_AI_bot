@@ -124,16 +124,20 @@ Manual-investigation Step 2 status:
 - internal/candidate-limit problem → 503;
 - no Bitrix write / no blocking.
 
-Bot-side Step 2 remains pending:
+Bot-side Step 2 is **MERGED / DEPLOYED / VERIFIED** via PR #60:
 
-1. protected gateway;
-2. persistent operator-investigation state;
-3. operator-authorized 60-day enrichment without faking automatic risk gate;
+1. protected phone gateway using exact request field `phone`;
+2. persistent `anti_fraud_operator_investigations` state;
+3. explicit operator-authorized 60-day enrichment without faking automatic risk gate;
 4. normal scoring;
 5. visibility even at automatic Risk 0;
-6. separate operator source/reason, e.g. `Авито`;
-7. no auto-block;
-8. tests and rollout.
+6. separate operator source/reason;
+7. immediate first-seen persistence for the existing 24-hour `Новый` rule;
+8. no auto-block;
+9. restart-safe worker and scheduler resume;
+10. CI + production API/UI/schema smoke.
+
+Production acceptance: revision `f98d10c327e14b6dd5a34a9117ce25310ed6180e`, immutable digest `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`, migrations 25, 13 PASS / 0 FAIL / 0 WARN, rollback not required.
 
 Hard evidence boundary:
 
@@ -141,7 +145,7 @@ Hard evidence boundary:
 - do not present it as if automatic telemetry discovered it;
 - automatic device/frequency/contact reasons remain separate.
 
-The current migration journal ends at `0023_anti_fraud_checkin_scout`; production migration count is 24. Inspect current main before creating the next migration, expected to be `0024_...` if nothing else has landed.
+The current migration journal includes `0024_anti_fraud_operator_investigation`; production migration count is **25**. Inspect current main before creating any next migration.
 
 See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for the full handoff.
 
