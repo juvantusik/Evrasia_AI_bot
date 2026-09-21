@@ -337,6 +337,6 @@ Confirmed production facts:
 - existing logout/revocation code can revoke pre-2FA sessions;
 - retained rollback backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/totp-login-step-v3-20260921-172331`.
 
-The immediate next step is **ordinary website login E2E with global OTP still OFF**. Only after normal login is confirmed unchanged should pilot-only profile enrollment UI + SMS ownership challenge be added for USER_ID `880339`.
+Ordinary website login E2E with global OTP still OFF is **PASSED**: the operator confirmed normal login with no OTP prompt. The immediate next step is pilot-only profile enrollment UI + SMS ownership challenge for USER_ID `880339`, while global OTP remains OFF.
 
 Critical invariant: direct PIN must require a session that actually passed TOTP; do not grant direct-PIN privilege merely because the account has active OTP.
