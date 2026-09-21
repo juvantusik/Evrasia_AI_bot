@@ -1,5 +1,38 @@
 # Server updates
 
+## Website TOTP 2FA — dormant login challenge (2026-09-21)
+
+Bitrix website host: `evrasia`.
+
+A dormant native-OTP second-step path was deployed into the current website sign-in while keeping the Bitrix OTP facility disabled globally.
+
+Production signin SHAs:
+
+- backend `local/components/eurasia/signin/class.php`: `06dcf40fcc5ab5b8ff5b77843bd02424f2136628bff8e2114152bb2a2555fb48`;
+- frontend JS `local/templates/eurasia/components/eurasia/signin/main/script.js`: `3f704994375adc0e074907effce43ef64a443c1a0e6708a780d84bd239cd9fc2`;
+- template `local/templates/eurasia/components/eurasia/signin/main/template.php`: `b8e65a204c69faa1e4c3ce84c6db047947c309e4742b3649eae351649a26eec4`.
+
+Post-write state:
+
+- `OTP_ENABLED=NO`;
+- `OTP_MANDATORY=NO`;
+- `OTP_TOTAL_ROWS=0`;
+- `PILOT_OTP_ROWS=0` for USER_ID `880339`;
+- no SMS send;
+- no session revoke;
+- no direct-PIN change;
+- rollback not required.
+
+Retained verified backup:
+
+`/home/site_evrasia/web/evrasia.spb.ru/backups/totp-login-step-v3-20260921-172331`
+
+Earlier temporary backup directories from the same rollout were renamed to neutral `totp-*` names; no legacy temporary continuation-code naming remains under the website backup directory.
+
+Next gate: ordinary website login E2E with global OTP still disabled.
+
+---
+
 > Current production operations note for Evrasia AI Bot.
 >
 > Last updated: **2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
