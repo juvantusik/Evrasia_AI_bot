@@ -58,21 +58,17 @@ The current UI/device-label cleanup is **DONE / PRODUCTION / OPERATOR ACCEPTED**
 
 Manual Anti-Fraud investigation by phone (PR #60) and its operator-visible evidence view (PR #62) are **DONE / PRODUCTION / VERIFIED**.
 
-Already completed for Step 2:
+Completed for Step 2:
 
-- Bitrix protected phone resolver: **DONE / PRODUCTION / VERIFIED**.
-
-Still pending in the bot:
-
-1. bot gateway for the protected Bitrix phone resolver;
-2. persistent PostgreSQL operator-investigation model;
-3. explicit operator-authorized 60-day loyalty/history enrichment without faking an automatic risk gate;
-4. normal Anti-Fraud scoring after enrichment;
-5. web UI action **«Добавить на проверку»**, phone-first;
-6. visible persistent operator reason/source, e.g. **Авито**, separated from automatic signals;
-7. tests;
-8. staged rollout and production verification;
-9. documentation update after implementation.
+1. Bitrix protected phone resolver — **DONE / PRODUCTION / VERIFIED**;
+2. bot gateway for the protected phone resolver — **DONE / PRODUCTION**;
+3. persistent PostgreSQL operator-investigation model — **DONE / PRODUCTION**;
+4. explicit operator-authorized 60-day loyalty/history enrichment without faking the automatic risk gate — **DONE / PRODUCTION**;
+5. normal Anti-Fraud scoring after enrichment — **DONE / PRODUCTION**;
+6. web UI action **«Добавить на проверку»**, phone-first — **DONE / PRODUCTION**;
+7. persistent operator source/reason separated from automatic evidence — **DONE / PRODUCTION**;
+8. operator-visible history / Device ID / linked USER_ID result layer — **DONE / PRODUCTION / VERIFIED** via PR #62;
+9. tests, rollout and production verification — **DONE**.
 
 Do **not** restart Check-in Scout Step 1 or the Bitrix resolver work. Those parts are already production-proven.
 
@@ -82,7 +78,7 @@ Issue tracking the manual-investigation requirement:
 
 ---
 
-## 2. Current bot production baseline — factual after PR #58
+## 2. Current bot production baseline — factual after PR #62
 
 Production host:
 
@@ -96,19 +92,15 @@ Production host:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted production application after PR #58:
+Accepted production application after PR #62:
 
-- revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
-- production migrations: **24**
+- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- production migrations: **25**
 - container state at acceptance: `running healthy`
-- PR #58 deployment: **7 PASS / 0 FAIL**
+- PR #62 acceptance: **15 PASS / 0 FAIL / 1 informational WARN**
 - rollback: not required.
-
-PR #58 deployment backup:
-
-`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
 
 Important: later documentation-only commits may advance GitHub `main` while production remains on the application revision above. Before any future production mutation, always read the actual runtime revision/image again.
 
