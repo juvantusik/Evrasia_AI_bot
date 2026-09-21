@@ -286,9 +286,10 @@ Current status on 2026-09-20:
 - PR #57 Trusted Device display: **DONE / DEPLOYED**;
 - PR #58 Russian device labels + Scout display wording: **DONE / DEPLOYED / OPERATOR ACCEPTED**;
 - Bitrix protected phone resolver for manual Anti-Fraud investigation: **DONE / PRODUCTION / VERIFIED**;
-- bot-side Step 2 manual investigation: **NOT YET IMPLEMENTED**.
+- PR #60 bot-side manual investigation by phone: **DONE / PRODUCTION / VERIFIED**;
+- PR #62 operator-visible 60-day history / Device ID / linked USER_ID results: **DONE / PRODUCTION / VERIFIED**.
 
-The next Anti-Fraud implementation should continue with the **bot side of “Добавить на проверку” by phone**:
+The current Anti-Fraud continuation starts from the accepted PR #62 state; do not re-implement **«Добавить на проверку»** or repeat already-completed rollout steps merely for reassurance:
 
 1. protected bot gateway to `/api/internal/anti-fraud/phone-resolve`;
 2. persistent operator-investigation table/state;
