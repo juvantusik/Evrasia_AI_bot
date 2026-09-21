@@ -220,7 +220,7 @@ Response contract:
 - ambiguous → 409 and no USER_ID selection;
 - resolver/candidate-limit problem → 503.
 
-The bot-side operator workflow **«Добавить на проверку»** is the next implementation step. It requires persistent operator-investigation state and an explicit operator-authorized 60-day history path. Do not fake the existing automatic `riskGateConfirmed` requirement.
+The bot-side operator workflow **«Добавить на проверку»** is production via PR #60. It uses persistent operator-investigation state and an explicit operator-authorized 60-day history path without faking the automatic `riskGateConfirmed` requirement. PR #62 adds the operator-visible result layer for that workflow.
 
 #### Trusted Device case-display semantics
 
@@ -297,26 +297,26 @@ PostgreSQL:
 - role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
 - retained test DB: `evrasia_ai_bot_antifraud_test`
-- production migrations: **24**
-- latest implemented migration tag in the current Anti-Fraud stream: `0023_anti_fraud_checkin_scout`.
+- production migrations: **25**
+- latest implemented migration tag in the current Anti-Fraud stream: `0024_anti_fraud_operator_investigation`.
 
 Legacy TEST container `evrasia-ai-bot-v17-test` is exited/archival. Do not restart it blindly.
 
 ## 6. Current production release identity
 
-Current accepted deployed application after PR #58 on 2026-09-20:
+Current accepted deployed application after PR #62 on 2026-09-20:
 
-- deployed revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
-- production migrations: **24**
-- app status after deployment: running / healthy
-- backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
-- deployment result: 7 PASS / 0 FAIL / rollback not required.
+- deployed revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable digest: `sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- production migrations: **25**
+- app status at acceptance: running / healthy
+- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`
+- PR #62 read-only acceptance: 15 PASS / 0 FAIL / 1 informational WARN.
 
-PR #58 was application/UI-only relative to the preceding production DB state; migration count remained 24.
+PR #62 added no migration and changed no scoring/grouping/blocking semantics. It exposed factual manual-investigation history metrics, Trusted Device prefix and linked USER_ID values in the operator UI.
 
-Two earlier PR #58 attempts failed safely before mutation because a temporary Compose file was staged outside the production Compose directory. The accepted deployment confirmed that relative-path Compose must be staged/validated in `/opt/evrasia-ai-bot/prod`.
+PR #58 remains a historical UI milestone and PR #60 remains the manual-investigation backend milestone; neither should be described as the current runtime baseline now that PR #62 is accepted.
 
 Later documentation-only commits may advance GitHub `main`; they do not by themselves change the deployed application identity above.
 
