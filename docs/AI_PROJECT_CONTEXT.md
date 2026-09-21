@@ -433,10 +433,8 @@ Authoritative continuation document:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Continuation keyword: **ПАНДА ДВА**.
-
 The workstream is read-only investigated and not implemented. It covers optional TOTP 2FA for guest accounts, SMS ownership confirmation before authenticator enrollment, pilot rollout for Bitrix USER_ID `880339`, session revocation after enrollment, and the planned direct bonus-PIN experience for a session that has actually passed the second factor.
 
 Confirmed production facts, file paths, table structures, SHA baselines, current Bitrix MFA state, current signin/PIN flows, security invariants and exact next steps are maintained in the dedicated checkpoint above.
 
-When the operator says **ПАНДА ДВА**, resume from that document and do not repeat the completed discovery audits.
+When the operator explicitly asks to continue the TOTP 2FA workstream, resume from that document and do not repeat completed discovery audits.
