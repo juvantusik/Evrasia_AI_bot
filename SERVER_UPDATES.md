@@ -66,10 +66,10 @@ A later docs-only GitHub commit may advance `main`; it does not by itself change
 - retained test DB: `evrasia_ai_bot_antifraud_test`
 - volume: `evrasia-postgres-prod-data`
 - network: `evrasia-prod-internal`
-- production migrations: **24**
-- latest relevant Anti-Fraud migration tag: `0023_anti_fraud_checkin_scout`
+- production migrations: **25**
+- latest relevant Anti-Fraud migration tag: `0024_anti_fraud_operator_investigation`
 
-Current Scout tables/state were introduced through PR #56. PR #57/#58 did not add migrations.
+Scout tables/state were introduced through PR #56 / migration `0023`; manual operator-investigation persistence was added by PR #60 / migration `0024`. PR #62 added no migration.
 
 ## 2026-09-19 → 2026-09-20 — Check-in Scout, phone resolver, Trusted Device display
 
