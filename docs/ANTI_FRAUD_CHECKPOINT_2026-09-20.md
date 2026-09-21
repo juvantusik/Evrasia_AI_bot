@@ -778,9 +778,7 @@ Bitrix/PHP can produce an error page while a shell/PHP command exits 0. Acceptan
 
 ## 15. TOTP 2FA workstream remains paused
 
-Do not resume TOTP work unless the operator explicitly writes:
-
-**ПАНДА ДВА**
+Do not resume TOTP work unless the operator explicitly asks to continue the TOTP 2FA workstream.
 
 Authoritative TOTP checkpoint:
 
