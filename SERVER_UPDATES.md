@@ -29,7 +29,7 @@ Retained verified backup:
 
 Earlier temporary backup directories from the same rollout were renamed to neutral `totp-*` names; no legacy temporary continuation-code naming remains under the website backup directory.
 
-Next gate: ordinary website login E2E with global OTP still disabled.
+Ordinary website login E2E with global OTP still disabled is **PASSED**: the operator confirmed normal login with no OTP prompt. Next gate: pilot-only profile enrollment UI + SMS ownership challenge for USER_ID `880339`, still with global OTP OFF.
 
 ---
 
