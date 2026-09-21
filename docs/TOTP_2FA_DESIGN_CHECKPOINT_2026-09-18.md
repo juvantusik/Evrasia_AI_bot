@@ -1,12 +1,12 @@
 # Evrasia — TOTP 2FA / protected-profile design checkpoint
 
-> Status: **PLANNED / INVESTIGATED / NOT IMPLEMENTED**
+> Status: **PARTIALLY IMPLEMENTED / DORMANT LOGIN CHALLENGE DEPLOYED / PILOT NOT ENROLLED**
 >
 > Date: **2026-09-18**
 >
 > Scope: Bitrix website personal account / sign-in / bonus PIN flow on production host `evrasia`.
 >
-> This document records the operator request, confirmed production structure, security invariants, source paths, current SHA baselines, and the exact continuation point. No 2FA production mutation had been performed at the time of this checkpoint.
+> This document records the operator request, confirmed production structure, security invariants, source paths, current SHA baselines, and the exact continuation point. On 2026-09-21 the dormant OTP-aware website login path was deployed, while global OTP, pilot enrollment, SMS ownership verification, TOTP secret/QR creation, session revocation, and direct-PIN behavior remain disabled/not implemented.
 
 ## 1. Operator request and business goal
 
@@ -324,31 +324,50 @@ A separate QR/TOTP dependency should not be introduced unless required by the ac
 
 ## 11. Current website sign-in flow
 
-Primary current class action:
+On 2026-09-21 the current AJAX sign-in was upgraded with a dormant native Bitrix OTP second-step path while global OTP remained disabled.
+
+Current production files:
 
 ```text
 /home/site_evrasia/web/evrasia.spb.ru/public_html/local/components/eurasia/signin/class.php
-SHA256=faa773dd38eccc86057cdb157d8d812a17c50ebc305c067f12fcd0a196255f68
-```
+SHA256=06dcf40fcc5ab5b8ff5b77843bd02424f2136628bff8e2114152bb2a2555fb48
 
-Current successful first-factor path:
-
-```text
-BX.ajax.runComponentAction('eurasia:signin', 'process', ...)
-    -> processAction()
-    -> CUser->Login($login, $password, 'Y', 'Y')
-    -> TrustedDeviceWebService::registerSuccessfulPasswordLogin(...)
-    -> frontend redirects to /account/
-```
-
-Frontend:
-
-```text
 /home/site_evrasia/web/evrasia.spb.ru/public_html/local/templates/eurasia/components/eurasia/signin/main/script.js
-SHA256=cb42522b82a5eeb528a5023e829f0ae46f32b3ac16156c7ee7bd7107ea86b7e7
+SHA256=3f704994375adc0e074907effce43ef64a443c1a0e6708a780d84bd239cd9fc2
+
+/home/site_evrasia/web/evrasia.spb.ru/public_html/local/templates/eurasia/components/eurasia/signin/main/template.php
+SHA256=b8e65a204c69faa1e4c3ce84c6db047947c309e4742b3649eae351649a26eec4
 ```
 
-Current JS redirects to `/account/` immediately on successful component action.
+Current behavior:
+
+```text
+eurasia:signin/process
+    -> CUser->Login(...)
+    -> normal user: complete login and Trusted Device registration
+    -> OTP-required user: return otpRequired=true
+       -> hidden 6-digit OTP form becomes visible
+       -> eurasia:signin/otp
+       -> CUser->LoginByOtp(...)
+       -> complete login and Trusted Device registration
+```
+
+At deployment verification:
+
+```text
+OTP_ENABLED=NO
+OTP_MANDATORY=NO
+OTP_TOTAL_ROWS=0
+PILOT_OTP_ROWS=0
+```
+
+Therefore the new OTP challenge path is present in production but dormant. It does not yet affect ordinary login and does not itself enable 2FA.
+
+Verified backup retained under the neutral name:
+
+```text
+/home/site_evrasia/web/evrasia.spb.ru/backups/totp-login-step-v3-20260921-172331
+```
 
 There is also the older/general component:
 
@@ -509,9 +528,17 @@ The implementation must preserve all of these:
 13. Disable/reset/recovery flows must not allow a one-SMS shortcut that defeats 2FA.
 14. If 2FA is reset/recovered later, consider a cooling-off period before direct bonus-PIN privilege is restored; this remains a design item, not yet implemented.
 
-## 17. What has NOT been implemented
+## 17. Current implementation boundary
 
-At checkpoint time:
+Implemented in production on 2026-09-21:
+
+- dormant OTP-aware AJAX login backend;
+- hidden 6-digit OTP challenge UI;
+- native `CUser->LoginByOtp(...)` continuation path;
+- Trusted Device registration moved to complete-authentication semantics for the OTP branch;
+- no change to global OTP state or native OTP storage.
+
+Still **not** implemented/enabled:
 
 - no Bitrix OTP global option was changed;
 - no row was created/changed in `b_sec_user` for USER_ID 880339;
@@ -519,50 +546,32 @@ At checkpoint time:
 - no QR was generated for the pilot account;
 - no SMS enrollment endpoint was created;
 - no profile 2FA block was deployed;
-- no login JS/backend was changed;
 - no direct-PIN branch was added;
-- no session marker for "this session passed TOTP" was added;
+- no durable session marker for "this session passed TOTP" was added;
 - no recovery/disable flow was implemented;
 - no rollout beyond USER_ID 880339 exists.
 
-All 2FA work so far is **read-only investigation and design**.
+The next gate is to verify ordinary login end-to-end while `OTP_ENABLED=NO` before any pilot enrollment work.
 
 ## 18. Exact continuation point — TOTP 2FA workstream
 
-When the operator explicitly asks to continue the TOTP 2FA workstream, resume from here without repeating the completed audits.
+When the operator explicitly asks to continue the TOTP 2FA workstream, resume from here without repeating the completed audits or dormant-login deployment.
 
-The next step is the already planned final **READ_ONLY pre-write audit**, limited to:
+Current production gate:
 
-1. count rows in `b_sec_user`;
-2. identify whether any active OTP users already exist;
-3. inspect exact Bitrix global OTP option names/current values;
-4. prove optional/mandatory behavior and keep mandatory OFF;
-5. inspect native setup call sites for the exact sequence around:
-   - `regenerate()`
-   - `syncParameters()`
-   - `save()/activate()`;
-6. confirm Bitrix login event wiring for `verifyUser()`;
-7. confirm no existing production MFA user would be affected unexpectedly.
+1. global OTP remains `OFF`;
+2. mandatory OTP remains `OFF`;
+3. `b_sec_user` remains empty;
+4. USER_ID `880339` has no OTP row/secret;
+5. dormant OTP-aware login code is deployed.
 
-If that confirms the expected state, proceed to the first guarded WRITE:
+Next step:
 
-```text
-optional Bitrix OTP enabled globally
-        |
-        +-> only USER_ID 880339 gets pilot enrollment UI
-        |
-        +-> SMS ownership verification
-        |
-        +-> QR / provisioning URI
-        |
-        +-> TOTP verification
-        |
-        +-> activate native Bitrix MFA for 880339
-        |
-        +-> revoke pre-2FA sessions
-        |
-        +-> verify next website login requires second factor
-```
+1. verify an ordinary current website login end-to-end with `OTP_ENABLED=NO`; expected behavior is unchanged login with no OTP prompt;
+2. only after that passes, add the pilot-only **Безопасность аккаунта** enrollment UI and SMS ownership challenge for USER_ID `880339`;
+3. keep global OTP OFF while building/testing enrollment UI;
+4. after SMS ownership verification, generate/present provisioning QR, verify TOTP, activate native Bitrix MFA, revoke pre-2FA sessions, and then enable native global OTP in optional/non-mandatory mode under guards;
+5. verify the next website login requires the second factor for the pilot while ordinary accounts remain unchanged.
 
 Only after enrollment/login/session E2E acceptance should the direct bonus-PIN change be enabled for the pilot.
 
