@@ -427,14 +427,14 @@ When a decision changes, record **Было → Стало → Причина** a
 
 ---
 
-## 17. TOTP 2FA / protected-profile workstream — PLANNED
+## 17. TOTP 2FA / protected-profile workstream — PARTIALLY IMPLEMENTED
 
 Authoritative continuation document:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-The workstream is read-only investigated and not implemented. It covers optional TOTP 2FA for guest accounts, SMS ownership confirmation before authenticator enrollment, pilot rollout for Bitrix USER_ID `880339`, session revocation after enrollment, and the planned direct bonus-PIN experience for a session that has actually passed the second factor.
+The workstream has completed read-only discovery and now has a dormant OTP-aware website login challenge deployed in production. Global OTP is still OFF, mandatory OTP is OFF, `b_sec_user` remains empty, and USER_ID `880339` is not enrolled. The remaining work covers SMS ownership confirmation before authenticator enrollment, pilot activation, session revocation, login E2E, and later direct bonus-PIN behavior for a session that actually passed the second factor.
 
-Confirmed production facts, file paths, table structures, SHA baselines, current Bitrix MFA state, current signin/PIN flows, security invariants and exact next steps are maintained in the dedicated checkpoint above.
+Current production signin SHAs after the dormant-login deployment are `06dcf40fcc5ab5b8ff5b77843bd02424f2136628bff8e2114152bb2a2555fb48` (backend), `3f704994375adc0e074907effce43ef64a443c1a0e6708a780d84bd239cd9fc2` (JS), and `b8e65a204c69faa1e4c3ce84c6db047947c309e4742b3649eae351649a26eec4` (template). The exact next gate is ordinary-login E2E with OTP still disabled. Full facts and security invariants remain in the dedicated checkpoint above.
 
 When the operator explicitly asks to continue the TOTP 2FA workstream, resume from that document and do not repeat completed discovery audits.
