@@ -4,8 +4,8 @@
 >
 > **Last updated:** 2026-09-20
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current accepted deployed app revision:** `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-> **Current production milestone:** Check-in Scout is production-verified; Trusted Device case display was corrected through PR #58; protected Bitrix phone resolver for manual Anti-Fraud investigation is production; bot-side Step 2 is next.
+> **Current accepted deployed app revision:** `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+> **Current production milestone:** PR #60 manual investigation by phone is production; PR #62 operator-visible 60-day history / Device ID / linked USER_ID results are production-verified.
 
 ---
 
@@ -47,12 +47,12 @@ Host/runtime:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted application baseline after PR #58:
+Accepted application baseline after PR #62:
 
-- revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
-- migrations: **24**
+- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- migrations: **25**
 - current confirmed bonus threshold: `40000`
 - accepted runtime state: `running healthy`
 
@@ -110,6 +110,8 @@ The earlier PR #32–#45 lineage below is retained as history. Current continuat
 - PR #56 — corrected Check-in Scout; merged/deployed/verified; migration `0023_anti_fraud_checkin_scout`;
 - PR #57 — exposes all case Trusted Device identifiers while keeping shared-device grouping semantics separate;
 - PR #58 — Russian device labels + Scout display wording; merged/deployed/operator accepted at revision `700422b3c9004c2d92092a166e50ac5e8e8a6d33`.
+- PR #60 — manual operator investigation by phone; merged/deployed/verified with migration `0024_anti_fraud_operator_investigation`.
+- PR #62 — operator-visible manual-investigation evidence: exact 60-day window, visit metrics/day summary, Trusted Device prefix and linked USER_ID display; merged/deployed/verified at revision `dfde4c39b3821f6946d3be05448d11aea1fcc441`.
 
 Detailed facts and the exact next step are in `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
 

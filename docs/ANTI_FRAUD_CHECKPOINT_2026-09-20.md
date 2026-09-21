@@ -6,7 +6,49 @@
 >
 > Source priority remains: **actual production → current GitHub → staging/test → current docs → older discussion**.
 >
-> This checkpoint records the factual state after PR #58 was merged, deployed and operator-accepted on 2026-09-20.
+> This checkpoint now records the factual state through PR #62 production acceptance on 2026-09-20.
+
+---
+
+## 0. Latest accepted state — PR #62
+
+PR #62 **Anti-Fraud: show manual investigation history and linked IDs** is **MERGED / PRODUCTION / VERIFIED**.
+
+Accepted production runtime:
+
+- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`;
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`;
+- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`;
+- migrations: **25**;
+- application: healthy, restart count 0 during acceptance.
+
+PR #62 does not change scoring, grouping, blocking or schema. It only exposes factual manual-investigation evidence already persisted by PR #60 and existing Trusted Device / identity-link data.
+
+Operator-visible manual-investigation card now includes:
+
+- human-readable status such as **«Проверка завершена»**;
+- exact latest 60-day manual-investigation window;
+- physical visits / visit days / restaurants;
+- first and last physical event;
+- expandable daily visit summary;
+- Trusted Device prefix (`16 chars + …`) when present;
+- linked Bitrix USER_ID values when present;
+- explicit **«Risk по категориям»** caption above the existing five risk scores.
+
+Production acceptance fixture USER_ID `1969724` returned:
+
+- `ready`;
+- **10** physical visits;
+- **9** visit days;
+- **8** restaurants;
+- **9** daily rows;
+- one Trusted Device: `3578df691292f7bc…`;
+- zero linked accounts at that moment.
+
+Read-only acceptance result: **15 PASS / 0 FAIL / 1 WARN**. The sole WARN was the factual absence of linked accounts for that account.
+
+The guarded deployment attempt discovered production was already on the exact target image and stopped before mutation. Do not attribute that prior cutover to a person/process without separate evidence.
 
 ---
 
@@ -14,7 +56,7 @@
 
 The current UI/device-label cleanup is **DONE / PRODUCTION / OPERATOR ACCEPTED**.
 
-The next work item is **Step 2: manual Anti-Fraud investigation by phone**.
+Manual Anti-Fraud investigation by phone (PR #60) and its operator-visible evidence view (PR #62) are **DONE / PRODUCTION / VERIFIED**.
 
 Already completed for Step 2:
 

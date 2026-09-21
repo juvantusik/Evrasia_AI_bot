@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-20** after PR #58 production acceptance, Check-in Scout production verification and Bitrix phone-resolver completion for Anti-Fraud Step 2.
+> Updated: **2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -13,15 +13,15 @@ Host: `eur-bot-01` (`192.168.103.200`).
 Current accepted bot application:
 
 - repo: `juvantusik/Evrasia_AI_bot`
-- production revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
+- production revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
 - Anti-Fraud threshold: 40000
 - scheduler: enabled, 15 min
-- production migrations: **24**
+- production migrations: **25**
 - app container: **running healthy** at acceptance.
 
-PR #58 is **PRODUCTION / OPERATOR ACCEPTED**.
+PR #62 is **PRODUCTION / VERIFIED**. PR #58 device-label semantics remain valid.
 
 PR #58 UI semantics:
 
@@ -57,6 +57,24 @@ Compose staging invariant confirmed by PR #58:
 Full current Anti-Fraud continuation:
 
 `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`
+
+## 1A. PR #62 manual-investigation evidence
+
+PR #62 adds no migration and no new risk/grouping/blocking rule. It exposes existing investigation evidence in the case UI.
+
+Production acceptance on USER_ID `1969724` proved:
+
+- latest investigation status `ready`;
+- exact manual 60-day window exposed by API;
+- 10 physical visits / 9 visit days / 8 restaurants / 9 daily rows;
+- one Trusted Device available for display: `3578df691292f7bc…`;
+- zero linked accounts at that moment;
+- deployed frontend contains the new labels;
+- 15 PASS / 0 FAIL / 1 informational WARN.
+
+The warning means only “no linked accounts currently exist for this account”; it is not an error.
+
+---
 
 ## 2. Anti-Fraud invariants
 
