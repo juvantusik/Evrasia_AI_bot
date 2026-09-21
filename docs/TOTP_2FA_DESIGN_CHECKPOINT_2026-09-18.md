@@ -551,7 +551,7 @@ Still **not** implemented/enabled:
 - no recovery/disable flow was implemented;
 - no rollout beyond USER_ID 880339 exists.
 
-The next gate is to verify ordinary login end-to-end while `OTP_ENABLED=NO` before any pilot enrollment work.
+Ordinary website login was then verified end-to-end by the operator with `OTP_ENABLED=NO`: normal login completed successfully with no OTP prompt. This closes the dormant-login compatibility gate before pilot enrollment work.
 
 ## 18. Exact continuation point — TOTP 2FA workstream
 
@@ -567,8 +567,8 @@ Current production gate:
 
 Next step:
 
-1. verify an ordinary current website login end-to-end with `OTP_ENABLED=NO`; expected behavior is unchanged login with no OTP prompt;
-2. only after that passes, add the pilot-only **Безопасность аккаунта** enrollment UI and SMS ownership challenge for USER_ID `880339`;
+1. ordinary current website login end-to-end with `OTP_ENABLED=NO` is **PASSED**: the operator confirmed normal login with no OTP prompt;
+2. add the pilot-only **Безопасность аккаунта** enrollment UI and SMS ownership challenge for USER_ID `880339`;
 3. keep global OTP OFF while building/testing enrollment UI;
 4. after SMS ownership verification, generate/present provisioning QR, verify TOTP, activate native Bitrix MFA, revoke pre-2FA sessions, and then enable native global OTP in optional/non-mandatory mode under guards;
 5. verify the next website login requires the second factor for the pilot while ordinary accounts remain unchanged.
