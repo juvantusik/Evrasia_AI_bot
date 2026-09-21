@@ -4,8 +4,6 @@
 >
 > Date: **2026-09-18**
 >
-> Continuation keyword: **ПАНДА ДВА**
->
 > Scope: Bitrix website personal account / sign-in / bonus PIN flow on production host `evrasia`.
 >
 > This document records the operator request, confirmed production structure, security invariants, source paths, current SHA baselines, and the exact continuation point. No 2FA production mutation had been performed at the time of this checkpoint.
@@ -529,9 +527,9 @@ At checkpoint time:
 
 All 2FA work so far is **read-only investigation and design**.
 
-## 18. Exact continuation point — keyword "ПАНДА ДВА"
+## 18. Exact continuation point — TOTP 2FA workstream
 
-When the operator writes **ПАНДА ДВА**, resume from here without repeating the completed audits.
+When the operator explicitly asks to continue the TOTP 2FA workstream, resume from here without repeating the completed audits.
 
 The next step is the already planned final **READ_ONLY pre-write audit**, limited to:
 
