@@ -393,12 +393,21 @@ Security invariants:
 - after 2FA activation, pre-2FA sessions must be revoked;
 - users without 2FA must continue to log in and receive PINs exactly as before;
 - no custom TOTP store should be created unless native Bitrix MFA proves unsuitable;
-- no 2FA production mutation has happened yet.
+- dormant OTP-aware website login code was deployed on 2026-09-21; global OTP, pilot enrollment, native OTP storage, SMS ownership verification and direct-PIN behavior remain unchanged/off.
+
+Current production state after 2026-09-21 dormant-login deployment:
+
+- signin backend SHA: `06dcf40fcc5ab5b8ff5b77843bd02424f2136628bff8e2114152bb2a2555fb48`;
+- signin JS SHA: `3f704994375adc0e074907effce43ef64a443c1a0e6708a780d84bd239cd9fc2`;
+- signin template SHA: `b8e65a204c69faa1e4c3ce84c6db047947c309e4742b3649eae351649a26eec4`;
+- `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `OTP_TOTAL_ROWS=0`, `PILOT_OTP_ROWS=0`;
+- retained rollback backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/totp-login-step-v3-20260921-172331`.
 
 Exact continuation:
 
-1. run the final pre-write audit described in `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` to inspect existing `b_sec_user` population, exact Bitrix OTP options, optional/mandatory behavior, native setup call sequence, and login event wiring;
-2. if safe, guarded pilot WRITE for USER_ID 880339 only: optional native Bitrix OTP + profile UI + SMS ownership check + QR + TOTP verify/activate + session revoke + login E2E;
-3. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
+1. verify ordinary website login end-to-end while global OTP remains OFF;
+2. if unchanged, add pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339, still without enabling global OTP;
+3. then perform guarded QR/TOTP activation + session revocation + optional/non-mandatory global OTP enablement and login E2E;
+4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
