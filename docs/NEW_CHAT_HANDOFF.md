@@ -328,13 +328,15 @@ The business request is:
 Confirmed production facts:
 
 - native `Bitrix\Security\Mfa\Otp` exists;
-- global `OTP_ENABLED=NO` at the checkpoint;
-- pilot OTP state is clean/uninitialized/unactivated;
-- native tables are `b_sec_user` and `b_sec_recovery_codes`;
-- current web login uses AJAX `eurasia:signin/process` -> `CUser->Login(...)`;
-- current web bonus PIN endpoint is `/local/php_interface/pincode.php`, which gets the RestIS PIN then delivers through VK/SMS;
-- existing logout/revocation code can revoke pre-2FA sessions.
+- dormant OTP-aware AJAX login code is deployed;
+- signin backend SHA: `06dcf40fcc5ab5b8ff5b77843bd02424f2136628bff8e2114152bb2a2555fb48`;
+- signin JS SHA: `3f704994375adc0e074907effce43ef64a443c1a0e6708a780d84bd239cd9fc2`;
+- signin template SHA: `b8e65a204c69faa1e4c3ce84c6db047947c309e4742b3649eae351649a26eec4`;
+- `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `b_sec_user` empty, pilot USER_ID `880339` has no OTP row;
+- current web bonus PIN endpoint remains `/local/php_interface/pincode.php` and still delivers through VK/SMS;
+- existing logout/revocation code can revoke pre-2FA sessions;
+- retained rollback backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/totp-login-step-v3-20260921-172331`.
 
-The immediate next step is **not** a blind WRITE. First run the final narrow pre-write audit from the dedicated checkpoint: current `b_sec_user` population, exact OTP option values, optional/mandatory mode, native setup sequence and login event wiring. If safe, proceed with the guarded pilot only.
+The immediate next step is **ordinary website login E2E with global OTP still OFF**. Only after normal login is confirmed unchanged should pilot-only profile enrollment UI + SMS ownership challenge be added for USER_ID `880339`.
 
 Critical invariant: direct PIN must require a session that actually passed TOTP; do not grant direct-PIN privilege merely because the account has active OTP.
