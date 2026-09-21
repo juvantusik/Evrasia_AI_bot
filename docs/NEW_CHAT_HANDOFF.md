@@ -308,9 +308,9 @@ If the operator explicitly asks to continue the TOTP 2FA workstream, switch to t
 
 ---
 
-## 10. Keyword continuation — ПАНДА ДВА
+## 10. TOTP 2FA continuation
 
-If the operator writes **ПАНДА ДВА**, resume the TOTP 2FA / protected-profile workstream from:
+If the operator explicitly asks to continue the TOTP 2FA / protected-profile workstream, resume from:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
