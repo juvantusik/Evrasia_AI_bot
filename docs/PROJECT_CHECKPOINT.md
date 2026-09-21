@@ -364,8 +364,6 @@ Dedicated authoritative checkpoint:
 
 Continuation keyword:
 
-`ПАНДА ДВА`
-
 Operator request:
 
 - optional TOTP 2FA for guest profiles using Яндекс Ключ / Google Authenticator / compatible TOTP apps;
@@ -403,4 +401,4 @@ Exact continuation:
 2. if safe, guarded pilot WRITE for USER_ID 880339 only: optional native Bitrix OTP + profile UI + SMS ownership check + QR + TOTP verify/activate + session revoke + login E2E;
 3. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
-When the operator says **ПАНДА ДВА**, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
+When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
