@@ -411,3 +411,5 @@ Exact continuation:
 4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
+
+- Direct-PIN pre-write audit: **PASS**. Live PIN endpoint remains SHA `32463182...`; active account.pincode template/JS are `5214db00...` / `8c240106...`. Direct disclosure will be pilot-only and server-authoritative: canonical `evrasia.rest`, POST+valid sessid, active initialized TOTP, matching current auth context, native `otpUsed=true`; otherwise preserve legacy VK/SMS. Mobile V4 unchanged.
