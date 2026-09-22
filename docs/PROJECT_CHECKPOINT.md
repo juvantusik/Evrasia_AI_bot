@@ -406,8 +406,8 @@ Current production state after 2026-09-21 dormant-login deployment:
 Exact continuation:
 
 1. ordinary website login end-to-end while global OTP remained OFF is **PASSED**; the operator confirmed normal login with no OTP prompt;
-2. add pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339, still without enabling global OTP;
-3. then perform guarded QR/TOTP activation + session revocation + optional/non-mandatory global OTP enablement and login E2E;
+2. pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339 are deployed, and the compact combined security/logout UI is visually accepted; global OTP is still OFF;
+3. perform the real SMS ownership test for the pilot, then guarded QR/TOTP activation + session revocation + optional/non-mandatory global OTP enablement and login E2E;
 4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
