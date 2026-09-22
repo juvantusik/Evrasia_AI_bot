@@ -601,3 +601,6 @@ Before any WRITE:
 - never print secret values.
 
 This document is a continuation checkpoint, not proof that 2FA is deployed.
+
+
+Direct-PIN pre-write audit is now **PASS** (`PASS_COUNT=9`, `FAIL_COUNT=0`, `WARN_COUNT=0`). Live production baseline: `/local/php_interface/pincode.php` `32463182fde298777c94310e79fb166d382b8d8e91a1611fe225c0b7f55a3ad5`, account.pincode component `972935afca826f7bc18ebc392904bf6e83dd1c8373b91d43ffe234d72565ec65`, active account.pincode template `5214db0008cff1e31d27b11c4184a17565e4b343f6d033cf04c0337faafedd96`, active account.pincode JS `8c240106d42afe20cfb4693e50de369efbdd9663531c4b4f0927f505ba81f1fc`. The endpoint authenticates through `CurrentUser::get()->getId()`, calls `CRestis::pincode()` once, rate-limits, then delivers through VK/SMS; browser currently never receives the PIN. The old CSRF check is commented out although frontend already sends `sessid`. Pilot direct-PIN patch must remain server-authoritative, pilot-only, canonical-host only, require active initialized TOTP + current native context user match + `isOtpUsed()=true`, require POST+valid Bitrix sessid for direct disclosure, preserve the existing rate limiter, and leave all non-eligible/non-pilot VK/SMS behavior unchanged. Mobile V4 remains out of scope.
