@@ -1,5 +1,28 @@
 # Server updates
 
+## Website TOTP 2FA — pilot SMS ownership UI (2026-09-22)
+
+Bitrix website host: `evrasia`.
+
+Pilot-only enrollment UI and SMS ownership backend were deployed for USER_ID `880339` while global OTP remained disabled.
+
+Verified state after deployment:
+
+- `OTP_ENABLED=NO`;
+- `OTP_MANDATORY=NO`;
+- `OTP_TOTAL_ROWS=0`;
+- `PILOT_OTP_ROWS=0`;
+- no TOTP secret generated;
+- no QR generated;
+- no session revocation;
+- no direct-PIN change.
+
+The first visual draft was rejected because it inherited the generic `.name_block` two-column layout and oversized button behavior. A scoped UI fix then combined the 2FA controls and **Выйти со всех устройств** into one compact **Безопасность аккаунта** card. The operator visually accepted the corrected layout on 2026-09-22.
+
+Next gate: real SMS ownership test for USER_ID `880339`. Do not generate/present a TOTP secret/QR until SMS ownership succeeds.
+
+---
+
 ## Website TOTP 2FA — dormant login challenge (2026-09-21)
 
 Bitrix website host: `evrasia`.
