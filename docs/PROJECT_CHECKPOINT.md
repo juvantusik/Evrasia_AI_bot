@@ -407,7 +407,7 @@ Exact continuation:
 
 1. ordinary website login end-to-end while global OTP remained OFF is **PASSED**; the operator confirmed normal login with no OTP prompt;
 2. pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339 are deployed, and the compact combined security/logout UI is visually accepted; global OTP is still OFF;
-3. real SMS ownership, QR/TOTP enrollment, and enforcement enablement for USER_ID 880339 are **PASSED**. Pre-2FA sessions/tokens were revoked, mobile revocation marker verified, and global OTP is now ON with mandatory OFF (`OTP_ENABLED=YES`, `OTP_MANDATORY=NO`). The pilot TOTP row remains active/initialized and isolated; source SHAs are unchanged. Next: password→TOTP login E2E from a fresh session, then verify native OTP-used session proof before any direct-PIN work;
+3. real SMS ownership, QR/TOTP enrollment, enforcement enablement, and password→TOTP login E2E for USER_ID 880339 are **PASSED**. The fresh login correctly requested and accepted the authenticator code. Global OTP is ON with mandatory OFF. Remaining immediate bug: the account security card still shows `Не подключена` / connect CTA despite active TOTP; fix UI state wiring without changing OTP/DB/auth. After that, verify native OTP-used session proof before any direct-PIN work;
 4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
