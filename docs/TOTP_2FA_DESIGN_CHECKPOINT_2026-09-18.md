@@ -569,7 +569,7 @@ Next step:
 
 1. ordinary current website login end-to-end with `OTP_ENABLED=NO` is **PASSED**: the operator confirmed normal login with no OTP prompt;
 2. pilot-only **Безопасность аккаунта** enrollment UI and SMS ownership challenge for USER_ID `880339` are deployed; the compact combined security/logout layout is visually **ACCEPTED** by the operator;
-3. global OTP remains OFF while the SMS ownership step is tested;
+3. global OTP remains OFF while the SMS ownership step is tested; the first runtime click exposed `Could not build component instance 'eurasia:totp.enrollment'`, traced to deployment metadata (`700/600 root:root`) on the new component; permissions were aligned to the working Bitrix component (`755/644 site_evrasia:site_evrasia`) without changing component content;
 4. after SMS ownership verification, generate/present provisioning QR, verify TOTP, activate native Bitrix MFA, revoke pre-2FA sessions, and then enable native global OTP in optional/non-mandatory mode under guards;
 5. verify the next website login requires the second factor for the pilot while ordinary accounts remain unchanged.
 
