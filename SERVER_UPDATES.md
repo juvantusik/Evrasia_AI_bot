@@ -25,7 +25,9 @@ The real SMS ownership test for USER_ID `880339` then **PASSED**: the SMS was re
 
 A following read-only audit confirmed native Bitrix enrollment semantics: `security.user.otp.init` generates the secret/provision URI in memory with `regenerate()`, returns `SECRET` / `PROVISION_URI` to the browser, and the browser posts the same secret back with the authenticator code; server confirmation uses `regenerate($binarySecret)->syncParameters(...)->save()`. There is no native pending-secret DB row. `Otp::getDeferredParams()` is public static, and `CUser::LoginByOtp()` uses it before setting `Authentication\Context::setOtpUsed(true)`.
 
-Next gate: inspect/reuse the exact native QR/frontend rendering contract, then implement the pilot QR/TOTP confirmation step behind the completed SMS ownership gate.
+A further read-only QR/frontend audit also **PASSED** (`PASS_COUNT=7`, `FAIL_COUNT=0`, `WARN_COUNT=0`). Native Bitrix loads the `qrcode` UI extension and renders `PROVISION_URI` with `new QRCode(...)` at 164x164 and error-correction level H. The native browser flow retains the generated secret in memory and posts it back with the authenticator code; TOTP requires only one code. Current pilot state remained `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `PILOT_OTP_ROWS=0`, `CURRENT_OTP_INITIALIZED=NO`, `CURRENT_OTP_ACTIVATED=NO`.
+
+Next gate: deploy the pilot QR/TOTP confirmation step behind the already-completed SMS session gate. Do not enable global OTP or revoke sessions until the newly-created pilot OTP row has been verified.
 
 ---
 
