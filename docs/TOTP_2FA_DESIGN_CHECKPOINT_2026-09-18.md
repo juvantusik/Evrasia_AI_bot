@@ -544,8 +544,8 @@ Still **not** implemented/enabled:
 - no row was created/changed in `b_sec_user` for USER_ID 880339;
 - no TOTP secret was generated;
 - no QR was generated for the pilot account;
-- no SMS enrollment endpoint was created;
-- no profile 2FA block was deployed;
+- pilot-only SMS ownership endpoint is deployed for USER_ID `880339`;
+- pilot-only profile block **Безопасность аккаунта** is deployed and visually accepted by the operator;
 - no direct-PIN branch was added;
 - no durable session marker for "this session passed TOTP" was added;
 - no recovery/disable flow was implemented;
@@ -568,8 +568,8 @@ Current production gate:
 Next step:
 
 1. ordinary current website login end-to-end with `OTP_ENABLED=NO` is **PASSED**: the operator confirmed normal login with no OTP prompt;
-2. add the pilot-only **Безопасность аккаунта** enrollment UI and SMS ownership challenge for USER_ID `880339`;
-3. keep global OTP OFF while building/testing enrollment UI;
+2. pilot-only **Безопасность аккаунта** enrollment UI and SMS ownership challenge for USER_ID `880339` are deployed; the compact combined security/logout layout is visually **ACCEPTED** by the operator;
+3. global OTP remains OFF while the SMS ownership step is tested;
 4. after SMS ownership verification, generate/present provisioning QR, verify TOTP, activate native Bitrix MFA, revoke pre-2FA sessions, and then enable native global OTP in optional/non-mandatory mode under guards;
 5. verify the next website login requires the second factor for the pilot while ordinary accounts remain unchanged.
 
