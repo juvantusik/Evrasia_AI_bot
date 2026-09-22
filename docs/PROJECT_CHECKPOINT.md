@@ -407,7 +407,7 @@ Exact continuation:
 
 1. ordinary website login end-to-end while global OTP remained OFF is **PASSED**; the operator confirmed normal login with no OTP prompt;
 2. pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339 are deployed, and the compact combined security/logout UI is visually accepted; global OTP is still OFF;
-3. real SMS ownership test for USER_ID 880339 is **PASSED**; the pilot QR/TOTP step is deployed using native Bitrix `qrcode`/`QRCode` and `regenerate(...)->syncParameters(...)->save()`. Deployment left `PILOT_OTP_ROWS=0`, `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`. Current production SHAs: template `222b3c19...`, JS `352447d4...`, enrollment component `4a1bfbd2...`. Next perform the browser QR scan + TOTP confirmation, then verify the resulting OTP row before separate global OTP enablement/session revocation/login E2E;
+3. real SMS ownership and QR/TOTP enrollment for USER_ID 880339 are **PASSED**. Read-only verification confirms one isolated active/initialized TOTP row for the pilot, no non-pilot OTP rows, no recovery codes, and global OTP still OFF (`OTP_ENABLED=NO`, `OTP_MANDATORY=NO`). Current production SHAs: template `222b3c19...`, JS `352447d4...`, enrollment component `4a1bfbd2...`. Next: guarded optional global OTP enablement + pilot session revocation, then password→TOTP login E2E before any direct-PIN work;
 4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
