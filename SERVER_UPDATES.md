@@ -19,7 +19,9 @@ Verified state after deployment:
 
 The first visual draft was rejected because it inherited the generic `.name_block` two-column layout and oversized button behavior. A scoped UI fix then combined the 2FA controls and **Выйти со всех устройств** into one compact **Безопасность аккаунта** card. The operator visually accepted the corrected layout on 2026-09-22.
 
-Next gate: real SMS ownership test for USER_ID `880339`. Do not generate/present a TOTP secret/QR until SMS ownership succeeds.
+The first real click reached the Bitrix AJAX layer but failed with `Could not build component instance 'eurasia:totp.enrollment'`. Root cause was confirmed as filesystem metadata from the guarded deploy: the new component directory/file were `700/600 root:root`, while the working Bitrix component baseline is `755/644 site_evrasia:site_evrasia`; the production PHP-FPM pool runs as `site_evrasia`. Metadata was aligned to the working component, content SHA remained unchanged, no service restart was required, and no SMS/OTP/DB/session write occurred during the fix.
+
+Next gate: retry the real SMS ownership test for USER_ID `880339`. Do not generate/present a TOTP secret/QR until SMS ownership succeeds.
 
 ---
 
