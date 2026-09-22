@@ -407,7 +407,7 @@ Exact continuation:
 
 1. ordinary website login end-to-end while global OTP remained OFF is **PASSED**; the operator confirmed normal login with no OTP prompt;
 2. pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339 are deployed, and the compact combined security/logout UI is visually accepted; global OTP is still OFF;
-3. real SMS ownership and QR/TOTP enrollment for USER_ID 880339 are **PASSED**. Read-only verification confirms one isolated active/initialized TOTP row for the pilot, no non-pilot OTP rows, no recovery codes, and global OTP still OFF (`OTP_ENABLED=NO`, `OTP_MANDATORY=NO`). Current production SHAs: template `222b3c19...`, JS `352447d4...`, enrollment component `4a1bfbd2...`. Next: guarded optional global OTP enablement + pilot session revocation, then password→TOTP login E2E before any direct-PIN work;
+3. real SMS ownership, QR/TOTP enrollment, and enforcement enablement for USER_ID 880339 are **PASSED**. Pre-2FA sessions/tokens were revoked, mobile revocation marker verified, and global OTP is now ON with mandatory OFF (`OTP_ENABLED=YES`, `OTP_MANDATORY=NO`). The pilot TOTP row remains active/initialized and isolated; source SHAs are unchanged. Next: password→TOTP login E2E from a fresh session, then verify native OTP-used session proof before any direct-PIN work;
 4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
 
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
