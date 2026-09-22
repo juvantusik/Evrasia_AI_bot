@@ -35,7 +35,7 @@ A final read-only enforcement preflight **PASSED** (`PASS_COUNT=7`, `FAIL_COUNT=
 
 The guarded enforcement write then **PASSED** (`PASS_COUNT=6`, `FAIL_COUNT=0`, `WARN_COUNT=0`). For USER_ID `880339`, Bitrix logout action was inserted, pilot `jwt_tokens`/`access_token` rows were verified at 0, Redis mobile revocation succeeded and the revocation marker exists with positive TTL. Only after revocation verification, native security options were set to `otp_enabled=Y` and `otp_mandatory_using=N`; effective state is global OTP ON / mandatory OFF. The pilot OTP row remained one active initialized TOTP row, no non-pilot OTP rows appeared, and all accepted source SHAs remained unchanged.
 
-Next gate: fresh password→TOTP login E2E. Direct-PIN flow remains unchanged until the resulting authenticated session is proven to have passed TOTP.
+Fresh password→TOTP login E2E for USER_ID `880339` then **PASSED**: the signin flow requested the 6-digit authenticator code, accepted it, and opened `/account/`. The account security card, however, still renders `Не подключена` and `ПОДКЛЮЧИТЬ 2FA`; this is now isolated as a UI state-wiring bug because the server-side TOTP row and enforced login are already proven. Next: inspect/fix only the account card state rendering, then verify native current-session OTP-used proof before direct-PIN work.
 
 ---
 
