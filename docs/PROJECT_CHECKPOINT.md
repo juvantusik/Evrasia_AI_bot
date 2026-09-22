@@ -413,3 +413,5 @@ Exact continuation:
 When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
 
 - Direct-PIN pre-write audit: **PASS**. Live PIN endpoint remains SHA `32463182...`; active account.pincode template/JS are `5214db00...` / `8c240106...`. Direct disclosure will be pilot-only and server-authoritative: canonical `evrasia.rest`, POST+valid sessid, active initialized TOTP, matching current auth context, native `otpUsed=true`; otherwise preserve legacy VK/SMS. Mobile V4 unchanged.
+
+- Direct-PIN deploy guard caught an intervening production-only JS drift. READ_ONLY audit accepted current `account.pincode/main/script.js` SHA `d66d71a8...` as the new live baseline: drift is isolated to that JS, contains no direct-PIN logic, and preserves the current PIN endpoint/VK-SMS handler. Do not restore older `8c240106...`; build the pilot patch on top of `d66d71a8...`.
