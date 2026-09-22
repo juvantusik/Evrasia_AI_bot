@@ -27,7 +27,9 @@ A following read-only audit confirmed native Bitrix enrollment semantics: `secur
 
 A further read-only QR/frontend audit also **PASSED** (`PASS_COUNT=7`, `FAIL_COUNT=0`, `WARN_COUNT=0`). Native Bitrix loads the `qrcode` UI extension and renders `PROVISION_URI` with `new QRCode(...)` at 164x164 and error-correction level H. The native browser flow retains the generated secret in memory and posts it back with the authenticator code; TOTP requires only one code. Current pilot state remained `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `PILOT_OTP_ROWS=0`, `CURRENT_OTP_INITIALIZED=NO`, `CURRENT_OTP_ACTIVATED=NO`.
 
-Next gate: deploy the pilot QR/TOTP confirmation step behind the already-completed SMS session gate. Do not enable global OTP or revoke sessions until the newly-created pilot OTP row has been verified.
+The pilot QR/TOTP continuation was then deployed successfully. Production SHAs: account template `222b3c19d46da4b127e79b37a96c3d3676f8ba0b0bf84a26ec9f3b71cd21de41`, account JS `352447d463aa0dcea91abfae1d0690682424343bf6fbdb9dc8428dee9b6cb17a`, enrollment component `4a1bfbd277980dd529f89b43bc834498a543de3f371df4870963a3a4e6b09833`. Component metadata remained `755/644 site_evrasia:site_evrasia`; post-deploy state remained `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `PILOT_OTP_ROWS=0`, `PILOT_OTP_INITIALIZED=NO`, `PILOT_OTP_ACTIVATED=NO`. No session revocation or PIN-flow change occurred.
+
+Next gate: browser QR scan + first TOTP confirmation for USER_ID `880339`, followed by read-only verification of the created OTP row before any global OTP enablement/session revocation.
 
 ---
 
