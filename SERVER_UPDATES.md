@@ -33,7 +33,9 @@ Browser QR scan + first TOTP confirmation for USER_ID `880339` then **PASSED**. 
 
 A final read-only enforcement preflight **PASSED** (`PASS_COUNT=7`, `FAIL_COUNT=0`, `WARN_COUNT=0`). All accepted source SHAs still match. Native security options remain effectively OFF/OFF with raw `otp_enabled=UNSET` and `otp_mandatory_using=UNSET`. The OTP-aware signin path is present. Production logout/revocation behavior was confirmed: Bitrix logout action, deletion of `jwt_tokens` and `access_token` rows for the user, and Redis mobile-token revocation. Relevant table/column inventory was captured without token values.
 
-Next gate: revoke USER_ID `880339` pre-2FA sessions/tokens first and verify zero remaining token rows plus mobile revocation marker, then set global OTP enabled with mandatory OFF. After that, perform password→TOTP login E2E before any direct-PIN work.
+The guarded enforcement write then **PASSED** (`PASS_COUNT=6`, `FAIL_COUNT=0`, `WARN_COUNT=0`). For USER_ID `880339`, Bitrix logout action was inserted, pilot `jwt_tokens`/`access_token` rows were verified at 0, Redis mobile revocation succeeded and the revocation marker exists with positive TTL. Only after revocation verification, native security options were set to `otp_enabled=Y` and `otp_mandatory_using=N`; effective state is global OTP ON / mandatory OFF. The pilot OTP row remained one active initialized TOTP row, no non-pilot OTP rows appeared, and all accepted source SHAs remained unchanged.
+
+Next gate: fresh password→TOTP login E2E. Direct-PIN flow remains unchanged until the resulting authenticated session is proven to have passed TOTP.
 
 ---
 
