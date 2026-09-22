@@ -29,7 +29,9 @@ A further read-only QR/frontend audit also **PASSED** (`PASS_COUNT=7`, `FAIL_COU
 
 The pilot QR/TOTP continuation was then deployed successfully. Production SHAs: account template `222b3c19d46da4b127e79b37a96c3d3676f8ba0b0bf84a26ec9f3b71cd21de41`, account JS `352447d463aa0dcea91abfae1d0690682424343bf6fbdb9dc8428dee9b6cb17a`, enrollment component `4a1bfbd277980dd529f89b43bc834498a543de3f371df4870963a3a4e6b09833`. Component metadata remained `755/644 site_evrasia:site_evrasia`; post-deploy state remained `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `PILOT_OTP_ROWS=0`, `PILOT_OTP_INITIALIZED=NO`, `PILOT_OTP_ACTIVATED=NO`. No session revocation or PIN-flow change occurred.
 
-Next gate: browser QR scan + first TOTP confirmation for USER_ID `880339`, followed by read-only verification of the created OTP row before any global OTP enablement/session revocation.
+Browser QR scan + first TOTP confirmation for USER_ID `880339` then **PASSED**. Read-only verification confirmed: `OTP_TOTAL_ROWS=1`, `PILOT_OTP_ROWS=1`, `NONPILOT_OTP_ROWS=0`, `PILOT_DB_ACTIVE_ROWS=1`, `PILOT_DB_TOTP_ROWS=1`, secret/init params present, `PILOT_OTP_INITIALIZED=YES`, `PILOT_OTP_ACTIVATED=YES`, recovery-code rows 0; global OTP remained `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`. No secret/init-param/recovery-code values were printed.
+
+Next gate: guarded optional global OTP enablement plus revocation of pre-2FA USER_ID `880339` web/mobile sessions, then password→TOTP login E2E. Keep direct-PIN flow unchanged until that login proves the current session actually passed TOTP.
 
 ---
 
