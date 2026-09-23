@@ -2,7 +2,7 @@
 
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: **2026-09-20** after PR #62 operator-visible manual-investigation evidence production acceptance.
+> Last updated: **2026-09-23** after PR #65 operator physical-history snapshot production acceptance.
 
 ## 1. Main rule
 
@@ -110,11 +110,25 @@ Operator source/reason remains separate from automatic evidence. Ambiguous phone
 
 PR #62 adds the operator-visible result layer: exact latest 60-day investigation window, physical visit/day/restaurant counts, first/last event, daily summary, Trusted Device prefix and linked USER_ID values when present. The five existing numeric categories remain risk scores and are explicitly labeled as such.
 
-Current production revision after PR #62: `dfde4c39b3821f6946d3be05448d11aea1fcc441`.
+PR #65 changes the source of operator physical-history metrics to a dedicated per-investigation Check-in snapshot:
 
-Current production immutable digest: `sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`.
+`targeted Check-in → anti_fraud_operator_investigation_visits → operator UI metrics`
 
-Production migrations: **25**.
+The parent investigation persists `physical_history_from` / `physical_history_until`. Targeted responses with unresolved cards fail closed.
+
+Critical invariant:
+
+`anti_fraud_operator_investigation_visits` is operator evidence and **must not** feed `anti_fraud_visits`. The latter remains automatic risk/history telemetry.
+
+Current production revision after PR #65: `d1746ceabb513727baad729adbd3333328fc2dab`.
+
+Current production immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`.
+
+Current image config ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`.
+
+Production migrations: **26**.
+
+Authoritative acceptance record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
 #### Bitrix account-state contract
 
