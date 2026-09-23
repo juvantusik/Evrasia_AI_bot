@@ -462,26 +462,23 @@ Mandatory lessons include:
 
 ## Current release status
 
-Current accepted production application is PR #60:
+Current accepted production bot application is PR #62:
 
-- revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`;
-- immutable digest: `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`;
-- image ID: `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`;
-- migrations: 25;
-- runtime: healthy at acceptance;
-- migration `0024_anti_fraud_operator_investigation`: applied and schema verified;
-- deployment backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`;
-- backup DB SHA256: `f164b6adb75d615488a1e7124f1bdfecd47e3f57af3464a14a2a8a4a1f44e201`;
-- deployment result: 13 PASS / 0 FAIL / 0 WARN;
-- rollback: not required.
+- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`;
+- immutable digest: `sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`;
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`;
+- migrations: **25**;
+- runtime: running / healthy at acceptance and reconfirmed healthy in the 2026-09-23 read-only diagnostics;
+- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`;
+- PR #62 added no migration and changed no scoring/grouping/blocking semantics;
+- PR #62 exposed factual operator-investigation history metrics, Trusted Device prefix and linked USER_ID values;
+- PR #62 read-only acceptance: 15 PASS / 0 FAIL / 1 informational WARN.
 
-Manual investigation by phone is now production. Remaining work is operator-visible end-to-end acceptance on an account intentionally selected for investigation. See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+PR #60 remains the backend/manual-investigation milestone, but it is no longer the current deployed application baseline.
 
-Earlier PR #44/#45 modal work remains historical and accepted but is no longer the latest release state.
+Earlier PR #44/#45 modal work, PR #56 Check-in Scout, PR #57/#58 UI/device work and PR #60 manual investigation remain historical accepted milestones. Do not repeat their deployments merely for reassurance.
 
-No repeat modal fix, block/unblock acceptance, Check-in Scout deployment, PR #57/#58 UI deployment or phone-resolver deployment is pending.
-
-
+Documentation-only branch commits can be newer than this application revision; they do not change production runtime identity.
 
 ## 2026-09-23 — TOTP direct-PIN pilot
 
@@ -502,3 +499,56 @@ Accepted deployment facts:
 Direct disclosure is allowed only for the pilot on canonical `evrasia.rest`, POST + valid sessid, active initialized native TOTP and a matching current auth context with `isOtpUsed()=true`. The endpoint still obtains the PIN through the pre-existing `CRestis::pincode()` call and preserves the existing rate limiter. Non-eligible requests continue through the existing VK/SMS path.
 
 Fresh incognito browser acceptance: password→TOTP login succeeded, the protected PIN UI displayed **«Показать Пин-код»**, and clicking it displayed a PIN in-browser. This verifies direct-display UI/transport. Actual spend/payment acceptance of that displayed PIN has **not yet been confirmed** by the operator and remains the next positive business E2E gate. Negative `otpUsed=false` fallback and ordinary non-2FA compatibility also remain pending before any rollout beyond the pilot.
+
+
+## 2026-09-23 — Anti-Fraud multicard manual-history root cause
+
+A read-only investigation of two operator-added accounts proved a systematic gap in the current manual-history path.
+
+Affected internal USER_ID values:
+
+- `6645`;
+- `408974`.
+
+Bot-side/source comparison:
+
+- both resolve uniquely through the protected phone resolver;
+- both protected loyalty responses report `active_card_count=2`, `active_card_found=false`, `issue=multiple_active_cards`;
+- loyalty 60-day history is empty for both;
+- bot DB contains zero verified loyalty-history visits for both;
+- both operator investigations reached `ready`;
+- 24-hour history freshness cache is not the cause.
+
+Critical divergence:
+
+- USER_ID `408974` has **2 physical Check-in records on 2026-09-22** in the targeted protected Check-in endpoint;
+- USER_ID `6645` targeted Check-in returns **0** for the expected period and therefore has an additional source/card-linkage issue.
+
+Final site-side production source audit:
+
+- result: **9 PASS / 0 FAIL / 0 WARN**;
+- mode: READ_ONLY;
+- routes SHA256: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- `AntiFraudLoyaltyService.php` SHA256: `44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`;
+- `AntiFraudCheckinScoutService.php` SHA256: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`.
+
+Exact source behavior:
+
+- loyalty service resolves active cards with `RESTIS_STATE=113`;
+- for multiple active cards it records `multiple_active_cards`;
+- account-level balance is still read from RestIS `/api/Balance` by phone;
+- `VIP_HISTORY` is intentionally skipped when more than one active card exists because legacy `VIP_HISTORY` requires a concrete card number;
+- targeted Check-in resolves all Bitrix card IDs owned by the requested USER_ID and reads `COfflineOrderHl` physical events for those cards.
+
+Conclusion:
+
+The operator UI calls its metrics **physical visits**, but the current manual investigation history path depends on single-card loyalty/VIP_HISTORY. For multicard accounts that can produce a false zero-history `ready` result.
+
+Next gate:
+
+1. design a minimal multicard-safe operator physical-history flow based on the existing targeted 60-day Check-in source;
+2. preserve loyalty/balance semantics separately;
+3. trace USER_ID `6645` read-only before any write;
+4. then implement with normal guarded deployment.
+
+No production write was made during this diagnosis.
