@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-23** after PR #65 production acceptance for dedicated operator physical-history snapshots.
+> Updated: **2026-09-23** after PR #67 browser-visible acceptance and legacy snapshot backfill.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -13,16 +13,16 @@ Host: `eur-bot-01` (`192.168.103.200`).
 Current accepted bot application:
 
 - repo: `juvantusik/Evrasia_AI_bot`
-- production revision: `d1746ceabb513727baad729adbd3333328fc2dab`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
-- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
+- production revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
+- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
 - Anti-Fraud threshold: 40000
 - scheduler: enabled, 15 min
-- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
 - production migrations: **26**
 - app container: **running healthy**, restart count 0 at acceptance.
 
-PR #65 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**. PR #62 evidence-view behavior and PR #58 device-label semantics remain valid.
+PR #67 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / VISUALLY ACCEPTED**. PR #65 snapshot architecture, PR #62 evidence-view behavior and PR #58 device-label semantics remain valid.
 
 PR #58 UI semantics:
 
@@ -97,7 +97,27 @@ Authoritative record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
 
 ---
 
-## 1B. PR #62 manual-investigation evidence
+## 1B. PR #67 UI completion + legacy snapshot backfill
+
+PR #67 removed the stale `loyaltyHistoryLoadedAt` dependency from the operator physical-history rendering gate. Production deployment: **41 PASS / 0 FAIL / 0 WARN**, no migration, no DB write, no rollback.
+
+One-time legacy backfill then populated the five latest-ready investigations created before PR #65 snapshot persistence:
+
+- `67429`: 8 / 6 / 6;
+- `2564174`: 22 / 15 / 17;
+- `778635`: 66 / 38 / 33;
+- `263189`: 39 / 26 / 22;
+- `1969724`: 11 / 10 / 9.
+
+Format above: physical visits / visit days / restaurants.
+
+Global result: **0** latest-ready investigations missing physical snapshot; **7** latest-ready investigations with coverage. Backfill: **55 PASS / 0 FAIL / 0 WARN**. For every backfilled account the snapshot event-set hash matched the targeted source and intersection with `anti_fraud_visits` remained 0.
+
+The operator then visually rechecked the web interface and confirmed: **everything is displayed correctly**.
+
+---
+
+## 1C. PR #62 manual-investigation evidence
 
 PR #62 adds no migration and no new risk/grouping/blocking rule. It exposes existing investigation evidence in the case UI.
 
