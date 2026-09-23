@@ -594,7 +594,7 @@ Production acceptance facts:
 - backup DB SHA256: `f164b6adb75d615488a1e7124f1bdfecd47e3f57af3464a14a2a8a4a1f44e201`;
 - deployment result: **13 PASS / 0 FAIL / 0 WARN**.
 
-Remaining acceptance step is operator-visible end-to-end use of **«Добавить на проверку»** with an intentionally selected account. This is not a deployment blocker and must not be simulated by mutating an arbitrary customer.
+This PR #60 acceptance note is historical. The later PR #65 production acceptance completed end-to-end operator-history verification on USER_ID `6645` and `408974`; see `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
 ---
 
@@ -614,7 +614,7 @@ This was observed for USER_ID `1969724`:
 
 That absence was current design, not evidence that the physical check-in was lost.
 
-Step 2 must solve that by making operator investigation a first-class persistent source of visibility.
+Step 2 solved this by making operator investigation a first-class persistent source of visibility; PR #65 later separated physical-history display persistence from automatic risk telemetry.
 
 ---
 
@@ -794,7 +794,7 @@ Authoritative TOTP checkpoint:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Do not mix TOTP work into the current Anti-Fraud Step 2 task.
+Do not mix TOTP work into Anti-Fraud work unless the operator explicitly resumes the TOTP workstream.
 
 ---
 
@@ -802,19 +802,17 @@ Do not mix TOTP work into the current Anti-Fraud Step 2 task.
 
 When continuing this work in a new chat:
 
-1. read `docs/PROJECT_CHECKPOINT.md`;
-2. read this file;
-3. read `docs/AI_PROJECT_CONTEXT.md`;
-4. inspect actual GitHub `main`;
-5. inspect actual production runtime before any write;
-6. do not redo PR #56/#57/#58, Scout deployment, Bitrix phone resolver research or resolver deployment;
-7. continue **Step 2 bot side** from the current production/code state.
+1. read `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` first;
+2. read `docs/PROJECT_CHECKPOINT.md`;
+3. use this 2026-09-20 checkpoint only for historical PR #62-and-earlier context;
+4. read `docs/AI_PROJECT_CONTEXT.md`;
+5. inspect actual GitHub `main`;
+6. inspect actual production runtime before any write;
+7. do not redo PR #56/#57/#58/#60/#62/#65 deployment or acceptance work merely for reassurance.
 
-The likely first implementation task is:
+There is no pending Step 2 implementation task. Migration `0024` and migration `0025` are already production-applied and verified.
 
-**inspect current main for the cleanest minimal bot gateway + persistent operator-investigation schema before creating migration 0024.**
-
-Do not make the generic operator watchlist the final Step 2 persistence layer.
+The next task should be whatever new operator/business requirement is explicitly requested, starting from the PR #65 production baseline.
 
 ---
 
