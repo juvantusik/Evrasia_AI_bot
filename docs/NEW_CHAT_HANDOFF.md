@@ -9,25 +9,26 @@
 Продолжаем проект Evrasia AI Bot. Не начинай работу заново и не проси меня повторять уже установленный контекст.
 
 Репозиторий: `juvantusik/Evrasia_AI_bot`.
+Самая свежая документационная ветка/handoff: `docs/pr62-consistency-cleanup`.
 
-Сначала полностью прочитай:
+Сначала прочитай:
 
-0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — **самый свежий authoritative handoff для текущей ветки Anti-Fraud / Check-in Scout / ручной проверки по телефону**;
-1. `docs/PROJECT_CHECKPOINT.md` — общий authoritative checkpoint;
-2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
-3. `docs/CURRENT_ARCHITECTURE.md` — актуальная архитектура;
-4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
-5. `SERVER_UPDATES.md` — фактическая история production/server updates;
-6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
-7. `docs/ANTI_FRAUD_UI_NEXT.md` — исторический UI-план с отметкой, что прежние пункты уже реализованы; текущий следующий шаг — Step 2 из checkpoint 2026-09-20;
-8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
-9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — planned TOTP 2FA / protected-profile design and production findings;
-11. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+0. `docs/NEW_CHAT_HANDOFF.md`;
+1. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`;
+2. `docs/PROJECT_CHECKPOINT.md`;
+3. `docs/AI_PROJECT_CONTEXT.md`;
+4. `docs/CURRENT_ARCHITECTURE.md`;
+5. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`;
+6. `SERVER_UPDATES.md`;
+7. `docs/SERVER_SCRIPT_RULES.md`.
 
-Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
+Приоритет источников: **фактический production → актуальный GitHub → staging/test → актуальная документация → старые обсуждения**.
 
-После docs-only commit GitHub `main` может быть новее deployed application revision. Перед следующей production mutation всегда отдельно проверяй фактический runtime image/revision.
+Текущая активная точка Anti-Fraud: доказан дефект ручной истории для multicard-аккаунтов. USER_ID `408974` имеет 2 физических Check-in 22.09.2026, но loyalty/VIP_HISTORY пуст из-за `multiple_active_cards`. USER_ID `6645` имеет ту же multicard-проблему, но targeted Check-in дополнительно возвращает 0 и требует отдельной трассировки. 24-часовой cache как причина исключён. Следующий шаг — спроектировать минимальный multicard-safe путь операторской физической истории через existing targeted 60-day Check-in source и отдельно найти причину отсутствия Check-in у USER_ID 6645. По этому дефекту production write ещё не делали.
+
+Параллельный TOTP workstream: пилот USER_ID `880339` уже enrolled, native `otpUsed` proof подтверждён, direct web PIN pilot deployed. В свежей incognito password→TOTP сессии кнопка **«Показать Пин-код»** появилась и PIN был показан. Полный business E2E остаётся pending только до подтверждения реального использования этого PIN при списании. Rollout за пределы 880339 запрещён.
+
+Не повторяй завершённые discovery/deploy проверки. Сначала назови восстановленную текущую точку и только потом продолжай.
 
 ---
 
