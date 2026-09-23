@@ -13,14 +13,15 @@
 
 In a new chat, read in this order:
 
-0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — current Anti-Fraud / Scout / manual-investigation handoff
-1. `docs/PROJECT_CHECKPOINT.md`
-2. `docs/AI_PROJECT_CONTEXT.md`
-3. `docs/CURRENT_ARCHITECTURE.md`
-4. `docs/SERVER_SCRIPT_RULES.md`
-5. `SERVER_UPDATES.md`
-6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`
-7. `docs/NEW_CHAT_HANDOFF.md`
+0. `docs/NEW_CHAT_HANDOFF.md` — fastest current handoff and exact active continuation
+1. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — current Anti-Fraud / Scout / manual-investigation handoff
+2. `docs/PROJECT_CHECKPOINT.md`
+3. `docs/AI_PROJECT_CONTEXT.md`
+4. `docs/CURRENT_ARCHITECTURE.md`
+5. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
+6. `docs/SERVER_SCRIPT_RULES.md`
+7. `SERVER_UPDATES.md`
+8. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`
 
 Source priority:
 
