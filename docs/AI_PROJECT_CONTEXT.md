@@ -4,8 +4,8 @@
 >
 > **Last updated:** 2026-09-23
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current accepted deployed app revision:** `d1746ceabb513727baad729adbd3333328fc2dab`
-> **Current production milestone:** PR #65 dedicated operator physical-history snapshots are production-verified and accepted; PR #62 evidence view remains valid.
+> **Current accepted deployed app revision:** `b0d12a112577de2a35e0a49e55367e3bc459bc07`
+> **Current production milestone:** PR #67 visible operator physical history is production-verified and browser-accepted; PR #65 snapshot architecture remains authoritative.
 
 ---
 
@@ -48,12 +48,12 @@ Host/runtime:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted application baseline after PR #65:
+Accepted application baseline after PR #67:
 
-- revision: `d1746ceabb513727baad729adbd3333328fc2dab`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
-- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
-- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
+- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
+- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
 - migrations: **26**
 - current confirmed bonus threshold: `40000`
 - accepted runtime state: `running healthy`
@@ -137,6 +137,7 @@ The earlier PR #32–#45 lineage below is retained as history. Current continuat
 - PR #60 — manual operator investigation by phone; merged/deployed/verified with migration `0024_anti_fraud_operator_investigation`.
 - PR #62 — operator-visible manual-investigation evidence: exact 60-day window, visit metrics/day summary, Trusted Device prefix and linked USER_ID display; merged/deployed/verified at revision `dfde4c39b3821f6946d3be05448d11aea1fcc441`.
 - PR #65 — dedicated operator physical Check-in snapshot, physical-history window fields, UI source switch away from `anti_fraud_visits`, fail-closed unresolved-card handling; merged/deployed/accepted at revision `d1746ceabb513727baad729adbd3333328fc2dab` with migration `0025_anti_fraud_operator_physical_history`.
+- PR #67 — removes the stale `loyaltyHistoryLoadedAt` UI gate; merged/deployed/browser-accepted at revision `b0d12a112577de2a35e0a49e55367e3bc459bc07`; no migration. Five legacy latest-ready investigations were backfilled, leaving 0 without physical coverage.
 
 Detailed current facts are in `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
