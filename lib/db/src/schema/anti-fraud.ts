@@ -5,6 +5,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -297,10 +298,10 @@ export const antiFraudOperatorInvestigationVisitsTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: uniqueIndex("anti_fraud_operator_investigation_visits_pk").on(
-      table.investigationId,
-      table.physicalEventId,
-    ),
+    pk: primaryKey({
+      name: "anti_fraud_operator_investigation_visits_pk",
+      columns: [table.investigationId, table.physicalEventId],
+    }),
     userOccurredIdx: index("anti_fraud_operator_investigation_visits_user_occurred_idx").on(
       table.bitrixUserId,
       table.occurredAt,
