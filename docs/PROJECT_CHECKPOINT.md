@@ -415,67 +415,58 @@ For future consent inspection:
 Next chat: read this file, `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` and `docs/SERVER_SCRIPT_RULES.md`, then inspect factual production state before any mutation.
 
 
-## 9. TOTP 2FA / protected-profile workstream — PLANNED / READ-ONLY INVESTIGATED
+## 9. TOTP 2FA / protected-profile workstream — PILOT DEPLOYED
 
 Dedicated authoritative checkpoint:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Continuation keyword:
+Pilot remains restricted to Bitrix USER_ID `880339`.
 
-Operator request:
+Current production status:
 
-- optional TOTP 2FA for guest profiles using Яндекс Ключ / Google Authenticator / compatible TOTP apps;
-- enrollment must first confirm the current account phone by SMS, so stolen login/password alone cannot enroll an attacker's authenticator;
-- TOTP does **not** replace the bonus-spending PIN;
-- after a profile is safely enrolled in 2FA, the intended benefit is to allow the bonus-spending PIN to be displayed directly in the personal account instead of waiting for VK/SMS delivery;
-- ordinary profiles must keep the current PIN-delivery behavior.
+- native Bitrix TOTP is enabled globally;
+- mandatory mode remains OFF;
+- SMS ownership-before-QR enrollment is implemented and passed;
+- pilot QR/TOTP enrollment passed;
+- pre-enrollment web/mobile sessions were revoked;
+- password → TOTP login E2E passed;
+- account security card connected state is wired to native OTP state;
+- fresh canonical current-session proof returns `isOtpUsed()=true`;
+- later cookie-restored sessions correctly return `otpUsed=false`;
+- direct web PIN pilot is deployed;
+- direct disclosure is allowed only on canonical `evrasia.rest`, POST + valid sessid, active initialized TOTP, matching current auth context, and `isOtpUsed()=true`;
+- otherwise the existing VK/SMS delivery remains;
+- fresh incognito password→TOTP session showed **«Показать Пин-код»** and displayed a real PIN;
+- direct-display transport/UI E2E is PASSED;
+- full business E2E remains pending until the operator confirms the displayed PIN works in a real bonus-spend/payment operation.
 
-Pilot is restricted to Bitrix `USER_ID=880339`.
+Direct-PIN production backup:
 
-Production read-only facts confirmed on 2026-09-18:
+`/home/site_evrasia/web/evrasia.spb.ru/backups/direct-pin-pilot-20260923-060243`
 
-- Bitrix native MFA exists: `Bitrix\Security\Mfa\Otp`;
-- global runtime state: `OTP_ENABLED=NO`, recovery codes disabled, Bitrix OTP SMS capability reports enabled;
-- native storage: `b_sec_user`; recovery storage: `b_sec_recovery_codes`;
-- pilot user currently has no initialized/activated OTP and no secret;
-- current website AJAX login uses `CUser->Login(...)` in `local/components/eurasia/signin/class.php`, while the older/general signin component already contains `Mfa\Otp::isOtpRequired()` rendering logic;
-- current web bonus-PIN endpoint is `/local/php_interface/pincode.php`: it obtains the real PIN from RestIS and sends it by VK when available, otherwise by SMS;
-- current V4 mobile PIN controller has analogous VK/SMS behavior;
-- existing global logout/session-revocation logic can revoke Bitrix auth actions and mobile JWT/refresh state.
+Current direct-PIN SHAs:
 
-Security invariants:
+- endpoint: `4d637e1bff15682d3eae6a5b4e3ffa074e2543daaf408767e2894654df2a0713`;
+- template: `569aaba642d5601215b453b04d06837da04b1378a8a69fd079ef777ad5797710`;
+- JS: `9b7afe419ee979089fda4b65af3475f415ea1eec8827a3c27d7be594ee5a68b4`.
 
-- SMS ownership confirmation must happen **before** exposing the TOTP provisioning QR/secret;
-- direct PIN must never be authorized only by `b_sec_user.ACTIVE=Y`;
-- the current session must itself be known to have passed TOTP, or old sessions must be invalidated and a post-TOTP session marker used;
-- after 2FA activation, pre-2FA sessions must be revoked;
-- users without 2FA must continue to log in and receive PINs exactly as before;
-- no custom TOTP store should be created unless native Bitrix MFA proves unsuitable;
-- dormant OTP-aware website login code was deployed on 2026-09-21; global OTP, pilot enrollment, native OTP storage, SMS ownership verification and direct-PIN behavior remain unchanged/off.
+Pending before rollout beyond `880339`:
 
-Current production state after 2026-09-21 dormant-login deployment:
+1. real-use PIN confirmation;
+2. cookie-restored / `otpUsed=false` fallback acceptance;
+3. ordinary non-2FA compatibility with global OTP ON / mandatory OFF;
+4. disable/reset/recovery guard redesign;
+5. separate remediation of the hardcoded PHP session cookie in `verify_order_by_sms.php` without printing the secret value.
 
-- signin backend SHA: `06dcf40fcc5ab5b8ff5b77843bd02424f2136628bff8e2114152bb2a2555fb48`;
-- signin JS SHA: `3f704994375adc0e074907effce43ef64a443c1a0e6708a780d84bd239cd9fc2`;
-- signin template SHA: `b8e65a204c69faa1e4c3ce84c6db047947c309e4742b3649eae351649a26eec4`;
-- `OTP_ENABLED=NO`, `OTP_MANDATORY=NO`, `OTP_TOTAL_ROWS=0`, `PILOT_OTP_ROWS=0`;
-- retained rollback backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/totp-login-step-v3-20260921-172331`.
+Do not repeat TOTP discovery, enrollment, session-proof or direct-PIN deployment.
 
-Exact continuation:
+---
 
-1. ordinary website login end-to-end while global OTP remained OFF is **PASSED**; the operator confirmed normal login with no OTP prompt;
-2. pilot-only profile enrollment UI + SMS ownership challenge for USER_ID 880339 are deployed, and the compact combined security/logout UI is visually accepted; global OTP is still OFF;
-3. real SMS ownership, QR/TOTP enrollment, enforcement enablement, password→TOTP login E2E, and account-card connected-state wiring for USER_ID 880339 are **PASSED/deployed**. The card now uses native Bitrix OTP state; a protected disable flow exists and requires the current TOTP code. Current production SHAs: template `8e17e304...`, JS `32e13d5d...`, TOTP component `d7856cba...`. Connected-state UI is visually accepted, including disable-button sizing. Native Bitrix auth-context persistence has now been proven: OTP login sets `otpUsed`, `UpdateSessionData()` stores serialized context in `SESS_AUTH['CONTEXT']`, and public `CUser::getContext()` restores it on later requests. Do not disable the pilot yet. The first browser `sessionProof` call exposed a guard bug: it reused enrollment-only `requirePilotUser()`, which rejects global OTP ON / existing OTP rows. `disableTotpAction()` also currently reuses that guard and must remain untested until its destructive semantics are handled separately. The read-only `sessionProofAction()` guard was fixed and the real browser probe now succeeds, but returns `otpUsed=false` while authenticated/pilot/OTP-active/context-user-match are all true. Therefore direct PIN remains ineligible. The browser diagnostic proved the serialized current session context itself is now `method=cookie` with `otpUsed=false` (object and raw `SESS_AUTH['CONTEXT']` match). Therefore the native OTP-used flag is being lost through cookie re-authorization/session replacement after the successful TOTP step. Direct PIN remains ineligible. Cookie/session and auth-action audits are complete. The lingering pilot logout action exists, but Bitrix marks it performed and skips logout on `IsJustAuthorized()`; on the next hit in the same session it is skipped by `AUTH_ACTIONS_PERFORMED`, so it is not the cause of the lost OTP context. Current `/account/` is still a cookie-restored context with `otpUsed=false`. Topology audit confirms the cross-host mechanism is viable: `auth_multisite=Y`, `PHPSESSID` is host-only, canonical site is `evrasia.rest`, vhost accepts legacy aliases, and `.htaccess` redirects `evrasia.spb.ru`/`www.evrasia.rest` to `evrasia.rest`. This can exactly produce cookie re-auth with `otpUsed=false`, but the actual OTP AJAX host has not yet been proven. Fresh private-window canonical login on `https://evrasia.rest/` is **PASSED**: immediately after password→TOTP login, the browser probe returned native `method=password`, `otpUsed=true`, matching raw session context, and `directPinEligible=true`. This closes the current-session proof gate and confirms later `method=cookie` / `otpUsed=false` is an appropriate downgrade after the original PHP session is lost/expired/rebuilt. No custom OTP session flag is needed. Next: verify ordinary non-2FA login with global OTP ON/mandatory OFF, then audit and implement pilot-only direct PIN behind native `otpActive && otpUsed`. Separate security finding: `verify_order_by_sms.php` contains a hardcoded PHP session cookie value; do not reproduce it and remediate separately;
-4. only after that E2E acceptance, add direct web bonus-PIN behavior for a second-factor-confirmed pilot session.
+## 10. Exact current continuation
 
-When the operator explicitly asks to continue TOTP 2FA, resume from this checkpoint and do not repeat the already completed 2FA discovery audits.
+For the current Anti-Fraud problem, resume from section 0 and `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`:
 
-- Direct-PIN pre-write audit: **PASS**. Live PIN endpoint remains SHA `32463182...`; active account.pincode template/JS are `5214db00...` / `8c240106...`. Direct disclosure will be pilot-only and server-authoritative: canonical `evrasia.rest`, POST+valid sessid, active initialized TOTP, matching current auth context, native `otpUsed=true`; otherwise preserve legacy VK/SMS. Mobile V4 unchanged.
+**design multicard-safe operator physical history via targeted 60-day Check-in, and separately trace USER_ID 6645 before any write.**
 
-- Direct-PIN deploy guard caught an intervening production-only JS drift. READ_ONLY audit accepted current `account.pincode/main/script.js` SHA `d66d71a8...` as the new live baseline: drift is isolated to that JS, contains no direct-PIN logic, and preserves the current PIN endpoint/VK-SMS handler. Do not restore older `8c240106...`; build the pilot patch on top of `d66d71a8...`.
-
-- **Direct web PIN pilot is deployed for USER_ID 880339 (2026-09-23).** Guarded production WRITE passed 9/0/1; the only warning was unavailable `node` for optional JS syntax checking. Backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/direct-pin-pilot-20260923-060243`. Current production SHAs: PIN endpoint `4d637e1b...`, account.pincode template `569aaba6...`, JS `9b7afe41...`. No OTP/session/DB/mobile state was changed. A fresh incognito `evrasia.rest` password→TOTP session showed **«Показать Пин-код»** and the browser displayed a PIN, so protected direct-display transport/UI is **PASSED**. The operator has not yet confirmed that this displayed PIN works in a real bonus-spend/payment operation, so full business E2E remains **PENDING**. Negative cookie-session fallback, ordinary non-2FA compatibility, and rollout beyond 880339 also remain pending. Direct disclosure stays server-authoritative and requires canonical host + POST + valid sessid + active initialized TOTP + matching native current context + `isOtpUsed()=true`; otherwise legacy VK/SMS is preserved.
-
-
-- **Manual Anti-Fraud history multicard gap (2026-09-23):** READ_ONLY production audit proved that two investigated accounts each have two active loyalty cards. The site-side loyalty endpoint intentionally returns `multiple_active_cards` and skips `VIP_HISTORY` when more than one active card exists, while the operator investigation worker currently treats the empty result as successful history completion. USER_ID 408974 has two physical Check-in events on 2026-09-22 in the targeted Check-in source, proving that the operator UI's zero-history result is false. USER_ID 6645 has the same multicard loyalty limitation plus a separate missing Check-in/linkage issue. The 24-hour cache hypothesis is ruled out for these cases. Next design gate: manual operator 'physical visits' history should use the existing targeted 60-day Check-in source, consistent with Check-in Scout, and USER_ID 6645 must be traced separately before write.
+For TOTP, resume only from the pending acceptance/security items in section 9.
