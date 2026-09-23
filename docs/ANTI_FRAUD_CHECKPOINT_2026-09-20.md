@@ -821,3 +821,18 @@ After every material change to architecture, production, DB, protected API, Anti
 - keep the immediate next step explicit enough that a new chat can continue without asking the operator to reconstruct context.
 
 Do not leave the newest factual state only in chat history.
+
+
+## 2026-09-23 — manual history multicard gap
+
+READ_ONLY production diagnostics for two operator-added accounts established a systematic manual-history gap:
+
+- both accounts resolve uniquely to Bitrix USER_IDs;
+- both currently have exactly two active loyalty cards and site-side loyalty returns `issue=multiple_active_cards`;
+- `AntiFraudLoyaltyService` intentionally does not call legacy `VIP_HISTORY` when `count($cards) > 1`; it still returns account balance by phone but leaves history empty;
+- current operator investigation worker still uses `enrichRestisHistoryForOperatorInvestigationOnce`, therefore an investigation can reach `ready` with zero history even though history was not actually loaded;
+- for USER_ID 408974 the protected Check-in source independently proves two physical check-ins on 2026-09-22, while loyalty history remains empty;
+- for USER_ID 6645 targeted Check-in history currently returns zero for that day, so this account has a second, separate source/linkage issue to trace;
+- the previously suspected 24-hour history cache is not the root cause for these two cases.
+
+Architecture consistency finding: the existing Check-in Scout already treats targeted 60-day `COfflineOrderHl` history as the authoritative physical-visit source and explicitly avoids `VIP_HISTORY` for physical-visit counting. The operator UI labels its metrics as physical visits, so the next design gate is to move manual operator history to the same targeted physical Check-in source (or otherwise separate physical-visit history from monetary loyalty history) rather than merging multiple-card `VIP_HISTORY` rows. No production writes were made during this diagnosis.
