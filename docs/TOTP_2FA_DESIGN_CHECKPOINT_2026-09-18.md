@@ -1,12 +1,13 @@
 # Evrasia — TOTP 2FA / protected-profile design checkpoint
 
-> Status: **PARTIALLY IMPLEMENTED / DORMANT LOGIN CHALLENGE DEPLOYED / PILOT NOT ENROLLED**
+> Status: **PILOT ENROLLED / NATIVE TOTP LOGIN VERIFIED / DIRECT WEB PIN PILOT DEPLOYED / BUSINESS PIN USE PENDING**
 >
-> Date: **2026-09-18**
+> Original design date: **2026-09-18**  
+> Latest factual update: **2026-09-23**
 >
 > Scope: Bitrix website personal account / sign-in / bonus PIN flow on production host `evrasia`.
 >
-> This document records the operator request, confirmed production structure, security invariants, source paths, current SHA baselines, and the exact continuation point. On 2026-09-21 the dormant OTP-aware website login path was deployed, while global OTP, pilot enrollment, SMS ownership verification, TOTP secret/QR creation, session revocation, and direct-PIN behavior remain disabled/not implemented.
+> This document records the full evolution from design/discovery to the current production pilot. Older sections describing global OTP OFF or an unenrolled pilot are historical snapshots and are superseded by the latest sections below. As of 2026-09-23, pilot USER_ID 880339 is enrolled, native password→TOTP and current-session `otpUsed` proof are verified, and the guarded direct web PIN pilot is deployed.
 
 ## 1. Operator request and business goal
 
@@ -659,3 +660,20 @@ Still pending before broader rollout:
 2. negative-path acceptance for a cookie-restored / `otpUsed=false` pilot session (must fall back to legacy VK/SMS and must not disclose PIN);
 3. ordinary non-2FA login/PIN compatibility with global OTP enabled and mandatory OFF;
 4. rollout beyond USER_ID `880339` remains prohibited until these acceptance gates pass.
+
+
+### Remaining TOTP/security follow-ups after direct-PIN deployment
+
+Do not repeat enrollment/session-proof/direct-PIN deployment.
+
+The remaining pilot gates are:
+
+1. confirm that the displayed direct PIN is actually accepted in a real bonus-spend/payment operation;
+2. explicitly verify a cookie-restored / `otpUsed=false` pilot session falls back to legacy VK/SMS and cannot see direct PIN;
+3. verify an ordinary non-2FA account still logs in and uses the legacy PIN path with global OTP enabled and mandatory mode OFF;
+4. keep rollout beyond USER_ID `880339` prohibited until those gates pass.
+
+Separate work not to mix into the direct-PIN acceptance:
+
+- `disableTotpAction()` currently reuses the enrollment-only pilot guard and must not be exercised until disable/reset/recovery/cooling-off semantics are redesigned;
+- `verify_order_by_sms.php` contains a hardcoded PHP session cookie value. Treat it as sensitive, never reproduce it, and remediate it in a separate guarded security task.
