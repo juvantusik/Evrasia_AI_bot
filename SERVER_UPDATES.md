@@ -481,3 +481,24 @@ Earlier PR #44/#45 modal work remains historical and accepted but is no longer t
 
 No repeat modal fix, block/unblock acceptance, Check-in Scout deployment, PR #57/#58 UI deployment or phone-resolver deployment is pending.
 
+
+
+## 2026-09-23 — TOTP direct-PIN pilot
+
+Production website direct-PIN pilot was deployed for USER_ID `880339`.
+
+Accepted deployment facts:
+
+- guarded WRITE: 9 PASS / 0 FAIL / 1 WARN;
+- WARN only because `node` was not installed for optional JS syntax validation;
+- PHP syntax checks passed before/after deployment;
+- backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/direct-pin-pilot-20260923-060243`;
+- endpoint SHA: `4d637e1bff15682d3eae6a5b4e3ffa074e2543daaf408767e2894654df2a0713`;
+- template SHA: `569aaba642d5601215b453b04d06837da04b1378a8a69fd079ef777ad5797710`;
+- JS SHA: `9b7afe419ee979089fda4b65af3475f415ea1eec8827a3c27d7be594ee5a68b4`;
+- rollback not required;
+- no DB, OTP, Bitrix option, session or mobile V4 mutation.
+
+Direct disclosure is allowed only for the pilot on canonical `evrasia.rest`, POST + valid sessid, active initialized native TOTP and a matching current auth context with `isOtpUsed()=true`. The endpoint still obtains the PIN through the pre-existing `CRestis::pincode()` call and preserves the existing rate limiter. Non-eligible requests continue through the existing VK/SMS path.
+
+Fresh incognito browser acceptance: password→TOTP login succeeded, the protected PIN UI displayed **«Показать Пин-код»**, and clicking it displayed a PIN in-browser. This verifies direct-display UI/transport. Actual spend/payment acceptance of that displayed PIN has **not yet been confirmed** by the operator and remains the next positive business E2E gate. Negative `otpUsed=false` fallback and ordinary non-2FA compatibility also remain pending before any rollout beyond the pilot.
