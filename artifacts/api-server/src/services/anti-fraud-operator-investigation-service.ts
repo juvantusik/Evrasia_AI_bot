@@ -5,7 +5,9 @@ import {
   type BitrixAntiFraudAccountRecord,
 } from "./bitrix-antifraud-account-gateway";
 import { analyzeAntiFraudWithSimilarityOnce } from "./anti-fraud-identity-similarity-service";
+import { BitrixAntiFraudCheckinGateway } from "./bitrix-antifraud-checkin-gateway";
 import { enrichRestisHistoryForOperatorInvestigationOnce } from "./anti-fraud-restis-history-enricher";
+import { refreshAntiFraudOperatorPhysicalHistoryOnce } from "./anti-fraud-operator-physical-history-service";
 
 const DEFAULT_BATCH_LIMIT = 5;
 const MAX_BATCH_LIMIT = 20;
@@ -26,6 +28,8 @@ export type AntiFraudOperatorInvestigation = {
   requestedAt: string;
   startedAt: string | null;
   historyCompletedAt: string | null;
+  physicalHistoryFrom: string | null;
+  physicalHistoryUntil: string | null;
   scoringCompletedAt: string | null;
   completedAt: string | null;
   lastError: string | null;
@@ -41,6 +45,8 @@ type InvestigationRow = {
   requested_at: Date;
   started_at: Date | null;
   history_completed_at: Date | null;
+  physical_history_from: Date | null;
+  physical_history_until: Date | null;
   scoring_completed_at: Date | null;
   completed_at: Date | null;
   last_error: string | null;
@@ -58,6 +64,8 @@ const mapInvestigation = (row: InvestigationRow): AntiFraudOperatorInvestigation
   requestedAt: row.requested_at.toISOString(),
   startedAt: iso(row.started_at),
   historyCompletedAt: iso(row.history_completed_at),
+  physicalHistoryFrom: iso(row.physical_history_from),
+  physicalHistoryUntil: iso(row.physical_history_until),
   scoringCompletedAt: iso(row.scoring_completed_at),
   completedAt: iso(row.completed_at),
   lastError: row.last_error,
@@ -246,6 +254,7 @@ const claimPending = async (investigationId?: string): Promise<InvestigationRow 
 const processInvestigation = async (
   investigation: InvestigationRow,
   gateway = new BitrixAntiFraudAccountGateway(),
+  checkinGateway = new BitrixAntiFraudCheckinGateway(),
 ): Promise<void> => {
   try {
     const accountMap = await gateway.resolveAccounts([Number(investigation.bitrix_user_id)]);
@@ -260,6 +269,16 @@ const processInvestigation = async (
         bitrixUserId: Number(investigation.bitrix_user_id),
         investigationId: investigation.investigation_id,
         lookbackDays: 60,
+      });
+
+      // Физическая история операторской проверки берётся из targeted Check-in,
+      // а не из VIP_HISTORY/anti_fraud_visits. Snapshot живёт отдельно и поэтому
+      // не меняет входные данные automatic risk scoring.
+      await refreshAntiFraudOperatorPhysicalHistoryOnce({
+        bitrixUserId: Number(investigation.bitrix_user_id),
+        investigationId: investigation.investigation_id,
+        lookbackDays: 60,
+        gateway: checkinGateway,
       });
 
       await pool.query(
@@ -296,7 +315,10 @@ const processInvestigation = async (
 
 export const processAntiFraudOperatorInvestigationById = async (
   investigationIdValue: string,
-  options?: { gateway?: BitrixAntiFraudAccountGateway },
+  options?: {
+    gateway?: BitrixAntiFraudAccountGateway;
+    checkinGateway?: BitrixAntiFraudCheckinGateway;
+  },
 ): Promise<{ processed: boolean }> => {
   const investigationId = String(investigationIdValue ?? "").trim();
   if (!investigationId || investigationId.length > 100) {
@@ -307,13 +329,14 @@ export const processAntiFraudOperatorInvestigationById = async (
   const investigation = await claimPending(investigationId);
   if (!investigation) return { processed: false };
 
-  await processInvestigation(investigation, options?.gateway);
+  await processInvestigation(investigation, options?.gateway, options?.checkinGateway);
   return { processed: true };
 };
 
 export const processPendingAntiFraudOperatorInvestigationsOnce = async (options?: {
   limit?: number;
   gateway?: BitrixAntiFraudAccountGateway;
+  checkinGateway?: BitrixAntiFraudCheckinGateway;
 }): Promise<{ processed: number }> => {
   const requested = Number(options?.limit ?? DEFAULT_BATCH_LIMIT);
   const limit = Number.isInteger(requested)
@@ -325,7 +348,7 @@ export const processPendingAntiFraudOperatorInvestigationsOnce = async (options?
   for (let index = 0; index < limit; index += 1) {
     const investigation = await claimPending();
     if (!investigation) break;
-    await processInvestigation(investigation, options?.gateway);
+    await processInvestigation(investigation, options?.gateway, options?.checkinGateway);
     processed += 1;
   }
 
