@@ -1,67 +1,7 @@
 import { pool } from "@workspace/db";
-import {
-  BitrixAntiFraudCheckinGateway,
-  type BitrixAntiFraudCheckinRecord,
-  type BitrixAntiFraudCheckinResult,
-} from "./bitrix-antifraud-checkin-gateway";
+import { BitrixAntiFraudCheckinGateway } from "./bitrix-antifraud-checkin-gateway";
 
-export type AntiFraudOperatorPhysicalHistoryRow = {
-  physicalEventId: string;
-  bitrixUserId: number;
-  occurredAt: Date;
-  restaurant: string;
-};
-
-export type AntiFraudOperatorPhysicalHistorySnapshot = {
-  from: Date;
-  to: Date;
-  records: AntiFraudOperatorPhysicalHistoryRow[];
-  unresolvedCardCount: number;
-};
-
-export const buildAntiFraudOperatorPhysicalHistorySnapshot = (
-  history: BitrixAntiFraudCheckinResult,
-  expectedBitrixUserId: number,
-): AntiFraudOperatorPhysicalHistorySnapshot => {
-  const userId = Number(expectedBitrixUserId);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    throw new Error("USER_ID ручной физической истории должен быть положительным integer");
-  }
-
-  const unresolvedCardCount = Number(history.unresolvedCardCount ?? 0);
-  if (!Number.isInteger(unresolvedCardCount) || unresolvedCardCount < 0) {
-    throw new Error("Физическая история содержит некорректный unresolved_card_count");
-  }
-  if (unresolvedCardCount > 0) {
-    throw new Error("Физическая история не разрешила все карты USER_ID");
-  }
-
-  const seen = new Set<string>();
-  const records = history.records.map((record: BitrixAntiFraudCheckinRecord) => {
-    if (Number(record.bitrixUserId) !== userId) {
-      throw new Error("Физическая история содержит USER_ID вне операторского расследования");
-    }
-    const physicalEventId = String(record.sourceRestisId ?? "").trim();
-    if (!physicalEventId || seen.has(physicalEventId)) {
-      throw new Error("Физическая история содержит некорректный или повторный event id");
-    }
-    seen.add(physicalEventId);
-
-    return {
-      physicalEventId,
-      bitrixUserId: userId,
-      occurredAt: new Date(record.occurredAt),
-      restaurant: String(record.restaurant ?? "").trim(),
-    };
-  });
-
-  return {
-    from: new Date(history.from),
-    to: new Date(history.to),
-    records,
-    unresolvedCardCount,
-  };
-};
+import { buildAntiFraudOperatorPhysicalHistorySnapshot } from "./anti-fraud-operator-physical-history-rules";
 
 // Добавлено 23.09.2026 ИТ Директор Евразии
 // Targeted Check-in snapshot хранится отдельно от anti_fraud_visits.
