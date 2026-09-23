@@ -2,7 +2,7 @@
 
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: **2026-09-23** after PR #65 operator physical-history snapshot production acceptance.
+> Last updated: **2026-09-23** after PR #67 browser-visible acceptance and legacy physical-snapshot backfill.
 
 ## 1. Main rule
 
@@ -116,13 +116,17 @@ PR #65 changes the source of operator physical-history metrics to a dedicated pe
 
 The parent investigation persists `physical_history_from` / `physical_history_until`. Targeted responses with unresolved cards fail closed.
 
+PR #67 completes the browser-visible layer: rendering of the physical-history panel depends on the PR #65 snapshot completion fields and no longer depends on legacy `loyaltyHistoryLoadedAt`. Five legacy latest-ready investigations created before snapshot persistence were backfilled; all seven current latest-ready investigations now have physical coverage. Browser visual acceptance is PASS.
+
 Critical invariant:
 
 `anti_fraud_operator_investigation_visits` is operator evidence and **must not** feed `anti_fraud_visits`. The latter remains automatic risk/history telemetry.
 
-Current production revision after PR #65: `d1746ceabb513727baad729adbd3333328fc2dab`.
+Current production revision after PR #67: `b0d12a112577de2a35e0a49e55367e3bc459bc07`.
 
-Current production immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`.
+Current production immutable digest: `sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`.
+
+Current image config ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`.
 
 Current image config ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`.
 
