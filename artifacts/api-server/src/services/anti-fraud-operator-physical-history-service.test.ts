@@ -102,3 +102,13 @@ test("operator physical snapshot service never writes automatic anti_fraud_visit
   assert.doesNotMatch(source, /DELETE\s+FROM\s+anti_fraud_visits/i);
   assert.match(source, /anti_fraud_operator_investigation_visits/);
 });
+
+test("operator physical snapshot fails closed when targeted history has unresolved cards", () => {
+  const history = result([]);
+  history.unresolvedCardCount = 1;
+
+  assert.throws(
+    () => buildAntiFraudOperatorPhysicalHistorySnapshot(history, 6645),
+    /не разрешила все карты/,
+  );
+});
