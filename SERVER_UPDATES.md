@@ -2,7 +2,7 @@
 
 > Current production operations note for Evrasia AI Bot.
 >
-> Last updated: **2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
+> Last updated: **2026-09-23** after PR #65 production acceptance for dedicated operator physical-history snapshots.
 
 ## Current production host
 
@@ -21,13 +21,13 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 Application:
 
 - service/container: `evrasia-ai-bot-app`
-- accepted deployed revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
-- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
-- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`
+- accepted deployed revision: `d1746ceabb513727baad729adbd3333328fc2dab`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
+- canonical Compose SHA256 at acceptance: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
 - app port: `127.0.0.1:18080 -> 8080`
-- production migrations: **25**
-- status: running healthy / PR #62 production accepted.
+- production migrations: **26**
+- status: running healthy / PR #65 production accepted; restart count 0.
 
 PR #62 acceptance facts:
 
@@ -57,6 +57,49 @@ The production runtime was already on the PR #62 target when the guarded deploym
 
 A later docs-only GitHub commit may advance `main`; it does not by itself change the deployed application identity above. Before any future mutation, re-read factual runtime revision/image from production.
 
+## 2026-09-23 — PR #65 operator physical-history snapshot
+
+PR #65 **Anti-Fraud: separate operator physical history from risk telemetry** is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**.
+
+Architecture:
+
+- manual 60-day physical history comes from the targeted protected Check-in endpoint;
+- snapshot table: `anti_fraud_operator_investigation_visits`;
+- snapshot is scoped by `investigation_id`;
+- `anti_fraud_operator_investigations` stores `physical_history_from` / `physical_history_until`;
+- UI visit/day/restaurant metrics read the dedicated snapshot;
+- operator physical snapshot events do not enter `anti_fraud_visits`;
+- unresolved targeted card mappings fail closed.
+
+Website targeted Check-in dedup:
+
+- old service SHA: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`;
+- accepted service SHA: `5f65703d91ee31a9d829cd64cefd011309c8a6c44d3fa96d2d8c77a1f81541e9`;
+- backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/anti-fraud-targeted-dedup-20260923-095449`;
+- USER_ID `6645`: 17 raw rows → 13 old Scout-style events → 10 targeted physical events;
+- external endpoint/gateway verification: 10 records, 10 unique source IDs, unresolved 0.
+
+Bot deployment:
+
+- revision: `d1746ceabb513727baad729adbd3333328fc2dab`;
+- immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`;
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`;
+- migrations: **26**;
+- deployment result: **61 PASS / 0 FAIL / 0 WARN**;
+- rollback: not required;
+- backup: `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`;
+- DB backup SHA256: `22643ef67f2d016886aa87c53c18cfcdc3c113ee502b2d76272255086747403f`.
+
+Production acceptance:
+
+- USER_ID `6645`: status ready; source 10 = snapshot 10; UI 10 visits / 9 days / 4 restaurants; snapshot-to-`anti_fraud_visits` intersection 0;
+- USER_ID `408974`: status ready; source 8 = snapshot 8; UI 8 visits / 7 days / 7 restaurants; snapshot-to-`anti_fraud_visits` intersection 0;
+- combined result: **31 PASS / 0 FAIL / 0 WARN**.
+
+Authoritative acceptance record:
+
+`docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
+
 ## PostgreSQL
 
 - service/container: `evrasia-ai-bot-db`
@@ -66,10 +109,10 @@ A later docs-only GitHub commit may advance `main`; it does not by itself change
 - retained test DB: `evrasia_ai_bot_antifraud_test`
 - volume: `evrasia-postgres-prod-data`
 - network: `evrasia-prod-internal`
-- production migrations: **24**
-- latest relevant Anti-Fraud migration tag: `0023_anti_fraud_checkin_scout`
+- production migrations: **26**
+- latest relevant Anti-Fraud migration tag: `0025_anti_fraud_operator_physical_history`
 
-Current Scout tables/state were introduced through PR #56. PR #57/#58 did not add migrations.
+PR #65 added the dedicated operator physical-history snapshot table and physical-history window columns. PR #56 Scout state remains separate.
 
 ## 2026-09-19 → 2026-09-20 — Check-in Scout, phone resolver, Trusted Device display
 
@@ -352,6 +395,7 @@ Do not clean without explicit operator approval.
 
 Known retained backups include:
 
+- `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`
 - `/opt/evrasia-ai-bot/backups/pr44-modal-fix-20260909-111032`
 - `/opt/evrasia-ai-bot/backups/pr41-inactive-ui-20260908-110846`
 - `/opt/evrasia-ai-bot/backups/anti-fraud-similarity-hotfix-20260908-090617`
@@ -390,22 +434,24 @@ Mandatory lessons include:
 
 ## Current release status
 
-Current accepted production application is PR #60:
+Current accepted production application is PR #65:
 
-- revision: `f98d10c327e14b6dd5a34a9117ce25310ed6180e`;
-- immutable digest: `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`;
-- image ID: `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`;
-- migrations: 25;
-- runtime: healthy at acceptance;
-- migration `0024_anti_fraud_operator_investigation`: applied and schema verified;
-- deployment backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`;
-- backup DB SHA256: `f164b6adb75d615488a1e7124f1bdfecd47e3f57af3464a14a2a8a4a1f44e201`;
-- deployment result: 13 PASS / 0 FAIL / 0 WARN;
+- revision: `d1746ceabb513727baad729adbd3333328fc2dab`;
+- immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`;
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`;
+- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`;
+- migrations: **26**;
+- runtime: healthy at acceptance, restart count 0;
+- migration `0025_anti_fraud_operator_physical_history`: applied and schema verified;
+- deployment backup: `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`;
+- backup DB SHA256: `22643ef67f2d016886aa87c53c18cfcdc3c113ee502b2d76272255086747403f`;
+- deployment result: **61 PASS / 0 FAIL / 0 WARN**;
+- end-to-end operator-history acceptance: **31 PASS / 0 FAIL / 0 WARN**;
 - rollback: not required.
 
-Manual investigation by phone is now production. Remaining work is operator-visible end-to-end acceptance on an account intentionally selected for investigation. See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+Manual investigation by phone, operator-visible evidence, dedicated physical-history snapshots and targeted multi-card dedup are now production-verified.
 
-Earlier PR #44/#45 modal work remains historical and accepted but is no longer the latest release state.
+Do not repeat PR #65 deployment, USER_ID 6645 / 408974 acceptance, site-side dedup investigation, modal fixes, block/unblock acceptance, Check-in Scout deployment, PR #57/#58 UI deployment or phone-resolver deployment merely for reassurance.
 
-No repeat modal fix, block/unblock acceptance, Check-in Scout deployment, PR #57/#58 UI deployment or phone-resolver deployment is pending.
+Current continuation record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
