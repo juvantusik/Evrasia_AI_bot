@@ -776,15 +776,15 @@ Bitrix/PHP can produce an error page while a shell/PHP command exits 0. Acceptan
 
 ---
 
-## 15. TOTP 2FA workstream remains paused
+## 15. TOTP 2FA is a separate parallel workstream
 
-Do not resume TOTP work unless the operator explicitly asks to continue the TOTP 2FA workstream.
+TOTP work is no longer merely planned: the pilot is enrolled and the direct web PIN pilot is deployed for USER_ID `880339`.
 
 Authoritative TOTP checkpoint:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Do not mix TOTP work into the current Anti-Fraud Step 2 task.
+Do not mix TOTP implementation/acceptance into the current Anti-Fraud multicard-history task unless the operator explicitly switches workstreams.
 
 ---
 
