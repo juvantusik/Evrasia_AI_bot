@@ -6,7 +6,7 @@
 >
 > Source priority remains: **actual production → current GitHub → staging/test → current docs → older discussion**.
 >
-> This checkpoint now records the factual state through PR #62 production acceptance on 2026-09-20.
+> This checkpoint records the factual state through PR #62 production acceptance and the 2026-09-23 manual-history multicard root-cause/source audit.
 
 ---
 
@@ -790,21 +790,20 @@ Do not mix TOTP work into the current Anti-Fraud Step 2 task.
 
 ## 16. What a new chat should do immediately
 
-When continuing this work in a new chat:
+When continuing the current Anti-Fraud workstream in a new chat:
 
-1. read `docs/PROJECT_CHECKPOINT.md`;
+1. read `docs/NEW_CHAT_HANDOFF.md`;
 2. read this file;
-3. read `docs/AI_PROJECT_CONTEXT.md`;
-4. inspect actual GitHub `main`;
-5. inspect actual production runtime before any write;
-6. do not redo PR #56/#57/#58, Scout deployment, Bitrix phone resolver research or resolver deployment;
-7. continue **Step 2 bot side** from the current production/code state.
+3. read `docs/PROJECT_CHECKPOINT.md`, `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md` and `docs/SERVER_SCRIPT_RULES.md`;
+4. inspect actual GitHub and factual production before any write;
+5. do **not** redo PR #56/#57/#58/#60/#62 rollout or the multicard root-cause/source audits;
+6. resume from the 2026-09-23 defect below.
 
-The likely first implementation task is:
+Exact active continuation:
 
-**inspect current main for the cleanest minimal bot gateway + persistent operator-investigation schema before creating migration 0024.**
+**design a minimal multicard-safe manual physical-history path based on the existing targeted 60-day Check-in source, and separately trace why USER_ID 6645 has no targeted Check-in record for the expected event.**
 
-Do not make the generic operator watchlist the final Step 2 persistence layer.
+No production write for this defect has been applied yet.
 
 ---
 
@@ -823,16 +822,106 @@ After every material change to architecture, production, DB, protected API, Anti
 Do not leave the newest factual state only in chat history.
 
 
-## 2026-09-23 — manual history multicard gap
+## 2026-09-23 — manual history multicard gap — root cause confirmed
 
-READ_ONLY production diagnostics for two operator-added accounts established a systematic manual-history gap:
+READ_ONLY production diagnostics for two operator-added accounts established a systematic manual-history gap.
 
-- both accounts resolve uniquely to Bitrix USER_IDs;
-- both currently have exactly two active loyalty cards and site-side loyalty returns `issue=multiple_active_cards`;
-- `AntiFraudLoyaltyService` intentionally does not call legacy `VIP_HISTORY` when `count($cards) > 1`; it still returns account balance by phone but leaves history empty;
-- current operator investigation worker still uses `enrichRestisHistoryForOperatorInvestigationOnce`, therefore an investigation can reach `ready` with zero history even though history was not actually loaded;
-- for USER_ID 408974 the protected Check-in source independently proves two physical check-ins on 2026-09-22, while loyalty history remains empty;
-- for USER_ID 6645 targeted Check-in history currently returns zero for that day, so this account has a second, separate source/linkage issue to trace;
-- the previously suspected 24-hour history cache is not the root cause for these two cases.
+Resolved USER_ID values:
 
-Architecture consistency finding: the existing Check-in Scout already treats targeted 60-day `COfflineOrderHl` history as the authoritative physical-visit source and explicitly avoids `VIP_HISTORY` for physical-visit counting. The operator UI labels its metrics as physical visits, so the next design gate is to move manual operator history to the same targeted physical Check-in source (or otherwise separate physical-visit history from monetary loyalty history) rather than merging multiple-card `VIP_HISTORY` rows. No production writes were made during this diagnosis.
+- first account → `6645`;
+- second account → `408974`.
+
+Do not copy the full phone numbers into diagnostics/docs when USER_ID is sufficient.
+
+### Bot/source comparison
+
+For USER_ID `6645`:
+
+- protected phone resolver: unique;
+- targeted Check-in, last 3 Moscow days: **0** records;
+- protected loyalty: `active_card_count=2`, `active_card_found=false`, `issue=multiple_active_cards`;
+- protected loyalty 60-day history: **0**;
+- bot DB verified loyalty visits: **0**;
+- latest operator investigation: `ready` with completed history stage;
+- current UI history window therefore shows **0 physical visits**.
+
+For USER_ID `408974`:
+
+- protected phone resolver: unique;
+- targeted Check-in, last 3 Moscow days: **2** records;
+- both physical Check-ins are on **2026-09-22**;
+- protected loyalty: `active_card_count=2`, `active_card_found=false`, `issue=multiple_active_cards`;
+- protected loyalty 60-day history: **0**;
+- bot DB verified loyalty visits: **0**;
+- Check-in Scout persistent state is `watching` with `double_checkin` trigger for 2026-09-22;
+- latest operator investigation nevertheless reached `ready` and the UI shows zero history.
+
+The prior 24-hour freshness-cache hypothesis is ruled out: bot account coverage was not fresh/complete and `freshness_cache_would_skip_now=NO` for both.
+
+### Exact production root cause
+
+Site-side protected routes are wired as expected:
+
+- `POST /api/internal/anti-fraud/loyalty` → `AntiFraudLoyaltyService.php`;
+- `POST /api/internal/anti-fraud/checkins` → `AntiFraudCheckinScoutService.php`;
+- `POST /api/internal/anti-fraud/phone-resolve` → resolver service.
+
+Production source baselines from the final read-only audit:
+
+- route file SHA256: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- `AntiFraudLoyaltyService.php` SHA256: `44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`;
+- `AntiFraudCheckinScoutService.php` SHA256: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`;
+- audit result: **9 PASS / 0 FAIL / 0 WARN**, read-only.
+
+The live loyalty code explicitly does the following:
+
+1. collects active Bitrix loyalty cards with `RESTIS_STATE=113`;
+2. sets `active_card_found=true` only when exactly one active card exists;
+3. when more than one active card exists, sets `issue=multiple_active_cards`;
+4. still calls RestIS `/api/Balance` by phone to obtain account-level balance;
+5. then returns early on `count($cards) > 1`;
+6. therefore legacy `VIP_HISTORY` is **not requested** for multicard accounts because that legacy request requires one concrete card number.
+
+This behavior is intentional in the site-side loyalty service, but the bot-side operator investigation currently treats the empty loyalty-history result as successful completion. That mismatch is the defect.
+
+### Why the Check-in source is the correct physical-history direction
+
+The production targeted Check-in service:
+
+- accepts `user_ids` and up to 60 days;
+- resolves **all Bitrix card element IDs owned by each requested USER_ID**, not only one active card;
+- queries `COfflineOrderHl` by those card IDs;
+- maps each physical event back to the USER_ID;
+- does not expose raw card numbers or raw RestIS IDs.
+
+Therefore multiple active cards do **not** inherently prevent targeted physical history. USER_ID `408974` proves this path works for a multicard account.
+
+The operator card currently labels the result as **physical visits**. The safest architecture direction is therefore:
+
+**manual operator physical history → targeted 60-day Check-in source**
+
+while keeping account-level loyalty balance/history semantics separate.
+
+Do **not** merge multiple-card `VIP_HISTORY` rows into the physical-visit counter merely to fill the UI; `VIP_HISTORY` and physical Check-in semantics are not interchangeable.
+
+### Separate unresolved issue: USER_ID 6645
+
+USER_ID `6645` has the same multicard loyalty limitation, but targeted Check-in also returns zero. That is a separate issue and must be traced before any broad write.
+
+The source audit confirms targeted Check-in depends on existing `COfflineOrderHl` rows linked through Bitrix card IDs. Historical site code populates that store from per-card RestIS history, so the next trace must determine whether the expected event:
+
+- never reached `COfflineOrderHl`;
+- is linked to a different Bitrix card;
+- is linked to another USER_ID;
+- or is outside the expected mapping for another factual reason.
+
+Do not guess which one until a targeted read-only trace proves it.
+
+### Exact next gate
+
+1. design the minimal bot/site contract change for manual physical history to use the existing targeted 60-day Check-in source;
+2. preserve current no-auto-block, risk, grouping, loyalty-balance and credential-boundary semantics;
+3. separately trace USER_ID `6645` before write;
+4. only then build guarded implementation/deployment steps.
+
+No production write was made during these diagnostics.
