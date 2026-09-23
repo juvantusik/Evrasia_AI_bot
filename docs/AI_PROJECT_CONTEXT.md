@@ -2,10 +2,10 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-20
+> **Last updated:** 2026-09-23
 > **Repository:** `juvantusik/Evrasia_AI_bot`
 > **Current accepted deployed app revision:** `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-> **Current production milestone:** PR #60 manual investigation by phone is production; PR #62 operator-visible 60-day history / Device ID / linked USER_ID results are production-verified.
+> **Current production milestone:** PR #62 remains the accepted bot runtime; TOTP direct-PIN pilot is deployed on the website for USER_ID 880339; the active Anti-Fraud continuation is the diagnosed multicard manual-history defect.
 
 ---
 
@@ -13,14 +13,15 @@
 
 In a new chat, read in this order:
 
-0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — current Anti-Fraud / Scout / manual-investigation handoff
-1. `docs/PROJECT_CHECKPOINT.md`
-2. `docs/AI_PROJECT_CONTEXT.md`
-3. `docs/CURRENT_ARCHITECTURE.md`
-4. `docs/SERVER_SCRIPT_RULES.md`
-5. `SERVER_UPDATES.md`
-6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`
-7. `docs/NEW_CHAT_HANDOFF.md`
+0. `docs/NEW_CHAT_HANDOFF.md` — fastest current handoff and exact active continuation
+1. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — current Anti-Fraud / Scout / manual-investigation handoff
+2. `docs/PROJECT_CHECKPOINT.md`
+3. `docs/AI_PROJECT_CONTEXT.md`
+4. `docs/CURRENT_ARCHITECTURE.md`
+5. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
+6. `docs/SERVER_SCRIPT_RULES.md`
+7. `SERVER_UPDATES.md`
+8. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md`
 
 Source priority:
 
@@ -238,7 +239,7 @@ Read-only production inspection reconfirmed the Bitrix resolver SHAs and showed 
 
 Production acceptance on 2026-09-20: revision `f98d10c327e14b6dd5a34a9117ce25310ed6180e`, immutable digest `sha256:6b21a15ad09bd82643401e6d1f3a2c18ab8dd42adcdfb1f4997b26a71f487e40`, image ID `sha256:af1e6ee925cd55ad2ed63be12fe13e8f18e3f33a95678bfe8f14141756762c43`, migrations 25, deployment 13 PASS / 0 FAIL / 0 WARN, rollback not required. Backup: `/opt/evrasia-ai-bot/backups/pr60-manual-investigation-20260920-153256`.
 
-Do not repeat deployment or backend smoke merely for reassurance. The remaining acceptance step is a deliberate operator-visible end-to-end use of **«Добавить на проверку»** on an account the operator actually intends to investigate.
+Do not repeat deployment or backend smoke merely for reassurance. Operator-visible use of **«Добавить на проверку»** has now been exercised on real intended investigations; that acceptance exposed the 2026-09-23 multicard manual-history defect documented in sections 18–19. Continue from that defect, not from PR #60 rollout.
 
 See `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` for hashes, routes, backup paths and deployment proof.
 
@@ -427,16 +428,111 @@ When a decision changes, record **Было → Стало → Причина** a
 
 ---
 
-## 17. TOTP 2FA / protected-profile workstream — PLANNED
+## 17. TOTP 2FA / protected-profile workstream — PILOT DEPLOYED
 
 Authoritative continuation document:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Continuation keyword: **ПАНДА ДВА**.
+Pilot is restricted to Bitrix USER_ID `880339`.
 
-The workstream is read-only investigated and not implemented. It covers optional TOTP 2FA for guest accounts, SMS ownership confirmation before authenticator enrollment, pilot rollout for Bitrix USER_ID `880339`, session revocation after enrollment, and the planned direct bonus-PIN experience for a session that has actually passed the second factor.
+Current factual production state:
 
-Confirmed production facts, file paths, table structures, SHA baselines, current Bitrix MFA state, current signin/PIN flows, security invariants and exact next steps are maintained in the dedicated checkpoint above.
+- native Bitrix MFA/TOTP is in use;
+- global OTP is enabled;
+- mandatory OTP remains OFF;
+- exactly one pilot TOTP enrollment was present at acceptance and no non-pilot OTP rows were present;
+- SMS ownership is required before QR/secret exposure;
+- real QR/TOTP enrollment succeeded;
+- pre-enrollment web/mobile sessions were revoked;
+- password → TOTP login E2E succeeded;
+- the account security card shows `Подключена` and `Отключить 2FA`;
+- native `CUser::getContext()->isOtpUsed()` is the accepted current-session proof;
+- a fresh canonical TOTP session reports `otpUsed=true`;
+- a later cookie-restored session reports `otpUsed=false`, which is an intended privilege downgrade.
 
-When the operator says **ПАНДА ДВА**, resume from that document and do not repeat the completed discovery audits.
+Direct web PIN pilot is deployed:
+
+- source PIN remains the existing `CRestis::pincode()` mechanism;
+- no new PIN generator/store was created;
+- direct disclosure requires canonical `evrasia.rest`, POST, valid Bitrix sessid, active initialized TOTP, matching current auth context and `isOtpUsed()=true`;
+- otherwise the existing VK/SMS path remains;
+- fresh incognito password → TOTP session showed **«Показать Пин-код»** and displayed a real PIN;
+- direct-display UI/transport E2E is PASSED;
+- **actual spend/payment use of that displayed PIN is still awaiting operator confirmation**;
+- rollout beyond USER_ID `880339` remains forbidden.
+
+Current direct-PIN production SHAs:
+
+- endpoint: `4d637e1bff15682d3eae6a5b4e3ffa074e2543daaf408767e2894654df2a0713`;
+- template: `569aaba642d5601215b453b04d06837da04b1378a8a69fd079ef777ad5797710`;
+- JS: `9b7afe419ee979089fda4b65af3475f415ea1eec8827a3c27d7be594ee5a68b4`;
+- backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/direct-pin-pilot-20260923-060243`.
+
+Pending:
+
+1. confirm that the displayed direct PIN works in a real bonus-spend/payment operation;
+2. explicitly verify cookie-restored / `otpUsed=false` fallback to legacy VK/SMS;
+3. verify ordinary non-2FA account compatibility with global OTP ON / mandatory OFF;
+4. repair the current disable-TOTP guard design before testing disable/reset/recovery;
+5. separately remediate the hardcoded PHP session cookie in `verify_order_by_sms.php` without ever printing its value.
+
+Do not repeat TOTP discovery, enrollment, session-proof or direct-PIN deployment.
+
+---
+
+## 18. Manual Anti-Fraud history multicard defect — ACTIVE
+
+Two real operator investigations exposed a systematic mismatch between the manual-history implementation and the physical-history semantics shown in the UI.
+
+Affected internal USER_ID values:
+
+- `6645`;
+- `408974`.
+
+Confirmed production facts:
+
+- both accounts have two active loyalty cards;
+- protected loyalty returns `issue=multiple_active_cards`;
+- site-side `AntiFraudLoyaltyService.php` deliberately skips legacy `VIP_HISTORY` when `count($cards) > 1`;
+- the account-level balance still comes from RestIS `/api/Balance` by phone;
+- current operator investigation can still reach `ready` with zero history;
+- USER_ID `408974` has two targeted physical Check-in events on 2026-09-22;
+- USER_ID `6645` targeted Check-in returns zero for the expected event and needs a separate trace;
+- the 24-hour cache hypothesis is ruled out.
+
+Production source baselines:
+
+- protected route file: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- loyalty service: `44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`;
+- Check-in Scout service: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`;
+- final read-only source audit: 9 PASS / 0 FAIL / 0 WARN.
+
+Architecture direction already supported by production:
+
+- targeted Check-in accepts `user_ids` and up to 60 days;
+- it resolves every Bitrix card ID owned by the requested USER_ID;
+- it queries physical `COfflineOrderHl` events by those card IDs;
+- it maps them back to USER_ID without exposing raw card numbers.
+
+Therefore the current next design gate is:
+
+**manual operator physical visits → existing targeted 60-day Check-in source**
+
+with loyalty balance/history kept as a separate concern.
+
+Before any write, separately trace why USER_ID `6645` has no targeted Check-in event. Do not assume the event is missing, mis-owned or linked elsewhere until read-only evidence proves which.
+
+---
+
+## 19. Immediate continuation point — 2026-09-23
+
+If the operator continues the current Anti-Fraud problem, do not reopen completed PR #60/#62 work. Resume from:
+
+1. design the minimal multicard-safe manual physical-history contract using targeted Check-in;
+2. trace USER_ID `6645` separately;
+3. then implement/test/deploy with normal production guards.
+
+If the operator switches back to TOTP, resume from direct-PIN business acceptance and negative compatibility gates, not from enrollment/discovery.
+
+For a new chat, read `docs/NEW_CHAT_HANDOFF.md` first.

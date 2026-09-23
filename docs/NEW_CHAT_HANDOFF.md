@@ -2,32 +2,33 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
+> **Updated: 2026-09-23** after TOTP direct-PIN pilot acceptance and the manual Anti-Fraud multicard-history root-cause audit.
 
 ## Ready-to-paste instruction for a new chat
 
 Продолжаем проект Evrasia AI Bot. Не начинай работу заново и не проси меня повторять уже установленный контекст.
 
 Репозиторий: `juvantusik/Evrasia_AI_bot`.
+Самая свежая документационная ветка/handoff: `docs/pr62-consistency-cleanup`.
 
-Сначала полностью прочитай:
+Сначала прочитай:
 
-0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — **самый свежий authoritative handoff для текущей ветки Anti-Fraud / Check-in Scout / ручной проверки по телефону**;
-1. `docs/PROJECT_CHECKPOINT.md` — общий authoritative checkpoint;
-2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
-3. `docs/CURRENT_ARCHITECTURE.md` — актуальная архитектура;
-4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
-5. `SERVER_UPDATES.md` — фактическая история production/server updates;
-6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
-7. `docs/ANTI_FRAUD_UI_NEXT.md` — исторический UI-план с отметкой, что прежние пункты уже реализованы; текущий следующий шаг — Step 2 из checkpoint 2026-09-20;
-8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
-9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — planned TOTP 2FA / protected-profile design, production read-only findings and continuation keyword `ПАНДА ДВА`;
-11. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
+0. `docs/NEW_CHAT_HANDOFF.md`;
+1. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`;
+2. `docs/PROJECT_CHECKPOINT.md`;
+3. `docs/AI_PROJECT_CONTEXT.md`;
+4. `docs/CURRENT_ARCHITECTURE.md`;
+5. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`;
+6. `SERVER_UPDATES.md`;
+7. `docs/SERVER_SCRIPT_RULES.md`.
 
-Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
+Приоритет источников: **фактический production → актуальный GitHub → staging/test → актуальная документация → старые обсуждения**.
 
-После docs-only commit GitHub `main` может быть новее deployed application revision. Перед следующей production mutation всегда отдельно проверяй фактический runtime image/revision.
+Текущая активная точка Anti-Fraud: доказан дефект ручной истории для multicard-аккаунтов. USER_ID `408974` имеет 2 физических Check-in 22.09.2026, но loyalty/VIP_HISTORY пуст из-за `multiple_active_cards`. USER_ID `6645` имеет ту же multicard-проблему, но targeted Check-in дополнительно возвращает 0 и требует отдельной трассировки. 24-часовой cache как причина исключён. Следующий шаг — спроектировать минимальный multicard-safe путь операторской физической истории через existing targeted 60-day Check-in source и отдельно найти причину отсутствия Check-in у USER_ID 6645. По этому дефекту production write ещё не делали.
+
+Параллельный TOTP workstream: пилот USER_ID `880339` уже enrolled, native `otpUsed` proof подтверждён, direct web PIN pilot deployed. В свежей incognito password→TOTP сессии кнопка **«Показать Пин-код»** появилась и PIN был показан. Полный business E2E остаётся pending только до подтверждения реального использования этого PIN при списании. Rollout за пределы 880339 запрещён.
+
+Не повторяй завершённые discovery/deploy проверки. Сначала назови восстановленную текущую точку и только потом продолжай.
 
 ---
 
@@ -278,62 +279,125 @@ Especially important after the PR #44 → #45 deployment sequence:
 
 ---
 
-## 9. Immediate continuation point
+## 9. Immediate continuation point — 2026-09-23
 
-Current status on 2026-09-20:
+Two workstreams are currently open. Do not mix them unless the operator explicitly switches context.
 
-- Check-in Scout Step 1: **DONE / MERGED / DEPLOYED / VERIFIED**;
-- PR #57 Trusted Device display: **DONE / DEPLOYED**;
-- PR #58 Russian device labels + Scout display wording: **DONE / DEPLOYED / OPERATOR ACCEPTED**;
-- Bitrix protected phone resolver for manual Anti-Fraud investigation: **DONE / PRODUCTION / VERIFIED**;
-- bot-side Step 2 manual investigation: **NOT YET IMPLEMENTED**.
+### A. Anti-Fraud manual-history defect — ACTIVE continuation
 
-The next Anti-Fraud implementation should continue with the **bot side of “Добавить на проверку” by phone**:
+Two operator investigations that should have shown recent history exposed a factual design gap.
 
-1. protected bot gateway to `/api/internal/anti-fraud/phone-resolve`;
-2. persistent operator-investigation table/state;
-3. explicit operator-authorized 60-day enrichment without faking `riskGateConfirmed`;
-4. normal scoring;
-5. UI action **«Добавить на проверку»**, phone-first;
-6. separate persistent operator source/reason such as `Авито`;
-7. no auto-block;
-8. tests → staged rollout → production verification.
+Resolved internal accounts:
 
-Do not redo phone-resolver research/deployment or Check-in Scout deployment.
+- USER_ID `6645`
+- USER_ID `408974`
 
-Use `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` as the detailed continuation source.
+Production facts already proven read-only:
 
-If the operator writes **ПАНДА ДВА**, switch to the paused TOTP workstream instead; otherwise do not mix TOTP into the current Anti-Fraud continuation.
+- both accounts currently have `active_card_count=2`;
+- protected loyalty endpoint returns `issue=multiple_active_cards` for both;
+- current `AntiFraudLoyaltyService.php` deliberately does **not** call legacy `VIP_HISTORY` when more than one active card exists, because `VIP_HISTORY` requires one concrete card number;
+- the worker currently treats this no-history loyalty result as successful history completion, so the investigation can become `ready` while the operator UI shows zero history;
+- the earlier 24-hour cache hypothesis is ruled out for these cases;
+- USER_ID `408974` has **2 physical Check-in events on 2026-09-22** in the targeted Check-in source, while loyalty history is empty;
+- USER_ID `6645` has the same multicard loyalty limitation but targeted Check-in returns **0** events for the expected period, so it has a separate Check-in/card-linkage/source-population issue to trace.
+
+Latest site-side production source baselines:
+
+- `AntiFraudLoyaltyService.php` SHA256: `44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`;
+- `AntiFraudCheckinScoutService.php` SHA256: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`;
+- protected route file SHA256: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- last audit result: **9 PASS / 0 FAIL / 0 WARN**, read-only.
+
+Important architecture fact:
+
+- targeted Check-in history resolves **all Bitrix card IDs owned by the requested USER_ID**, then queries `COfflineOrderHl` by those card IDs;
+- therefore the multicard state itself does not prevent targeted physical Check-in history;
+- manual operator **physical visits** should be sourced from the existing targeted 60-day Check-in path rather than relying on single-card `VIP_HISTORY`;
+- loyalty/balance semantics remain separate, and no raw card number or RestIS credential should cross into the bot.
+
+**Exact next gate:** design the minimal multicard-safe manual-history fix and separately trace why USER_ID `6645` has no targeted Check-in record. No production write has been approved/applied for this defect yet.
+
+### B. TOTP 2FA / protected direct PIN — PILOT deployed
+
+Pilot remains only Bitrix USER_ID `880339`.
+
+Current accepted production state:
+
+- native Bitrix TOTP is enabled globally but **not mandatory**;
+- exactly one active/initialized pilot TOTP row exists; no non-pilot OTP rows were present at acceptance;
+- fresh canonical `https://evrasia.rest/` password → TOTP login proves native current-session `isOtpUsed()=true`;
+- later cookie-restored sessions correctly downgrade to `otpUsed=false`;
+- no custom OTP session flag is needed;
+- pilot direct web PIN is deployed;
+- direct PIN is server-authoritative and requires canonical host + POST + valid sessid + active initialized TOTP + matching current auth context + `isOtpUsed()=true`;
+- in a fresh incognito TOTP session, the PIN block showed **«Показать Пин-код»** and displayed a real PIN in-browser;
+- this proves direct-display transport/UI E2E;
+- **actual use of that displayed PIN for a real bonus-spend/payment operation is still awaiting operator confirmation**;
+- rollout beyond USER_ID `880339` remains prohibited.
+
+Direct-PIN production backup:
+
+`/home/site_evrasia/web/evrasia.spb.ru/backups/direct-pin-pilot-20260923-060243`
+
+Current direct-PIN production SHAs:
+
+- `/local/php_interface/pincode.php`: `4d637e1bff15682d3eae6a5b4e3ffa074e2543daaf408767e2894654df2a0713`;
+- account.pincode template: `569aaba642d5601215b453b04d06837da04b1378a8a69fd079ef777ad5797710`;
+- account.pincode JS: `9b7afe419ee979089fda4b65af3475f415ea1eec8827a3c27d7be594ee5a68b4`.
+
+Still pending before any broader TOTP/direct-PIN rollout:
+
+1. operator confirmation that the direct PIN actually works in a real spend/payment operation;
+2. explicit negative-path acceptance that a cookie-restored / `otpUsed=false` pilot session does **not** get direct PIN and falls back to legacy VK/SMS;
+3. ordinary non-2FA account compatibility with global OTP ON / mandatory OFF;
+4. separate repair of `disableTotpAction()`, which still reuses an enrollment-only guard and must not be exercised until reset/recovery/cooling-off semantics are designed;
+5. separate audit/remediation of the hardcoded PHP session cookie in `verify_order_by_sms.php`; never reproduce the cookie value.
 
 ---
 
-## 10. Keyword continuation — ПАНДА ДВА
+## 10. What a new chat must do first
 
-If the operator writes **ПАНДА ДВА**, resume the TOTP 2FA / protected-profile workstream from:
+1. Read this file and the current authoritative checkpoints:
+   - `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`;
+   - `docs/PROJECT_CHECKPOINT.md`;
+   - `docs/AI_PROJECT_CONTEXT.md`;
+   - `docs/CURRENT_ARCHITECTURE.md`;
+   - `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`;
+   - `SERVER_UPDATES.md`;
+   - `docs/SERVER_SCRIPT_RULES.md`.
+2. Inspect factual GitHub/production state before any write; documentation-only commits may be newer than the deployed app.
+3. Do **not** repeat already completed PR #62 deployment, TOTP enrollment, session-proof, direct-PIN deployment, or the multicard root-cause audits.
+4. If continuing the current Anti-Fraud issue, resume from:
+   **design multicard-safe physical-history flow + trace USER_ID 6645 targeted Check-in absence**.
+5. If continuing TOTP, resume from:
+   **real-use direct-PIN confirmation / negative cookie-session fallback / ordinary non-2FA compatibility**, not from enrollment discovery.
 
-`docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
+---
 
-Do not repeat the already completed production read-only discovery.
+## 11. Ready-to-paste new-chat prompt
 
-The business request is:
+```text
+Продолжаем Evrasia AI Bot как единый проект, ничего уже сделанного не переделывай.
 
-- optional TOTP 2FA using Яндекс Ключ / Google Authenticator / compatible TOTP clients;
-- enrollment requires SMS confirmation of the current account phone **before** exposing the TOTP provisioning QR/secret;
-- TOTP protects login; it does not replace the bonus-spending PIN;
-- after safe enrollment, the intended benefit is to show the actual bonus-spending PIN directly in the personal account without waiting for VK/SMS;
-- all ordinary profiles keep current behavior;
-- initial pilot is Bitrix USER_ID `880339` only.
+Репозиторий: juvantusik/Evrasia_AI_bot.
+Документационная ветка с самым свежим handoff: docs/pr62-consistency-cleanup.
 
-Confirmed production facts:
+Сначала восстанови контекст из:
+1) docs/NEW_CHAT_HANDOFF.md
+2) docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md
+3) docs/PROJECT_CHECKPOINT.md
+4) docs/AI_PROJECT_CONTEXT.md
+5) docs/CURRENT_ARCHITECTURE.md
+6) docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md
+7) SERVER_UPDATES.md
+8) docs/SERVER_SCRIPT_RULES.md
 
-- native `Bitrix\Security\Mfa\Otp` exists;
-- global `OTP_ENABLED=NO` at the checkpoint;
-- pilot OTP state is clean/uninitialized/unactivated;
-- native tables are `b_sec_user` and `b_sec_recovery_codes`;
-- current web login uses AJAX `eurasia:signin/process` -> `CUser->Login(...)`;
-- current web bonus PIN endpoint is `/local/php_interface/pincode.php`, which gets the RestIS PIN then delivers through VK/SMS;
-- existing logout/revocation code can revoke pre-2FA sessions.
+Приоритет источников: фактический production → актуальный GitHub → staging/test → актуальная документация → старые обсуждения.
 
-The immediate next step is **not** a blind WRITE. First run the final narrow pre-write audit from the dedicated checkpoint: current `b_sec_user` population, exact OTP option values, optional/mandatory mode, native setup sequence and login event wiring. If safe, proceed with the guarded pilot only.
+Текущая активная точка Anti-Fraud: найден production-дефект ручной 60-дневной истории для аккаунтов с несколькими активными loyalty-картами. USER_ID 408974 имеет 2 физических Check-in 22.09.2026, но loyalty VIP_HISTORY пуст, потому что AntiFraudLoyaltyService при active_card_count>1 намеренно не делает VIP_HISTORY. USER_ID 6645 имеет ту же multicard-проблему, но targeted Check-in дополнительно возвращает 0 — это надо трассировать отдельно. 24-часовой cache как причина исключён. Последний read-only source audit = 9 PASS / 0 FAIL / 0 WARN. Следующий шаг: спроектировать минимальный multicard-safe fix, где операторская физическая история использует targeted 60-day Check-in source, и отдельно найти причину отсутствия Check-in у USER_ID 6645. Ничего в production по этому дефекту пока не менять без нового guarded шага.
 
-Critical invariant: direct PIN must require a session that actually passed TOTP; do not grant direct-PIN privilege merely because the account has active OTP.
+Параллельный TOTP workstream: пилот USER_ID 880339 уже полностью enrolled, native otpUsed proof подтверждён, direct web PIN pilot deployed. В свежей incognito password→TOTP сессии кнопка «Показать Пин-код» появилась и PIN реально показался. Полный business E2E ещё не закрыт только потому, что пока не подтверждено фактическое использование этого PIN при списании. Rollout за пределы 880339 запрещён; cookie-restored otpUsed=false должен оставаться без direct PIN.
+
+Не повторяй завершённые discovery/deploy проверки. Сначала назови восстановленную текущую точку и только потом продолжай.
+```

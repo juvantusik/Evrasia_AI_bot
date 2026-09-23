@@ -6,7 +6,7 @@
 >
 > Source priority remains: **actual production → current GitHub → staging/test → current docs → older discussion**.
 >
-> This checkpoint now records the factual state through PR #62 production acceptance on 2026-09-20.
+> This checkpoint records the factual state through PR #62 production acceptance and the 2026-09-23 manual-history multicard root-cause/source audit.
 
 ---
 
@@ -58,21 +58,17 @@ The current UI/device-label cleanup is **DONE / PRODUCTION / OPERATOR ACCEPTED**
 
 Manual Anti-Fraud investigation by phone (PR #60) and its operator-visible evidence view (PR #62) are **DONE / PRODUCTION / VERIFIED**.
 
-Already completed for Step 2:
+Completed for Step 2:
 
-- Bitrix protected phone resolver: **DONE / PRODUCTION / VERIFIED**.
-
-Still pending in the bot:
-
-1. bot gateway for the protected Bitrix phone resolver;
-2. persistent PostgreSQL operator-investigation model;
-3. explicit operator-authorized 60-day loyalty/history enrichment without faking an automatic risk gate;
-4. normal Anti-Fraud scoring after enrichment;
-5. web UI action **«Добавить на проверку»**, phone-first;
-6. visible persistent operator reason/source, e.g. **Авито**, separated from automatic signals;
-7. tests;
-8. staged rollout and production verification;
-9. documentation update after implementation.
+1. Bitrix protected phone resolver — **DONE / PRODUCTION / VERIFIED**;
+2. bot gateway for the protected phone resolver — **DONE / PRODUCTION**;
+3. persistent PostgreSQL operator-investigation model — **DONE / PRODUCTION**;
+4. explicit operator-authorized 60-day loyalty/history enrichment without faking the automatic risk gate — **DONE / PRODUCTION**;
+5. normal Anti-Fraud scoring after enrichment — **DONE / PRODUCTION**;
+6. web UI action **«Добавить на проверку»**, phone-first — **DONE / PRODUCTION**;
+7. persistent operator source/reason separated from automatic evidence — **DONE / PRODUCTION**;
+8. operator-visible history / Device ID / linked USER_ID result layer — **DONE / PRODUCTION / VERIFIED** via PR #62;
+9. tests, rollout and production verification — **DONE**.
 
 Do **not** restart Check-in Scout Step 1 or the Bitrix resolver work. Those parts are already production-proven.
 
@@ -82,7 +78,7 @@ Issue tracking the manual-investigation requirement:
 
 ---
 
-## 2. Current bot production baseline — factual after PR #58
+## 2. Current bot production baseline — factual after PR #62
 
 Production host:
 
@@ -96,19 +92,15 @@ Production host:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted production application after PR #58:
+Accepted production application after PR #62:
 
-- revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
-- production migrations: **24**
+- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
+- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- production migrations: **25**
 - container state at acceptance: `running healthy`
-- PR #58 deployment: **7 PASS / 0 FAIL**
+- PR #62 acceptance: **15 PASS / 0 FAIL / 1 informational WARN**
 - rollback: not required.
-
-PR #58 deployment backup:
-
-`/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
 
 Important: later documentation-only commits may advance GitHub `main` while production remains on the application revision above. Before any future production mutation, always read the actual runtime revision/image again.
 
@@ -784,37 +776,34 @@ Bitrix/PHP can produce an error page while a shell/PHP command exits 0. Acceptan
 
 ---
 
-## 15. TOTP 2FA workstream remains paused
+## 15. TOTP 2FA is a separate parallel workstream
 
-Do not resume TOTP work unless the operator explicitly writes:
-
-**ПАНДА ДВА**
+TOTP work is no longer merely planned: the pilot is enrolled and the direct web PIN pilot is deployed for USER_ID `880339`.
 
 Authoritative TOTP checkpoint:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Do not mix TOTP work into the current Anti-Fraud Step 2 task.
+Do not mix TOTP implementation/acceptance into the current Anti-Fraud multicard-history task unless the operator explicitly switches workstreams.
 
 ---
 
 ## 16. What a new chat should do immediately
 
-When continuing this work in a new chat:
+When continuing the current Anti-Fraud workstream in a new chat:
 
-1. read `docs/PROJECT_CHECKPOINT.md`;
+1. read `docs/NEW_CHAT_HANDOFF.md`;
 2. read this file;
-3. read `docs/AI_PROJECT_CONTEXT.md`;
-4. inspect actual GitHub `main`;
-5. inspect actual production runtime before any write;
-6. do not redo PR #56/#57/#58, Scout deployment, Bitrix phone resolver research or resolver deployment;
-7. continue **Step 2 bot side** from the current production/code state.
+3. read `docs/PROJECT_CHECKPOINT.md`, `docs/AI_PROJECT_CONTEXT.md`, `docs/CURRENT_ARCHITECTURE.md` and `docs/SERVER_SCRIPT_RULES.md`;
+4. inspect actual GitHub and factual production before any write;
+5. do **not** redo PR #56/#57/#58/#60/#62 rollout or the multicard root-cause/source audits;
+6. resume from the 2026-09-23 defect below.
 
-The likely first implementation task is:
+Exact active continuation:
 
-**inspect current main for the cleanest minimal bot gateway + persistent operator-investigation schema before creating migration 0024.**
+**design a minimal multicard-safe manual physical-history path based on the existing targeted 60-day Check-in source, and separately trace why USER_ID 6645 has no targeted Check-in record for the expected event.**
 
-Do not make the generic operator watchlist the final Step 2 persistence layer.
+No production write for this defect has been applied yet.
 
 ---
 
@@ -831,3 +820,108 @@ After every material change to architecture, production, DB, protected API, Anti
 - keep the immediate next step explicit enough that a new chat can continue without asking the operator to reconstruct context.
 
 Do not leave the newest factual state only in chat history.
+
+
+## 2026-09-23 — manual history multicard gap — root cause confirmed
+
+READ_ONLY production diagnostics for two operator-added accounts established a systematic manual-history gap.
+
+Resolved USER_ID values:
+
+- first account → `6645`;
+- second account → `408974`.
+
+Do not copy the full phone numbers into diagnostics/docs when USER_ID is sufficient.
+
+### Bot/source comparison
+
+For USER_ID `6645`:
+
+- protected phone resolver: unique;
+- targeted Check-in, last 3 Moscow days: **0** records;
+- protected loyalty: `active_card_count=2`, `active_card_found=false`, `issue=multiple_active_cards`;
+- protected loyalty 60-day history: **0**;
+- bot DB verified loyalty visits: **0**;
+- latest operator investigation: `ready` with completed history stage;
+- current UI history window therefore shows **0 physical visits**.
+
+For USER_ID `408974`:
+
+- protected phone resolver: unique;
+- targeted Check-in, last 3 Moscow days: **2** records;
+- both physical Check-ins are on **2026-09-22**;
+- protected loyalty: `active_card_count=2`, `active_card_found=false`, `issue=multiple_active_cards`;
+- protected loyalty 60-day history: **0**;
+- bot DB verified loyalty visits: **0**;
+- Check-in Scout persistent state is `watching` with `double_checkin` trigger for 2026-09-22;
+- latest operator investigation nevertheless reached `ready` and the UI shows zero history.
+
+The prior 24-hour freshness-cache hypothesis is ruled out: bot account coverage was not fresh/complete and `freshness_cache_would_skip_now=NO` for both.
+
+### Exact production root cause
+
+Site-side protected routes are wired as expected:
+
+- `POST /api/internal/anti-fraud/loyalty` → `AntiFraudLoyaltyService.php`;
+- `POST /api/internal/anti-fraud/checkins` → `AntiFraudCheckinScoutService.php`;
+- `POST /api/internal/anti-fraud/phone-resolve` → resolver service.
+
+Production source baselines from the final read-only audit:
+
+- route file SHA256: `39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- `AntiFraudLoyaltyService.php` SHA256: `44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`;
+- `AntiFraudCheckinScoutService.php` SHA256: `fd497e84b1ddb3afc16e497395215576dd38feb9d5e73132b4f9278b48f16e9b`;
+- audit result: **9 PASS / 0 FAIL / 0 WARN**, read-only.
+
+The live loyalty code explicitly does the following:
+
+1. collects active Bitrix loyalty cards with `RESTIS_STATE=113`;
+2. sets `active_card_found=true` only when exactly one active card exists;
+3. when more than one active card exists, sets `issue=multiple_active_cards`;
+4. still calls RestIS `/api/Balance` by phone to obtain account-level balance;
+5. then returns early on `count($cards) > 1`;
+6. therefore legacy `VIP_HISTORY` is **not requested** for multicard accounts because that legacy request requires one concrete card number.
+
+This behavior is intentional in the site-side loyalty service, but the bot-side operator investigation currently treats the empty loyalty-history result as successful completion. That mismatch is the defect.
+
+### Why the Check-in source is the correct physical-history direction
+
+The production targeted Check-in service:
+
+- accepts `user_ids` and up to 60 days;
+- resolves **all Bitrix card element IDs owned by each requested USER_ID**, not only one active card;
+- queries `COfflineOrderHl` by those card IDs;
+- maps each physical event back to the USER_ID;
+- does not expose raw card numbers or raw RestIS IDs.
+
+Therefore multiple active cards do **not** inherently prevent targeted physical history. USER_ID `408974` proves this path works for a multicard account.
+
+The operator card currently labels the result as **physical visits**. The safest architecture direction is therefore:
+
+**manual operator physical history → targeted 60-day Check-in source**
+
+while keeping account-level loyalty balance/history semantics separate.
+
+Do **not** merge multiple-card `VIP_HISTORY` rows into the physical-visit counter merely to fill the UI; `VIP_HISTORY` and physical Check-in semantics are not interchangeable.
+
+### Separate unresolved issue: USER_ID 6645
+
+USER_ID `6645` has the same multicard loyalty limitation, but targeted Check-in also returns zero. That is a separate issue and must be traced before any broad write.
+
+The source audit confirms targeted Check-in depends on existing `COfflineOrderHl` rows linked through Bitrix card IDs. Historical site code populates that store from per-card RestIS history, so the next trace must determine whether the expected event:
+
+- never reached `COfflineOrderHl`;
+- is linked to a different Bitrix card;
+- is linked to another USER_ID;
+- or is outside the expected mapping for another factual reason.
+
+Do not guess which one until a targeted read-only trace proves it.
+
+### Exact next gate
+
+1. design the minimal bot/site contract change for manual physical history to use the existing targeted 60-day Check-in source;
+2. preserve current no-auto-block, risk, grouping, loyalty-balance and credential-boundary semantics;
+3. separately trace USER_ID `6645` before write;
+4. only then build guarded implementation/deployment steps.
+
+No production write was made during these diagnostics.
