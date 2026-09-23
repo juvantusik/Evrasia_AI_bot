@@ -5,6 +5,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -263,6 +264,8 @@ export const antiFraudOperatorInvestigationsTable = pgTable(
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     historyCompletedAt: timestamp("history_completed_at", { withTimezone: true }),
+    physicalHistoryFrom: timestamp("physical_history_from", { withTimezone: true }),
+    physicalHistoryUntil: timestamp("physical_history_until", { withTimezone: true }),
     scoringCompletedAt: timestamp("scoring_completed_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     lastError: text("last_error"),
@@ -277,6 +280,35 @@ export const antiFraudOperatorInvestigationsTable = pgTable(
       table.status,
       table.updatedAt,
     ),
+  }),
+);
+
+// Добавлено 23.09.2026 ИТ Директор Евразии
+// Физическая история конкретного operator investigation не участвует в automatic risk scoring.
+export const antiFraudOperatorInvestigationVisitsTable = pgTable(
+  "anti_fraud_operator_investigation_visits",
+  {
+    investigationId: text("investigation_id")
+      .notNull()
+      .references(() => antiFraudOperatorInvestigationsTable.investigationId, { onDelete: "cascade" }),
+    physicalEventId: text("physical_event_id").notNull(),
+    bitrixUserId: integer("bitrix_user_id").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    restaurant: text("restaurant").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: "anti_fraud_operator_investigation_visits_pk",
+      columns: [table.investigationId, table.physicalEventId],
+    }),
+    userOccurredIdx: index("anti_fraud_operator_investigation_visits_user_occurred_idx").on(
+      table.bitrixUserId,
+      table.occurredAt,
+    ),
+    investigationOccurredIdx: index(
+      "anti_fraud_operator_investigation_visits_investigation_occurred_idx",
+    ).on(table.investigationId, table.occurredAt),
   }),
 );
 
@@ -324,5 +356,6 @@ export type AntiFraudRiskScore = typeof antiFraudRiskScoresTable.$inferSelect;
 export type AntiFraudRiskReason = typeof antiFraudRiskReasonsTable.$inferSelect;
 export type AntiFraudCheckinWatchState = typeof antiFraudCheckinWatchStateTable.$inferSelect;
 export type AntiFraudOperatorInvestigation = typeof antiFraudOperatorInvestigationsTable.$inferSelect;
+export type AntiFraudOperatorInvestigationVisit = typeof antiFraudOperatorInvestigationVisitsTable.$inferSelect;
 export type AntiFraudSyncState = typeof antiFraudSyncStateTable.$inferSelect;
 export type AntiFraudSyncRun = typeof antiFraudSyncRunsTable.$inferSelect;

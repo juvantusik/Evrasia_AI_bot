@@ -180,11 +180,8 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
       a.loyalty_history_loaded_at,
       oi.history_completed_at AS operator_history_completed_at,
       oi.completed_at AS operator_completed_at,
-      CASE
-        WHEN oi.requested_at IS NOT NULL THEN oi.requested_at - interval '60 days'
-        ELSE NULL
-      END AS operator_history_window_from,
-      COALESCE(oi.history_completed_at, oi.requested_at) AS operator_history_window_until,
+      oi.physical_history_from AS operator_history_window_from,
+      oi.physical_history_until AS operator_history_window_until,
       history.physical_visits AS history_physical_visits,
       history.visit_days AS history_visit_days,
       history.restaurant_count AS history_restaurant_count,
@@ -211,8 +208,11 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     ) audit ON true
     LEFT JOIN LATERAL (
       SELECT
+        i.investigation_id,
         i.requested_at,
         i.history_completed_at,
+        i.physical_history_from,
+        i.physical_history_until,
         i.completed_at
       FROM anti_fraud_operator_investigations i
       WHERE i.bitrix_user_id = a.bitrix_user_id
@@ -221,21 +221,17 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
     ) oi ON true
     LEFT JOIN LATERAL (
       WITH physical AS (
-        SELECT DISTINCT
-          v.source_restis_id,
-          v.visited_at,
+        SELECT
+          v.physical_event_id,
+          v.occurred_at,
           v.restaurant
-        FROM anti_fraud_visits v
-        WHERE v.bitrix_user_id = a.bitrix_user_id
-          AND v.loyalty_verified IS TRUE
-          AND oi.requested_at IS NOT NULL
-          AND oi.history_completed_at IS NOT NULL
-          AND v.visited_at >= oi.requested_at - interval '60 days'
-          AND v.visited_at <= oi.history_completed_at
+        FROM anti_fraud_operator_investigation_visits v
+        WHERE v.investigation_id = oi.investigation_id
+          AND v.bitrix_user_id = a.bitrix_user_id
       ),
       daily AS (
         SELECT
-          (visited_at AT TIME ZONE 'Europe/Moscow')::date AS day,
+          (occurred_at AT TIME ZONE 'Europe/Moscow')::date AS day,
           count(*)::int AS visits,
           count(DISTINCT restaurant)::int AS restaurants
         FROM physical
@@ -245,8 +241,8 @@ const loadContactMap = async (userIds: number[]): Promise<Map<number, ContactVal
         (SELECT count(*)::int FROM physical) AS physical_visits,
         (SELECT count(*)::int FROM daily) AS visit_days,
         (SELECT count(DISTINCT restaurant)::int FROM physical) AS restaurant_count,
-        (SELECT min(visited_at) FROM physical) AS first_visit_at,
-        (SELECT max(visited_at) FROM physical) AS last_visit_at,
+        (SELECT min(occurred_at) FROM physical) AS first_visit_at,
+        (SELECT max(occurred_at) FROM physical) AS last_visit_at,
         COALESCE(
           (
             SELECT json_agg(

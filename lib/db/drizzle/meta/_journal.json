@@ -26,6 +26,7 @@
     {"idx":21,"version":"7","when":1789226400000,"tag":"0021_anti_fraud_consent_status","breakpoints":true},
     {"idx":22,"version":"7","when":1789291800000,"tag":"0022_phonebook_legal_entity_master","breakpoints":true},
     {"idx":23,"version":"7","when":1789783200000,"tag":"0023_anti_fraud_checkin_scout","breakpoints":true},
-    {"idx":24,"version":"7","when":1789876800000,"tag":"0024_anti_fraud_operator_investigation","breakpoints":true}
+    {"idx":24,"version":"7","when":1789876800000,"tag":"0024_anti_fraud_operator_investigation","breakpoints":true},
+    {"idx":25,"version":"7","when":1790154000000,"tag":"0025_anti_fraud_operator_physical_history","breakpoints":true}
   ]
 }
