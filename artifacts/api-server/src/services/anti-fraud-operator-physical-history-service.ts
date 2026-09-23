@@ -28,6 +28,14 @@ export const buildAntiFraudOperatorPhysicalHistorySnapshot = (
     throw new Error("USER_ID ручной физической истории должен быть положительным integer");
   }
 
+  const unresolvedCardCount = Number(history.unresolvedCardCount ?? 0);
+  if (!Number.isInteger(unresolvedCardCount) || unresolvedCardCount < 0) {
+    throw new Error("Физическая история содержит некорректный unresolved_card_count");
+  }
+  if (unresolvedCardCount > 0) {
+    throw new Error("Физическая история не разрешила все карты USER_ID");
+  }
+
   const seen = new Set<string>();
   const records = history.records.map((record: BitrixAntiFraudCheckinRecord) => {
     if (Number(record.bitrixUserId) !== userId) {
@@ -51,7 +59,7 @@ export const buildAntiFraudOperatorPhysicalHistorySnapshot = (
     from: new Date(history.from),
     to: new Date(history.to),
     records,
-    unresolvedCardCount: Number(history.unresolvedCardCount ?? 0),
+    unresolvedCardCount,
   };
 };
 
