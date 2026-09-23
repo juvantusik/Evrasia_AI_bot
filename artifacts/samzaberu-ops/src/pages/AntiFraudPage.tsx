@@ -300,11 +300,13 @@ const OperatorInvestigationSummary = ({
     .filter((id) => id !== account.bitrixUserId)
     .sort((a, b) => a - b);
 
+  // PR #65 physical-history snapshot is authoritative for operator-visible visits.
+  // Do not gate this UI on legacy loyaltyHistoryLoadedAt: multi-card accounts can have
+  // a complete targeted Check-in snapshot while loyalty history is intentionally unavailable.
   const historyCovered = Boolean(
     account.operatorInvestigationHistoryCompletedAt
       && account.operatorHistoryWindowFrom
-      && account.operatorHistoryWindowUntil
-      && account.loyaltyHistoryLoadedAt,
+      && account.operatorHistoryWindowUntil,
   );
   const dailyVisits = account.historyDailyVisits ?? [];
   const completion = account.operatorInvestigationCompletedAt
