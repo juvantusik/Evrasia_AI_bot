@@ -608,3 +608,54 @@ Direct-PIN pre-write audit is now **PASS** (`PASS_COUNT=9`, `FAIL_COUNT=0`, `WAR
 A guarded direct-PIN deploy attempt correctly stopped before WRITE because production `account.pincode/main/script.js` had moved from audited SHA `8c240106...` to `d66d71a8b3dc4d310ff15c0a670efd2dbed3bc442e8aa7146cf92521c2fe7ae9`. Follow-up READ_ONLY drift audit reproduced the same SHA, confirmed endpoint/template were unchanged, confirmed no direct-PIN markers/handler existed, and isolated drift to PIN JS only. Comparison with the immediately preceding audit output shows the change is in the MobileID/SMS-code confirmation payload construction (`FormData` -> plain object); the primary `/local/php_interface/pincode.php` AJAX response handler remains structurally unchanged. Accept `d66d71a8...` as the current production JS baseline for the direct-PIN pilot patch; do not revert that change.
 
 Immediately before the direct-PIN pilot WRITE, the live `account.pincode/main/script.js` changed from the earlier audit SHA to `d66d71a8b3dc4d310ff15c0a670efd2dbed3bc442e8aa7146cf92521c2fe7ae9`. A dedicated READ_ONLY drift audit reproduced that SHA, confirmed the drift is isolated to this JS file, found no direct-PIN markers/handler, and confirmed the current response handler still posts to `/local/php_interface/pincode.php` with Bitrix sessid and still has the legacy VK/SMS handling. The current production JS should therefore be treated as the new baseline for the guarded pilot patch; do not roll it back to the older `8c240106...` snapshot. The visible drift includes the MobileID/SMS confirmation helper using a plain data object for `id`, `code`, `sessid` instead of the earlier FormData construction and is unrelated to direct-PIN response handling.
+
+## Direct-PIN pilot deployment / browser acceptance — 2026-09-23
+
+The guarded pilot direct-PIN WRITE completed successfully in production for USER_ID `880339`.
+
+Deployment result:
+
+- `PASS_COUNT=9`, `FAIL_COUNT=0`, `WARN_COUNT=1`;
+- warning only: `node` was unavailable for an optional staged JS syntax check; PHP staged/production syntax checks passed;
+- rollback was not required;
+- deployment backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/direct-pin-pilot-20260923-060243`;
+- production PIN endpoint SHA: `4d637e1bff15682d3eae6a5b4e3ffa074e2543daaf408767e2894654df2a0713`;
+- production account.pincode template SHA: `569aaba642d5601215b453b04d06837da04b1378a8a69fd079ef777ad5797710`;
+- production account.pincode JS SHA: `9b7afe419ee979089fda4b65af3475f415ea1eec8827a3c27d7be594ee5a68b4`;
+- PIN component, TOTP component and signin backend remained unchanged;
+- OTP state remained `OTP_ENABLED=YES`, `OTP_MANDATORY=NO`, exactly one active initialized pilot TOTP row and zero non-pilot OTP rows;
+- no DB/OTP/session/mobile mutation was performed by deployment.
+
+Deployed server-side direct-disclosure rule remains pilot-only and fail-closed:
+
+```text
+USER_ID == 880339
+AND host == evrasia.rest
+AND request == POST
+AND valid Bitrix sessid
+AND TOTP initialized + activated
+AND current auth context user == authenticated user
+AND current auth context isOtpUsed() == true
+    -> return the existing RestIS PinCode directly to the browser
+
+otherwise
+    -> preserve the existing VK/SMS delivery path
+```
+
+The existing `CRestis::pincode($phone)` source and the existing Redis one-request-per-minute rate limiter remain the source/rate-control mechanism; no new PIN generator or PIN store was introduced.
+
+Browser acceptance on a fresh incognito canonical session is **partially PASSED**:
+
+- password -> TOTP login succeeded;
+- the PIN block switched to the protected-state UI and showed `Показать Пин-код`;
+- pressing the button returned and displayed a real PIN in the browser;
+- the operator has **not yet confirmed that the displayed PIN was successfully accepted for an actual bonus-spend/payment operation**.
+
+Therefore the direct-display transport/UI E2E is accepted, while **functional PIN validity at real use remains pending operator confirmation**. Do not mark the full direct-PIN business E2E complete until that confirmation is received.
+
+Still pending before broader rollout:
+
+1. operator confirmation that the displayed direct PIN is operational in the real spend/payment flow;
+2. negative-path acceptance for a cookie-restored / `otpUsed=false` pilot session (must fall back to legacy VK/SMS and must not disclose PIN);
+3. ordinary non-2FA login/PIN compatibility with global OTP enabled and mandatory OFF;
+4. rollout beyond USER_ID `880339` remains prohibited until these acceptance gates pass.
