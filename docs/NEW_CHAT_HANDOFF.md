@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
+> **Updated: 2026-09-23** after PR #65 production acceptance for dedicated operator physical-history snapshots.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -12,8 +12,9 @@
 
 Сначала полностью прочитай:
 
-0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — **самый свежий authoritative handoff для текущей ветки Anti-Fraud / Check-in Scout / ручной проверки по телефону**;
+0. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — **самый свежий authoritative acceptance/handoff для текущей ветки Anti-Fraud / ручной физической истории**;
 1. `docs/PROJECT_CHECKPOINT.md` — общий authoritative checkpoint;
+1A. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — исторический checkpoint PR #62 и предшествующей архитектуры; читать для контекста, но не использовать как текущий production baseline;
 2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
 3. `docs/CURRENT_ARCHITECTURE.md` — актуальная архитектура;
 4. `docs/SERVER_SCRIPT_RULES.md` — обязательные правила серверных скриптов;
@@ -35,19 +36,20 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Accepted deployed application baseline after PR #62:
+Accepted deployed application baseline after PR #65:
 
-- application revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
-- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- application revision: `d1746ceabb513727baad729adbd3333328fc2dab`
+- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
 - app: `evrasia-ai-bot-app`
 - DB: `evrasia-ai-bot-db`
 - DB name/role: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- production migrations: **25**
-- app state at acceptance: **running healthy**
-- PR #58 deployment backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
+- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- production migrations: **26**
+- app state at acceptance: **running healthy**, restart count 0
+- PR #65 deployment backup: `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`
 
 PR #58 is UI-only relative to the PR #57 application baseline: no DB migration, no scoring/grouping change and no Bitrix write.
 
@@ -64,11 +66,34 @@ Current Scout display wording:
 
 **Important:** PR #58 changed the first phrase only in the UI. Backend field `days_2plus_7d` and its `>=2` calculation were not changed. Do not silently change Scout business logic based on the label.
 
-For the full current Anti-Fraud state and next continuation point, read `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+For the current Anti-Fraud production state and continuation point, read `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` first.
 
 ---
 
-## 1A. Latest Anti-Fraud operator-visible acceptance — PR #62
+## 1A. Latest Anti-Fraud production acceptance — PR #65
+
+PR #65 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**.
+
+Key invariant:
+
+- operator 60-day physical history is stored in `anti_fraud_operator_investigation_visits`, scoped by `investigation_id`;
+- UI visit/day/restaurant metrics read from that snapshot;
+- targeted physical snapshot event IDs do **not** enter `anti_fraud_visits`;
+- `anti_fraud_visits` remains automatic risk/history telemetry.
+
+Production acceptance:
+
+- USER_ID `6645`: source 10 → snapshot 10; UI 10 physical visits / 9 visit days / 4 restaurants; snapshot-to-`anti_fraud_visits` intersection 0;
+- USER_ID `408974`: source 8 → snapshot 8; UI 8 physical visits / 7 visit days / 7 restaurants; snapshot-to-`anti_fraud_visits` intersection 0;
+- combined acceptance: **31 PASS / 0 FAIL / 0 WARN**.
+
+The accompanying website targeted Check-in dedup is also accepted: current site service SHA `5f65703d91ee31a9d829cd64cefd011309c8a6c44d3fa96d2d8c77a1f81541e9`.
+
+Full record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
+
+---
+
+## 1B. Previous Anti-Fraud operator-visible acceptance — PR #62
 
 PR #62 is **MERGED / PRODUCTION / VERIFIED**.
 
