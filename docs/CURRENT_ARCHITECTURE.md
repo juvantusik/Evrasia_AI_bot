@@ -222,6 +222,16 @@ Response contract:
 
 The bot-side operator workflow **«Добавить на проверку»** is production via PR #60. It uses persistent operator-investigation state and an explicit operator-authorized 60-day history path without faking the automatic `riskGateConfirmed` requirement. PR #62 adds the operator-visible result layer for that workflow.
 
+Known production limitation diagnosed on 2026-09-23:
+
+- the current manual-history worker obtains its visit history through the protected loyalty/VIP_HISTORY path;
+- the site-side loyalty service intentionally skips `VIP_HISTORY` when a USER_ID has more than one active loyalty card, because the legacy request requires one concrete card number;
+- this can leave an investigation `ready` with zero displayed history even when physical Check-in events exist;
+- USER_ID `408974` proves the mismatch: two physical Check-ins exist on 2026-09-22 while loyalty history is empty;
+- USER_ID `6645` has the same multicard loyalty limitation and additionally has no targeted Check-in record for the expected event, which is a separate trace.
+
+The existing targeted Check-in architecture already supports up to 60 days for explicit USER_ID values and resolves **all Bitrix card IDs owned by each USER_ID** before reading `COfflineOrderHl`. Therefore the planned correction is to source operator-facing **physical visits** from targeted Check-in, keeping loyalty balance/history separate. This is a diagnosed next change, not yet a deployed architecture mutation.
+
 #### Trusted Device case-display semantics
 
 Case backend separates:
