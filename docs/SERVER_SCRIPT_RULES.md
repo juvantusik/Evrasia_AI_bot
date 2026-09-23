@@ -192,10 +192,10 @@ Latest accepted factual application baseline after PR #65 production acceptance 
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- accepted deployed application revision: `d1746ceabb513727baad729adbd3333328fc2dab`
-- immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
-- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
-- canonical Compose SHA256 at acceptance: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- accepted deployed application revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
+- immutable digest: `sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
+- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
+- canonical Compose SHA256 at acceptance: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role / production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
@@ -272,3 +272,15 @@ Authoritative acceptance record:
 ## Operator preference
 
 The operator prefers concise guidance: one full script, then paste the complete output, then analyze it section-by-section and provide the next full script. Do not ask again for facts already established in project context.
+
+## Operator-visible Anti-Fraud acceptance rule
+
+When the task is specifically about what the operator sees in the Anti-Fraud web UI, backend/API correctness alone is not sufficient acceptance.
+
+- verify the production frontend bundle contains the intended rendering logic;
+- verify the UI-facing API fields required by that render path;
+- when feasible, require an operator browser spot-check before declaring the change visually accepted;
+- distinguish a legacy-data gap from a frontend-code defect;
+- for one-time snapshot backfills, prove exact source/snapshot identity and preserve the separation from `anti_fraud_visits`.
+
+This rule was added after PR #65 backend acceptance initially missed a stale React display gate and legacy ready investigations created before physical-snapshot persistence.
