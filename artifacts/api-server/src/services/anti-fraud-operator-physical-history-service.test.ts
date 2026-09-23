@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   buildAntiFraudOperatorPhysicalHistorySnapshot,
@@ -88,4 +89,16 @@ test("operator physical snapshot rejects duplicate event ids defensively", () =>
     ),
     /повторный event id/,
   );
+});
+
+test("operator physical snapshot service never writes automatic anti_fraud_visits telemetry", async () => {
+  const source = await readFile(
+    new URL("./anti-fraud-operator-physical-history-service.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /INSERT\s+INTO\s+anti_fraud_visits/i);
+  assert.doesNotMatch(source, /UPDATE\s+anti_fraud_visits/i);
+  assert.doesNotMatch(source, /DELETE\s+FROM\s+anti_fraud_visits/i);
+  assert.match(source, /anti_fraud_operator_investigation_visits/);
 });
