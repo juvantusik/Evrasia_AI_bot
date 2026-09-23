@@ -1,14 +1,14 @@
 # Anti-Fraud PR #65 — Production Acceptance 2026-09-23
 
-> **Authoritative acceptance record for PR #65 and the accompanying website targeted Check-in dedup fix.**
+> **Authoritative acceptance record for PR #65, PR #67 UI completion, legacy snapshot backfill, and the accompanying website targeted Check-in dedup fix.**
 >
 > Source priority: **actual production → current GitHub → staging/test → current docs → older discussion**.
 
 ## 1. Final status
 
-PR #65 **Anti-Fraud: separate operator physical history from risk telemetry** is:
+PR #65 **Anti-Fraud: separate operator physical history from risk telemetry** and PR #67 **Anti-Fraud: show PR65 physical history in UI** are:
 
-**MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**
+**MERGED / DEPLOYED / PRODUCTION / VERIFIED / VISUALLY ACCEPTED**
 
 GitHub / CI:
 
@@ -294,3 +294,118 @@ A manual browser visual spot-check of those cards may be performed if desired, b
 Any future manual-investigation change must preserve the separation:
 
 `operator physical snapshot ≠ automatic risk telemetry`.
+
+
+## 10. PR #67 — visible UI completion
+
+After PR #65 backend acceptance, browser inspection proved that the React UI still hid valid physical-history snapshots when legacy `loyaltyHistoryLoadedAt` was absent.
+
+Root cause:
+
+`historyCovered` incorrectly required both the new PR #65 physical snapshot fields and the old loyalty-history coverage marker.
+
+Accepted PR #67 change:
+
+- remove `loyaltyHistoryLoadedAt` from the physical-history display gate;
+- keep the authoritative gate on:
+  - `operatorInvestigationHistoryCompletedAt`;
+  - `operatorHistoryWindowFrom`;
+  - `operatorHistoryWindowUntil`;
+- no DB migration;
+- no scoring/grouping/blocking change;
+- no Anti-Fraud refresh;
+- regression guard added to prevent reintroducing the legacy loyalty dependency.
+
+Production PR #67 runtime:
+
+- revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`;
+- image config ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`;
+- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`;
+- migrations: **26**;
+- restart count: **0**;
+- frontend asset changed from `/assets/antifraud-DH3ofxdZ.js` to `/assets/antifraud-2JsE0ngX.js`;
+- deployment result: **41 PASS / 0 FAIL / 0 WARN**;
+- rollback: not required;
+- backup: `/opt/evrasia-ai-bot/backups/pr67-operator-history-ui-20260923-105939`.
+
+## 11. Legacy ready-investigation physical snapshot backfill
+
+Production audit after PR #67 showed:
+
+- latest investigations total: **10**;
+- latest `ready`: **7**;
+- `ready` with physical snapshot: **2**;
+- `ready` missing physical snapshot: **5**.
+
+The five legacy latest-ready investigations were:
+
+- USER_ID `67429`;
+- USER_ID `2564174`;
+- USER_ID `778635`;
+- USER_ID `263189`;
+- USER_ID `1969724`.
+
+They were completed before PR #65 snapshot persistence existed. Therefore the correct remedy was a one-time physical-snapshot backfill, not a new investigation and not a scoring rerun.
+
+Backfill safety contract:
+
+- targeted Check-in read only;
+- writes only `anti_fraud_operator_investigation_visits` and `physical_history_from/until` on the already-existing latest `ready` investigation;
+- no scoring write;
+- no `anti_fraud_visits` write;
+- no Bitrix user-state write;
+- no blocking;
+- no app restart;
+- exact source-event set hash verified against persisted snapshot;
+- snapshot-to-`anti_fraud_visits` intersection required to remain zero.
+
+Backup:
+
+- directory: `/opt/evrasia-ai-bot/backups/pr65-legacy-physical-backfill-20260923-112902`;
+- dump: `operator-history.before-backfill.dump`;
+- SHA256: `634ebbc3954153b2644482462c4b0becd28beaeabfee4d0a5aee257d4157a84f`;
+- archive verified with `pg_restore -l`.
+
+Accepted backfill results:
+
+- USER_ID `67429`: **8 visits / 6 days / 6 restaurants**;
+- USER_ID `2564174`: **22 / 15 / 17**;
+- USER_ID `778635`: **66 / 38 / 33**;
+- USER_ID `263189`: **39 / 26 / 22**;
+- USER_ID `1969724`: **11 / 10 / 9**.
+
+For every account:
+
+- source event count = snapshot row count;
+- snapshot event IDs were distinct;
+- source/snapshot event-set SHA256 matched exactly;
+- snapshot-to-`anti_fraud_visits` intersection = **0**;
+- UI-facing API returned the completed physical snapshot.
+
+Global result:
+
+- remaining latest `ready` without physical snapshot: **0**;
+- latest `ready` with physical snapshot: **7**;
+- backfilled: **5**;
+- result: **55 PASS / 0 FAIL / 0 WARN**.
+
+## 12. Browser visual acceptance
+
+After PR #67 deployment and the legacy snapshot backfill, the operator rechecked the Anti-Fraud interface and confirmed that the required information is now visible and correct.
+
+**BROWSER VISUAL ACCEPTANCE: PASS**
+
+This closes the previously missing final validation layer. The backend/API-only acceptance from earlier in the day was not sufficient by itself.
+
+Current rule for future UI work:
+
+**do not call an operator-visible Anti-Fraud change accepted until the actual browser rendering has been visually confirmed when the task is about what the operator sees.**
+
+## 13. Final continuation point
+
+The operator physical-history workstream is complete.
+
+Current accepted production application is PR #67 at revision `b0d12a112577de2a35e0a49e55367e3bc459bc07`, with all seven current latest-ready manual investigations covered by physical snapshots.
+
+Do not redo PR #65/PR #67 deployment, multi-card dedup, legacy snapshot backfill, or USER_ID acceptance checks merely for reassurance.

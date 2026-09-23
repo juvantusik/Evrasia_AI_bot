@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-23** after PR #65 production acceptance for dedicated operator physical-history snapshots.
+> **Updated: 2026-09-23** after PR #67 UI acceptance and legacy physical-snapshot backfill.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -36,20 +36,21 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Accepted deployed application baseline after PR #65:
+Accepted deployed application baseline after PR #67:
 
-- application revision: `d1746ceabb513727baad729adbd3333328fc2dab`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
-- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
+- application revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
+- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
+- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
 - app: `evrasia-ai-bot-app`
 - DB: `evrasia-ai-bot-db`
 - DB name/role: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
 - production migrations: **26**
 - app state at acceptance: **running healthy**, restart count 0
-- PR #65 deployment backup: `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`
+- PR #67 deployment backup: `/opt/evrasia-ai-bot/backups/pr67-operator-history-ui-20260923-105939`
+- legacy snapshot backfill backup: `/opt/evrasia-ai-bot/backups/pr65-legacy-physical-backfill-20260923-112902`
 
 PR #58 is UI-only relative to the PR #57 application baseline: no DB migration, no scoring/grouping change and no Bitrix write.
 
@@ -70,9 +71,14 @@ For the current Anti-Fraud production state and continuation point, read `docs/A
 
 ---
 
-## 1A. Latest Anti-Fraud production acceptance — PR #65
+## 1A. Latest Anti-Fraud production acceptance — PR #67 / PR #65
 
 PR #65 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**.
+
+
+PR #67 completed the browser-visible layer: the physical-history panel no longer depends on legacy `loyaltyHistoryLoadedAt`. The operator visually confirmed the interface after deployment and backfill.
+
+Legacy latest-ready investigations were backfilled: 5 accounts, leaving **0** latest-ready investigations without physical snapshot and **7** with physical coverage. Backfill result: **55 PASS / 0 FAIL / 0 WARN**.
 
 Key invariant:
 

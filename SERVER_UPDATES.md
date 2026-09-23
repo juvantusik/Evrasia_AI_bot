@@ -2,7 +2,7 @@
 
 > Current production operations note for Evrasia AI Bot.
 >
-> Last updated: **2026-09-23** after PR #65 production acceptance for dedicated operator physical-history snapshots.
+> Last updated: **2026-09-23** after PR #67 UI acceptance and legacy physical-snapshot backfill.
 
 ## Current production host
 
@@ -21,13 +21,13 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 Application:
 
 - service/container: `evrasia-ai-bot-app`
-- accepted deployed revision: `d1746ceabb513727baad729adbd3333328fc2dab`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
-- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
-- canonical Compose SHA256 at acceptance: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- accepted deployed revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
+- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
+- canonical Compose SHA256 at acceptance: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
 - app port: `127.0.0.1:18080 -> 8080`
 - production migrations: **26**
-- status: running healthy / PR #65 production accepted; restart count 0.
+- status: running healthy / PR #67 production and browser-visible UI accepted; restart count 0.
 
 PR #62 acceptance facts:
 
@@ -99,6 +99,41 @@ Production acceptance:
 Authoritative acceptance record:
 
 `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
+
+## 2026-09-23 — PR #67 visible operator history + legacy backfill
+
+PR #67 fixed the final UI-only blocker after PR #65: the React history panel incorrectly required legacy `loyaltyHistoryLoadedAt`, so valid PR #65 physical snapshots could be hidden for multi-card accounts.
+
+Accepted production change:
+
+- physical-history UI gate uses the PR #65 snapshot completion fields only;
+- no migration;
+- no scoring/grouping/blocking change;
+- no Anti-Fraud refresh;
+- new frontend asset: `/assets/antifraud-2JsE0ngX.js`;
+- deployment: **41 PASS / 0 FAIL / 0 WARN**;
+- backup: `/opt/evrasia-ai-bot/backups/pr67-operator-history-ui-20260923-105939`;
+- rollback not required.
+
+Legacy investigation audit then found 5 latest-ready investigations created before physical-snapshot persistence. A one-time backfill populated only operator snapshot/window state, without scoring writes or `anti_fraud_visits` writes.
+
+Backfill backup:
+
+`/opt/evrasia-ai-bot/backups/pr65-legacy-physical-backfill-20260923-112902/operator-history.before-backfill.dump`
+
+SHA256:
+
+`634ebbc3954153b2644482462c4b0becd28beaeabfee4d0a5aee257d4157a84f`
+
+Result:
+
+- 5 backfilled;
+- 0 latest-ready investigations still missing physical snapshot;
+- 7 latest-ready investigations have physical coverage;
+- backfill: **55 PASS / 0 FAIL / 0 WARN**;
+- snapshot-to-`anti_fraud_visits` intersection remained 0 for every account.
+
+Final browser validation was performed by the operator and confirmed correct visible output. This closes the operator physical-history workstream.
 
 ## PostgreSQL
 
