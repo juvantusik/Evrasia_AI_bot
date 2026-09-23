@@ -188,28 +188,29 @@ Always verify a factual output marker such as `DIAGNOSTIC_COMPLETE=YES` when STD
 
 ## Current production invariants
 
-Latest accepted factual application baseline after PR #62 production acceptance on 2026-09-20:
+Latest accepted factual application baseline after PR #65 production acceptance on 2026-09-23:
 
 - host: `eur-bot-01`
 - app: `evrasia-ai-bot-app`
-- accepted deployed application revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-- immutable digest: `sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
-- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
-- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`
+- accepted deployed application revision: `d1746ceabb513727baad729adbd3333328fc2dab`
+- immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
+- canonical Compose SHA256 at acceptance: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
 - DB service/container: `evrasia-ai-bot-db`
 - DB role / production DB: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
-- production migrations: **25**
-- current migration stream includes `0024_anti_fraud_operator_investigation`
+- production migrations: **26**
+- current migration stream includes `0025_anti_fraud_operator_physical_history`
 - Anti-Fraud scheduler: enabled, 15 minutes
 - confirmed operator bonus threshold: `40000`
 - PR #56 Check-in Scout: production verified
 - PR #57/#58 Trusted Device display/labels: production
 - PR #60 manual investigation by phone: production verified
 - PR #62 operator-visible 60-day history / Device ID / linked USER_ID results: production verified
+- PR #65 dedicated operator physical-history snapshot: production verified and accepted
 - controlled block/unblock on safe USER_ID 880339 remains completed; do not repeat merely for reassurance
 - Phonebook canonical route: `/phonebook`
 - `/directory` and `/api/directory/...`: expected 404
@@ -218,6 +219,23 @@ Latest accepted factual application baseline after PR #62 production acceptance 
 PR #62 read-only acceptance on USER_ID `1969724`: 15 PASS / 0 FAIL / 1 informational WARN; 10 physical visits, 9 visit days, 8 restaurants, one Trusted Device prefix, zero linked accounts.
 
 These documented invariants are not substitutes for fresh guards before a future mutation. Documentation-only commits may advance GitHub `main` without advancing the production image.
+
+### PR #65 operator snapshot deployment invariant
+
+Manual operator physical Check-in history is now persisted separately in
+`anti_fraud_operator_investigation_visits`.
+
+Deployment / acceptance checks for this subsystem must preserve:
+
+- targeted Check-in physical snapshot is scoped by `investigation_id`;
+- `physical_history_from` / `physical_history_until` are populated only after successful targeted history;
+- unresolved targeted cards fail closed;
+- operator physical snapshot events must not be inserted into `anti_fraud_visits`;
+- acceptance should compare exact event identities or a stable hash of the event-ID set, not only total row counts;
+- current accepted site-side targeted dedup service SHA is `5f65703d91ee31a9d829cd64cefd011309c8a6c44d3fa96d2d8c77a1f81541e9`.
+
+Authoritative acceptance record:
+`docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
 ## Anti-Fraud invariants
 

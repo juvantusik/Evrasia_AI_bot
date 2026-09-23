@@ -2,7 +2,7 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-20** after PR #62 production acceptance for operator-visible manual-investigation results.
+> Updated: **2026-09-23** after PR #65 production acceptance for dedicated operator physical-history snapshots.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
@@ -13,15 +13,16 @@ Host: `eur-bot-01` (`192.168.103.200`).
 Current accepted bot application:
 
 - repo: `juvantusik/Evrasia_AI_bot`
-- production revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
-- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
+- production revision: `d1746ceabb513727baad729adbd3333328fc2dab`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
 - Anti-Fraud threshold: 40000
 - scheduler: enabled, 15 min
-- production migrations: **25**
-- app container: **running healthy** at acceptance.
+- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- production migrations: **26**
+- app container: **running healthy**, restart count 0 at acceptance.
 
-PR #62 is **PRODUCTION / VERIFIED**. PR #58 device-label semantics remain valid.
+PR #65 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**. PR #62 evidence-view behavior and PR #58 device-label semantics remain valid.
 
 PR #58 UI semantics:
 
@@ -56,9 +57,47 @@ Compose staging invariant confirmed by PR #58:
 
 Full current Anti-Fraud continuation:
 
-`docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`
+`docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
 
-## 1A. PR #62 manual-investigation evidence
+The older `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` remains historical context for PR #62 and earlier work.
+
+## 1A. PR #65 operator physical-history snapshot — production accepted
+
+PR #65 separates manual-investigation physical history from automatic risk telemetry.
+
+Production facts:
+
+- migration `0025_anti_fraud_operator_physical_history` applied; total migrations **26**;
+- dedicated table: `anti_fraud_operator_investigation_visits`;
+- exact physical window persisted in `physical_history_from` / `physical_history_until`;
+- worker requires targeted Check-in snapshot success before `history_completed_at`;
+- unresolved targeted cards fail closed;
+- UI physical visits / visit days / restaurants read from the latest investigation snapshot;
+- operator physical event IDs do not enter `anti_fraud_visits`.
+
+Website targeted Check-in dedup:
+
+- current accepted site service SHA: `5f65703d91ee31a9d829cd64cefd011309c8a6c44d3fa96d2d8c77a1f81541e9`;
+- USER_ID `6645`: 17 raw rows → 13 old Scout-style events → 10 targeted physical events;
+- live protected endpoint / bot gateway boundary returns 10 unique events, unresolved 0.
+
+Production acceptance:
+
+- USER_ID `6645`: snapshot 10, UI 10 visits / 9 days / 4 restaurants, telemetry intersection 0;
+- USER_ID `408974`: snapshot 8, UI 8 visits / 7 days / 7 restaurants, telemetry intersection 0;
+- acceptance result: **31 PASS / 0 FAIL / 0 WARN**.
+
+Deployment:
+
+- backup: `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`;
+- deployment result: **61 PASS / 0 FAIL / 0 WARN**;
+- rollback not required.
+
+Authoritative record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
+
+---
+
+## 1B. PR #62 manual-investigation evidence
 
 PR #62 adds no migration and no new risk/grouping/blocking rule. It exposes existing investigation evidence in the case UI.
 

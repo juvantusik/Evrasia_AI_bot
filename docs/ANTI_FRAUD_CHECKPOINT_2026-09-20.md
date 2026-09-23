@@ -6,79 +6,79 @@
 >
 > Source priority remains: **actual production → current GitHub → staging/test → current docs → older discussion**.
 >
-> This checkpoint now records the factual state through PR #62 production acceptance on 2026-09-20.
+> Historical checkpoint originally recorded through PR #62. The current production baseline is PR #65; read `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` first.
 
 ---
 
-## 0. Latest accepted state — PR #62
+## 0. Latest accepted state — PR #65
 
-PR #62 **Anti-Fraud: show manual investigation history and linked IDs** is **MERGED / PRODUCTION / VERIFIED**.
+PR #65 **Anti-Fraud: separate operator physical history from risk telemetry** is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**.
 
-Accepted production runtime:
+Current production runtime:
 
-- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`;
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`;
-- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`;
-- canonical Compose SHA256 at acceptance: `652ee50e82f45c8c9d5cd91ba1fd054e0b0c44a829cf998e51e750e7f6d54028`;
-- migrations: **25**;
-- application: healthy, restart count 0 during acceptance.
+- revision: `d1746ceabb513727baad729adbd3333328fc2dab`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`;
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`;
+- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`;
+- migrations: **26**;
+- application: healthy, restart count 0.
 
-PR #62 does not change scoring, grouping, blocking or schema. It only exposes factual manual-investigation evidence already persisted by PR #60 and existing Trusted Device / identity-link data.
+PR #65 architecture:
 
-Operator-visible manual-investigation card now includes:
+- targeted Check-in 60-day physical history is persisted in `anti_fraud_operator_investigation_visits`;
+- snapshot is scoped by `investigation_id`;
+- `physical_history_from` / `physical_history_until` persist the exact source window;
+- UI physical visit/day/restaurant metrics read that snapshot;
+- operator physical snapshot events remain separate from `anti_fraud_visits`;
+- unresolved targeted cards fail closed.
 
-- human-readable status such as **«Проверка завершена»**;
-- exact latest 60-day manual-investigation window;
-- physical visits / visit days / restaurants;
-- first and last physical event;
-- expandable daily visit summary;
-- Trusted Device prefix (`16 chars + …`) when present;
-- linked Bitrix USER_ID values when present;
-- explicit **«Risk по категориям»** caption above the existing five risk scores.
+Website targeted Check-in dedup is also production-accepted:
 
-Production acceptance fixture USER_ID `1969724` returned:
+- current service SHA: `5f65703d91ee31a9d829cd64cefd011309c8a6c44d3fa96d2d8c77a1f81541e9`;
+- USER_ID `6645`: 17 raw rows → 13 old Scout-style events → 10 targeted physical events;
+- real protected endpoint / bot gateway: 10 unique events, unresolved 0.
 
-- `ready`;
-- **10** physical visits;
-- **9** visit days;
-- **8** restaurants;
-- **9** daily rows;
-- one Trusted Device: `3578df691292f7bc…`;
-- zero linked accounts at that moment.
+End-to-end production acceptance:
 
-Read-only acceptance result: **15 PASS / 0 FAIL / 1 WARN**. The sole WARN was the factual absence of linked accounts for that account.
+- USER_ID `6645`: source 10 = snapshot 10 = UI 10 physical visits; 9 visit days; 4 restaurants; snapshot-to-`anti_fraud_visits` intersection 0;
+- USER_ID `408974`: source 8 = snapshot 8 = UI 8 physical visits; 7 visit days; 7 restaurants; snapshot-to-`anti_fraud_visits` intersection 0;
+- result: **31 PASS / 0 FAIL / 0 WARN**.
 
-The guarded deployment attempt discovered production was already on the exact target image and stopped before mutation. Do not attribute that prior cutover to a person/process without separate evidence.
+Bot deployment result: **61 PASS / 0 FAIL / 0 WARN**, rollback not required.
+
+Full authoritative record:
+
+`docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
+
+PR #62 remains the previous evidence-view milestone and is historical context, not the current runtime baseline.
 
 ---
 
 ## 1. Immediate continuation point
 
-The current UI/device-label cleanup is **DONE / PRODUCTION / OPERATOR ACCEPTED**.
+The current manual-investigation physical-history work is **DONE / PRODUCTION / VERIFIED / ACCEPTED**.
 
-Manual Anti-Fraud investigation by phone (PR #60) and its operator-visible evidence view (PR #62) are **DONE / PRODUCTION / VERIFIED**.
+Completed:
 
-Already completed for Step 2:
+1. protected phone resolver;
+2. persistent operator-investigation model;
+3. targeted 60-day physical Check-in history;
+4. separate per-investigation physical snapshot;
+5. normal Anti-Fraud scoring after enrichment;
+6. phone-first **«Добавить на проверку»** UI;
+7. persistent operator source/reason separated from automatic telemetry;
+8. multi-card targeted event dedup;
+9. production deployment and schema verification;
+10. end-to-end acceptance on USER_ID `6645` and `408974`;
+11. proof that snapshot physical event IDs do not enter `anti_fraud_visits`.
 
-- Bitrix protected phone resolver: **DONE / PRODUCTION / VERIFIED**.
+Do not repeat these steps merely for reassurance.
 
-Still pending in the bot:
+A manual browser visual spot-check may still be performed if desired, but there is no unresolved backend/API correctness blocker for PR #65.
 
-1. bot gateway for the protected Bitrix phone resolver;
-2. persistent PostgreSQL operator-investigation model;
-3. explicit operator-authorized 60-day loyalty/history enrichment without faking an automatic risk gate;
-4. normal Anti-Fraud scoring after enrichment;
-5. web UI action **«Добавить на проверку»**, phone-first;
-6. visible persistent operator reason/source, e.g. **Авито**, separated from automatic signals;
-7. tests;
-8. staged rollout and production verification;
-9. documentation update after implementation.
+For any new Anti-Fraud change, start from the production baseline in:
 
-Do **not** restart Check-in Scout Step 1 or the Bitrix resolver work. Those parts are already production-proven.
-
-Issue tracking the manual-investigation requirement:
-
-- GitHub issue #54: https://github.com/juvantusik/Evrasia_AI_bot/issues/54
+`docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
 
 ---
 
@@ -594,7 +594,7 @@ Production acceptance facts:
 - backup DB SHA256: `f164b6adb75d615488a1e7124f1bdfecd47e3f57af3464a14a2a8a4a1f44e201`;
 - deployment result: **13 PASS / 0 FAIL / 0 WARN**.
 
-Remaining acceptance step is operator-visible end-to-end use of **«Добавить на проверку»** with an intentionally selected account. This is not a deployment blocker and must not be simulated by mutating an arbitrary customer.
+This PR #60 acceptance note is historical. The later PR #65 production acceptance completed end-to-end operator-history verification on USER_ID `6645` and `408974`; see `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
 ---
 
@@ -614,7 +614,7 @@ This was observed for USER_ID `1969724`:
 
 That absence was current design, not evidence that the physical check-in was lost.
 
-Step 2 must solve that by making operator investigation a first-class persistent source of visibility.
+Step 2 solved this by making operator investigation a first-class persistent source of visibility; PR #65 later separated physical-history display persistence from automatic risk telemetry.
 
 ---
 
@@ -794,7 +794,7 @@ Authoritative TOTP checkpoint:
 
 `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`
 
-Do not mix TOTP work into the current Anti-Fraud Step 2 task.
+Do not mix TOTP work into Anti-Fraud work unless the operator explicitly resumes the TOTP workstream.
 
 ---
 
@@ -802,19 +802,17 @@ Do not mix TOTP work into the current Anti-Fraud Step 2 task.
 
 When continuing this work in a new chat:
 
-1. read `docs/PROJECT_CHECKPOINT.md`;
-2. read this file;
-3. read `docs/AI_PROJECT_CONTEXT.md`;
-4. inspect actual GitHub `main`;
-5. inspect actual production runtime before any write;
-6. do not redo PR #56/#57/#58, Scout deployment, Bitrix phone resolver research or resolver deployment;
-7. continue **Step 2 bot side** from the current production/code state.
+1. read `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` first;
+2. read `docs/PROJECT_CHECKPOINT.md`;
+3. use this 2026-09-20 checkpoint only for historical PR #62-and-earlier context;
+4. read `docs/AI_PROJECT_CONTEXT.md`;
+5. inspect actual GitHub `main`;
+6. inspect actual production runtime before any write;
+7. do not redo PR #56/#57/#58/#60/#62/#65 deployment or acceptance work merely for reassurance.
 
-The likely first implementation task is:
+There is no pending Step 2 implementation task. Migration `0024` and migration `0025` are already production-applied and verified.
 
-**inspect current main for the cleanest minimal bot gateway + persistent operator-investigation schema before creating migration 0024.**
-
-Do not make the generic operator watchlist the final Step 2 persistence layer.
+The next task should be whatever new operator/business requirement is explicitly requested, starting from the PR #65 production baseline.
 
 ---
 

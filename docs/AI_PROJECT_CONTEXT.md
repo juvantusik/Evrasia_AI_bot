@@ -2,10 +2,10 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-20
+> **Last updated:** 2026-09-23
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current accepted deployed app revision:** `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-> **Current production milestone:** PR #60 manual investigation by phone is production; PR #62 operator-visible 60-day history / Device ID / linked USER_ID results are production-verified.
+> **Current accepted deployed app revision:** `d1746ceabb513727baad729adbd3333328fc2dab`
+> **Current production milestone:** PR #65 dedicated operator physical-history snapshots are production-verified and accepted; PR #62 evidence view remains valid.
 
 ---
 
@@ -13,7 +13,8 @@
 
 In a new chat, read in this order:
 
-0. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — current Anti-Fraud / Scout / manual-investigation handoff
+0. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — current Anti-Fraud / manual-investigation acceptance and handoff
+0A. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — historical PR #62 and earlier Anti-Fraud context
 1. `docs/PROJECT_CHECKPOINT.md`
 2. `docs/AI_PROJECT_CONTEXT.md`
 3. `docs/CURRENT_ARCHITECTURE.md`
@@ -47,12 +48,13 @@ Host/runtime:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted application baseline after PR #62:
+Accepted application baseline after PR #65:
 
-- revision: `dfde4c39b3821f6946d3be05448d11aea1fcc441`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:369f313744a9c1d7b70b94eee2971d78c42320d9400bffb1bf3e6dd107f417d3`
-- image ID: `sha256:4e8b9448c1e7c8c9aad17e502aaabf0452479dc0688a7dc92219833f3b6a408e`
-- migrations: **25**
+- revision: `d1746ceabb513727baad729adbd3333328fc2dab`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`
+- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`
+- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`
+- migrations: **26**
 - current confirmed bonus threshold: `40000`
 - accepted runtime state: `running healthy`
 
@@ -74,6 +76,28 @@ Current Scout display wording:
 The first phrase is display-only. Technical `days_2plus_7d` still uses `>=2`. Do not change backend semantics unless the operator separately approves a rule change.
 
 Documentation-only commits after this checkpoint may advance GitHub `main` without changing the deployed application identity. Re-read actual runtime revision/image before every production mutation.
+
+---
+
+## 2A. PR #65 manual physical-history invariant
+
+Manual operator physical history is now a dedicated per-investigation snapshot.
+
+- source: targeted protected Check-in endpoint, max 60 days;
+- persistence: `anti_fraud_operator_investigation_visits`;
+- scope: exact `investigation_id`;
+- parent window: `physical_history_from` / `physical_history_until`;
+- UI metrics read the dedicated snapshot;
+- `anti_fraud_visits` remains automatic risk/history telemetry and must not receive operator physical snapshot events;
+- unresolved targeted card mappings fail closed.
+
+Accepted site-side targeted dedup service SHA:
+`5f65703d91ee31a9d829cd64cefd011309c8a6c44d3fa96d2d8c77a1f81541e9`.
+
+Production acceptance:
+- USER_ID `6645`: 10 source events = 10 snapshot rows = 10 UI physical visits; telemetry intersection 0;
+- USER_ID `408974`: 8 source events = 8 snapshot rows = 8 UI physical visits; telemetry intersection 0;
+- combined result: **31 PASS / 0 FAIL / 0 WARN**.
 
 ---
 
@@ -112,8 +136,9 @@ The earlier PR #32–#45 lineage below is retained as history. Current continuat
 - PR #58 — Russian device labels + Scout display wording; merged/deployed/operator accepted at revision `700422b3c9004c2d92092a166e50ac5e8e8a6d33`.
 - PR #60 — manual operator investigation by phone; merged/deployed/verified with migration `0024_anti_fraud_operator_investigation`.
 - PR #62 — operator-visible manual-investigation evidence: exact 60-day window, visit metrics/day summary, Trusted Device prefix and linked USER_ID display; merged/deployed/verified at revision `dfde4c39b3821f6946d3be05448d11aea1fcc441`.
+- PR #65 — dedicated operator physical Check-in snapshot, physical-history window fields, UI source switch away from `anti_fraud_visits`, fail-closed unresolved-card handling; merged/deployed/accepted at revision `d1746ceabb513727baad729adbd3333328fc2dab` with migration `0025_anti_fraud_operator_physical_history`.
 
-Detailed facts and the exact next step are in `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+Detailed current facts are in `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
 Merged application PRs leading to the current state:
 
