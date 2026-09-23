@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   buildAntiFraudOperatorPhysicalHistorySnapshot,
-} from "./anti-fraud-operator-physical-history-service";
+} from "./anti-fraud-operator-physical-history-rules";
 import type { BitrixAntiFraudCheckinResult } from "./bitrix-antifraud-checkin-gateway";
 
 const result = (
