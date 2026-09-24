@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-24** after TOTP disable-flow browser acceptance; Anti-Fraud PR #67 baseline remains unchanged.
+> **Updated: 2026-09-24** after TOTP disable-flow acceptance and SamZaberu mobile Trusted Device end-to-end production acceptance; Anti-Fraud app revision baseline remains unchanged.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -22,6 +22,7 @@
 6. `docs/ANTI_FRAUD_OPERATOR_SETTINGS.md` — текущая операторская настройка Anti-Fraud;
 7. `docs/ANTI_FRAUD_UI_NEXT.md` — исторический UI-план с отметкой, что прежние пункты уже реализованы; текущий следующий шаг — Step 2 из checkpoint 2026-09-20;
 8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
+8A. `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md` — authoritative acceptance внешнего `sz_ + 64hex` mobile contract и site -> bot Trusted Device E2E;
 9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
 10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — authoritative TOTP 2FA / protected-profile checkpoint, now including production pilot and accepted disable-flow fix;
 11. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
@@ -124,6 +125,39 @@ Acceptance fixture USER_ID `1969724`:
 - no linked accounts at acceptance.
 
 Do not interpret `Посещения 0` or `История/бонусы 0` as event counts. They remain risk scores.
+
+---
+
+## 1C. SamZaberu mobile Trusted Device — PRODUCTION / END-TO-END ACCEPTED
+
+Do not confuse this with the SamZaberu Telegram scenario. This section describes the **mobile application installation identity** used by Trusted Device / Anti-Fraud.
+
+Accepted production contract on 2026-09-24:
+
+- external `device_id`: literal `sz_` + 64 lowercase hex = 67 chars;
+- one random ID per app installation;
+- prefix is a namespace and must not be stripped;
+- mobile adapter hashes the entire namespaced value, including `sz_`, into a 64-hex core identity;
+- shared `TrustedDeviceService` remains unchanged.
+
+Production mobile adapter:
+
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/TrustedDeviceMobileService.php`
+
+SHA256:
+
+`c59d2a9e1b70aa026b603b457673a842dbaa6b784eae25b40c5e03684b9e612d`
+
+Safe USER_ID `880339` created exactly one new ACTIVE/PASSWORD `SAMZABERU_IOS` row on the site. The next Trusted Device sync then delivered exactly one matching current link and two matching auth events to the bot PostgreSQL.
+
+Final business proof:
+
+`BOT_INGEST_RESULT=PASS_DEVICE_LINK_SYNCED`
+
+The registration/ingestion task is **closed**. Current `client_type=NULL` is only a separate non-blocking metadata/display follow-up.
+
+Read the exact acceptance, backup and failure-root-cause record in:
+`docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
 
 ---
 
@@ -276,6 +310,8 @@ One production app/container contains:
 2. Anti-Fraud — `/antifraud` + 15-minute scheduler
 3. SamZaberu — Telegram scenario inside `EvrasiaTelegramBotV2`
 4. Corporate communications / MegaFon — Telegram scenario/workflow inside the same application
+
+Separately, the SamZaberu **mobile app** now supplies Trusted Device installation identity to the website; that path is not a separate bot/container and is documented in section 1C.
 
 `/directory` and `/api/directory/...` are removed and expected 404.
 

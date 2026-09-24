@@ -490,3 +490,50 @@ Do not repeat PR #65 deployment, USER_ID 6645 / 408974 acceptance, site-side ded
 
 Current continuation record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
+
+
+## SamZaberu mobile Trusted Device production acceptance — 2026-09-24
+
+Website production host: `evrasia`.
+
+Changed production file:
+
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/TrustedDeviceMobileService.php`
+
+Accepted SHA256:
+
+`c59d2a9e1b70aa026b603b457673a842dbaa6b784eae25b40c5e03684b9e612d`
+
+Shared `TrustedDeviceService.php` was intentionally unchanged:
+
+`32a29a5dff76372961a9ec7879b1f2eaf4deeab0a35e2a62a62fdc4a4c091022`
+
+Production backup:
+
+`/home/site_evrasia/web/evrasia.spb.ru/backups/mobile-device-core-adapter-20260924-174920-286568`
+
+Accepted behavior:
+
+- external SamZaberu mobile installation ID is literal `sz_` + 64 lowercase hex = 67 chars;
+- mobile adapter hashes the full namespaced value, including `sz_`, to derive the 64-hex core identity;
+- shared browser/core Trusted Device contract remains unchanged;
+- no DB schema migration;
+- no auth-controller change in the final adapter patch;
+- no API response-format change;
+- patch result: `PATCH_APPLIED=YES`, `ROLLBACK_PERFORMED=NO`;
+- owner/mode preserved `site_evrasia:site_evrasia:664`.
+
+Safe production E2E acceptance with USER_ID `880339`:
+
+- one new site Trusted Device row: ID `21732`, ACTIVE, PASSWORD, `SAMZABERU_IOS`;
+- created at `2026-09-24 19:16:31 MSK`;
+- one new unique device hash;
+- first following Trusted Device bot sync succeeded at `2026-09-24 19:22:13 MSK`;
+- exactly one matching current link reached `anti_fraud_device_links`;
+- matching trust-created (`event_type=10`) and login (`event_type=1`) events reached `anti_fraud_device_events`, both `auth_method=2`;
+- final result: `BOT_INGEST_RESULT=PASS_DEVICE_LINK_SYNCED`.
+
+Current non-blocking observation: bot-side `client_type=NULL` for this SamZaberu identity. Treat explicit iOS/Android display metadata as a separate follow-up; do not reopen the accepted identity-registration flow.
+
+Full acceptance:
+`docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.

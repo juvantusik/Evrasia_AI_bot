@@ -2,7 +2,7 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-23
+> **Last updated:** 2026-09-24
 > **Repository:** `juvantusik/Evrasia_AI_bot`
 > **Current accepted deployed app revision:** `b0d12a112577de2a35e0a49e55367e3bc459bc07`
 > **Current production milestone:** PR #67 visible operator physical history is production-verified and browser-accepted; PR #65 snapshot architecture remains authoritative.
@@ -15,6 +15,7 @@ In a new chat, read in this order:
 
 0. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — current Anti-Fraud / manual-investigation acceptance and handoff
 0A. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — historical PR #62 and earlier Anti-Fraud context
+0B. `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md` — accepted SamZaberu mobile device_id -> Trusted Device -> Anti-Fraud E2E
 1. `docs/PROJECT_CHECKPOINT.md`
 2. `docs/AI_PROJECT_CONTEXT.md`
 3. `docs/CURRENT_ARCHITECTURE.md`
@@ -98,6 +99,41 @@ Production acceptance:
 - USER_ID `6645`: 10 source events = 10 snapshot rows = 10 UI physical visits; telemetry intersection 0;
 - USER_ID `408974`: 8 source events = 8 snapshot rows = 8 UI physical visits; telemetry intersection 0;
 - combined result: **31 PASS / 0 FAIL / 0 WARN**.
+
+---
+
+## 2B. SamZaberu mobile Trusted Device — CLOSED / PRODUCTION / E2E ACCEPTED
+
+Production acceptance completed 2026-09-24.
+
+External mobile contract:
+
+- `device_id` = literal `sz_` + 64 lowercase hex characters = **67 chars total**;
+- one random installation identity per app installation;
+- `platform` = `ios|android`;
+- `sz_` is the namespace and must not be stripped.
+
+Website production adapter:
+
+- host `evrasia`;
+- `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/TrustedDeviceMobileService.php`;
+- accepted SHA256 `c59d2a9e1b70aa026b603b457673a842dbaa6b784eae25b40c5e03684b9e612d`;
+- backup `/home/site_evrasia/web/evrasia.spb.ru/backups/mobile-device-core-adapter-20260924-174920-286568`.
+
+The mobile adapter derives the shared-core identity as SHA-256 of the **full namespaced normalized external value**, including `sz_`. The resulting 64-hex value is passed to the existing `TrustedDeviceService`, whose accepted SHA remains `32a29a5dff76372961a9ec7879b1f2eaf4deeab0a35e2a62a62fdc4a4c091022`. Shared browser/core behavior was not changed.
+
+Safe USER_ID `880339` E2E proof:
+
+- site row ID `21732`, ACTIVE, PASSWORD, `SAMZABERU_IOS`, created `2026-09-24 19:16:31 MSK`;
+- site state changed from 6 -> 7 rows and 6 -> 7 unique hashes;
+- Trusted Device bot sync succeeded `19:22:13 MSK`;
+- one matching current link reached `anti_fraud_device_links`;
+- two matching events reached `anti_fraud_device_events`: `event_type=10` trust-created and `event_type=1` login, both `auth_method=2`;
+- `BOT_INGEST_RESULT=PASS_DEVICE_LINK_SYNCED`.
+
+Current non-blocking follow-up: `client_type=NULL` on the accepted bot-side link/events. Explicit SamZaberu iOS/Android display metadata is separate future work.
+
+Do **not** reopen the device-registration flow unless new evidence appears. See the dedicated acceptance document above.
 
 ---
 
@@ -371,6 +407,8 @@ A later HTTP timeout after 202 is not proof of job failure. Never trigger a seco
 - raw loyalty card numbers must not appear in bot UI/API/logs;
 - required secret mounts remain protected and must not be printed;
 - Trusted Device is app installation/trust identity, not IP/hardware identity;
+- SamZaberu external installation identity is `sz_ + 64hex`; the full namespaced value is deterministically hashed in the mobile adapter before entering the shared 64-hex core contract;
+- raw SamZaberu `device_id`, full device hash and trust token must not be printed;
 - logout must not manufacture a new identity.
 
 ---
