@@ -254,6 +254,38 @@ UI labels after PR #58:
 
 Both are the same hash type. A single-account hash becomes shared grouping evidence if a second USER_ID later appears on the same hash and the next sync/scoring cycle ingests that relation.
 
+#### SamZaberu mobile -> Trusted Device
+
+SamZaberu **mobile application** is a separate client source from the Telegram scenario described below.
+
+Production-accepted mobile identity flow on 2026-09-24:
+
+```text
+SamZaberu mobile
+  -> explicit auth (PASSWORD / SMS / MOBILE_ID)
+  -> TrustedDeviceMobileService
+  -> external installation ID: sz_ + 64 lowercase hex
+  -> SHA-256 over the full namespaced value, including sz_
+  -> 64-hex core identity
+  -> existing TrustedDeviceService
+  -> ev_trusted_devices
+  -> protected Trusted Device export
+  -> Anti-Fraud collector
+  -> anti_fraud_device_links / anti_fraud_device_events
+```
+
+Current production mobile adapter:
+
+- website host: `evrasia`;
+- file: `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/TrustedDeviceMobileService.php`;
+- SHA256: `c59d2a9e1b70aa026b603b457673a842dbaa6b784eae25b40c5e03684b9e612d`.
+
+The shared `TrustedDeviceService` remains unchanged and keeps its 64-hex opaque-ID contract. Browser Trusted Device behavior therefore remains intact.
+
+Safe production USER_ID `880339` was accepted end-to-end: one new SamZaberu iOS Trusted Device row was created on the site, then one matching current link plus two auth events were ingested by the bot. Exact acceptance evidence and rollback path are recorded in `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
+
+Current bot-side `client_type` for that accepted SamZaberu link/event is `NULL`. This is a non-blocking metadata/display follow-up, not an identity-ingestion failure.
+
 #### Loyalty/history credential boundary
 
 The bot container does **not** hold RestIS credentials. Loyalty/history access goes through the protected site-side integration. This boundary is intentional and must not be “fixed” by copying RestIS credentials into `evrasia-ai-bot-app`.
