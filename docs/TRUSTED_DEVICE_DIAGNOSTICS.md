@@ -1,6 +1,6 @@
 # Trusted Device diagnostics — authoritative counting method
 
-> Updated: **2026-09-20**.
+> Updated: **2026-09-24**.
 >
 > Purpose: give any new chat/operator the exact, production-proven method for answering **«сколько уже накопилось device_id / device hash для Trusted Device»** without confusing it with Anti-Fraud device-link statistics.
 
@@ -38,7 +38,24 @@ These labels do not represent two different identifier formats.
 
 If another USER_ID later appears on a hash that was previously single-account, the next sync/scoring cycle can make it a shared device and use it as linking/grouping evidence.
 
-A Trusted Device hash is not a guaranteed physical-hardware serial number. The current web mechanism is based on browser/device identity; another browser/profile or cookie reset can create another identifier for the same physical computer.
+A Trusted Device hash is not a guaranteed physical-hardware serial number. Browser Trusted Device identity can change with another browser/profile or cookie reset. Since 2026-09-24, the same authoritative store also contains accepted SamZaberu mobile installation identities.
+
+## 1B. SamZaberu mobile source — production accepted 2026-09-24
+
+SamZaberu mobile now participates in the same Trusted Device store with a namespaced external installation ID:
+
+- external contract: literal `sz_` + 64 lowercase hex characters = 67 characters total;
+- one random installation ID per application installation;
+- `platform` is `ios` or `android`;
+- the `sz_` prefix is part of identity and must not be stripped;
+- the mobile adapter hashes the **entire normalized namespaced value** to derive the 64-hex opaque ID required by the shared `TrustedDeviceService`;
+- `TrustedDeviceService` then performs its normal storage hash into `DEVICE_ID_HASH`;
+- browser/core behavior is unchanged.
+
+Accepted production mobile adapter SHA256:
+`c59d2a9e1b70aa026b603b457673a842dbaa6b784eae25b40c5e03684b9e612d`.
+
+Production E2E acceptance on safe USER_ID `880339` created one `SAMZABERU_IOS` Trusted Device row and the matching Anti-Fraud link/events. See `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
 
 ## 2. What exactly to count
 
@@ -158,15 +175,20 @@ Important: this is a historical checkpoint only. For a current answer, rerun the
 
 ## 6. Current source semantics
 
-The accumulated values discussed in this diagnostic currently come from the **browser-side Trusted Device mechanism**. Do not describe `UNIQUE_DEVICE_HASHES` as a count of physical phones unless/until the source contract proves that.
+The authoritative `ev_trusted_devices` store now contains more than one client source:
+
+- browser Trusted Device identities;
+- SamZaberu mobile installation identities accepted through the namespaced `sz_ + 64hex` contract.
+
+Do not describe `UNIQUE_DEVICE_HASHES` as a count of physical phones or physical computers. A row/hash is a Trusted Device installation/profile identity, not guaranteed hardware identity.
 
 Therefore use wording such as:
 
 - `уникальные DEVICE_ID_HASH`;
-- `уникальные browser/device identifiers`;
+- `уникальные browser/mobile installation identifiers`;
 - `накопленные идентификаторы Trusted Device`.
 
-Avoid wording such as `8155 физических устройств`.
+Avoid wording such as `N физических устройств` unless a separate hardware-identity source explicitly proves that claim.
 
 ## 7. Rules for future chats/operators
 
