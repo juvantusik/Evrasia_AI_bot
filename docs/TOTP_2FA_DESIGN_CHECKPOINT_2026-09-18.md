@@ -1,6 +1,6 @@
 # Evrasia — TOTP 2FA / protected-profile design checkpoint
 
-> Status: **PLANNED / INVESTIGATED / NOT IMPLEMENTED**
+> Status: **PILOT IMPLEMENTED / PRODUCTION / DISABLE FLOW BROWSER-ACCEPTED**
 >
 > Date: **2026-09-18**
 >
@@ -8,7 +8,7 @@
 >
 > Scope: Bitrix website personal account / sign-in / bonus PIN flow on production host `evrasia`.
 >
-> This document records the operator request, confirmed production structure, security invariants, source paths, current SHA baselines, and the exact continuation point. No 2FA production mutation had been performed at the time of this checkpoint.
+> This document began as the 2026-09-18 design checkpoint. Production factual state now supersedes the original planning sections where noted below.
 
 ## 1. Operator request and business goal
 
@@ -594,3 +594,82 @@ Before any WRITE:
 - never print secret values.
 
 This document is a continuation checkpoint, not proof that 2FA is deployed.
+
+
+## 20. Production addendum — 2026-09-24 disable-flow acceptance
+
+The pilot TOTP flow for Bitrix USER_ID `880339` progressed beyond the original 2026-09-18 planning state.
+
+Accepted production facts before disable testing:
+
+- global Bitrix OTP enabled;
+- mandatory OTP remained off;
+- pilot enrollment completed with SMS ownership confirmation before QR;
+- TOTP enrollment/login passed;
+- pre-enrollment sessions were revoked;
+- direct web bonus-PIN disclosure was limited to a session proven by Bitrix auth context to have actually used OTP;
+- no rollout beyond USER_ID `880339`.
+
+### Disable-flow bug
+
+The personal-account **«Отключить 2FA»** action existed, but `disableTotpAction()` incorrectly called the generic `requirePilotUser()` helper.
+
+That helper was enrollment-specific and correctly rejected:
+
+- globally enabled OTP via `Otp::isOtpEnabled()`;
+- any existing `b_sec_user` OTP row.
+
+Those conditions are valid guards for first-time enrollment but are incompatible with disabling an already-enrolled OTP. As a result, the disable action could fail before reaching TOTP verification.
+
+### Production fix
+
+A dedicated disable-only helper `requirePilotUserForDisable()` was added. It checks only:
+
+- authenticated Bitrix session;
+- pilot USER_ID `880339`;
+- availability of the Bitrix security module.
+
+The enrollment helper and its existing safeguards were preserved unchanged.
+
+Production component:
+
+`/home/site_evrasia/web/evrasia.spb.ru/public_html/local/components/eurasia/totp.enrollment/class.php`
+
+Before SHA256:
+
+`27a8b349c606b361b78b6320d03ab4dd761650292d51880e62202483bf2e089c`
+
+After SHA256:
+
+`16220efe992af6fbf0b2910adb29be0ecdb3b100b7ad0d43fa4de58b73495789`
+
+Bitrix core `Otp.php` remained untouched:
+
+`285a0fa1d87ebf3e1268e7fe8ea561634e7d9f645d6b8f08e19bdcc34b20372c`
+
+Backup:
+
+`/home/site_evrasia/web/evrasia.spb.ru/backups/totp-disable-guard-fix-20260924-060347`
+
+Deployment verification:
+
+- 22 PASS / 0 FAIL;
+- PHP syntax PASS;
+- no DB write during patch;
+- no OTP-state write during patch;
+- no service restart;
+- Bitrix core unchanged.
+
+### Browser acceptance
+
+After the patch, the operator retried **«Отключить 2FA»** using a fresh current TOTP code.
+
+Result: **SUCCESS / BROWSER ACCEPTED**.
+
+The action now reaches the intended protected flow:
+
+`current TOTP verify -> Otp::delete() -> post-check -> page reload`
+
+This preserves the intended reset semantics: disabling removes the OTP enrollment rather than merely setting it inactive, so a future re-enrollment requires a fresh setup/QR.
+
+A read-only post-check of the persisted `b_sec_user` state should be used whenever future work depends on the exact current enrollment state.
