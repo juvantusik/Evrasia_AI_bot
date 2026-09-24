@@ -385,6 +385,46 @@ Known backups:
 
 Longer term, inspect SamZaberu code and migrate it to the canonical public-offer URL rather than relying on the obsolete filename.
 
+## 7A. SamZaberu mobile Trusted Device — PRODUCTION / END-TO-END ACCEPTED
+
+Closed on 2026-09-24.
+
+Accepted external mobile contract:
+
+- `device_id = sz_` + 64 lowercase hex characters = 67 characters total;
+- `platform = ios|android`;
+- `sz_` is a namespace and must not be stripped;
+- older clients with no optional device context remain fail-open.
+
+Production mobile adapter:
+
+- host: `evrasia`;
+- file: `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/TrustedDeviceMobileService.php`;
+- SHA256: `c59d2a9e1b70aa026b603b457673a842dbaa6b784eae25b40c5e03684b9e612d`;
+- backup: `/home/site_evrasia/web/evrasia.spb.ru/backups/mobile-device-core-adapter-20260924-174920-286568`.
+
+The adapter hashes the **full namespaced external value**, including `sz_`, into the 64-hex opaque identity required by the shared `TrustedDeviceService`. The shared core itself was not changed.
+
+Safe USER_ID `880339` acceptance:
+
+- site Trusted Device row ID `21732`;
+- ACTIVE / PASSWORD;
+- `SAMZABERU_IOS`;
+- created `2026-09-24 19:16:31 MSK`;
+- one new row and one new unique device hash.
+
+Bot-side E2E:
+
+- Trusted Device sync succeeded at `2026-09-24 19:22:13 MSK`;
+- one matching current link reached `anti_fraud_device_links`;
+- two matching events reached `anti_fraud_device_events`: trust-created (`event_type=10`) and login (`event_type=1`), both `auth_method=2`;
+- `BOT_INGEST_RESULT=PASS_DEVICE_LINK_SYNCED`.
+
+Current non-blocking follow-up: bot-side `client_type` is still `NULL`; explicit SamZaberu iOS/Android display classification is separate future work.
+
+Authoritative acceptance document:
+`docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
+
 ## 8. Continuation point for new chat
 
 Confirmed:
@@ -402,7 +442,8 @@ Confirmed:
 - rollout to all historical users: **NOT DONE**;
 - five web-visible Anti-Fraud users with agreements 1+2 were verified as post-rollout `evrasia_signup` registrations, not account-gate acceptances;
 - legacy compatibility PDF replacement: **PRODUCTION**;
-- `/club/` bonus-program link points to current compatibility PDF.
+- `/club/` bonus-program link points to current compatibility PDF;
+- SamZaberu mobile Trusted Device: **PRODUCTION / END-TO-END ACCEPTED**; external `sz_ + 64hex` contract is adapted to the shared 64-hex core identity without changing `TrustedDeviceService`; site -> export -> bot ingestion verified.
 
 For future consent inspection:
 1. obtain web-visible USER_ID from `eur-bot-01` PostgreSQL table `anti_fraud_web_account_state`;
