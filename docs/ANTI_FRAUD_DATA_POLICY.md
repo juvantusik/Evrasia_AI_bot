@@ -92,7 +92,12 @@ Internal audit:
 - `anti_fraud_device_events` загружается инкрементально; конфликтующие дубликаты source event нельзя молча перезаписывать.
 - Trusted Device export не передаёт телефон, email, имя пользователя, IP или trust token.
 - Trusted Device — это app install/trust identity, а не IMEI/MAC/advertising ID/hardware identity.
+- Для SamZaberu mobile внешний installation ID имеет контракт: literal `sz_` + 64 lowercase hex = 67 символов.
+- Префикс `sz_` является namespace и не удаляется; mobile adapter вычисляет SHA-256 от **полного namespaced значения**, включая `sz_`, чтобы получить 64-hex core identity для общего `TrustedDeviceService`.
+- Общий `TrustedDeviceService` сохраняет прежний 64-hex opaque-token contract; browser flow не меняется.
+- Raw SamZaberu `device_id`, полный `DEVICE_ID_HASH` и trust token не должны печататься в routine diagnostics/logs.
 - Logout не должен создавать новый device identity; reinstall может создать новый installation identity.
+- Production E2E acceptance этого mobile flow зафиксирован в `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
 
 ## Explainable Risk Scoring v1.7
 
