@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-23** after PR #67 UI acceptance and legacy physical-snapshot backfill.
+> **Updated: 2026-09-24** after TOTP disable-flow browser acceptance; Anti-Fraud PR #67 baseline remains unchanged.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -23,7 +23,7 @@
 7. `docs/ANTI_FRAUD_UI_NEXT.md` — исторический UI-план с отметкой, что прежние пункты уже реализованы; текущий следующий шаг — Step 2 из checkpoint 2026-09-20;
 8. `docs/TRUSTED_DEVICE_DIAGNOSTICS.md` — authoritative method для вопроса «сколько накопилось device_id/device hash именно для Trusted Device/SMS trust-механизма»; считать на Bitrix host `evrasia` из `ev_trusted_devices`, не из Anti-Fraud PostgreSQL;
 9. `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` — связь Anti-Fraud с обновлёнными офертой/политикой сайта и будущей регистрацией/фиксацией согласий;
-10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — planned TOTP 2FA / protected-profile design, production read-only findings and continuation keyword `ПАНДА ДВА`;
+10. `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` — authoritative TOTP 2FA / protected-profile checkpoint, now including production pilot and accepted disable-flow fix;
 11. `docs/NEW_CHAT_HANDOFF.md` — этот handoff.
 
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
@@ -368,3 +368,28 @@ Confirmed production facts:
 The immediate next step is **not** a blind WRITE. First run the final narrow pre-write audit from the dedicated checkpoint: current `b_sec_user` population, exact OTP option values, optional/mandatory mode, native setup sequence and login event wiring. If safe, proceed with the guarded pilot only.
 
 Critical invariant: direct PIN must require a session that actually passed TOTP; do not grant direct-PIN privilege merely because the account has active OTP.
+
+
+## 10A. Latest TOTP pilot state — 2026-09-24
+
+Pilot scope remains USER_ID `880339` only.
+
+The TOTP disable flow is now **PRODUCTION / BROWSER ACCEPTED**.
+
+Root cause of the previous failure: `disableTotpAction()` reused enrollment-only `requirePilotUser()`, which rejects globally-enabled OTP and an already-existing OTP row. A dedicated `requirePilotUserForDisable()` guard was added for the disable path only.
+
+Production TOTP component SHA256 after the fix:
+
+`16220efe992af6fbf0b2910adb29be0ecdb3b100b7ad0d43fa4de58b73495789`
+
+Backup:
+
+`/home/site_evrasia/web/evrasia.spb.ru/backups/totp-disable-guard-fix-20260924-060347`
+
+Bitrix core `Otp.php` SHA256 remained:
+
+`285a0fa1d87ebf3e1268e7fe8ea561634e7d9f645d6b8f08e19bdcc34b20372c`
+
+Operator browser acceptance: fresh TOTP code successfully disabled 2FA and the page returned to the unprotected state.
+
+Do not restore the old generic enrollment guard in the disable action.
