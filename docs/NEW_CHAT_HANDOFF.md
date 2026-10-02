@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-09-24** after TOTP disable-flow acceptance and SamZaberu mobile Trusted Device end-to-end production acceptance; Anti-Fraud app revision baseline remains unchanged.
+> **Updated: 2026-10-02**. Current continuation is the Anti-Fraud UI/unblock incident; SamZaberu Legal Consents first-registration design correction is accepted but not implemented.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -12,7 +12,9 @@
 
 Сначала полностью прочитай:
 
-0. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — **самый свежий authoritative acceptance/handoff для текущей ветки Anti-Fraud / ручной физической истории**;
+0. `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md` — **ТЕКУЩАЯ АКТИВНАЯ ПРОБЛЕМА**: веб-интерфейс Anti-Fraud не открывается по operator-used URL и есть свежий регресс разблокировки; диагностика ещё не выполнена;
+0A. `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md` — исправленный дизайн согласий для первой регистрации СамЗаберу; реализация ещё не выполнена;
+0B. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — последняя принятая база Anti-Fraud до текущего инцидента;
 1. `docs/PROJECT_CHECKPOINT.md` — общий authoritative checkpoint;
 1A. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — исторический checkpoint PR #62 и предшествующей архитектуры; читать для контекста, но не использовать как текущий production baseline;
 2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
@@ -30,6 +32,37 @@
 Приоритет источников: **production actual state → current GitHub → staging/test → current docs → older discussion**. Не повторяй уже завершённые проверки и deployment-шаги.
 
 После docs-only commit GitHub `main` может быть новее deployed application revision. Перед следующей production mutation всегда отдельно проверяй фактический runtime image/revision.
+
+### Текущая точка продолжения — НЕ ПЕРЕПРЫГИВАТЬ
+
+Есть новый production-инцидент:
+
+- после кнопки **«Разблокировать»** на реальном аккаунте не произошло ожидаемого визуального/фактического восстановления;
+- точный хвост ` - блок ИТ` остался;
+- затем оператор сообщил, что `http://192.168.103.200:8081/antifraud` вообще перестал открываться.
+
+Ожидаемый контракт разблокировки прежний:
+
+- `ACTIVE=Y`;
+- `BLOCKED=N`;
+- удалить только финальный ` - блок ИТ`;
+- исторический `UF_AF_BLOCK_REASON` сохранить.
+
+Причина пока **не установлена**.
+
+Первый шаг нового чата — **один READ_ONLY production diagnostic** на `eur-bot-01`: factual compose/container health/restarts, image/revision, listeners `8081/18080/18081/80/443`, nginx/proxy config, HTTP probes, recent logs, DB reachability и последние `anti_fraud_web_unblock` audit rows. **Не перезапускать контейнеры и не менять код до диагноза.**
+
+Важно: старые docs описывают nginx production -> `18080`, test `18081`. Пользовательский URL `:8081` не надо “исправлять” по памяти — нужно выяснить фактический listener/proxy.
+
+Отдельно не терять SamZaberu Legal Consents:
+
+- текущий ТЗ от 18.09 описывает JWT-protected post-auth flow;
+- V4 `/signup` создаёт USER_ID, но JWT не выдаёт;
+- для новой регистрации принят дизайн: current legal docs/codes получить без JWT, accepted codes передать в signup, backend валидирует required/current и пишет native Bitrix consent на новый USER_ID;
+- существующие JWT-protected `/legal/consents` + `/accept` оставить для авторизованных пользователей/новых редакций;
+- **реализация ещё не выполнена**.
+
+Не смешивать текущий outage/unblock incident с открытым старым PR #69 по отображению бонусов.
 
 ---
 
