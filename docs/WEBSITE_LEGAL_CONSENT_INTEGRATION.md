@@ -2,7 +2,7 @@
 
 > Status: website legal catalog, offer, privacy policy, standalone consents, registration consent persistence and the existing-user account consent gate are **PRODUCTION**.
 >
-> Updated: **2026-09-12** after global rollout of the existing-user consent gate, production extension of Anti-Fraud account-map with consent fields, and removal of the stale test-user restriction from the consent save handler.
+> Updated: **2026-10-02**. Website consent flows remain production; SamZaberu mobile first-registration consent handling now has an accepted design correction but is **not yet implemented**.
 
 ## 1. Scope and production website
 
@@ -58,6 +58,40 @@ Authoritative event table:
 - key columns: `ID`, `DATE_INSERT`, `AGREEMENT_ID`, `USER_ID`, `IP`, `URL`, `ORIGIN_ID`, `ORIGINATOR_ID`.
 
 Historical consent lookup must use this table, not USER `UF_*` fields. Existing `UF_SMS` and `UF_SUBSCRIBE` values are mailing/subscription state and must not be treated as versioned offer/PD consent records.
+
+## 3A. SamZaberu mobile first-registration consent flow — DESIGN CORRECTION ACCEPTED / NOT IMPLEMENTED
+
+The SamZaberu Legal Consents API TЗ dated 2026-09-18 correctly describes the JWT-protected **existing-user / post-authentication** flow, but it omitted first-time V4 registration.
+
+Previously established production V4 facts:
+
+- `/api/v4/signup` calls `Auth::signup()`;
+- signup creates the Bitrix USER_ID;
+- signup returns registration data (created id/message) and does **not** issue access/refresh JWT;
+- V4 JWT issue points were already mapped during the all-device logout/session-revocation work.
+
+Therefore a new user cannot use the current JWT-protected `GET /api/v4/legal/consents` before registration.
+
+Accepted correction:
+
+1. before JWT/user creation, mobile fetches the **current** legal-document catalog/content/codes from the server without hardcoding;
+2. user confirms required documents in the mobile registration UI;
+3. the signup request carries the accepted current document `code` values;
+4. backend revalidates current/required codes, creates USER_ID and persists native Bitrix consent events for that USER_ID;
+5. marketing remains optional;
+6. JWT-protected `/legal/consents` and `/legal/consents/accept` remain the correct flow for already authenticated users and later document revisions.
+
+Do **not** solve the registration gap by:
+
+- hardcoding document HTML/text in the app;
+- hardcoding current `code` values;
+- making the authenticated consent-write endpoint anonymous;
+- passing a raw USER_ID from the mobile client instead of using the final server-side registration/auth identity binding.
+
+Exact endpoint name for the pre-auth current-document catalog, mobile signup consent originator, and final “documents changed” error contract remain implementation details. They are not production until implemented and E2E verified.
+
+Authoritative design note:
+`docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md`.
 
 ## 4. Existing-user personal-account consent gate — PRODUCTION / GLOBAL ROLLOUT
 

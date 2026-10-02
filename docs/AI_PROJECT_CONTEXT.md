@@ -2,10 +2,10 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-09-24
+> **Last updated:** 2026-10-02
 > **Repository:** `juvantusik/Evrasia_AI_bot`
 > **Current accepted deployed app revision:** `b0d12a112577de2a35e0a49e55367e3bc459bc07`
-> **Current production milestone:** PR #67 visible operator physical history is production-verified and browser-accepted; PR #65 snapshot architecture remains authoritative.
+> **Current production milestone:** last accepted app baseline remains PR #67 / `b0d12a...`, but a **new open Anti-Fraud UI/unblock incident was reported 2026-10-02**. Factual runtime must be re-verified before any mutation.
 
 ---
 
@@ -13,9 +13,11 @@
 
 In a new chat, read in this order:
 
-0. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — current Anti-Fraud / manual-investigation acceptance and handoff
-0A. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — historical PR #62 and earlier Anti-Fraud context
-0B. `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md` — accepted SamZaberu mobile device_id -> Trusted Device -> Anti-Fraud E2E
+0. `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md` — **CURRENT ACTIVE INCIDENT**: Anti-Fraud UI unavailable at the operator-used URL and reported unblock regression; diagnosis not yet started
+0A. `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md` — corrected mobile registration consent design; implementation pending
+0B. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — last accepted Anti-Fraud / manual-investigation baseline
+0C. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — historical PR #62 and earlier Anti-Fraud context
+0D. `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md` — accepted SamZaberu mobile device_id -> Trusted Device -> Anti-Fraud E2E
 1. `docs/PROJECT_CHECKPOINT.md`
 2. `docs/AI_PROJECT_CONTEXT.md`
 3. `docs/CURRENT_ARCHITECTURE.md`
@@ -134,6 +136,55 @@ Safe USER_ID `880339` E2E proof:
 Current non-blocking follow-up: `client_type=NULL` on the accepted bot-side link/events. Explicit SamZaberu iOS/Android display metadata is separate future work.
 
 Do **not** reopen the device-registration flow unless new evidence appears. See the dedicated acceptance document above.
+
+---
+
+## 2C. CURRENT ACTIVE INCIDENT — Anti-Fraud UI / unblock regression (2026-10-02)
+
+User-reported facts:
+
+- after pressing **«Разблокировать»** on a real blocked account, the expected state restoration did not visibly occur;
+- the exact trailing ` - блок ИТ` marker remained in the name;
+- later the operator reported that `http://192.168.103.200:8081/antifraud` no longer opens.
+
+Accepted unblock contract remains:
+
+- `ACTIVE=Y`;
+- `BLOCKED=N`;
+- remove only the exact trailing ` - блок ИТ`;
+- preserve historical `UF_AF_BLOCK_REASON`.
+
+The root cause is **unknown**. Do not assume the unblock regression and the UI outage share one cause.
+
+The operator-used `:8081` URL is not confirmed by the older architecture docs, which document production nginx -> `18080` and test `18081`. Treat `:8081` as a factual user-reported access path that must be inspected, not corrected by assumption.
+
+**Next step:** one guarded READ_ONLY production diagnostic on `eur-bot-01`: containers/health/restarts, current image/revision, listeners, nginx/proxy config, HTTP probes, recent logs, DB reachability and latest `anti_fraud_web_unblock` audit rows. No restart or code change before diagnosis.
+
+Authoritative incident handoff:
+`docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md`.
+
+## 2D. SamZaberu mobile legal consents — registration design correction
+
+The 2026-09-18 mobile Legal Consents TЗ correctly describes the JWT-protected **existing-user** flow but omitted the first-time registration case.
+
+Previously established production facts:
+
+- V4 `/api/v4/signup` creates the Bitrix USER_ID and returns registration data;
+- signup itself does **not** issue JWT;
+- JWT issue points were already mapped during the all-device logout/session-revocation work.
+
+Accepted correction:
+
+- before JWT, mobile registration obtains the current legal document catalog/content/codes from the server without hardcoding;
+- the signup request carries the accepted current `code` values;
+- backend validates current/required codes, creates USER_ID and persists native Bitrix consent events for that USER_ID;
+- marketing remains optional;
+- JWT-protected `/legal/consents` + `/accept` remain for authenticated existing users / later document revisions.
+
+Implementation is **pending**. Do not describe the public document GET or signup `agreements` field as production yet.
+
+Authoritative design note:
+`docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md`.
 
 ---
 
@@ -341,7 +392,7 @@ Localization remains accepted, including Russian operator text for `max_devices_
 
 ---
 
-## 8. Manual block / unblock — COMPLETE
+## 8. Manual block / unblock — PREVIOUSLY ACCEPTED; CURRENT REGRESSION OPEN
 
 Routes:
 
@@ -359,7 +410,11 @@ Safe USER_ID `880339` controlled round-trip is already production-proven:
 - 27 PASS / 0 FAIL / 0 WARN
 - no real customer mutation.
 
-Do not repeat merely for reassurance. The safe account is risk-0 and legitimately has no case; never mutate a real customer or fabricate production risk data just to create a visual fixture.
+The controlled USER_ID `880339` round-trip remains valid historical acceptance and must not be repeated merely for reassurance.
+
+**However, this section no longer means the current production path can be assumed healthy.** On 2026-10-02 a real-account unblock was reported to leave the account blocked/name suffix unchanged, followed by an Anti-Fraud UI availability incident. Diagnose the current runtime and latest unblock audit/factual Bitrix state according to `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md`.
+
+Never mutate a real customer or fabricate production risk data merely to create a visual fixture.
 
 ---
 

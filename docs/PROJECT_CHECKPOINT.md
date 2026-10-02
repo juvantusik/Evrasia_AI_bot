@@ -2,9 +2,66 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-09-23** after PR #67 browser-visible acceptance and legacy snapshot backfill.
+> Updated: **2026-10-02** with a superseding current-incident/legal-consent continuation block. Older sections are retained for history and may describe earlier rollout states.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
+
+## 0. Superseding continuation — 2026-10-02
+
+This block supersedes older continuation wording later in this file where the project has moved on.
+
+### CURRENT ACTIVE ISSUE — Anti-Fraud UI / unblock regression
+
+User-reported production symptoms:
+
+- pressing **«Разблокировать»** on a real blocked account did not visibly restore the expected state;
+- the exact trailing ` - блок ИТ` suffix remained;
+- the operator then reported that `http://192.168.103.200:8081/antifraud` no longer opens.
+
+Expected accepted unblock contract remains:
+
+- `ACTIVE=Y`;
+- `BLOCKED=N`;
+- remove only the exact trailing ` - блок ИТ`;
+- preserve historical Anti-Fraud block reason.
+
+Root cause is **not diagnosed yet**.
+
+Next chat must begin with the READ_ONLY production diagnostic in
+`docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md`.
+Do not restart/recreate containers or modify code before the runtime/listener/proxy/log/audit state is known.
+
+Important infrastructure nuance: older accepted architecture documents production nginx -> direct app port `18080` and test `18081`; the operator-used `:8081` URL must be factually inspected rather than assumed correct or incorrect.
+
+### SamZaberu Legal Consents — registration-flow correction
+
+The mobile Legal Consents TЗ dated 2026-09-18 describes a JWT-protected post-auth flow and omitted first-time registration.
+
+Established V4 fact: `/api/v4/signup` creates the Bitrix USER_ID but does **not** issue JWT.
+
+Accepted design correction:
+
+- fetch current legal document catalog/content/codes before JWT without hardcoding;
+- send accepted current codes with V4 signup;
+- backend validates current/required documents, creates USER_ID and persists native Bitrix consent events;
+- marketing remains optional;
+- keep JWT-protected `/legal/consents` and `/accept` for authenticated existing users / future document revisions.
+
+Implementation is **pending**. See
+`docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md`.
+
+### Closed work that must not be reopened
+
+- SamZaberu mobile Trusted Device `sz_ + 64hex` flow is production E2E accepted; see `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
+- TOTP pilot/disable-flow work is later than the historical “planned” section near the bottom of this file; use `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` plus `docs/NEW_CHAT_HANDOFF.md` for the later accepted state.
+- Existing-user website legal consent gate was globally rolled out on 2026-09-12; the older “controlled user only / rollout not done” wording in historical sections below is stale. Use `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` as authoritative.
+
+### GitHub / deployment caution
+
+GitHub `main` at this checkpoint is documentation head `18dc1fea2464ec9f681dd54f1f0466c6de5983aa`.
+The last accepted deployed app baseline in docs is `b0d12a112577de2a35e0a49e55367e3bc459bc07`, but because an availability incident is now open, the next chat must verify the factual current runtime/image/revision before any production mutation.
+
+Open PR #69 is an older Anti-Fraud bonus-display UI change. Do not merge/deploy it as part of the outage diagnosis without separate evidence/decision.
 
 ## 1. Bot production baseline
 
