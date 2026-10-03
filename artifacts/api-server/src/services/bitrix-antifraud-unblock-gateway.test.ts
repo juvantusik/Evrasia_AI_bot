@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  buildAntiFraudUnblockAccountCacheUpdate,
+  IT_BLOCK_NAME_SUFFIX,
+  shouldStripAntiFraudUnblockNameSuffix,
+} from "./anti-fraud-unblock-cache";
 import { BitrixAntiFraudUnblockGateway } from "./bitrix-antifraud-unblock-gateway";
 
 const reason = "Историческое основание блокировки";
@@ -81,5 +86,47 @@ test("Bitrix unblock gateway rejects HTTP failures without echoing server body",
       assert.doesNotMatch(error.message, new RegExp(secret));
       return true;
     },
+  );
+});
+
+test("Anti-Fraud unblock cache update strips only the exact trailing IT marker", () => {
+  const strip = shouldStripAntiFraudUnblockNameSuffix(true, "unblocked");
+  assert.equal(strip, true);
+
+  const update = buildAntiFraudUnblockAccountCacheUpdate(
+    881346,
+    true,
+    false,
+    reason,
+    strip,
+  );
+
+  assert.match(update.text, /display_name = CASE/);
+  assert.match(
+    update.text,
+    /right\(display_name, char_length\(\$6::text\)\) = \$6::text/,
+  );
+  assert.match(
+    update.text,
+    /left\(display_name, char_length\(display_name\) - char_length\(\$6::text\)\)/,
+  );
+  assert.deepEqual(update.values, [
+    881346,
+    true,
+    false,
+    reason,
+    true,
+    IT_BLOCK_NAME_SUFFIX,
+  ]);
+});
+
+test("Anti-Fraud idempotent already-unblocked result does not rewrite the local name", () => {
+  assert.equal(
+    shouldStripAntiFraudUnblockNameSuffix(true, "already_unblocked"),
+    false,
+  );
+  assert.equal(
+    shouldStripAntiFraudUnblockNameSuffix(false, "unblocked"),
+    false,
   );
 });
