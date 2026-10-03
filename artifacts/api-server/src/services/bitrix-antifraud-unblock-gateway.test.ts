@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { pool } from "@workspace/db";
+import {
+  buildAntiFraudUnblockAccountCacheUpdate,
+  IT_BLOCK_NAME_SUFFIX,
+  shouldStripAntiFraudUnblockNameSuffix,
+} from "./anti-fraud-unblock-cache";
 import { BitrixAntiFraudUnblockGateway } from "./bitrix-antifraud-unblock-gateway";
-import { unblockAntiFraudAccounts } from "./anti-fraud-unblock-service";
 
 const reason = "Историческое основание блокировки";
 
@@ -86,101 +89,44 @@ test("Bitrix unblock gateway rejects HTTP failures without echoing server body",
   );
 });
 
-type CapturedQuery = {
-  text: string;
-  values: unknown[] | undefined;
-};
+test("Anti-Fraud unblock cache update strips only the exact trailing IT marker", () => {
+  const strip = shouldStripAntiFraudUnblockNameSuffix(true, "unblocked");
+  assert.equal(strip, true);
 
-const withCapturedPoolQueries = async (
-  action: (queries: CapturedQuery[]) => Promise<void>,
-): Promise<void> => {
-  const mutablePool = pool as unknown as {
-    query: (text: string, values?: unknown[]) => Promise<unknown>;
-  };
-  const originalQuery = mutablePool.query;
-  const queries: CapturedQuery[] = [];
+  const update = buildAntiFraudUnblockAccountCacheUpdate(
+    881346,
+    true,
+    false,
+    reason,
+    strip,
+  );
 
-  mutablePool.query = async (text: string, values?: unknown[]) => {
-    queries.push({ text, values });
-    return { rows: [], rowCount: 1 };
-  };
-
-  try {
-    await action(queries);
-  } finally {
-    mutablePool.query = originalQuery;
-  }
-};
-
-test("Anti-Fraud unblock immediately strips only the exact trailing IT marker from local cache", async () => {
-  const gateway = new BitrixAntiFraudUnblockGateway({
-    token: "x".repeat(64),
-    fetchImpl: async () => new Response(JSON.stringify({
-      ok: true,
-      dry_run: false,
-      requested: 1,
-      resolved: 1,
-      unresolved: [],
-      records: [{
-        bitrix_user_id: 881346,
-        before: { active: true, blocked: true, block_reason: reason },
-        after: { active: true, blocked: false, block_reason: reason },
-        already_unblocked: false,
-        changed: true,
-        success: true,
-        result: "unblocked",
-      }],
-    }), { status: 200, headers: { "Content-Type": "application/json" } }),
-  });
-
-  await withCapturedPoolQueries(async (queries) => {
-    const result = await unblockAntiFraudAccounts([881346], "case-regression", { gateway });
-
-    assert.equal(result.ok, true);
-    const update = queries.find((query) => query.text.includes("UPDATE anti_fraud_accounts"));
-    assert.ok(update);
-    assert.match(update.text, /display_name = CASE/);
-    assert.match(
-      update.text,
-      /right\(display_name, char_length\(\$6::text\)\) = \$6::text/,
-    );
-    assert.match(
-      update.text,
-      /left\(display_name, char_length\(display_name\) - char_length\(\$6::text\)\)/,
-    );
-    assert.equal(update.values?.[4], true);
-    assert.equal(update.values?.[5], " - блок ИТ");
-  });
+  assert.match(update.text, /display_name = CASE/);
+  assert.match(
+    update.text,
+    /right\(display_name, char_length\(\$6::text\)\) = \$6::text/,
+  );
+  assert.match(
+    update.text,
+    /left\(display_name, char_length\(display_name\) - char_length\(\$6::text\)\)/,
+  );
+  assert.deepEqual(update.values, [
+    881346,
+    true,
+    false,
+    reason,
+    true,
+    IT_BLOCK_NAME_SUFFIX,
+  ]);
 });
 
-test("Anti-Fraud idempotent already-unblocked result does not rewrite the local name", async () => {
-  const gateway = new BitrixAntiFraudUnblockGateway({
-    token: "x".repeat(64),
-    fetchImpl: async () => new Response(JSON.stringify({
-      ok: true,
-      dry_run: false,
-      requested: 1,
-      resolved: 1,
-      unresolved: [],
-      records: [{
-        bitrix_user_id: 102,
-        before: { active: true, blocked: false, block_reason: reason },
-        after: { active: true, blocked: false, block_reason: reason },
-        already_unblocked: true,
-        changed: false,
-        success: true,
-        result: "already_unblocked",
-      }],
-    }), { status: 200, headers: { "Content-Type": "application/json" } }),
-  });
-
-  await withCapturedPoolQueries(async (queries) => {
-    const result = await unblockAntiFraudAccounts([102], "case-idempotent", { gateway });
-
-    assert.equal(result.ok, true);
-    const update = queries.find((query) => query.text.includes("UPDATE anti_fraud_accounts"));
-    assert.ok(update);
-    assert.equal(update.values?.[4], false);
-    assert.equal(update.values?.[5], " - блок ИТ");
-  });
+test("Anti-Fraud idempotent already-unblocked result does not rewrite the local name", () => {
+  assert.equal(
+    shouldStripAntiFraudUnblockNameSuffix(true, "already_unblocked"),
+    false,
+  );
+  assert.equal(
+    shouldStripAntiFraudUnblockNameSuffix(false, "unblocked"),
+    false,
+  );
 });

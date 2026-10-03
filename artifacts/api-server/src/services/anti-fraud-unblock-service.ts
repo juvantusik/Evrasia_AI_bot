@@ -4,10 +4,13 @@ import {
   BitrixAntiFraudUnblockGateway,
   type BitrixAntiFraudUnblockRecord,
 } from "./bitrix-antifraud-unblock-gateway";
+import {
+  buildAntiFraudUnblockAccountCacheUpdate,
+  shouldStripAntiFraudUnblockNameSuffix,
+} from "./anti-fraud-unblock-cache";
 
 const SOURCE = "anti_fraud_web_unblock";
 const MAX_CASE_ID_LENGTH = 160;
-const IT_BLOCK_NAME_SUFFIX = " - блок ИТ";
 
 type Options = {
   gateway?: BitrixAntiFraudUnblockGateway;
@@ -50,22 +53,14 @@ const persistAccountState = async (
   reason: string | null,
   stripItBlockSuffix: boolean,
 ): Promise<void> => {
-  await pool.query(
-    `UPDATE anti_fraud_accounts
-     SET bitrix_active = $2,
-         bitrix_blocked = $3,
-         bitrix_block_reason = $4,
-         display_name = CASE
-           WHEN $5::boolean
-            AND display_name IS NOT NULL
-            AND right(display_name, char_length($6::text)) = $6::text
-           THEN left(display_name, char_length(display_name) - char_length($6::text))
-           ELSE display_name
-         END,
-         last_synced_at = now()
-     WHERE bitrix_user_id = $1`,
-    [bitrixUserId, active, blocked, reason, stripItBlockSuffix, IT_BLOCK_NAME_SUFFIX],
+  const update = buildAntiFraudUnblockAccountCacheUpdate(
+    bitrixUserId,
+    active,
+    blocked,
+    reason,
+    stripItBlockSuffix,
   );
+  await pool.query(update.text, update.values);
 };
 
 const writeAudit = async (
@@ -120,7 +115,7 @@ export const unblockAntiFraudAccounts = async (
         effective.active,
         effective.blocked,
         effective.blockReason,
-        record.result === "unblocked",
+        shouldStripAntiFraudUnblockNameSuffix(record.success, record.result),
       );
     }
   }
