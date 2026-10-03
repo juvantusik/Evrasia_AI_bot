@@ -93,7 +93,7 @@ Current Scout display wording:
 
 **Important:** PR #58 changed the first phrase only in the UI. Backend field `days_2plus_7d` and its `>=2` calculation were not changed. Do not silently change Scout business logic based on the label.
 
-For the current Anti-Fraud production state and continuation point, read `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` first.
+For the current Anti-Fraud production state and continuation point, read `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md` first.
 
 ---
 

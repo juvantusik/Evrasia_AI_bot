@@ -222,7 +222,7 @@ The earlier PR #32–#45 lineage below is retained as history. Current continuat
 - PR #67 — removes the stale `loyaltyHistoryLoadedAt` UI gate; merged/deployed/browser-accepted at revision `b0d12a112577de2a35e0a49e55367e3bc459bc07`; no migration. Five legacy latest-ready investigations were backfilled, leaving 0 without physical coverage.
 - PR #73 — immediate local display-name cache correction after real successful unblock; merged/deployed/browser-accepted at revision `949aec3fd76af2d6525f7705ad31cd798d533fbb`; no migration.
 
-Detailed current facts are in `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
+Detailed current production facts are in `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`; PR #65 remains the historical physical-history acceptance.
 
 Merged application PRs leading to the current state:
 
