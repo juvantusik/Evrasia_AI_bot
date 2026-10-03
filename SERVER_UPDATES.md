@@ -2,7 +2,7 @@
 
 > Current production operations note for Evrasia AI Bot.
 >
-> Last updated: **2026-09-23** after PR #67 UI acceptance and legacy physical-snapshot backfill.
+> Last updated: **2026-10-03** after PR #73 production/browser acceptance and nginx startup-race mitigation.
 
 ## Current production host
 
@@ -21,13 +21,35 @@ The old Debian 9 / `/home/tech/samzaberu-bot` deployment is not the active produ
 Application:
 
 - service/container: `evrasia-ai-bot-app`
-- accepted deployed revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
-- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
-- canonical Compose SHA256 at acceptance: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
+- accepted deployed revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`
+- canonical Compose SHA256 at acceptance: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`
 - app port: `127.0.0.1:18080 -> 8080`
+- operator Anti-Fraud publication: `192.168.103.200:8081`
 - production migrations: **26**
-- status: running healthy / PR #67 production and browser-visible UI accepted; restart count 0.
+- status: running healthy / PR #73 production and browser accepted; restart count 0
+- deployment backup: `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`
+- deployment result: **58 PASS / 0 WARN / 0 FAIL**.
+
+### 2026-10-02/03 Anti-Fraud incident closure
+
+Two independent issues were closed:
+
+- nginx fixed-IP startup race after reboot;
+- transient local `display_name` lag after successful unblock.
+
+Permanent nginx guard:
+
+- `/etc/systemd/system/nginx.service.d/20-evrasia-wait-for-ip.conf`
+- SHA256 `835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`
+- backup `/opt/evrasia-ai-bot/backups/nginx-ip-wait-20261003-063648`
+- current nginx active; 80/8081 published and healthy
+- full reboot acceptance pending next normal/approved reboot.
+
+PR #73 immediate cache fix is merged/deployed/browser accepted. Authoritative record:
+
+`docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`
 
 PR #62 acceptance facts:
 
@@ -469,28 +491,23 @@ Mandatory lessons include:
 
 ## Current release status
 
-Current accepted production application is PR #65:
+Current accepted production application is PR #73:
 
-- revision: `d1746ceabb513727baad729adbd3333328fc2dab`;
-- immutable digest: `sha256:ca788e0dcc62fbcc4a810c79866a684f2160d062c2486e4c7577c520374c72b8`;
-- image ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`;
-- canonical Compose SHA256: `bdcba0082691165ce17c6eca05a28f8bdab42b86ef3edbc9a2fbb5181d0ce097`;
+- revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`;
+- immutable digest: `sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`;
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`;
+- canonical Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`;
 - migrations: **26**;
 - runtime: healthy at acceptance, restart count 0;
-- migration `0025_anti_fraud_operator_physical_history`: applied and schema verified;
-- deployment backup: `/opt/evrasia-ai-bot/backups/pr65-operator-physical-history-20260923-102119`;
-- backup DB SHA256: `22643ef67f2d016886aa87c53c18cfcdc3c113ee502b2d76272255086747403f`;
-- deployment result: **61 PASS / 0 FAIL / 0 WARN**;
-- end-to-end operator-history acceptance: **31 PASS / 0 FAIL / 0 WARN**;
+- deployment backup: `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`;
+- deployment result: **58 PASS / 0 WARN / 0 FAIL**;
+- browser acceptance: **PASS**;
 - rollback: not required.
 
-Manual investigation by phone, operator-visible evidence, dedicated physical-history snapshots and targeted multi-card dedup are now production-verified.
+The 2026-10-02/03 Anti-Fraud availability/unblock-display incident is closed. PR #73 does not include PR #69.
 
-Do not repeat PR #65 deployment, USER_ID 6645 / 408974 acceptance, site-side dedup investigation, modal fixes, block/unblock acceptance, Check-in Scout deployment, PR #57/#58 UI deployment or phone-resolver deployment merely for reassurance.
-
-Current continuation record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
-
-
+Current continuation record:
+`docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
 ## SamZaberu mobile Trusted Device production acceptance — 2026-09-24
 

@@ -2,10 +2,10 @@
 
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
-> **Last updated:** 2026-10-02
+> **Last updated:** 2026-10-03
 > **Repository:** `juvantusik/Evrasia_AI_bot`
-> **Current accepted deployed app revision:** `b0d12a112577de2a35e0a49e55367e3bc459bc07`
-> **Current production milestone:** last accepted app baseline remains PR #67 / `b0d12a...`, but a **new open Anti-Fraud UI/unblock incident was reported 2026-10-02**. Factual runtime must be re-verified before any mutation.
+> **Current accepted deployed app revision:** `949aec3fd76af2d6525f7705ad31cd798d533fbb`
+> **Current production milestone:** PR #73 is merged, deployed, server-verified and browser-accepted; the 2026-10-02/03 Anti-Fraud incident is closed. Permanent nginx IP-wait guard is installed; normal-reboot acceptance remains pending.
 
 ---
 
@@ -13,11 +13,12 @@
 
 In a new chat, read in this order:
 
-0. `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md` — **CURRENT ACTIVE INCIDENT**: Anti-Fraud UI unavailable at the operator-used URL and reported unblock regression; diagnosis not yet started
-0A. `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md` — corrected mobile registration consent design; implementation pending
-0B. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — last accepted Anti-Fraud / manual-investigation baseline
-0C. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — historical PR #62 and earlier Anti-Fraud context
-0D. `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md` — accepted SamZaberu mobile device_id -> Trusted Device -> Anti-Fraud E2E
+0. `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md` — **CURRENT AUTHORITATIVE PRODUCTION ACCEPTANCE**: PR #73 + closed Anti-Fraud incident
+0A. `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md` — closed incident history/root-cause summary
+0B. `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md` — accepted registration-consent design; implementation pending
+0C. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — previous operator physical-history acceptance
+0D. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — historical PR #62 and earlier Anti-Fraud context
+0E. `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md` — accepted SamZaberu Trusted Device E2E
 1. `docs/PROJECT_CHECKPOINT.md`
 2. `docs/AI_PROJECT_CONTEXT.md`
 3. `docs/CURRENT_ARCHITECTURE.md`
@@ -51,15 +52,17 @@ Host/runtime:
 - network: `evrasia-prod-internal`
 - volume: `evrasia-postgres-prod-data`
 
-Accepted application baseline after PR #67:
+Accepted application baseline after PR #73:
 
-- revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
-- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
-- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
+- revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`
+- canonical Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`
 - migrations: **26**
 - current confirmed bonus threshold: `40000`
-- accepted runtime state: `running healthy`
+- accepted runtime state: `running healthy`, restart count 0
+- deployment backup: `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`
+- nginx IP-wait drop-in SHA256: `835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`
 
 PR #58 deployment backup:
 
@@ -139,29 +142,21 @@ Do **not** reopen the device-registration flow unless new evidence appears. See 
 
 ---
 
-## 2C. CURRENT ACTIVE INCIDENT — Anti-Fraud UI / unblock regression (2026-10-02)
+## 2C. Anti-Fraud UI / unblock incident — CLOSED / ACCEPTED (2026-10-03)
 
-User-reported facts:
+The 2026-10-02/03 incident is closed.
 
-- after pressing **«Разблокировать»** on a real blocked account, the expected state restoration did not visibly occur;
-- the exact trailing ` - блок ИТ` marker remained in the name;
-- later the operator reported that `http://192.168.103.200:8081/antifraud` no longer opens.
+Proved root causes:
 
-Accepted unblock contract remains:
+- nginx boot race: `network-online.target` could be reached before DHCP assigned `192.168.103.200/24`; permanent IP-wait systemd drop-in installed;
+- successful unblock could leave bot-local `display_name` stale until `bitrix_account_map`; PR #73 now removes only exact trailing ` - блок ИТ` immediately after real successful unblock.
 
-- `ACTIVE=Y`;
-- `BLOCKED=N`;
-- remove only the exact trailing ` - блок ИТ`;
-- preserve historical `UF_AF_BLOCK_REASON`.
+PR #73 production deployment: **58 PASS / 0 WARN / 0 FAIL**, rollback not required. Operator browser acceptance: **«все работает»**.
 
-The root cause is **unknown**. Do not assume the unblock regression and the UI outage share one cause.
+Authoritative acceptance:
+`docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
-The operator-used `:8081` URL is not confirmed by the older architecture docs, which document production nginx -> `18080` and test `18081`. Treat `:8081` as a factual user-reported access path that must be inspected, not corrected by assumption.
-
-**Next step:** one guarded READ_ONLY production diagnostic on `eur-bot-01`: containers/health/restarts, current image/revision, listeners, nginx/proxy config, HTTP probes, recent logs, DB reachability and latest `anti_fraud_web_unblock` audit rows. No restart or code change before diagnosis.
-
-Authoritative incident handoff:
-`docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md`.
+The nginx guard is installed/currently healthy; validate it at the next normal/approved reboot rather than rebooting production only for reassurance.
 
 ## 2D. SamZaberu mobile legal consents — registration design correction
 
@@ -225,6 +220,7 @@ The earlier PR #32–#45 lineage below is retained as history. Current continuat
 - PR #62 — operator-visible manual-investigation evidence: exact 60-day window, visit metrics/day summary, Trusted Device prefix and linked USER_ID display; merged/deployed/verified at revision `dfde4c39b3821f6946d3be05448d11aea1fcc441`.
 - PR #65 — dedicated operator physical Check-in snapshot, physical-history window fields, UI source switch away from `anti_fraud_visits`, fail-closed unresolved-card handling; merged/deployed/accepted at revision `d1746ceabb513727baad729adbd3333328fc2dab` with migration `0025_anti_fraud_operator_physical_history`.
 - PR #67 — removes the stale `loyaltyHistoryLoadedAt` UI gate; merged/deployed/browser-accepted at revision `b0d12a112577de2a35e0a49e55367e3bc459bc07`; no migration. Five legacy latest-ready investigations were backfilled, leaving 0 without physical coverage.
+- PR #73 — immediate local display-name cache correction after real successful unblock; merged/deployed/browser-accepted at revision `949aec3fd76af2d6525f7705ad31cd798d533fbb`; no migration.
 
 Detailed current facts are in `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
 
@@ -392,7 +388,7 @@ Localization remains accepted, including Russian operator text for `max_devices_
 
 ---
 
-## 8. Manual block / unblock — PREVIOUSLY ACCEPTED; CURRENT REGRESSION OPEN
+## 8. Manual block / unblock — PRODUCTION ACCEPTED / PR #73
 
 Routes:
 
@@ -412,7 +408,7 @@ Safe USER_ID `880339` controlled round-trip is already production-proven:
 
 The controlled USER_ID `880339` round-trip remains valid historical acceptance and must not be repeated merely for reassurance.
 
-**However, this section no longer means the current production path can be assumed healthy.** On 2026-10-02 a real-account unblock was reported to leave the account blocked/name suffix unchanged, followed by an Anti-Fraud UI availability incident. Diagnose the current runtime and latest unblock audit/factual Bitrix state according to `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md`.
+**Current production path is accepted again.** PR #73 removed the transient local-name lag after successful unblock; production deploy and operator browser verification passed. See `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
 Never mutate a real customer or fabricate production risk data merely to create a visual fixture.
 

@@ -2,7 +2,7 @@
 
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
-> Last updated: **2026-09-23** after PR #67 browser-visible acceptance and legacy physical-snapshot backfill.
+> Last updated: **2026-10-03** after PR #73 production/browser acceptance and permanent nginx startup-race mitigation.
 
 ## 1. Main rule
 
@@ -122,17 +122,15 @@ Critical invariant:
 
 `anti_fraud_operator_investigation_visits` is operator evidence and **must not** feed `anti_fraud_visits`. The latter remains automatic risk/history telemetry.
 
-Current production revision after PR #67: `b0d12a112577de2a35e0a49e55367e3bc459bc07`.
+Current production revision after PR #73: `949aec3fd76af2d6525f7705ad31cd798d533fbb`.
 
-Current production immutable digest: `sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`.
+Current production immutable digest: `sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`.
 
-Current image config ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`.
-
-Current image config ID: `sha256:34e3c50395b0a34a3b8efe044fc1ad6e7b90771824449a38354babaefdea451c`.
+Current image config ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`.
 
 Production migrations: **26**.
 
-Authoritative acceptance record: `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`.
+Authoritative acceptance record: `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
 #### Bitrix account-state contract
 
@@ -347,30 +345,35 @@ PostgreSQL:
 - role: `evrasia_ai_bot`
 - production DB: `evrasia_ai_bot`
 - retained test DB: `evrasia_ai_bot_antifraud_test`
-- production migrations: **24**
-- latest implemented migration tag in the current Anti-Fraud stream: `0023_anti_fraud_checkin_scout`.
+- production migrations: **26**
+- latest implemented migration tag in the current Anti-Fraud stream: `0025_anti_fraud_operator_physical_history`.
 
 Legacy TEST container `evrasia-ai-bot-v17-test` is exited/archival. Do not restart it blindly.
 
 ## 6. Current production release identity
 
-Current accepted deployed application after PR #58 on 2026-09-20:
+Current accepted deployed application after PR #73 on 2026-10-03:
 
-- deployed revision: `700422b3c9004c2d92092a166e50ac5e8e8a6d33`
-- immutable digest: `sha256:b9ef12f9ea198c31d253ff9e07821c9c2aaa3aaa98fc286c0322c6c2534f5348`
-- image ID: `sha256:700a55f7cc915f4945a65955c06f65c2a739be98678fb2fd963cd50edfa5564d`
-- production migrations: **24**
-- app status after deployment: running / healthy
-- backup: `/opt/evrasia-ai-bot/backups/pr58-ui-labels-continuation-20260920-084234`
-- deployment result: 7 PASS / 0 FAIL / rollback not required.
+- deployed revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`
+- immutable digest: `sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`
+- canonical Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`
+- production migrations: **26**
+- app status: running / healthy, restart count 0
+- backup: `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`
+- deployment result: **58 PASS / 0 WARN / 0 FAIL**
+- browser acceptance: **PASS**
+- rollback: not required.
 
-PR #58 was application/UI-only relative to the preceding production DB state; migration count remained 24.
+Permanent nginx IP-wait guard:
 
-Two earlier PR #58 attempts failed safely before mutation because a temporary Compose file was staged outside the production Compose directory. The accepted deployment confirmed that relative-path Compose must be staged/validated in `/opt/evrasia-ai-bot/prod`.
+- drop-in: `/etc/systemd/system/nginx.service.d/20-evrasia-wait-for-ip.conf`
+- SHA256: `835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`
+- current nginx state: active
+- full reboot acceptance: pending next normal/approved reboot.
 
-Later documentation-only commits may advance GitHub `main`; they do not by themselves change the deployed application identity above.
-
-Full current Anti-Fraud handoff: `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md`.
+Full current Anti-Fraud acceptance:
+`docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
 ## 7. Anti-Fraud performance architecture
 
@@ -394,7 +397,7 @@ The persisted `anti_fraud_risk_scoring` timing does not include the subsequent s
 - `/directory` = 404
 - `/api/directory/...` = 404
 
-Nginx routes production to port 18080. TEST port 18081 has no active role in the current production path.
+The application binds directly on `127.0.0.1:18080`. Nginx publishes the operator Anti-Fraud path on `192.168.103.200:8081` and also owns the fixed-LAN `:80` listener. TEST port `18081` has no active role in the current production path.
 
 ## 9. Change history
 
@@ -429,6 +432,22 @@ Nginx routes production to port 18080. TEST port 18081 has no active role in the
 **Стало:** inactive remains a distinct Bitrix/UI status but is operationally hidden/excluded together with blocked accounts by default. Shared toggle exposes both. Technical reason details are localized for the operator UI.
 
 **Причина:** an externally deactivated account should not pollute active operational Anti-Fraud workload/KPI while still remaining distinguishable from an Anti-Fraud/Bitrix block.
+
+### 2026-10-03 — nginx startup-race guard
+
+**Было:** nginx could start after `network-online.target` but before DHCP actually assigned `192.168.103.200/24`, causing fixed-IP bind failure and loss of ports 80/8081.
+
+**Стало:** systemd drop-in waits for the exact LAN address before nginx config-test/start. Current service is healthy; validate on the next normal/approved reboot.
+
+**Причина:** on this host `network-online.target` did not guarantee that the DHCP-backed address was already assigned.
+
+### 2026-10-03 — immediate unblock display-name cache update
+
+**Было:** successful Bitrix unblock immediately updated local ACTIVE/BLOCKED/reason, while local `display_name` could retain ` - блок ИТ` until the next full account-map sync.
+
+**Стало:** PR #73 removes only the exact trailing ` - блок ИТ` in the immediate local cache update after a real successful `unblocked` result; `already_unblocked` remains idempotent.
+
+**Причина:** eliminate a short operator-visible cache inconsistency without adding another Bitrix round-trip or changing the unblock contract.
 
 ## 10. Change rule
 
