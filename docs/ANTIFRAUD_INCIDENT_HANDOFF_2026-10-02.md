@@ -1,176 +1,99 @@
 # Anti-Fraud operator UI / unblock incident — handoff 2026-10-02
 
-> Status: **OPEN / DIAGNOSIS NOT STARTED**
+> Status: **CLOSED / PRODUCTION ACCEPTED 2026-10-03**
 >
-> This is the current continuation point. Do not apply a fix until factual production diagnostics identify the failure.
+> Authoritative final acceptance: `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
-## 1. User-reported production symptoms
+## 1. Original symptoms
 
-On 2026-10-02 the operator reported two related symptoms:
+On 2026-10-02 the operator reported:
 
-1. after pressing **«Разблокировать»** for a real blocked account, the account did not visibly return to active/unblocked state and the exact trailing marker ` - блок ИТ` remained in the Bitrix name;
-2. the Anti-Fraud web interface later stopped opening at the operator-used URL:
-   `http://192.168.103.200:8081/antifraud`.
+1. an unblock operation did not immediately look correct in the Anti-Fraud UI and the exact trailing ` - блок ИТ` appeared to remain;
+2. `http://192.168.103.200:8081/antifraud` later stopped opening.
 
-These are observations only. The root cause is **not yet established**.
+The two symptoms were investigated separately and had different causes.
 
-Do not assume that the failed unblock and the unavailable UI have the same root cause.
+## 2. UI availability — resolved
 
-## 2. Accepted unblock contract — still authoritative until disproved by current production
+The application itself remained healthy on `127.0.0.1:18080`.
 
-Bitrix is the factual source of truth.
+The publication failure was nginx:
 
-Accepted state semantics:
+`bind() to 192.168.103.200:80 failed (99: Cannot assign requested address)`
 
-- `ACTIVE=Y, BLOCKED=N` -> **Активен**;
-- `ACTIVE=N, BLOCKED=N` -> **Неактивен**;
-- any `BLOCKED=Y` -> **Заблокирован**.
+Boot diagnostics proved that `network-online.target` was reached before DHCP had actually assigned `192.168.103.200/24` to `ens18`. Nginx binds the fixed LAN address, failed once, and did not retry. The exact race recurred after another real reboot.
 
-Accepted manual Anti-Fraud block behavior:
+Permanent systemd guard installed:
 
-- `ACTIVE=N`;
-- `BLOCKED=Y`;
-- append exact trailing suffix ` - блок ИТ` to `NAME`, idempotently;
-- keep historical Anti-Fraud block reason.
+`/etc/systemd/system/nginx.service.d/20-evrasia-wait-for-ip.conf`
 
-Accepted manual Anti-Fraud unblock behavior:
+SHA256:
+
+`835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`
+
+Backup:
+
+`/opt/evrasia-ai-bot/backups/nginx-ip-wait-20261003-063648`
+
+Current state is healthy: nginx active, ports 80/8081 listening, Anti-Fraud through 8081 HTTP 200.
+
+A deliberate reboot was not performed only for testing. Validate the guard at the next normal/approved reboot.
+
+## 3. Unblock — factual operation succeeded
+
+For USER_ID `881346`, audit row `89` proved:
+
+- result `unblocked`;
+- success true;
+- before blocked true;
+- after blocked false;
+- active remained true.
+
+Live Bitrix confirmed:
 
 - `ACTIVE=Y`;
 - `BLOCKED=N`;
-- remove **only** the exact final suffix ` - блок ИТ` from `NAME`;
-- preserve other name text/markers;
-- preserve historical `UF_AF_BLOCK_REASON`.
+- exact trailing ` - блок ИТ` removed;
+- historical block reason preserved.
 
-This exact round-trip was previously production-verified on the controlled fixture described in `docs/BITRIX_ANTI_FRAUD_PRODUCTION_MAP.md`.
+The old apparent failure was therefore not a failed Bitrix unblock.
 
-The new user report means the behavior must now be re-verified against factual current production rather than assumed from the old acceptance.
+## 4. Local display-name cache defect — resolved by PR #73
 
-## 3. Known architecture before the incident
+Before PR #73, bot-side unblock immediately updated local active/blocked/reason but did not immediately update local `display_name`. The next `bitrix_account_map` cycle eventually corrected it.
 
-Production bot host:
+PR #73 now removes only the exact final ` - блок ИТ` in the same local cache update after a real successful `unblocked` result. `already_unblocked` remains idempotent.
 
-- hostname: `eur-bot-01`;
-- IP: `192.168.103.200`;
-- canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`;
-- app container: `evrasia-ai-bot-app`;
-- DB container: `evrasia-ai-bot-db`;
-- DB / role: `evrasia_ai_bot`.
+PR #73 merged as:
 
-Previously accepted application revision:
+`949aec3fd76af2d6525f7705ad31cd798d533fbb`
 
-`b0d12a112577de2a35e0a49e55367e3bc459bc07`
+Production image:
 
-Previously accepted direct app binding:
+`ghcr.io/juvantusik/evrasia_ai_bot@sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`
 
-`127.0.0.1:18080`
+Production deploy:
 
-Current architecture documentation says nginx routes production to port `18080`; test port `18081` has no active production role.
+- backup `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`;
+- 58 PASS / 0 WARN / 0 FAIL;
+- DB container unchanged;
+- migrations remained 26;
+- rollback not required;
+- app/nginx/direct/LAN checks all healthy.
 
-The operator-used `:8081` URL is therefore **user-reported access reality that must be factually inspected**. Do not silently rewrite it to `:18080`, and do not assume it is wrong. Determine what currently listens/proxies on `8081`.
+The operator then browser-tested the real workflow and confirmed: **«все работает»**.
 
-GitHub `main` at the time this handoff was written was documentation-only head:
+## 5. Current baseline
 
-`18dc1fea2464ec9f681dd54f1f0466c6de5983aa`
+- production revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`;
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`;
+- Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`;
+- migrations: 26;
+- app healthy, restart count 0 at acceptance;
+- operator URL `http://192.168.103.200:8081/antifraud` is a valid production path.
 
-Do not infer current runtime image/revision from this GitHub head.
+## 6. Status
 
-## 4. Relevant implementation paths
+**CLOSED / ACCEPTED.**
 
-Bot-side operator flow:
-
-- UI: `artifacts/samzaberu-ops/src/pages/AntiFraudPage.tsx`;
-- route: `POST /api/anti-fraud/unblock`;
-- route implementation: `artifacts/api-server/src/routes/anti-fraud-web.ts`;
-- service: `artifacts/api-server/src/services/anti-fraud-unblock-service.ts`;
-- Bitrix gateway: `artifacts/api-server/src/services/bitrix-antifraud-unblock-gateway.ts`.
-
-Bitrix-side protected route:
-
-- `POST /api/internal/anti-fraud/unblock`;
-- service: `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/lib/Services/AntiFraudUnblockService.php`.
-
-Bot-side unblock service persists the returned factual state into `anti_fraud_accounts` and writes `anti_fraud_block_audit`.
-
-## 5. Mandatory first step in the next chat — READ ONLY
-
-Before any code change or restart, run one guarded read-only diagnostic on `eur-bot-01`.
-
-It should establish, in this order:
-
-1. host/user/environment;
-2. canonical Compose file exists and its current SHA;
-3. current containers, status, health and restart counts;
-4. current app image ID/digest/revision labels if available;
-5. current listeners for at least `8081`, `18080`, `18081`, `80`, `443`;
-6. nginx / reverse-proxy factual config relevant to `/antifraud` and those ports;
-7. HTTP probes:
-   - local app health;
-   - local/direct `/antifraud`;
-   - operator-used `http://192.168.103.200:8081/antifraud`;
-8. recent app/container logs around the outage, without printing secrets;
-9. PostgreSQL reachability only — no data mutation;
-10. latest unblock audit rows (`source=anti_fraud_web_unblock`) and their before/after/result/success fields, read-only.
-
-Do not restart/recreate containers merely because the UI is unavailable. Diagnose first.
-
-## 6. Unblock regression investigation after runtime availability is understood
-
-After the web/runtime layer is diagnosed, inspect the failed unblock separately.
-
-Use the latest relevant unblock audit entry or the operator-provided account as the target.
-
-Required comparison:
-
-```text
-A. bot anti_fraud_block_audit
-B. bot anti_fraud_accounts snapshot
-C. protected Bitrix factual account-map / unblock response
-D. direct factual Bitrix USER state
-   ACTIVE
-   BLOCKED
-   NAME suffix
-   UF_AF_BLOCK_REASON
-```
-
-Distinguish these failure classes instead of guessing:
-
-- UI request never reached bot route;
-- bot route failed before Bitrix;
-- protected Bitrix request failed;
-- Bitrix service returned unsuccessful/no-op;
-- Bitrix changed but bot snapshot/UI did not refresh;
-- Bitrix status changed but name suffix cleanup failed;
-- operation succeeded but operator page displayed stale state;
-- current runtime differs from the previously accepted code.
-
-Do not mutate the affected real account during diagnosis unless the operator explicitly authorizes a corrective write after the factual state is known.
-
-## 7. Safety
-
-Production is critical.
-
-For diagnostics:
-
-- `MODE=READ_ONLY`;
-- `DATABASE_WRITE=NO`;
-- `API_WRITE=NO`;
-- `APPLICATION_CODE_WRITE=NO`;
-- do not print protected service tokens, cookies, Authorization headers, DB passwords or other credentials;
-- do not print raw customer PII unless strictly required;
-- do not restart the legacy `evrasia-ai-bot-v17-test` container.
-
-For any later write:
-
-baseline -> backup -> verify backup -> minimal change -> syntax/tests -> apply -> factual post-check -> rollback plan.
-
-## 8. Open related item that must not be mixed into the incident
-
-PR #69 remains an older open UI-only bonus-display change. Do **not** merge/deploy it while diagnosing this outage merely because it is open.
-
-Treat the current UI availability/unblock regression independently first.
-
-## 9. Current status
-
-**OPEN.**
-
-No production diagnostic output has yet been captured for the 2026-10-02 UI outage/unblock regression.
+Do not reopen the 2026-10-02/03 incident without a new symptom. PR #69 bonus display and SamZaberu Legal Consents remain separate workstreams.

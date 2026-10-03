@@ -2,7 +2,7 @@
 
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
-> **Updated: 2026-10-02**. Current continuation is the Anti-Fraud UI/unblock incident; SamZaberu Legal Consents first-registration design correction is accepted but not implemented.
+> **Updated: 2026-10-03**. PR #73 and the 2026-10-02/03 Anti-Fraud incident are production/browser accepted; nginx IP-wait guard is installed with normal-reboot validation still pending. SamZaberu Legal Consents registration implementation remains pending.
 
 ## Ready-to-paste instruction for a new chat
 
@@ -12,9 +12,10 @@
 
 Сначала полностью прочитай:
 
-0. `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md` — **ТЕКУЩАЯ АКТИВНАЯ ПРОБЛЕМА**: веб-интерфейс Anti-Fraud не открывается по operator-used URL и есть свежий регресс разблокировки; диагностика ещё не выполнена;
-0A. `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md` — исправленный дизайн согласий для первой регистрации СамЗаберу; реализация ещё не выполнена;
-0B. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — последняя принятая база Anti-Fraud до текущего инцидента;
+0. `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md` — **ТЕКУЩИЙ AUTHORITATIVE production acceptance**
+0A. `docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md` — закрытый incident/root-cause record
+0B. `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md` — accepted design, implementation pending
+0C. `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` — предыдущий Anti-Fraud acceptance
 1. `docs/PROJECT_CHECKPOINT.md` — общий authoritative checkpoint;
 1A. `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` — исторический checkpoint PR #62 и предшествующей архитектуры; читать для контекста, но не использовать как текущий production baseline;
 2. `docs/AI_PROJECT_CONTEXT.md` — текущий проектный/технический контекст;
@@ -35,34 +36,23 @@
 
 ### Текущая точка продолжения — НЕ ПЕРЕПРЫГИВАТЬ
 
-Есть новый production-инцидент:
+Anti-Fraud incident 2026-10-02/03 **закрыт**.
 
-- после кнопки **«Разблокировать»** на реальном аккаунте не произошло ожидаемого визуального/фактического восстановления;
-- точный хвост ` - блок ИТ` остался;
-- затем оператор сообщил, что `http://192.168.103.200:8081/antifraud` вообще перестал открываться.
+Подтверждено:
 
-Ожидаемый контракт разблокировки прежний:
+- nginx outage был startup race между systemd `network-online.target` и фактическим DHCP assignment; permanent drop-in установлен;
+- USER_ID 881346 был фактически успешно разблокирован; временно отставал только bot-local `display_name`;
+- PR #73 устранил это окно: после успешного `unblocked` точный финальный ` - блок ИТ` удаляется из локального cache сразу;
+- production deploy PR #73: **58 PASS / 0 WARN / 0 FAIL**;
+- пользователь выполнил browser acceptance и подтвердил: **«все работает»**.
 
-- `ACTIVE=Y`;
-- `BLOCKED=N`;
-- удалить только финальный ` - блок ИТ`;
-- исторический `UF_AF_BLOCK_REASON` сохранить.
+Не повторять этот incident для reassurance.
 
-Причина пока **не установлена**.
+Открытые отдельные направления:
 
-Первый шаг нового чата — **один READ_ONLY production diagnostic** на `eur-bot-01`: factual compose/container health/restarts, image/revision, listeners `8081/18080/18081/80/443`, nginx/proxy config, HTTP probes, recent logs, DB reachability и последние `anti_fraud_web_unblock` audit rows. **Не перезапускать контейнеры и не менять код до диагноза.**
-
-Важно: старые docs описывают nginx production -> `18080`, test `18081`. Пользовательский URL `:8081` не надо “исправлять” по памяти — нужно выяснить фактический listener/proxy.
-
-Отдельно не терять SamZaberu Legal Consents:
-
-- текущий ТЗ от 18.09 описывает JWT-protected post-auth flow;
-- V4 `/signup` создаёт USER_ID, но JWT не выдаёт;
-- для новой регистрации принят дизайн: current legal docs/codes получить без JWT, accepted codes передать в signup, backend валидирует required/current и пишет native Bitrix consent на новый USER_ID;
-- существующие JWT-protected `/legal/consents` + `/accept` оставить для авторизованных пользователей/новых редакций;
-- **реализация ещё не выполнена**.
-
-Не смешивать текущий outage/unblock incident с открытым старым PR #69 по отображению бонусов.
+- PR #69 — bonus-display UI, отдельно от PR #73;
+- SamZaberu Legal Consents first-registration implementation — ещё pending;
+- nginx boot guard следует принять на следующем нормальном/явно согласованном reboot, не перезагружать production только ради теста.
 
 ---
 
@@ -70,21 +60,23 @@
 
 Host: `eur-bot-01` (`192.168.103.200`).
 
-Accepted deployed application baseline after PR #67:
+Accepted deployed application baseline after PR #73:
 
-- application revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
-- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
-- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
+- application revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`
+- immutable CI image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`
 - app: `evrasia-ai-bot-app`
 - DB: `evrasia-ai-bot-db`
 - DB name/role: `evrasia_ai_bot`
 - Compose project: `evrasia-prod`
 - canonical Compose: `/opt/evrasia-ai-bot/prod/compose.yml`
-- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
+- canonical Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`
 - production migrations: **26**
 - app state at acceptance: **running healthy**, restart count 0
-- PR #67 deployment backup: `/opt/evrasia-ai-bot/backups/pr67-operator-history-ui-20260923-105939`
-- legacy snapshot backfill backup: `/opt/evrasia-ai-bot/backups/pr65-legacy-physical-backfill-20260923-112902`
+- PR #73 deployment backup: `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`
+- nginx IP-wait drop-in SHA256: `835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`
+- browser acceptance: **PASS**
+
 
 PR #58 is UI-only relative to the PR #57 application baseline: no DB migration, no scoring/grouping change and no Bitrix write.
 
@@ -101,16 +93,17 @@ Current Scout display wording:
 
 **Important:** PR #58 changed the first phrase only in the UI. Backend field `days_2plus_7d` and its `>=2` calculation were not changed. Do not silently change Scout business logic based on the label.
 
-For the current Anti-Fraud production state and continuation point, read `docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md` first.
+For the current Anti-Fraud production state and continuation point, read `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md` first.
 
 ---
 
-## 1A. Latest Anti-Fraud production acceptance — PR #67 / PR #65
+## 1A. Latest Anti-Fraud production acceptance — PR #73 / PR #67 / PR #65
+
+PR #73 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / BROWSER ACCEPTED**. It removes the transient local `display_name` lag after a real successful unblock and closes the 2026-10-02/03 incident. Full record: `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
 PR #65 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / ACCEPTED**.
 
-
-PR #67 completed the browser-visible layer: the physical-history panel no longer depends on legacy `loyaltyHistoryLoadedAt`. The operator visually confirmed the interface after deployment and backfill.
+PR #67 completed the browser-visible history layer: the physical-history panel no longer depends on legacy `loyaltyHistoryLoadedAt`. The operator visually confirmed the interface after deployment and backfill.
 
 Legacy latest-ready investigations were backfilled: 5 accounts, leaving **0** latest-ready investigations without physical snapshot and **7** with physical coverage. Backfill result: **55 PASS / 0 FAIL / 0 WARN**.
 
@@ -378,9 +371,11 @@ Especially important after the PR #44 → #45 deployment sequence:
 
 ---
 
-## 9. Immediate continuation point
+## 9. Historical continuation point — 2026-09-20
 
-Current status on 2026-09-20:
+> Superseded. Do not use this section as the current continuation point; use the top of this file and `docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
+
+Historical status on 2026-09-20:
 
 - Check-in Scout Step 1: **DONE / MERGED / DEPLOYED / VERIFIED**;
 - PR #57 Trusted Device display: **DONE / DEPLOYED**;

@@ -2,66 +2,57 @@
 
 > **Authoritative continuation checkpoint.**
 >
-> Updated: **2026-10-02** with a superseding current-incident/legal-consent continuation block. Older sections are retained for history and may describe earlier rollout states.
+> Updated: **2026-10-03** after PR #73 production deployment/browser acceptance and permanent nginx startup-race mitigation. Older sections are retained for history and may describe earlier rollout states.
 >
 > Source priority: **production actual state → current GitHub → staging/test → current docs → older discussion**.
 
-## 0. Superseding continuation — 2026-10-02
+## 0. Superseding continuation — 2026-10-03
 
 This block supersedes older continuation wording later in this file where the project has moved on.
 
-### CURRENT ACTIVE ISSUE — Anti-Fraud UI / unblock regression
+### Anti-Fraud UI / unblock incident — CLOSED / ACCEPTED
 
-User-reported production symptoms:
+The 2026-10-02/03 Anti-Fraud incident is closed.
 
-- pressing **«Разблокировать»** on a real blocked account did not visibly restore the expected state;
-- the exact trailing ` - блок ИТ` suffix remained;
-- the operator then reported that `http://192.168.103.200:8081/antifraud` no longer opens.
+Two separate root causes were proved:
 
-Expected accepted unblock contract remains:
+- nginx could start before DHCP had assigned the fixed LAN IP; permanent systemd IP-wait drop-in is installed and current service state is healthy;
+- successful unblock updated Bitrix immediately but local `display_name` could remain stale until `bitrix_account_map`; PR #73 removes only the exact trailing ` - блок ИТ` immediately after a real successful unblock.
 
-- `ACTIVE=Y`;
-- `BLOCKED=N`;
-- remove only the exact trailing ` - блок ИТ`;
-- preserve historical Anti-Fraud block reason.
+Current PR #73 production baseline:
 
-Root cause is **not diagnosed yet**.
+- revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`;
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`;
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`;
+- canonical Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`;
+- migrations: **26**;
+- deploy: **58 PASS / 0 WARN / 0 FAIL**;
+- browser acceptance: operator confirmed **«все работает»**.
 
-Next chat must begin with the READ_ONLY production diagnostic in
-`docs/ANTIFRAUD_INCIDENT_HANDOFF_2026-10-02.md`.
-Do not restart/recreate containers or modify code before the runtime/listener/proxy/log/audit state is known.
+Authoritative acceptance:
+`docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`.
 
-Important infrastructure nuance: older accepted architecture documents production nginx -> direct app port `18080` and test `18081`; the operator-used `:8081` URL must be factually inspected rather than assumed correct or incorrect.
+Nginx permanent drop-in:
+`/etc/systemd/system/nginx.service.d/20-evrasia-wait-for-ip.conf`,
+SHA256 `835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`.
+
+A deliberate reboot was not performed solely for testing; validate boot resilience at the next normal/approved reboot.
 
 ### SamZaberu Legal Consents — registration-flow correction
 
-The mobile Legal Consents TЗ dated 2026-09-18 describes a JWT-protected post-auth flow and omitted first-time registration.
-
-Established V4 fact: `/api/v4/signup` creates the Bitrix USER_ID but does **not** issue JWT.
-
-Accepted design correction:
-
-- fetch current legal document catalog/content/codes before JWT without hardcoding;
-- send accepted current codes with V4 signup;
-- backend validates current/required documents, creates USER_ID and persists native Bitrix consent events;
-- marketing remains optional;
-- keep JWT-protected `/legal/consents` and `/accept` for authenticated existing users / future document revisions.
-
-Implementation is **pending**. See
+The accepted first-registration design remains implementation-pending. See
 `docs/SAMZABERU_LEGAL_CONSENTS_REGISTRATION_2026-10-02.md`.
 
 ### Closed work that must not be reopened
 
-- SamZaberu mobile Trusted Device `sz_ + 64hex` flow is production E2E accepted; see `docs/SAMZABERU_TRUSTED_DEVICE_PRODUCTION_ACCEPTANCE_2026-09-24.md`.
-- TOTP pilot/disable-flow work is later than the historical “planned” section near the bottom of this file; use `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md` plus `docs/NEW_CHAT_HANDOFF.md` for the later accepted state.
-- Existing-user website legal consent gate was globally rolled out on 2026-09-12; the older “controlled user only / rollout not done” wording in historical sections below is stale. Use `docs/WEBSITE_LEGAL_CONSENT_INTEGRATION.md` as authoritative.
+- 2026-10-02/03 Anti-Fraud incident and PR #73 deployment/browser acceptance;
+- SamZaberu mobile Trusted Device `sz_ + 64hex` production E2E;
+- TOTP pilot/disable-flow acceptance;
+- existing-user website legal-consent gate rollout.
 
-### GitHub / deployment caution
+### Separate open work
 
-GitHub `main` at this checkpoint is documentation head `18dc1fea2464ec9f681dd54f1f0466c6de5983aa`.
-The last accepted deployed app baseline in docs is `b0d12a112577de2a35e0a49e55367e3bc459bc07`, but because an availability incident is now open, the next chat must verify the factual current runtime/image/revision before any production mutation.
-
-Open PR #69 is an older Anti-Fraud bonus-display UI change. Do not merge/deploy it as part of the outage diagnosis without separate evidence/decision.
+PR #69 remains an independent open UI-only bonus-display change. Do not merge/deploy it merely because PR #73 is closed.
 
 ## 1. Bot production baseline
 
@@ -70,16 +61,18 @@ Host: `eur-bot-01` (`192.168.103.200`).
 Current accepted bot application:
 
 - repo: `juvantusik/Evrasia_AI_bot`
-- production revision: `b0d12a112577de2a35e0a49e55367e3bc459bc07`
-- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:a9545807cf8b09c0a159e6d7bf8b3a1850ee5a7356966826c4d10a25bbf98767`
-- image ID: `sha256:44916797485a87a94ead3e4cfc8445727b0a1752c08d9fa81123dd5172ae34a1`
+- production revision: `949aec3fd76af2d6525f7705ad31cd798d533fbb`
+- immutable image: `ghcr.io/juvantusik/evrasia_ai_bot@sha256:8f1cbe957e8f85afd00a5c28a03793e602c09b9e8eba3d9a96a8e5366af79ed3`
+- image ID: `sha256:4ed7d900f318acce1ecc3d8aac0cfd7a4cfd882990735d1e089235dd13ee0478`
 - Anti-Fraud threshold: 40000
 - scheduler: enabled, 15 min
-- canonical Compose SHA256: `8f9246704bf8cc75b2b9c2b6b849953766668e2af27790f4b05ea83a082d2d1c`
+- canonical Compose SHA256: `4580356ddcfbe37e639895510c872a5c13831777a8ee6d032147171bf762af80`
 - production migrations: **26**
-- app container: **running healthy**, restart count 0 at acceptance.
+- app container: **running healthy**, restart count 0 at acceptance
+- PR #73 deployment backup: `/opt/evrasia-ai-bot/backups/pr73-prod-deploy-20261003-103819`
+- nginx IP-wait drop-in SHA256: `835832635b2593dc8786b96ed602a1957931782c482cf15fbe91d180afda8c39`.
 
-PR #67 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / VISUALLY ACCEPTED**. PR #65 snapshot architecture, PR #62 evidence-view behavior and PR #58 device-label semantics remain valid.
+PR #73 is **MERGED / DEPLOYED / PRODUCTION / VERIFIED / BROWSER ACCEPTED**. PR #67 UI-history acceptance, PR #65 snapshot architecture, PR #62 evidence-view behavior and PR #58 device-label semantics remain valid.
 
 PR #58 UI semantics:
 
@@ -114,7 +107,7 @@ Compose staging invariant confirmed by PR #58:
 
 Full current Anti-Fraud continuation:
 
-`docs/ANTI_FRAUD_PR65_PRODUCTION_ACCEPTANCE_2026-09-23.md`
+`docs/ANTI_FRAUD_PR73_PRODUCTION_ACCEPTANCE_2026-10-03.md`
 
 The older `docs/ANTI_FRAUD_CHECKPOINT_2026-09-20.md` remains historical context for PR #62 and earlier work.
 
