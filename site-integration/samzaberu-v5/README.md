@@ -1,6 +1,6 @@
 # SamZaberu V5 — isolated site integration prototype
 
-> **STRUCTURES / SOURCE OF TRUTH — 2026-10-11:** [docs/STRUCTURE_REGISTRY.md](../../../docs/STRUCTURE_REGISTRY.md). The eight required **physical** `b_user` columns are verified in production metadata; no account rows were read. Runtime ORM map / real SQL use and login-policy integration remain pending. V5 is not deployed. Reuse verified Bitrix/V4/TOTP/Trusted Device structure rather than repeating full diagnostics.
+> **STRUCTURES / SOURCE OF TRUTH — 2026-10-11:** [docs/STRUCTURE_REGISTRY.md](../../docs/STRUCTURE_REGISTRY.md). The eight required **physical** `b_user` columns are verified in production metadata; no account rows were read. Runtime ORM map / real SQL use and login-policy integration remain pending. V5 is not deployed. Reuse verified Bitrix/V4/TOTP/Trusted Device structure rather than repeating full diagnostics.
 
 **Status:** offline-tested V5 policy and JSON-handler components only. **No live V5 HTTP endpoint, Bitrix integration, JWT issuance, SMS send, database migration or production deployment exists yet.** This directory is deliberately independent of the running Evrasia bot and website.
 
