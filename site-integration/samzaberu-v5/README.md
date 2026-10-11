@@ -179,3 +179,16 @@ All four locally tested file Git blob hashes were independently matched against 
 **All required `b_user` columns are confirmed in the production DB schema**, but no live PDO account-row read was performed by the V5 candidate, and the native Bitrix login-policy hooks have not yet been integrated. It remains a candidate, not an activated adapter. Do not select a provider based on this static diagnostic alone. Next: finish the `V5ExistingLoginPolicyPort` implementation based on actual site login lockout rules; do NOT rerun schema inventory.
 
 `api/v5/router.php` still returns HTTP 503 to every request, V4 is unmodified, and no SMS or JWTs were sent.
+
+
+## 2026-10-11 — current login controls + mandatory MFA policy boundary
+
+New **offline / GitHub-only** components:
+
+- `src/V5ExistingLoginPolicy.php` implements `V5ExistingLoginPolicyPort` with `V5StrictExistingLoginPolicy`. The `LOGIN_ATTEMPTS` count from the verified `b_user` schema is compared only against a **live-sourced positive limit**, not a guessed numeric threshold; the decision also requires affirmative current evidence of no temporary lock, no security restriction and no blocking site-specific login rule. Unknown state returns `null`/denial; a known restriction returns `false`.
+- `src/V5NoMfaFallbackPolicy.php` implements `V5NoMfaFallbackPolicyPort` through `V5StrictNoMfaFallbackPolicy`. It requires current global native Bitrix MFA settings and affirmative account/group SMS eligibility. Native-option reader candidate uses only `Otp::isOtpEnabled()` and `Otp::isMandatoryUsing()`. The existing `V5NativeTotpStatus` calls the fallback policy only after a **confirmed missing** `b_sec_user` row, never for a configured/disabled factor.
+- `tests/V5AuthPoliciesTest.php`: **98 assertions PASS** (PHP 8.4.24); the two sources and test match exact GitHub blob hashes of the locally tested files. Full local regression: workflow 86, JSON handler 48, native MFA status 63, new auth policies 98 = **295/295 PASS**.
+
+**Still unimplemented production dependencies:** current no-side-effect `V5CurrentLoginControlsPort` source based on actual Bitrix policy/lockout semantics; `V5PerUserSmsEligibilityPort` based on current per-account/group MFA policy; and the independent atomic `V5FirstFactorAttemptGatePort`. The native-global-options adapter is staging-only and has not been runtime-tested against production Bitrix. Do NOT call `CUser->Login()` or replay `OnBeforeUserLogin` from a password-only precheck: those can mutate authentication state. No SMS/JWT, no DB/production writes, no change to V4, and the V5 router remains fail-closed (HTTP 503).
+
+**Canonical already-inspected structures:** `docs/STRUCTURE_REGISTRY.md`; all eight `b_user` columns were proved physically present. No repeat table inventory is needed.
