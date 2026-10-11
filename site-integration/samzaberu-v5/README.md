@@ -206,3 +206,13 @@ New staged files:
 **Not yet tested:** real MySQL concurrency, deadlock recovery, server clock alignment, deployment across workers, approved quotas, proxy IP resolution, rate-window expiry maintenance. Fixed windows may burst at boundaries; consider the shared-IP and deliberate account-lockout tradeoff. This protects **password attempts**, NOT SMS sending budgets. No live DB connection, no migration, no V5 JWT/SMS, no production or V4 changes, router remains HTTP 503.
 
 Remaining actual website dependencies: `V5CurrentLoginControlsPort` and `V5PerUserSmsEligibilityPort`, plus challenge/TOTP-SMS/JWT/PIN integrations. The canonical Bitrix schema and V4 facts are already fixed in `docs/STRUCTURE_REGISTRY.md`; never rerun those audits as part of implementing the limiter.
+
+## 2026-10-11 — real MySQL concurrency acceptance harness (not yet run)
+
+Prepared two new files under `tests/integration/`: `V5MySqlAttemptStoreIntegration.php` and `run_mysql_attempt_concurrency.sh`, plus its `README.md`. **Only a dedicated pre-existing `evrasia_v5_test_*` staging MySQL schema is permitted**; both entry points refuse `evrasia`/`eur-bot-01`, mismatched DB identities or missing explicit test authorization. No production connection is permitted.
+
+The runner synchronizes **24 independently connected MySQL PHP workers** over the same four rate buckets, tests that **exactly 7** requests are admitted and **17** denied, proves each committed bucket equals **7**, then tests rollback of earlier increments when the last bucket reaches its limit. It deletes only its own eight synthetic bucket keys after verification, leaving the test table in the isolated schema.
+
+**Verification so far:** PHP 8.4.24 source lint PASS, Bash syntax PASS and `--lint-only` PASS. A run without explicit staging configuration was correctly refused before any DB connection. Both committed worker and Bash runner blob hashes match local linted files. **Actual MySQL contention remains PENDING:** this environment has no installed MySQL server or `pdo_mysql`. Do not claim an E2E pass until the operator supplies output from a dedicated staging run. The original 144 mocked-PDO/logic assertions remain a separate earlier milestone.
+
+The test itself writes only synthetic counters into a new **test** schema and is not a production migration. V4 and production remain unchanged, and `api/v5/router.php` still fails closed with 503. Next implementation work can proceed on real site login/MFA evidence and SMS anti-spam budgets in parallel with this independent acceptance test.
