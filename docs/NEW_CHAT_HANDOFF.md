@@ -1,5 +1,11 @@
 # Evrasia — New Chat Handoff
 
+> **BITRIX / САМЗАБЕРУ V3C — новое дополнение 2026-10-11:** [Bitrix/START_HERE.md](Bitrix/START_HERE.md) → [технический checkpoint](Bitrix/V3C_SECURE_AUTH_CHECKPOINT_2026-10-11.md) → [25-case E2E acceptance](Bitrix/V3C_TEST_ACCEPTANCE_2026-10-11.md). Последнее подтверждение: **real verifier + real PDO + sandbox MariaDB, 25/25 PASS, synthetic TOTP candidate; V3C NOT DEPLOYED**. Production Bitrix не изменён.
+>
+> **Не путать две 2FA-ветки:** ранние разделы ниже о веб-TOTP как «PLANNED» являются историческими; [веб-2FA checkpoint, раздел 20](TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md) подтверждает production-пилот/отключение 2026-09-24. Мобильная V3C на 2026-10-11 отдельно **не внедрена**. Этот баннер не меняет ранее зафиксированную production-ревизию Anti-Fraud бота.
+
+---
+
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
 > **Updated: 2026-10-03**. PR #73 and the 2026-10-02/03 Anti-Fraud incident are production/browser accepted; nginx IP-wait guard is installed with normal-reboot validation still pending. SamZaberu Legal Consents registration implementation remains pending.
