@@ -216,3 +216,14 @@ The runner synchronizes **24 independently connected MySQL PHP workers** over th
 **Verification so far:** PHP 8.4.24 source lint PASS, Bash syntax PASS and `--lint-only` PASS. A run without explicit staging configuration was correctly refused before any DB connection. Both committed worker and Bash runner blob hashes match local linted files. **Actual MySQL contention remains PENDING:** this environment has no installed MySQL server or `pdo_mysql`. Do not claim an E2E pass until the operator supplies output from a dedicated staging run. The original 144 mocked-PDO/logic assertions remain a separate earlier milestone.
 
 The test itself writes only synthetic counters into a new **test** schema and is not a production migration. V4 and production remain unchanged, and `api/v5/router.php` still fails closed with 503. Next implementation work can proceed on real site login/MFA evidence and SMS anti-spam budgets in parallel with this independent acceptance test.
+
+
+## 2026-10-11 — SMS sending/financial anti-spam budget (OFFLINE, NOT LIVE)
+
+New `src/V5SmsDispatchBudget.php` prepares **10** scope-separated HMAC-SHA256 quota windows covering account, verified phone, server-observed IP, mobile device, whole-service SMS count and whole-service **monetary upper-bound reservation**. Phone is returned only by `V5VerifiedSmsDestinationPort` (server-verified account phone), and price only by `V5SmsPriceCeilingPort` (authoritative upper price in currency minor units). HTTP does not accept a phone or tariff. No actual production tariff or quota values were invented. Daily windows must be at least 86400s; burst windows at least 60s.
+
+`V5AtomicSmsOutboxPort::reserveAndQueue()` is a **security contract, not yet implemented**: must lock the password-proven SMS challenge, revalidate account/MFA/verified phone, enforce existing `ChallengeRules` (300s TTL, >=60s resend cooldown, max 3 SMS sends), atomically reserve all 10 quotas, and persist encrypted outbox + stable delivery idempotency key in the SAME transaction. Only after commit may a separate worker send a real SMS using a verified gateway. On unknown provider delivery outcome without proven idempotency, do not retry with a new paid send automatically. No JWT based on queueing.
+
+`tests/V5SmsDispatchBudgetTest.php`: **111/111 PASS** on local PHP 8.4.24 using entirely synthetic destination/tariff and fake in-memory atomic outbox (no SQL/SMS). Regression workflow 86 + JSON 48 + password gate 70 + fake-PDO first-factor store 74 + SMS budget 111 = **389/389 PASS**. The two new committed PHP blobs match tested local files exactly.
+
+Read the complete invariant and next implementation gate in `docs/SAMZABERU_V5_SMS_SEND_GUARDS_2026-10-11.md`. Real Bitrix phone resolver, current provider maximum tariff, transactional challenge/outbox/weighted quota store and SMS gateway are **NOT implemented**, staging E2E NOT run, production/V4 not changed and V5 router remains HTTP 503.
