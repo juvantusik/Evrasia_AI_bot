@@ -289,3 +289,14 @@ The new read-only operator result on `evrasia` is `FINAL_STATUS=PASS`: live sour
 Changed `site-integration/samzaberu-v5/src/V5SiteAccountReader.php` (branch only) to **refuse the native ORM query** when the required fields are missing from the runtime ORM entity field map. Expanded its offline test to **94/94 PASS**. Added `src/V5PdoUserRowSource.php` as an alternative parameterized, two-result-limit SQL **candidate**, and `tests/V5PdoUserRowSourceTest.php` (**28/28 PASS** with mocked PDO, no DB connection). All four GitHub blobs were matched to the locally tested bytes. This minimizes changes to the existing V5 login workflow.
 
 **SUPERSEDED BY 2026-10-11 SCHEMA CHECK:** all 8 `b_user` columns are now verified in the production physical schema (`MISSING_COLUMN_COUNT=0`, `FINAL_STATUS=PASS`, no user records read). The ORM guard and new SQL provider remain not deployed; ORM runtime map and real PDO account-query execution are still unverified. Next gate is live login/lockout policy semantics, not another general table inventory. Do not bypass any blocked/expired/unknown account state. The V5 HTTP router remains disabled (503); V4 and production unchanged.
+
+
+## 21. Login-policy enforcement and SMS-fallback eligibility (2026-10-11)
+
+Implemented in the isolated branch **only**:
+
+- `src/V5ExistingLoginPolicy.php`: strict `LOGIN_ATTEMPTS` evaluator, requiring independently retrieved *current* native attempt ceiling and three authoritative no-restriction signals. It does not guess lockout thresholds or invoke a Bitrix login action.
+- `src/V5NoMfaFallbackPolicy.php`: a no-downgrade fallback rule that requires both live native global mandatory-MFA settings and explicit per-user SMS eligibility. Optional native `Otp::isOtpEnabled()`/`Otp::isMandatoryUsing()` adapter is **staging candidate only**.
+- `tests/V5AuthPoliciesTest.php`: 98/98 local assertions PASS; regression runs for V5 workflow (86), JSON (48), native MFA state (63) plus policies (98) totaled **295/295 PASS**. New GitHub blobs verified byte-for-byte against the locally tested files.
+
+The current trusted inputs `V5CurrentLoginControlsPort` and `V5PerUserSmsEligibilityPort` are still missing their real website implementations, as is the atomic `V5FirstFactorAttemptGatePort` and any end-to-end session issuer/challenge backend. This is an application-policy implementation, **not a working Bitrix login integration**. Use previously documented source contracts rather than rerunning the `b_user`, V4, OTP and Trusted Device structure audits. The canonical structure registry is `docs/STRUCTURE_REGISTRY.md`. Existing production V4 and website remain unchanged; V5 still responds 503.
