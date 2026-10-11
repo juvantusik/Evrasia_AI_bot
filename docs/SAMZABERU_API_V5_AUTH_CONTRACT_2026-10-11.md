@@ -234,3 +234,12 @@ The API V5 branch contains a new **disabled/fail-closed routing scaffold**, usin
 Files: `site-integration/samzaberu-v5/api/v5/router.php`, `src/V5RouteMap.php`, `tests/V5RouteMapTest.php`. Offline PHP lint, route-map test and default-deny smoke check passed.
 
 The operational paste after the last step contains repeated V4/JWT entrypoint inspections, **not** the `api/v4/.htaccess` rewrite-target result. Do not invent V5 rewrite/bootstrap behavior until verified.
+
+
+## 14. Rewrite checkpoint and V5 candidate (2026-10-11)
+
+The operator's read-only production log verifies `api/v4/.htaccess`: `RewriteBase` present, three rewrite conditions and one rule targeting `router.php`; SHA256 `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3`; `FINAL_STATUS=PASS`. The V4 router and JWT flow have already been mapped; repeating that broad audit is unnecessary.
+
+Added `site-integration/samzaberu-v5/api/v5/.htaccess` as an **independent, staging-only rewrite candidate**, plus a PHP static contract test. Offline PHP 8.4 lint and test passed. This is not a replica of V4's unseen rewrite conditions and **not a live Apache validation**. The V5 router still returns HTTP 503; no V5 auth endpoints, SMS, TOTP or tokens can be used.
+
+**Next implementation gate:** build the real V5 Bitrix adapters and atomic challenge/session persistence in a non-production environment. Verify Apache rewrite, router base path, and package layout against the live bootstrap before any pilot.
