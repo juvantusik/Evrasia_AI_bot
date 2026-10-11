@@ -315,3 +315,14 @@ Acceptance before enabling: staging backup and migration, InnoDB/permission chec
 Added `site-integration/samzaberu-v5/tests/integration/V5MySqlAttemptStoreIntegration.php`, `run_mysql_attempt_concurrency.sh` and `README.md` to the isolated branch. The test has explicit local-test-schema, MySQL-host identity and production-host guards. It verifies 24 concurrent connections, expects exactly 7/24 successful reservations under contention, checks all four counters, and separately verifies full rollback on a last-bucket denial. Synthetic HMAC counters are removed by a narrowly scoped cleanup; no Bitrix source, user accounts or V4 sessions are involved.
 
 **State: READY FOR STAGING / NOT EXECUTED against a live MySQL server.** Local PHP 8.4.24 lint PASS, Bash `--lint-only` PASS, invalid-environment guard FAIL-CLOSED before DB. GH blobs match the locally linted copies. Real MySQL or `pdo_mysql` were unavailable in this environment; therefore concurrency acceptance is **not** completed. Executing the harness requires operator provisioning of a disposable staging schema and a dedicated test DB account. This step makes no production changes; it does not remove other requirements on SMS, TOTP replay, account policy, refresh or JWT.
+
+
+## 24. SMS anti-spam, verified phone and financial upper bound (2026-10-11)
+
+New branch-only `site-integration/samzaberu-v5/src/V5SmsDispatchBudget.php` prepares ten opaque HMAC quota windows with independently configured counters for account, verified server-side phone, IP, mobile device, global SMS and global **maximum potential spend** in minor currency units. Unknown verified phone/price/current currency/quota fails closed; pricing and destination MUST be returned by trusted server ports, never client JSON. Fake values in unit tests do not establish a live SMS tariff.
+
+`tests/V5SmsDispatchBudgetTest.php`: **111/111 OFFLINE PASS**; current five-group regression 86 + 48 + 70 + 74 + 111 = **389/389 PASS** on local PHP 8.4.24, all tests entirely synthetic. Both new GitHub blobs match the exact locally linted and tested file bytes.
+
+No actual `V5AtomicSmsOutboxPort` is implemented. It must atomically recheck the password-proven pending challenge, OTP/MFA state, account/phone verification epoch and device binding, enforce 300s TTL/60s SMS resend cooldown/max3 sends under a lock, reserve all ten monetary and count budgets, and create one encrypted durable outbox record with a provider idempotency key. A separate dispatcher sends SMS after COMMIT. Uncertain delivery results must not silently send twice. Challenge verification and independent V5 JWT remain distinct.
+
+Detailed guard/acceptance checkpoint: `docs/SAMZABERU_V5_SMS_SEND_GUARDS_2026-10-11.md`. Real verified-phone integration, actual tariff source, transactional outbox, provider, staging and production activation remain **PENDING**; the V5 HTTP router still returns 503 and V4 is untouched.
