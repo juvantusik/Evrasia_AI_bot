@@ -40,3 +40,11 @@ Native Bitrix TOTP overrides a trusted device. Password failure, blocked/inactiv
 See `docs/SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md` on this branch.
 
 **V4 and production must remain untouched** during this stage.
+
+## 2026-10-11 — V5 assurance policy increment
+
+- `src/V5SessionAssurancePolicy.php` provides a **fail-closed second gate** for protected V5 operations (e.g. bonus-PIN disclosure).
+- `tests/V5SessionAssurancePolicyTest.php` tests valid server-confirmed TOTP/SMS/trusted sessions, V4 JWT rejection, missing claims, mismatched user/session/epoch, revoked sessions, unverified revocation and expired credentials. Tested locally on PHP 8.4: **50 PASS**.
+- Test with `php site-integration/samzaberu-v5/tests/V5SessionAssurancePolicyTest.php`.
+- **Not an HTTP authentication verifier**: its `verifiedClaims` argument must be produced **only after** independent cryptographic JWT verification using a new V5 issuer/audience and key; its session argument must come **only from** an authoritative server-side assurance store after a successful fail-closed revocation check. It does not validate JWT signatures itself or create sessions, tokens, or persistent records.
+- These site-side integration dependencies have **not been implemented or deployed**. Never pass client-supplied claims or trust flags to this policy, and never route V5 requests through the legacy V4 `JwtAuthorization::checkAuth()` path.
