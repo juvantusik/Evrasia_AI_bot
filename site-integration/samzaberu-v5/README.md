@@ -133,3 +133,19 @@ New files, **GitHub branch only**:
 **Not yet implemented**: `V5PasswordAccountReaderPort` concrete site-side lookup, or `V5FirstFactorAttemptGatePort` atomic throttle backend. These MUST be implemented against verified active Bitrix data and anti-fraud rules before any public routing. In particular, the reader must also enforce all existing Bitrix login restrictions such as password-expired state and login-attempt lockouts: the current snapshot's `bitrixActive` and `antiFraudAllowed` **are not sufficient to claim full login-policy compatibility on their own**. No guessed production table/column/lookup semantics are accepted. If live login policy needs additional explicit fields, extend the account snapshot and tests before staging.
 
 Next: finish the site-specific unique-login reader and account-policy/throttle integration using verified current site code, then reuse the existing V3C OTP atomic verification stage for challenges. `api/v5/router.php` is still intentionally disabled/HTTP 503. V4 and production were not changed.
+
+
+## 2026-10-11 — V4-compatible unique-login account reader for V5
+
+Latest `evrasia` read-only diagnostic: `FINAL_STATUS=PASS`, `FINAL_RC=0`. The **unchanged** V4 `Auth.php` proves phone login is normalized by `PhoneConfirm::setPhoneMask()`, V4 uses `EMAIL` for email login and `LOGIN` for phone, and account lookup uses `\Bitrix\Main\UserTable::getList()` with a one-row limit. `BLOCKED` is involved in V4's filter but the diagnostic did not disclose every key/value: do not assume that V4's exact ORM filter has been fully recovered. No DB queries were executed.
+
+Implemented in this **isolated GitHub branch only**:
+
+- `src/V5SiteAccountReader.php`: `V5SiteAccountReader` consumes authoritative current account rows through `V5AccountRowSourcePort`, existing phone mask behavior through `V5PhoneLoginNormalizerPort`, live native 2FA state through `V5NativeTotpStatusPort`, and real login-attempt/lockout semantics through `V5ExistingLoginPolicyPort`. Unknown state **denies** login. It requires exactly one matching record; duplicates are rejected.
+- `V5NativeBitrixUserRowSource` is a **staging-only ORM candidate** using `UserTable::getList()` with `limit => 2` and `EMAIL`/`LOGIN` filters. Unlike V4, it does not pre-filter inactive/blocked records, so duplicates cannot be silently bypassed. The eight selected fields are based on prior V3C SQL source audits and the V4 login flow, but their availability in the **actual ORM map** must still be confirmed before using this class on the site.
+- `V5NativePhoneLoginNormalizer` wraps the existing `PhoneConfirm::setPhoneMask()`; its runtime side effects and required bootstrap remain an integration check, not an assumption.
+- `tests/V5SiteAccountReaderTest.php`: **90 offline assertions PASS** on PHP 8.4, covering email/phone identity, ambiguous accounts, blocked/inactive/expired accounts, unknown TOTP and login policy state, corrupt fields, ORM query shape, normalization and dependency outages. Local source and test SHA match the committed GitHub blobs exactly.
+
+**Still missing:** operational implementations of `V5NativeTotpStatusPort` and `V5ExistingLoginPolicyPort`, atomic rate limiting, and the challenge/JWT service integrations. `PASSWORD_EXPIRED` and `LOGIN_ATTEMPTS` must be reconciled with the *live* Bitrix policy, including currently configured lockout thresholds. The V4 optional explicit login `type` flag is not in the current V5 JSON contract; V5 follows V4's default `@`-based branch.
+
+**Deployment remains OFF:** production, Bitrix DB, V4 and the disabled V5 router are unchanged; no real user records, SMS or JWTs were accessed.
