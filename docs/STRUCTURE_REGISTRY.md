@@ -179,6 +179,7 @@ Bitrix MFA хранит нативные секреты и состояние re
 | V3C native TOTP | offline/staging prototype, не развернут и не заменяет нативный Bitrix |
 | `V5AtomicFirstFactorAttemptGate` и `V5MySqlAttemptWindowStore` | **OFFLINE TESTED 144/144**, staging-only транзакционный кандидат с 4 HMAC-бюджетами; новая таблица **не создана**, реальная MySQL-конкуренция не проверена |
 | `V5CurrentLoginControlsPort`, `V5PerUserSmsEligibilityPort`, strong-trust provenance | **PENDING** достоверных site-side провайдеров и интеграции |
+| `V5SmsDispatchBudget` и `V5SmsBudgetPolicy` | **OFFLINE TESTED 111/111**, десять HMAC-квот включая общий денежный резерв; verified-phone/pricing sources и атомарный outbox **PENDING** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -231,12 +232,23 @@ Bitrix MFA хранит нативные секреты и состояние re
 
 **Незакрыто:** нет реального запуска в staging, поскольку в среде проверки отсутствовали MySQL и `pdo_mysql`; нужна подтверждённая тестовая база, 24 одновременных соединения и полный вывод `FINAL_STATUS=PASS`. Логика лимитера (144/144 на fake PDO) и staging-concurrency E2E — разные уровни. Другие источники Bitrix/MFA, лимиты SMS и V5 JWT продолжают ожидать подключения, повторные структурные аудиты не проводить.
 
+
+### 2026-10-11 — V5 SMS/денежные квоты: код есть, транзакционного SMS-outbox ещё НЕТ
+
+В `feature/samzaberu-api-v5-auth-contract` добавлен `site-integration/samzaberu-v5/src/V5SmsDispatchBudget.php` и тест `tests/V5SmsDispatchBudgetTest.php` (**111/111 PASS** на локальном PHP 8.4.24). Подготовлены десять серверных HMAC-окон: account burst/day, verified phone burst/day, IP burst/day, device burst, global burst/day, и глобальный дневной резерв **верхней стоимости SMS** в младших денежных единицах. Неизвестный подтверждённый номер, тариф, валюта или лимит → отказ до очереди. Номер и цену нельзя принимать из HTTP; полноценной реализации проверенного phone-provider и SMS tariff-provider пока нет.
+
+Все новый source/test GitHub blob hash совпадают с локальными протестированными файлами. Результат пятёрки тестовых наборов: workflow 86, JSON 48, password gate 70, fake-PDO store 74, SMS budget 111 — **389/389 PASS** (НЕ production, НЕ real SMS).
+
+**ОБЯЗАТЕЛЬНАЯ следующая реализация:** `V5AtomicSmsOutboxPort` должен в одной транзакции проверить парольный pending-челлендж, существующие правила `ChallengeRules` (300 сек, 60 сек, 3 отправки), текущее разрешение аккаунта и отсутствие TOTP-деградации, версию проверенного телефона, зарезервировать все десять квот и записать **зашифрованную** SMS-задачу с provider-idempotency key. Отправка только после коммита отдельным worker. Пока это **не реализовано и не протестировано**; никаких SMS/JWT, БД-миграций или production-изменений нет. Статус V5: HTTP 503.
+
+**Детальный контракт:** `docs/SAMZABERU_V5_SMS_SEND_GUARDS_2026-10-11.md` в feature-ветке. Прежде чем запускать, проверить тариф/идемпотентность реального SMS-провайдера; не исследовать заново `b_user`, V4, TOTP и Trusted Device.
+
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
 1. Проверить **runtime ORM mapping** только если собираемся использовать ORM-источник. После подтверждения физической `b_user` не повторять `information_schema`; SQL-кандидат — отдельный вариант.
 2. Подключить `V5CurrentLoginControlsPort` к реальным штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
 3. Подключить `V5PerUserSmsEligibilityPort` к фактическим глобальным optional/mandatory MFA правилам и учётом деактивации.
-4. Завершить атомарное хранилище challenge, повторное использование кода TOTP между вебом и мобильным каналом, бюджет SMS и серверное определение проверенного телефона.
+4. Завершить атомарное хранилище challenge и SMS-outbox, reuse Bitrix V3C TOTP с общим anti-replay, подключить десять рассчитанных SMS-квот к транзакционной БД, тарифу провайдера и серверному подтверждённому телефону.
 5. Подтвердить strong-enrollment provenance Trusted Device, сделать независимые V5 JWT/refresh/assurance и защищённый PIN.
 6. Сделать staging end-to-end; затем отдельный одобренный пилот `USER_ID=880339`. **Никаких production write до отдельного разрешения оператора.**
 
