@@ -1,5 +1,8 @@
 # Evrasia — New Chat Handoff
 
+> **ОБЯЗАТЕЛЬНО ПЕРЕД ДИАГНОСТИКОЙ BITRIX / AUTH / V5 (2026-10-11):** прочитать [docs/STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). Там уже закреплены реальные таблицы `b_user` (8/8), `b_sec_user`, V4, JWT, TOTP V3C, Trusted Device, источники SHA, степень доказанности и запрет повторных широких аудитов. Не начинать новый чат с повторного поиска структур; выяснить только ещё не закрытый интеграционный вопрос. Актуальная работа V5 идёт в `feature/samzaberu-api-v5-auth-contract`, не deployed. Старые описания TOTP ниже читать в свете более нового документа.
+
+
 > Fast handoff for continuing Evrasia AI Bot in a new ChatGPT chat.
 >
 > **Updated: 2026-10-03**. PR #73 and the 2026-10-02/03 Anti-Fraud incident are production/browser accepted; nginx IP-wait guard is installed with normal-reboot validation still pending. SamZaberu Legal Consents registration implementation remains pending.
