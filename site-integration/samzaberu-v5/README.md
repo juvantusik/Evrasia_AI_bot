@@ -65,6 +65,16 @@ See `docs/SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md` on this branch.
 - `src/V5RouteMap.php`: five proposed V5 POST routes in an isolated registry.
 - `api/v5/router.php`: a **disabled-by-default offline scaffold**; it responds with HTTP 503 `{"error":"v5_unavailable"}`. Even if its explicit readiness flag is set, registered route callbacks **still return HTTP 503**. No client can log in through this scaffold, and it must **not** be copied to production yet.
 - `tests/V5RouteMapTest.php`: registry test. Offline PHP 8.4.24 checks passed, including syntax checks and disabled-router CLI smoke test. Source repository files were verified after commit.
-- Site-specific rewrite/bootstrap integration remains **pending**: the latest server paste replayed the V4 entrypoint inspection; it did not contain the requested `api/v4/.htaccess` rewrite-target output.
+- The **V4** rewrite target has now been confirmed by the operator's production read-only check (see rewrite candidate section below); actual Apache V5 integration and isolated Bitrix bootstrap tests remain pending.
 
 There is **no live V5 handler**, no JWT issuer, no TOTP/SMS verifier, no SMS send and no challenge DB persistence. This step only establishes a safe, version-separated routing structure.
+
+
+## 2026-10-11 — site rewrite checkpoint and isolated candidate
+
+- The operator's latest `evrasia` log confirms `api/v4/.htaccess` SHA256 `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3`, with `RewriteBase` present, three conditions, one rule and a `router.php` rewrite target. Final server result: `FINAL_STATUS=PASS / FINAL_RC=0`; **read-only, no deployment**.
+- `api/v5/.htaccess` is a **separately designed candidate** for the offline V5 router, **not** a copy of V4's unknown condition details. It sends routes to `router.php`, whose current implementation denies access with HTTP 503. This code must **not** be installed in production until the full site bootstrap and Apache behavior are tested in staging.
+- `tests/V5RewriteContractTest.php` asserts the candidate's rewrite directives and separation from V4. Locally tested with PHP 8.4.24: lint and static contract PASS. **APACHE_INTEGRATION_TESTED=NO**.
+- Test with `php site-integration/samzaberu-v5/tests/V5RewriteContractTest.php`.
+
+`api/v5/router.php` currently requires its route map via the **offline repository layout**; production packaging paths are not yet defined. Do not copy these files individually to the Bitrix document root.
