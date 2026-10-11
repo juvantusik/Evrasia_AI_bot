@@ -214,3 +214,15 @@ A focused read-only site inspection on `evrasia` completed: **7 PASS, 0 FAIL, 0 
 **Do not publish sensitive vulnerability details, current keys, credentials or security-audit raw outputs in this repository; keep detailed findings in the access-controlled operational review.**
 
 **Deployment status:** the V5 code in this branch is an isolated offline decision prototype, not a deployed API. V4 and Bitrix production remain unchanged.
+
+
+## 12. Focused V4 entrypoint and refresh checkpoint (2026-10-11)
+
+Read-only production diagnostic returned `FINAL_STATUS=PASS`, `RUN_RC=0` and matched previous SHA baselines for the V4 router and JWT class.
+
+- V4 routing runs through `Bramus\\Router\\Router::run()` at the end of `api/v4/router.php`, with an `api/v4/.htaccess` present; `api/v4/index.php` is absent. **The rewrite contents are not yet inspected**, so do not guess the V5 public entrypoint or Apache rewrites.
+- Legacy refresh `JwtAuthorization::makeRefresh()` uses its V4 refresh token/DB state and then calls `createTokens()`. **It does not demonstrate V5 MFA/session assurance**; V5 must implement and enforce a separate refresh boundary, not pass V4 refresh tokens into V5.
+- Site production was read-only; no V5 router exists on that host.
+- In the isolated GitHub prototype, `src/ChallengeRules.php` with `tests/ChallengeRulesTest.php` adds a **locally verified 55-case** pending-challenge policy. Rules require strong server-side binding, short TTL and SMS resend cooldown; durable atomic storage and gateway rate limits are still missing.
+
+Next site dependency: inspect only the relevant nonsecret `api/v4/.htaccess` rewrite target and the actual bootstrap wiring before authoring V5 `.htaccess`/`router.php`. Do not modify or duplicate V4.
