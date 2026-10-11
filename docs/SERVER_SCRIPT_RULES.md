@@ -1,5 +1,8 @@
 # Evrasia AI Bot — Server Script Execution Rules
 
+> **Правило без повторных диагностик (2026-10-11):** сначала сверить [реестр исследованных структур](STRUCTURE_REGISTRY.md) и уже подтверждённые SHA/SQL-метаданные. Запрещён новый «полный аудит структур» без изменения исходника/схемы, конкретного инцидента или предоперационного guard. Для нового интеграционного вопроса задавать **один узкий read-only тест**, который не дублирует закрытые проверки. Последняя проверка `b_user`: 8/8 колонок существуют, `MISSING_COLUMN_COUNT=0`, повторный поиск в `information_schema` не нужен.
+
+
 These rules are mandatory for every server-side diagnostic, deployment, migration, rollback, or forensic bash script provided to the operator.
 
 ## Delivery format
