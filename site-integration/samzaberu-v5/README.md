@@ -1,6 +1,6 @@
 # SamZaberu V5 — isolated site integration prototype
 
-**Status:** offline-tested V5 policy components only. **No V5 HTTP route, Bitrix integration, JWT issuance, SMS send, database migration or production deployment exists yet.** This directory is deliberately independent of the running Evrasia bot and website.
+**Status:** offline-tested V5 policy and JSON-handler components only. **No live V5 HTTP endpoint, Bitrix integration, JWT issuance, SMS send, database migration or production deployment exists yet.** This directory is deliberately independent of the running Evrasia bot and website.
 
 ## Current files
 
@@ -78,3 +78,35 @@ There is **no live V5 handler**, no JWT issuer, no TOTP/SMS verifier, no SMS sen
 - Test with `php site-integration/samzaberu-v5/tests/V5RewriteContractTest.php`.
 
 `api/v5/router.php` currently requires its route map via the **offline repository layout**; production packaging paths are not yet defined. Do not copy these files individually to the Bitrix document root.
+
+
+## 2026-10-11 — server-side login workflow and JSON auth handler (implemented offline)
+
+New files, committed to this **isolated branch only**:
+
+- `src/V5LoginWorkflow.php`: a typed orchestration layer for `signIn`, `verifyChallenge`, and `resendSms`. Native Bitrix TOTP takes priority over trust; weak V4 password-only trust cannot bypass SMS. Password verification MUST have no Bitrix/PHP authorization side effect. Pending challenges never carry JWTs. Verification depends on an **atomic, one-time** server-side grant and user/device binding.
+- `src/V5AuthHttpHandler.php`: strict JSON request/response mapping for the first three V5 auth routes, with a bounded 8 KiB JSON body, no arbitrary phone field, no exposure of upstream errors. The independent V5 `refresh` and bonus-PIN operations remain unavailable (`503`) until session verification is implemented.
+- `tests/V5LoginWorkflowTest.php`: **86 assertions PASS** on local PHP 8.4.24, including password denial, blocked accounts, mandatory TOTP, strong/weak trusted devices, wrong/replayed codes, device mismatch, SMS outages and rate-limit failures.
+- `tests/V5AuthHttpHandlerTest.php`: **48 assertions PASS** on local PHP 8.4.24, including exact JSON response shapes, refusal of user-supplied phone/user IDs, invalid input types, credential-free pending states, replay rejection, no error-detail leakage, and fail-closed disabled endpoints.
+- Both files and both test files were fetched back from GitHub and **their Git blob hashes matched the locally tested files exactly**.
+
+Offline tests:
+
+```bash
+php -l site-integration/samzaberu-v5/src/V5LoginWorkflow.php
+php -l site-integration/samzaberu-v5/src/V5AuthHttpHandler.php
+php site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
+php site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php
+```
+
+**Strict integration gate:** these are real, tested application-layer and JSON-handling implementations, **not** functional production endpoints. There is deliberately no site-side `V5PasswordProofPort` (no-side-effect Bitrix password proof), `V5TrustProofPort` (cryptographic trust plus strong-enrollment provenance), `V5AtomicChallengePort` (durable challenge and anti-spam SMS/native TOTP anti-replay), or `V5StrongSessionPort` (server-verified assurance plus independent V5 access/refresh JWT) implementation. The existing `api/v5/router.php` continues to respond `503` to **every request**, and must not be activated until these providers and integration tests are complete.
+
+Client response examples (placeholders, **not live API**):
+
+```json
+{"status":"challenge_required","challenge_id":"<opaque server ID>","challenge_type":"sms","expires_in":150}
+```
+
+A successful authenticator challenge uses `"challenge_type":"totp"`. The first response contains no access or refresh token. Only after verified MFA/strong trust may an authenticated response contain `access_token`, `refresh_token`, and optionally `trusted_device`.
+
+Next dependency: **focused read-only inspection of Bitrix's password-hash verification API and native TOTP verification/replay API** on `evrasia`. Do not use `CUser->Login()` as password proof unless it can be demonstrated not to authorize the current PHP session. Then implement site adapters, transactional challenge store, SMS budget reserve and V5 JWT issuer in a non-production environment.
