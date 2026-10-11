@@ -243,3 +243,16 @@ The operator's read-only production log verifies `api/v4/.htaccess`: `RewriteBas
 Added `site-integration/samzaberu-v5/api/v5/.htaccess` as an **independent, staging-only rewrite candidate**, plus a PHP static contract test. Offline PHP 8.4 lint and test passed. This is not a replica of V4's unseen rewrite conditions and **not a live Apache validation**. The V5 router still returns HTTP 503; no V5 auth endpoints, SMS, TOTP or tokens can be used.
 
 **Next implementation gate:** build the real V5 Bitrix adapters and atomic challenge/session persistence in a non-production environment. Verify Apache rewrite, router base path, and package layout against the live bootstrap before any pilot.
+
+
+## 15. Implemented V5 login orchestration and JSON handler (2026-10-11)
+
+Added to `feature/samzaberu-api-v5-auth-contract` (no production deployment):
+
+- `site-integration/samzaberu-v5/src/V5LoginWorkflow.php` implements the typed login state transitions through server-provided password proof, native TOTP challenge, verified MFA-proven Trusted Device, or SMS challenge; confirmation and SMS resend are separate operations. No JWT on pending challenge, no weak V4 trusted-device bypass.
+- `site-integration/samzaberu-v5/src/V5AuthHttpHandler.php` provides strict JSON I/O for the first three endpoints. Refresh and PIN handlers remain intentionally unavailable.
+- `tests/V5LoginWorkflowTest.php`: **86 locally passing assertions**. `tests/V5AuthHttpHandlerTest.php`: **48 locally passing assertions**. Source and tests match verified GitHub blob SHA to locally tested bytes.
+
+No production Bitrix session or user table was touched. The backend interfaces deliberately require implementations that prove the password **without creating a Bitrix session**, verify the **existing** native TOTP with replay protection, use a transactional/atomic OTP challenge store and SMS quotas, validate both trust cryptography **and** prior MFA enrollment, and issue **separate V5** JWT sessions with server-side assurance checks.
+
+**Remaining before live pilot:** actual Bitrix adapter methods based on current site version; atomic challenge persistence; SMS integration and global budgets; V5 JWT access/refresh signing, independent keys and server-verifiable assurance; Apache/Bitrix staging integration and authenticated end-to-end test. All V5 router requests still return **HTTP 503**. V4 and production remain untouched.
