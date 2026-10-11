@@ -1,5 +1,8 @@
 # Evrasia AI Bot — Current Project Checkpoint
 
+> **AUTH / BITRIX ADDENDUM — 2026-10-11 (более новый, чем старые разделы TOTP/V4):** основной неизменяемый реестр изученных структур — [docs/STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). Физические 8 полей `b_user` подтверждены в production через `information_schema` (`MISSING_COLUMN_COUNT=0`). Не проводить повторный аудит этих структур. Bitrix V4 работает, V5 существует только в изолированной GitHub-ветке и недоступен на production. Веб-исправление отключения TOTP пилота было принято 2026-09-24; старые слова «TOTP ещё не реализован» относятся к тогдашней стадии, не отменяют поздние acceptance-факты. Операционный baseline Anti-Fraud PR #73 ниже остаётся отдельной последней подтверждённой точкой 2026-10-03, а не перепроверен сегодня.
+
+
 > **Authoritative continuation checkpoint.**
 >
 > Updated: **2026-10-03** after PR #73 production deployment/browser acceptance and permanent nginx startup-race mitigation. Older sections are retained for history and may describe earlier rollout states.
