@@ -1,5 +1,8 @@
 # Evrasia AI Bot — Current Architecture
 
+> **Реестр технических структур сайта (2026-10-11):** [docs/STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md) содержит проверенные Bitrix `b_user`, `b_sec_user`, native OTP, Trusted Device, V4 JWT и изолированную V5-ветку, с разделением site `evrasia` и bot `eur-bot-01`. Данные реестра не меняют описанную ниже production-топологию. При продолжении работы избегать повторных проверок уже зафиксированных структур.
+
+
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
 > Last updated: **2026-10-03** after PR #73 production/browser acceptance and permanent nginx startup-race mitigation.
