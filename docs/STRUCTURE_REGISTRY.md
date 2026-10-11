@@ -35,7 +35,7 @@
 | Источник | SHA-256 из последнего тематического аудита | Подтверждённое назначение / статус |
 |---|---|---|
 | `local/php_interface/Controllers/V4/Auth.php` | `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` | V4 signin, **SOURCE VERIFIED 2026-10-11** |
-| `api/v4/router.php` | `3b263c09387a3d588f972960f2e8eb44e4d88b21065539be50` | маршрутизатор V4, ранее source-verified |
+| `api/v4/router.php` | `3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50` | маршрутизатор V4, ранее source-verified |
 | `api/v4/.htaccess` | `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3` | `RewriteBase` присутствует, 3 `RewriteCond`, 1 `RewriteRule` на `router.php`; **не** сохранён полный текст условий |
 | `bitrix/modules/main/lib/UserTable.php` | `e9574a33afa1a592b7f4555ba1f5a5bb54e2fa70f84968360feeb56396e725a4` | проверен статический поиск объявлений, **SOURCE VERIFIED 2026-10-11** |
 | `bitrix/modules/main/lib/Security/Password.php` | `a1ffbba30510caa373087127d3af5714d36be526f5df854610f80ff227a10296` | `Password::equals()`; искусственные SHA-512 и legacy salted-MD5 прошли; **SOURCE + SYNTHETIC TEST VERIFIED** |
@@ -47,7 +47,7 @@
 | `local/php_interface/lib/Services/TrustedDeviceService.php` | `58e107742f5a40b1b28cd439bee5b9721b020ddb25873feb01b79a404c644417` | SHA текущего аудита **2026-10-11**; исторический принятый отличался |
 | `local/php_interface/lib/PhoneAuth.php` | `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27` | отдельный SMS/Mobile ID контур V4 |
 | `local/php_interface/lib/JwtAuthorization.php` | `0e539789a6322b2c209b9e8e937bb04e43344aa9092bcac5e627136c30fbc7d9` | JWT V4 access/refresh; НЕ использовать как V5 assurance |
-| `local/php_interface/Controllers/V4/PinCode.php` | `7734ddbaba0e7ec9ddfc9f0a9008c0da0c1523e505e52caebac2bbaf637cd0` | V4 выдача бонусного PIN через прежний канал, **исторический исходник** |
+| `local/php_interface/Controllers/V4/PinCode.php` | `7734ddbaba0e7ec9ddfc9f0a9008c0da0c0a1523e505e52caebac2bbaf637cd0` | V4 выдача бонусного PIN через прежний канал, **исторический исходник** |
 
 Это контрольные суммы **на дату соответствующей проверки**, не гарантии неизменности на будущую дату. История веб-2FA и файлов отображения PIN — в `docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md`.
 
