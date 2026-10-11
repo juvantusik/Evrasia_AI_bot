@@ -1,0 +1,12 @@
+# SamZaberu API V5 rewrite CANDIDATE.
+# STAGING ONLY until reviewed against live Apache config and V5 bootstrap.
+# This file is version-separated from /api/v4/.htaccess.
+#
+# Rewrites all V5 request paths to the offline, fail-closed router, including
+# "/" and unexpected filenames; no static-file or legacy-V4 escape path.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /api/v5/
+    RewriteRule ^router\.php$ - [L]
+    RewriteRule ^ router.php [L,QSA]
+</IfModule>
