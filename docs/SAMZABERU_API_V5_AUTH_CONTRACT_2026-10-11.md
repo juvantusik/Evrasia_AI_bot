@@ -201,3 +201,28 @@ First implementation increment is committed to the isolated GitHub branch `featu
 - `README.md` — explicit integration boundaries and fail-closed requirements.
 
 **Important:** this is testable pure code, **not** a website controller/router and **not deployed**. It does not create JWT, send SMS or access a DB. Integration still requires the live `api/v4/router.php` and `JwtAuthorization` behavior to be inspected. V4, production website and Bitrix core remain unchanged.
+
+## 11. Verified site V4 router and legacy JWT boundary (2026-10-11)
+
+The operator ran a **read-only** focused check on Bitrix production host `evrasia`: `7 PASS / 0 FAIL / 0 WARN`; router and JWT source hashes were unchanged by the audit. No production code/DB writes, JWT creation, Bitrix application bootstrap or SMS dispatch.
+
+Confirmed files:
+
+- `api/v4/router.php`: SHA256 `3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50`, 302 lines; uses `Bramus\Router\Router`; POST middleware uses `CRouter::checkEncryption()`; includes `/signin`, `/signup`, Mobile ID and `/pincode` routes. Some early routes write `json_encode([$_POST, $input])` to a file, and one other route serializes `$_SERVER` to a response. They are **security review items**; do not copy this instrumentation into V5 and do not assume externally exploitable without checking routing/access.
+- `local/php_interface/lib/JwtAuthorization.php`: SHA256 `0e539789a6322b2c209b9e8e937bb04e43344aa9092bcac5e627136c30fbc7d9`, 279 lines.
+- Legacy JWT methods: `__construct` (~22), `createTokens` (~26), `createRefreshToken` (~35), `createAccessToken` (~67), `getAccessToken` (~83), `isAccessTokenRevoked` (~98), `getAuthUserId` (~130), `checkAuth` (~166), `makeRefresh` (~231).
+- Refresh tokens are separately signed and inserted into `Evrasia\Orm\JwtAccessTokenTable`; access-token revocation checks a Redis timestamp.
+- **Critical V5 trust-boundary concern:** both legacy `getAuthUserId()` and `checkAuth()` contain an early `$_REQUEST` conditional returning a value **before** JWT decoding. Input keys were masked in the diagnostic. Do not call these methods for V5 authentication; the actual applicability of the shortcut to untrusted HTTP callers has not yet been confirmed.
+- **Critical V5 availability/security concern:** the legacy `isAccessTokenRevoked()` appears to return `false` if the Redis check throws. For V5 authenticated operations, failing to verify revocation/assurance must **deny** access rather than implicitly accept the token.
+- The actual `makeRefresh()` method body and Bitrix API entrypoint/bootstrap wiring remain to be reviewed before writing a live V5 router. No need to repeat general Trusted Device or Bitrix TOTP audits.
+
+### Consequences for implementation
+
+1. Reuse Bitrix **business services** (native MFA verification, user status, Trusted Device) but keep **V5 token issuance/validation and assurance policy separate** from the V4 `JwtAuthorization::checkAuth()/getAuthUserId()/makeRefresh()` path.
+2. V5 verifiers must accept only server-validated V5-issuer tokens **and** verify server-side session assurance/revocation, including after refresh. Client-supplied user IDs, `amr`, `auth_method`, and headers are never authentication evidence.
+3. Keep legacy V4 routes and token verifier operational *only for existing V4 consumers during a controlled migration*, but never allow V4 tokens to authorize V5 protected PIN endpoints.
+4. Do not copy debug request-body logging, raw `$_SERVER` diagnostics, or fail-open Redis revocation into V5.
+5. Source inspection is not runtime penetration testing; do not declare a confirmed externally reachable bypass until the request-parameter branch and its upstream protection have been reviewed safely.
+6. Do not deploy new V5 endpoints until site-side bootstrap, rate limits, session store, refresh semantics and MFA second-factor boundary are evidenced and tested.
+
+**Deployment status:** V5 remains an offline GitHub prototype; no production V5 path exists.
