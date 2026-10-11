@@ -150,11 +150,34 @@ final class V5NativeBitrixUserRowSource implements V5AccountRowSourcePort
             throw new RuntimeException('account_lookup_unavailable');
         }
 
+        // The installed evrasia UserTable.php static source does not list
+        // PASSWORD_EXPIRED or LOGIN_ATTEMPTS (2026-10-11 inspection).
+        // Probe the authoritative ORM entity field map before any query.
+        // This adapter is unusable if one field is not exposed by this ORM.
+        // Never silently omit account-lockout columns or default them to N/0.
+        $select = [
+            'ID', 'LOGIN', 'EMAIL', 'PASSWORD', 'ACTIVE', 'BLOCKED',
+            'PASSWORD_EXPIRED', 'LOGIN_ATTEMPTS',
+        ];
+        if (!is_callable([\Bitrix\Main\UserTable::class, 'getEntity'])) {
+            throw new RuntimeException('user_orm_map_unavailable');
+        }
+        $entity = \Bitrix\Main\UserTable::getEntity();
+        if (!is_object($entity) || !is_callable([$entity, 'getFields'])) {
+            throw new RuntimeException('user_orm_map_unavailable');
+        }
+        $mapped = $entity->getFields();
+        if (!is_array($mapped)) {
+            throw new RuntimeException('user_orm_map_unavailable');
+        }
+        foreach ($select as $required) {
+            if (!array_key_exists($required, $mapped)) {
+                throw new RuntimeException('user_orm_field_unavailable');
+            }
+        }
+
         $result = \Bitrix\Main\UserTable::getList([
-            'select' => [
-                'ID', 'LOGIN', 'EMAIL', 'PASSWORD', 'ACTIVE', 'BLOCKED',
-                'PASSWORD_EXPIRED', 'LOGIN_ATTEMPTS',
-            ],
+            'select' => $select,
             'filter' => [$field => $normalizedLogin],
             'limit' => 2,
         ]);
