@@ -6,6 +6,18 @@ namespace Bitrix\Main {
         public static array $rows = [];
         public static ?array $options = null;
         public static bool $throw = false;
+        public static array $availableFields = [
+            'ID'=>true,'LOGIN'=>true,'EMAIL'=>true,'PASSWORD'=>true,
+            'ACTIVE'=>true,'BLOCKED'=>true,'PASSWORD_EXPIRED'=>true,
+            'LOGIN_ATTEMPTS'=>true,
+        ];
+        public static function getEntity(): object {
+            return new class {
+                public function getFields(): array {
+                    return UserTable::$availableFields;
+                }
+            };
+        }
         public static function getList(array $options): object {
             if(self::$throw) throw new \RuntimeException('source error');
             self::$options = $options;
@@ -185,6 +197,17 @@ namespace Evrasia\Samzaberu\V5 {
     ok(count($native->findAtMostTwo('LOGIN','mask_79210000000'))===2,'native ORM detects ambiguity');
     try {$native->findAtMostTwo('BLOCKED','anything');ok(false,'field injection must deny');}
     catch(\RuntimeException $ex){ok(true,'unknown field denied');}
+    // Regression: production's static ORM source lacks the two login policy
+    // columns. A missing entity field must DENY before executing any query.
+    foreach(['PASSWORD_EXPIRED','LOGIN_ATTEMPTS'] as $missing) {
+        $saved=\Bitrix\Main\UserTable::$availableFields;
+        unset(\Bitrix\Main\UserTable::$availableFields[$missing]);
+        \Bitrix\Main\UserTable::$options=null;
+        try {$native->findAtMostTwo('EMAIL','a@example.invalid');ok(false,'unknown ORM field must fail closed');}
+        catch(\RuntimeException $ex){ok(true,'unavailable ORM field denied');}
+        ok(\Bitrix\Main\UserTable::$options===null,'unmapped ORM field skips getList');
+        \Bitrix\Main\UserTable::$availableFields=$saved;
+    }
     \Bitrix\Main\UserTable::$throw=true;
     try {$native->findAtMostTwo('EMAIL','a@example.invalid');ok(false,'ORM exception must propagate');}
     catch(\RuntimeException $ex){ok(true,'ORM exception fail closed');}
