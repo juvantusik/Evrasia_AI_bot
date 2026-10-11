@@ -226,3 +226,11 @@ Read-only production diagnostic returned `FINAL_STATUS=PASS`, `RUN_RC=0` and mat
 - In the isolated GitHub prototype, `src/ChallengeRules.php` with `tests/ChallengeRulesTest.php` adds a **locally verified 55-case** pending-challenge policy. Rules require strong server-side binding, short TTL and SMS resend cooldown; durable atomic storage and gateway rate limits are still missing.
 
 Next site dependency: inspect only the relevant nonsecret `api/v4/.htaccess` rewrite target and the actual bootstrap wiring before authoring V5 `.htaccess`/`router.php`. Do not modify or duplicate V4.
+
+## 13. V5 router scaffold isolated in GitHub (2026-10-11)
+
+The API V5 branch contains a new **disabled/fail-closed routing scaffold**, using the established Bramus router only behind an explicit readiness guard. Five V5 POST route names are registered separately from V4. All callbacks remain unavailable (503), no matter whether the guard is set. This is *not a deployed API*: production Bitrix and V4 are unchanged.
+
+Files: `site-integration/samzaberu-v5/api/v5/router.php`, `src/V5RouteMap.php`, `tests/V5RouteMapTest.php`. Offline PHP lint, route-map test and default-deny smoke check passed.
+
+The operational paste after the last step contains repeated V4/JWT entrypoint inspections, **not** the `api/v4/.htaccess` rewrite-target result. Do not invent V5 rewrite/bootstrap behavior until verified.
