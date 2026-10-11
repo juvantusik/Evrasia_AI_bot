@@ -1,6 +1,6 @@
 # SamZaberu V5 — isolated site integration prototype
 
-**Status:** offline-tested decision policy only. **No V5 HTTP route, Bitrix integration, JWT issuance, SMS send, database migration or production deployment exists yet.** This directory is deliberately independent of the running Evrasia bot and website.
+**Status:** offline-tested V5 policy components only. **No V5 HTTP route, Bitrix integration, JWT issuance, SMS send, database migration or production deployment exists yet.** This directory is deliberately independent of the running Evrasia bot and website.
 
 ## Current files
 
@@ -48,3 +48,14 @@ See `docs/SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md` on this branch.
 - Test with `php site-integration/samzaberu-v5/tests/V5SessionAssurancePolicyTest.php`.
 - **Not an HTTP authentication verifier**: its `verifiedClaims` argument must be produced **only after** independent cryptographic JWT verification using a new V5 issuer/audience and key; its session argument must come **only from** an authoritative server-side assurance store after a successful fail-closed revocation check. It does not validate JWT signatures itself or create sessions, tokens, or persistent records.
 - These site-side integration dependencies have **not been implemented or deployed**. Never pass client-supplied claims or trust flags to this policy, and never route V5 requests through the legacy V4 `JwtAuthorization::checkAuth()` path.
+
+## 2026-10-11 — pending challenge and SMS-resend rules
+
+- `src/ChallengeRules.php` — fail-closed validation of a server-side pending password-first challenge, binding to user and mobile device, 5-minute maximum TTL, up to 5 failed attempts.
+- `tests/ChallengeRulesTest.php` — **55/55 cases PASS**, local PHP 8.4.24 syntax/lint and execution. The GitHub content hashes of both files were matched against tested local files.
+- SMS resend requires verified clear **global** SMS limits, at least a 60-second cooldown and fewer than 3 sends per challenge. These are **initial V5 policy defaults**, not yet an approved complete provider quota. Gateway/phone/IP/user-wide budgets must be implemented and configured against actual operator limits before enabling SMS.
+- The rule evaluator cannot by itself prevent concurrency or SMS spam. **Every verification attempt (including wrong codes), challenge consumption and resend reservation must be persisted atomically** by a verified transactional/compare-and-swap backend. Do not rely on in-process state or a pre-check plus unlocked write.
+- A native TOTP code is verified only through existing Bitrix state. This helper never knows, copies or logs the TOTP secret.
+- Test with `php site-integration/samzaberu-v5/tests/ChallengeRulesTest.php`.
+
+**No V5 challenge database table, Bitrix integration, SMS sender or HTTP route is deployed.** Only the offline evaluator and tests exist.
