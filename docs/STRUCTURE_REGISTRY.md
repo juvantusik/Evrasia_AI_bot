@@ -173,7 +173,9 @@ Bitrix MFA хранит нативные секреты и состояние re
 | `V5SiteAccountReader` | OFFLINE TESTED, уникальный EMAIL/LOGIN, блокировки; требует источников политики/MFA |
 | `V5NativeBitrixUserRowSource` | fail-closed guard для runtime ORM field map; возможная неполная ORM-проекция |
 | `V5PdoUserRowSource` | OFFLINE TESTED 28/28 с fake PDO; **физическая схема `b_user` теперь подтверждена**, но live SQL-коннект самого адаптера не проверен |
-| `V5NativeTotpStatus` | OFFLINE TESTED; только безопасное определение состояния нативной MFA; policy fallback пока не реализован |
+| `V5NativeTotpStatus` | OFFLINE TESTED; только безопасное определение состояния нативной MFA |
+| `V5StrictExistingLoginPolicy` | OFFLINE TESTED; запрет при неизвестном лимите/lockout; текущий Bitrix controls-provider ещё не подключён |
+| `V5StrictNoMfaFallbackPolicy` и `V5NativeBitrixGlobalOtpConfig` | OFFLINE TESTED; дополнительное пользовательское разрешение SMS ещё не подключено |
 | V3C native TOTP | offline/staging prototype, не развернут и не заменяет нативный Bitrix |
 | `V5FirstFactorAttemptGatePort`, `V5ExistingLoginPolicyPort`, `V5NoMfaFallbackPolicyPort`, strong-trust provenance | **PENDING реальной реализации / интеграции** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
