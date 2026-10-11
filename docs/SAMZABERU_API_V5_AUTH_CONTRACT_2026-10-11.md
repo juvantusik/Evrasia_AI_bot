@@ -1,8 +1,9 @@
 # SamZaberu mobile — API V5 authorization contract
 
-> Status: **DESIGN DRAFT / ISOLATED GITHUB BRANCH / NOT IMPLEMENTED / NOT DEPLOYED**
+> Status: **ISOLATED OFFLINE COMPONENTS IMPLEMENTED / SITE INTEGRATION PENDING / NOT DEPLOYED**
 >
 > Date: **2026-10-11**
+> **STRUCTURE SOURCE OF TRUTH (2026-10-11):** [docs/STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). All 8 required physical `b_user` columns were confirmed in production DB schema, including `PASSWORD_EXPIRED` and `LOGIN_ATTEMPTS`. Do **not** repeat schema/Bitrix/V4/TOTP/Trusted Device discovery. Static ORM field-map status and the not-deployed V5 state are recorded separately. Earlier sections retain historical checkpoints, but this notice supersedes an older 'schema not verified' statement.
 >
 > Approved product decision: develop a separate API V5 for a future SamZaberu mobile app version. Leave the current V4 API and current mobile app behavior unchanged while V5 is developed and tested.
 >
@@ -283,8 +284,8 @@ Next review must establish the live `Bitrix\Main\UserTable` ORM map fields plus 
 
 ## 20. Bitrix UserTable static field mismatch and safe V5 account source candidate (2026-10-11)
 
-The new read-only operator result on \`evrasia\` is \`FINAL_STATUS=PASS\`: live source guards for unchanged V4 authentication and native MFA passed. The file \`bitrix/modules/main/lib/UserTable.php\` (SHA256 \`e9574a33afa1a592b7f4555ba1f5a5bb54e2fa70f84968360feeb56396e725a4\`) did not reveal \`PASSWORD_EXPIRED\` or \`LOGIN_ATTEMPTS\` in a static field-name search, although the standard Bitrix login PHP source uses those identifiers. This is **not a live ORM metadata check and not a database schema inspection**.
+The new read-only operator result on `evrasia` is `FINAL_STATUS=PASS`: live source guards for unchanged V4 authentication and native MFA passed. The file `bitrix/modules/main/lib/UserTable.php` (SHA256 `e9574a33afa1a592b7f4555ba1f5a5bb54e2fa70f84968360feeb56396e725a4`) did not reveal `PASSWORD_EXPIRED` or `LOGIN_ATTEMPTS` in a static field-name search, although the standard Bitrix login PHP source uses those identifiers. This is **not a live ORM metadata check and not a database schema inspection**.
 
-Changed \`site-integration/samzaberu-v5/src/V5SiteAccountReader.php\` (branch only) to **refuse the native ORM query** when the required fields are missing from the runtime ORM entity field map. Expanded its offline test to **94/94 PASS**. Added \`src/V5PdoUserRowSource.php\` as an alternative parameterized, two-result-limit SQL **candidate**, and \`tests/V5PdoUserRowSourceTest.php\` (**28/28 PASS** with mocked PDO, no DB connection). All four GitHub blobs were matched to the locally tested bytes. This minimizes changes to the existing V5 login workflow.
+Changed `site-integration/samzaberu-v5/src/V5SiteAccountReader.php` (branch only) to **refuse the native ORM query** when the required fields are missing from the runtime ORM entity field map. Expanded its offline test to **94/94 PASS**. Added `src/V5PdoUserRowSource.php` as an alternative parameterized, two-result-limit SQL **candidate**, and `tests/V5PdoUserRowSourceTest.php` (**28/28 PASS** with mocked PDO, no DB connection). All four GitHub blobs were matched to the locally tested bytes. This minimizes changes to the existing V5 login workflow.
 
-Next gate: prove which \`b_user\` columns physically exist via a schema-only, read-only query on the correct database, then verify native user login/lockout policy semantics without mutating source or records. The ORM guard and new SQL provider are not deployed, and they do not establish that production database access will succeed. Do not bypass any blocked/expired/unknown account state. The V5 HTTP router remains disabled (503); V4 and production unchanged.
+**SUPERSEDED BY 2026-10-11 SCHEMA CHECK:** all 8 `b_user` columns are now verified in the production physical schema (`MISSING_COLUMN_COUNT=0`, `FINAL_STATUS=PASS`, no user records read). The ORM guard and new SQL provider remain not deployed; ORM runtime map and real PDO account-query execution are still unverified. Next gate is live login/lockout policy semantics, not another general table inventory. Do not bypass any blocked/expired/unknown account state. The V5 HTTP router remains disabled (503); V4 and production unchanged.
