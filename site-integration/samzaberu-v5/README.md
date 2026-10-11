@@ -1,5 +1,7 @@
 # SamZaberu V5 — isolated site integration prototype
 
+> **STRUCTURES / SOURCE OF TRUTH — 2026-10-11:** [docs/STRUCTURE_REGISTRY.md](../../../docs/STRUCTURE_REGISTRY.md). The eight required **physical** `b_user` columns are verified in production metadata; no account rows were read. Runtime ORM map / real SQL use and login-policy integration remain pending. V5 is not deployed. Reuse verified Bitrix/V4/TOTP/Trusted Device structure rather than repeating full diagnostics.
+
 **Status:** offline-tested V5 policy and JSON-handler components only. **No live V5 HTTP endpoint, Bitrix integration, JWT issuance, SMS send, database migration or production deployment exists yet.** This directory is deliberately independent of the running Evrasia bot and website.
 
 ## Current files
@@ -163,17 +165,17 @@ Implemented in this **isolated GitHub branch only**:
 
 ## 2026-10-11 — V5 account source compatibility checkpoint (ORM fields)
 
-Operator read-only inspection on \`evrasia\` returned \`FINAL_STATUS=PASS\` without running Bitrix or querying the database. Exact production source \`bitrix/modules/main/lib/UserTable.php\` SHA256 was \`e9574a33afa1a592b7f4555ba1f5a5bb54e2fa70f84968360feeb56396e725a4\`. Its static text contained \`ID\`, \`LOGIN\`, \`EMAIL\`, \`PASSWORD\`, \`ACTIVE\`, \`BLOCKED\`, but did **not** contain \`PASSWORD_EXPIRED\` or \`LOGIN_ATTEMPTS\`. The legacy PHP login source contains the latter tokens. **A source-text absence is not proof of physical DB or runtime ORM field absence.** The production \`b_user\` schema is not yet verified.
+Operator read-only inspection on `evrasia` returned `FINAL_STATUS=PASS` without running Bitrix or querying the database. Exact production source `bitrix/modules/main/lib/UserTable.php` SHA256 was `e9574a33afa1a592b7f4555ba1f5a5bb54e2fa70f84968360feeb56396e725a4`. Its static text contained `ID`, `LOGIN`, `EMAIL`, `PASSWORD`, `ACTIVE`, `BLOCKED`, but did **not** contain `PASSWORD_EXPIRED` or `LOGIN_ATTEMPTS`. The legacy PHP login source contains the latter tokens. **A source-text absence is not proof of physical DB or runtime ORM field absence.** **SUPERSEDED 2026-10-11:** the production physical `b_user` schema WAS verified: all 8 required columns exist; `MISSING_COLUMN_COUNT=0`, `FINAL_STATUS=PASS`. Runtime ORM field map is still a separate unverified integration detail.
 
 The prior ORM staging candidate incorrectly assumed all eight fields were available. Corrected, without touching V4 or production:
 
-- \`src/V5SiteAccountReader.php\`: the \`V5NativeBitrixUserRowSource\` now inspects the runtime ORM entity map **before issuing its query**; if any required field is unmapped, it throws and cannot silently skip password expiry or failed-login limits. The rest of \`V5SiteAccountReader\` and its fail-closed identity/policy rules are unchanged.
-- \`tests/V5SiteAccountReaderTest.php\`: **94/94 local assertions PASS** on PHP 8.4.24, including a regression where either missing field prevents the ORM query.
-- \`src/V5PdoUserRowSource.php\`: a separate **staging-only** parameterized \`b_user\` SELECT candidate for those columns, restricted to \`EMAIL\` or \`LOGIN\`, returning at most two rows. It accepts an injected PDO connection; it does not open its own DB connection and may only be wired after a real read-only table-schema check.
-- \`tests/V5PdoUserRowSourceTest.php\`: **28/28 local assertions PASS** with mocked PDO (no actual SQL connection). Covers parameter binding, duplicate detection, allowlisted identifiers, error paths and ensuring no blocked-account prefilter.
+- `src/V5SiteAccountReader.php`: the `V5NativeBitrixUserRowSource` now inspects the runtime ORM entity map **before issuing its query**; if any required field is unmapped, it throws and cannot silently skip password expiry or failed-login limits. The rest of `V5SiteAccountReader` and its fail-closed identity/policy rules are unchanged.
+- `tests/V5SiteAccountReaderTest.php`: **94/94 local assertions PASS** on PHP 8.4.24, including a regression where either missing field prevents the ORM query.
+- `src/V5PdoUserRowSource.php`: a separate **staging-only** parameterized `b_user` SELECT candidate for those columns, restricted to `EMAIL` or `LOGIN`, returning at most two rows. It accepts an injected PDO connection; it does not open its own DB connection and may only be wired after a real read-only table-schema check.
+- `tests/V5PdoUserRowSourceTest.php`: **28/28 local assertions PASS** with mocked PDO (no actual SQL connection). Covers parameter binding, duplicate detection, allowlisted identifiers, error paths and ensuring no blocked-account prefilter.
 
 All four locally tested file Git blob hashes were independently matched against files fetched from the GitHub feature branch.
 
-**No proof yet that a live \`PDO\` read from \`b_user\` works**, that the columns exist in the production DB, or that all native Bitrix login policy hooks have been reproduced. It remains a candidate, not an activated adapter. Do not select a provider based on this static diagnostic alone. Next: an operator-run **read-only schema-only** check (column names only; never fetch user records or print DB credentials), then finish the \`V5ExistingLoginPolicyPort\` implementation based on actual site lockout rules.
+**All required `b_user` columns are confirmed in the production DB schema**, but no live PDO account-row read was performed by the V5 candidate, and the native Bitrix login-policy hooks have not yet been integrated. It remains a candidate, not an activated adapter. Do not select a provider based on this static diagnostic alone. Next: finish the `V5ExistingLoginPolicyPort` implementation based on actual site login lockout rules; do NOT rerun schema inventory.
 
-\`api/v5/router.php\` still returns HTTP 503 to every request, V4 is unmodified, and no SMS or JWTs were sent.
+`api/v5/router.php` still returns HTTP 503 to every request, V4 is unmodified, and no SMS or JWTs were sent.
