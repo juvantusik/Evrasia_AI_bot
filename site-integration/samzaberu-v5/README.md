@@ -59,3 +59,12 @@ See `docs/SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md` on this branch.
 - Test with `php site-integration/samzaberu-v5/tests/ChallengeRulesTest.php`.
 
 **No V5 challenge database table, Bitrix integration, SMS sender or HTTP route is deployed.** Only the offline evaluator and tests exist.
+
+## 2026-10-11 — fail-closed V5 HTTP router scaffold
+
+- `src/V5RouteMap.php`: five proposed V5 POST routes in an isolated registry.
+- `api/v5/router.php`: a **disabled-by-default offline scaffold**; it responds with HTTP 503 `{"error":"v5_unavailable"}`. Even if its explicit readiness flag is set, registered route callbacks **still return HTTP 503**. No client can log in through this scaffold, and it must **not** be copied to production yet.
+- `tests/V5RouteMapTest.php`: registry test. Offline PHP 8.4.24 checks passed, including syntax checks and disabled-router CLI smoke test. Source repository files were verified after commit.
+- Site-specific rewrite/bootstrap integration remains **pending**: the latest server paste replayed the V4 entrypoint inspection; it did not contain the requested `api/v4/.htaccess` rewrite-target output.
+
+There is **no live V5 handler**, no JWT issuer, no TOTP/SMS verifier, no SMS send and no challenge DB persistence. This step only establishes a safe, version-separated routing structure.
