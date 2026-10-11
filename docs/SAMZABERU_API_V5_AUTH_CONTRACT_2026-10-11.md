@@ -191,3 +191,13 @@ This should be controlled per pilot USER_ID before widening the rollout. The ini
 - [ ] Secure V4-to-V5 migration enforcement.
 
 No file/database/route changes on website production are authorized or implied by this document.
+
+## 10. Isolated V5 policy prototype (2026-10-11)
+
+First implementation increment is committed to the isolated GitHub branch `feature/samzaberu-api-v5-auth-contract` in `site-integration/samzaberu-v5/`:
+
+- `src/AuthDecision.php` — PHP native type-safe factor selector (DENY, native TOTP, approved trust, SMS).
+- `tests/AuthDecisionTest.php` — 32/32 exhaustive truth-table cases passed locally on PHP 8.4; PHP lint passed; code targets PHP >=8.2.
+- `README.md` — explicit integration boundaries and fail-closed requirements.
+
+**Important:** this is testable pure code, **not** a website controller/router and **not deployed**. It does not create JWT, send SMS or access a DB. Integration still requires the live `api/v4/router.php` and `JwtAuthorization` behavior to be inspected. V4, production website and Bitrix core remain unchanged.
