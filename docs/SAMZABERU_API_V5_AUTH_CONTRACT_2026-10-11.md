@@ -256,3 +256,10 @@ Added to `feature/samzaberu-api-v5-auth-contract` (no production deployment):
 No production Bitrix session or user table was touched. The backend interfaces deliberately require implementations that prove the password **without creating a Bitrix session**, verify the **existing** native TOTP with replay protection, use a transactional/atomic OTP challenge store and SMS quotas, validate both trust cryptography **and** prior MFA enrollment, and issue **separate V5** JWT sessions with server-side assurance checks.
 
 **Remaining before live pilot:** actual Bitrix adapter methods based on current site version; atomic challenge persistence; SMS integration and global budgets; V5 JWT access/refresh signing, independent keys and server-verifiable assurance; Apache/Bitrix staging integration and authenticated end-to-end test. All V5 router requests still return **HTTP 503**. V4 and production remain untouched.
+
+
+## 16. Pre-existing Bitrix-native TOTP implementation assets — reuse (2026-10-11)
+
+Project history confirms that native Bitrix TOTP code and replay behavior were already studied in read-only audits earlier on 2026-10-11. The V3C prototype includes `NativeTotpVerifierV3C`, `PdoTotpStoreV3C`, a locked-row native candidate, locked identity/version projections, and an offline test harness. The verifier's `verifyAndConsume(Account,code)` contract requires password proof, device binding, strict rate limits and per-user locking; old V3C state tables are **not installed** and those classes are **not live**.
+
+**Accepted next move:** adapt the existing V3C native OTP implementation behind V5's `V5AtomicChallengePort` after checking original source hashes and confirming atomic behavior in staging. Do NOT recreate TOTP secrets/algorithms or claim V3C was deployed. The missing separate prerequisite is a proven Bitrix **password verification method with no PHP session authorization side effect**. Secure SMS challenge storage and V5 JWT issuance remain distinct implementation tasks.
