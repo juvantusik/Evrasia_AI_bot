@@ -177,7 +177,8 @@ Bitrix MFA хранит нативные секреты и состояние re
 | `V5StrictExistingLoginPolicy` | OFFLINE TESTED; запрет при неизвестном лимите/lockout; текущий Bitrix controls-provider ещё не подключён |
 | `V5StrictNoMfaFallbackPolicy` и `V5NativeBitrixGlobalOtpConfig` | OFFLINE TESTED; дополнительное пользовательское разрешение SMS ещё не подключено |
 | V3C native TOTP | offline/staging prototype, не развернут и не заменяет нативный Bitrix |
-| `V5FirstFactorAttemptGatePort`, `V5ExistingLoginPolicyPort`, `V5NoMfaFallbackPolicyPort`, strong-trust provenance | **PENDING реальной реализации / интеграции** |
+| `V5AtomicFirstFactorAttemptGate` и `V5MySqlAttemptWindowStore` | **OFFLINE TESTED 144/144**, staging-only транзакционный кандидат с 4 HMAC-бюджетами; новая таблица **не создана**, реальная MySQL-конкуренция не проверена |
+| `V5CurrentLoginControlsPort`, `V5PerUserSmsEligibilityPort`, strong-trust provenance | **PENDING** достоверных site-side провайдеров и интеграции |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -212,11 +213,20 @@ Bitrix MFA хранит нативные секреты и состояние re
 
 **Следующий реальный шаг:** адаптировать *существующие* настройки/ограничения Bitrix и пользовательскую optional-MFA политику к этим двум интерфейсам с тестированием на staging. Колонки `b_user`, пути V4, методы TOTP и структура MFA уже подтверждены; их не пересматривать без изменения кода или конкретного дефекта. Production/V4/V5-router не затронуты.
 
+
+### 2026-10-11 — четыре атомарных бюджета первого фактора (GitHub-only)
+
+В ветке V5 добавлены `src/V5FirstFactorAttemptGate.php` (70/70 локальных тестов) и `src/V5MySqlAttemptWindowStore.php` (74/74 тестов на fake PDO). Инвариант: запрос на проверку пароля **до поиска пользователя** атомарно резервирует бюджеты по каноническому логину, IP источника, установке приложения и IP+логину. При превышении любого лимита — отказ и откат всех инкрементов. Значения квот не придуманы, будут заданы отдельной конфигурацией. Сырые логин/телефон/IP/device ID в таблицу не передаются: ключи — HMAC-SHA256. IP должен быть получен из серверного доверенного источника, а не подменяемого заголовка.
+
+Проект новой таблицы: `schema/PROPOSED_ev_v5_auth_attempt_windows.sql` (InnoDB; **не запущен ни на staging, ни на production**). Проверки 144/144 проходили в PHP 8.4.24 с искусственными объектами/поддельной PDO; никакого реального MySQL-concurrency E2E, миграции или server-write нет. Нужны согласование квот, секретов, доверенного proxy IP, NTP и безопасного удаления устаревших окон. **SMS-челленджи и их денежные лимиты — отдельная незакрытая работа**.
+
+Это не отменяет необходимость действующих источников `V5CurrentLoginControlsPort` (Bitrix login-policy) и `V5PerUserSmsEligibilityPort` (user/group MFA). Физическая `b_user` 8/8 уже проверена — НЕ исследовать её повторно.
+
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
 1. Проверить **runtime ORM mapping** только если собираемся использовать ORM-источник. После подтверждения физической `b_user` не повторять `information_schema`; SQL-кандидат — отдельный вариант.
-2. Реализовать `V5ExistingLoginPolicyPort` по штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
-3. Реализовать `V5NoMfaFallbackPolicyPort` с текущими глобальными optional/mandatory MFA правилами и учётом деактивации.
+2. Подключить `V5CurrentLoginControlsPort` к реальным штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
+3. Подключить `V5PerUserSmsEligibilityPort` к фактическим глобальным optional/mandatory MFA правилам и учётом деактивации.
 4. Завершить атомарное хранилище challenge, повторное использование кода TOTP между вебом и мобильным каналом, бюджет SMS и серверное определение проверенного телефона.
 5. Подтвердить strong-enrollment provenance Trusted Device, сделать независимые V5 JWT/refresh/assurance и защищённый PIN.
 6. Сделать staging end-to-end; затем отдельный одобренный пилот `USER_ID=880339`. **Никаких production write до отдельного разрешения оператора.**
