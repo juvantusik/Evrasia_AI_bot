@@ -109,4 +109,13 @@ Client response examples (placeholders, **not live API**):
 
 A successful authenticator challenge uses `"challenge_type":"totp"`. The first response contains no access or refresh token. Only after verified MFA/strong trust may an authenticated response contain `access_token`, `refresh_token`, and optionally `trusted_device`.
 
-Next dependency: **focused read-only inspection of Bitrix's password-hash verification API and native TOTP verification/replay API** on `evrasia`. Do not use `CUser->Login()` as password proof unless it can be demonstrated not to authorize the current PHP session. Then implement site adapters, transactional challenge store, SMS budget reserve and V5 JWT issuer in a non-production environment.
+Next dependency: verify a **non-authorizing Bitrix password proof mechanism** for the actual site version, then adapt the already-staged V3C native TOTP verifier to the V5 atomic challenge port; do not reimplement or repeat the completed native TOTP static audits. Implement challenge storage, SMS budget reserve, and V5 JWT issuer in a non-production environment. Do not use `CUser->Login()` as password proof unless it can be demonstrated not to authorize the current PHP session.
+
+
+### Reuse existing native Bitrix TOTP V3C stage — do not redo
+
+Earlier project work on 2026-10-11 already prepared and statically checked the **offline** `NativeTotpVerifierV3C`, `PdoTotpStoreV3C`, native Bitrix locked-row candidate, canonical identity projection, credential marker and version-proof pieces, and a non-production E2E harness candidate. The relevant Bitrix OTP algorithm and replay-state code was previously inspected against then-current SHA baselines.
+
+The V3C verifier exposes `verifyAndConsume(Account, code): bool` and explicitly requires a password-proven user, device binding, rate limiting and shared per-user mutex. The V3C state table was **not** created, and the V3C verifier was **not** deployed. The new V5 `V5AtomicChallengePort` is the integration boundary to **reuse that existing candidate**, after checking that its staged files still exist, match the recorded hashes, and pass updated integration/transaction tests. Do NOT bypass existing native Bitrix anti-replay protection, do NOT call the V3C provider directly with an untrusted `user_id`, and do NOT assert production readiness based on static analysis alone.
+
+Native TOTP work is NOT a fresh design task. The actual remaining implementation gaps are a verified non-authorizing Bitrix password proof, durable challenge state + SMS quotas, proof-bound session persistence and independent V5 JWT signing/refresh, and live staging integration.
