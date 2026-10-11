@@ -149,3 +149,13 @@ Implemented in this **isolated GitHub branch only**:
 **Still missing:** operational implementations of `V5NativeTotpStatusPort` and `V5ExistingLoginPolicyPort`, atomic rate limiting, and the challenge/JWT service integrations. `PASSWORD_EXPIRED` and `LOGIN_ATTEMPTS` must be reconciled with the *live* Bitrix policy, including currently configured lockout thresholds. The V4 optional explicit login `type` flag is not in the current V5 JSON contract; V5 follows V4's default `@`-based branch.
 
 **Deployment remains OFF:** production, Bitrix DB, V4 and the disabled V5 router are unchanged; no real user records, SMS or JWTs were accessed.
+
+
+## 2026-10-11 — conservative Bitrix MFA status source
+
+- New `src/V5NativeTotpStatus.php`: a guarded native `Bitrix\Security\Mfa\UserTable` **staging candidate**, using fresh `b_sec_user` ORM rows (not cached `Otp::getByUser()`), an injected site-level `V5NoMfaFallbackPolicyPort`, and explicit tri-state treatment. Active valid TOTP returns `true`; a truly absent MFA row returns `false` **only if** mandatory-MFA policy explicitly confirms that password plus SMS is allowed. Any inactive, temporarily deactivated, malformed, incompatible or unavailable factor returns unknown/rejection, not SMS fallback.
+- New `tests/V5NativeTotpStatusTest.php`: **63/63 offline assertions PASS** with PHP 8.4.24, using a stub of the existing V5 status interface and a synthetic Bitrix ORM source. Both committed Git blobs match the locally linted/tested bytes. No site DB connection, native OTP secret or real account was used.
+- **Not a production-ready provider.** The `V5NoMfaFallbackPolicyPort` has no real implementation. The live Bitrix MFA mandatory/skip/deactivation rules and ORM bootstrap require staging confirmation. The existing V3C challenge-side anti-replay protection remains authoritative; this source is only an initial factor-selection signal. Recheck the current MFA state under appropriate locks before any challenge consumption or JWT.
+- A temporarily disabled, manually disabled or unsupported configured OTP row currently **denies login** rather than silently downgrading to SMS. If product policy should allow a recovery path, design a separate verified recovery flow; do not equate inactive OTP with 'no 2FA'.
+
+**Operational state:** all V5 routes remain HTTP 503; no production code, database, SMS or session was modified. Next narrow site read-only check: confirm the `Bitrix\Main\UserTable` ORM map includes all selected user columns and identify the actual site policy/lockout entrypoint, without running Bitrix bootstrap or reading account rows.
