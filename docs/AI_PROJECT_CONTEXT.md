@@ -1,5 +1,8 @@
 # Evrasia AI Bot — AI Project Context
 
+> **СВЕЖИЙ ТЕХНИЧЕСКИЙ КОНТЕКСТ (2026-10-11):** перед работой с сайтом Bitrix / SamZaberu auth V4/V5 сначала открыть [единый реестр структур](STRUCTURE_REGISTRY.md). В нём **production DB VERIFIED** 8/8 столбцов `b_user`; известно отличие физической схемы от статического поиска в `Bitrix\Main\UserTable.php`; зафиксированы V4, native TOTP, Trusted Device и граница GitHub-only V5. Это дополнение не означает новый deploy Anti-Fraud. Не перезапускать уже подтверждённые read-only исследования без реального изменения источника/схемы или конкретного интеграционного пробела.
+
+
 > Operational source of truth for continuing Evrasia AI Bot work across chats.
 >
 > **Last updated:** 2026-10-03
