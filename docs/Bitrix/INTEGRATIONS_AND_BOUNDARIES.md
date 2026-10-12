@@ -35,6 +35,18 @@
 - Наличие web-site TOTP pilot **не означает**, что mobile V4 уже требует TOTP.
 - Не менять bonus PIN, веб-JWT или logout косвенно через V3C без отдельной согласованной интеграционной спецификации.
 
+## 3A. СамЗаберу API V5 — новая отдельная feature-ветка (2026-10-12)
+
+**GitHub-only / NOT DEPLOYED / HTTP 503 fail-closed.** Это не переименование уже изолированно испытанного V3C. [Актуальная точка V5](V5_AUTH_HANDOFF_2026-10-12.md) и её собственная feature-ветка `feature/samzaberu-api-v5-auth-contract`.
+
+- Бизнес-правило: TOTP включён → требуется authenticator code; иначе только сильный MFA-backed Trusted Device может заменить SMS; в остальных случаях SMS challenge идёт на подтверждённый **сервером** телефон, без поля для ввода номера. После полной MFA-проверки бонусный PIN доступен без новой SMS.
+- SMS бюджет/лимиты, outbox, native Bitrix locked eligibility и security versions существуют как предложенный код с **отдельными fake/offline tests**, но не как действующий V5 HTTP login.
+- Ключевое отличие от V3C: реальная Bitrix ORM использует `MysqliConnection`; новый `V5BitrixPdoCompatibilityBridge` — SQL-фасад поверх того же native connection, **не PDO с server-prepared statements**. Требуется доказательство нулевой native transaction depth, владения текущей транзакцией и единого rollback; 62/62 fake staging-permit tests не являются production evidence.
+- Все 10 native изменений MFA/пароля/телефона/recovery/agent/logout должны атомарно согласоваться с `AUTH_EPOCH`. Нативные хуки и production SQL миграции **не установлены**.
+- Следующее действие по V5 на момент snapshot: разбор stdout исходниковой read-only диагностики `v5_native_depth_readonly.sh`; не повторять E2E V3C и не включать V5 без отдельных staging/production gates.
+
+**При переходе в новый чат явно выбирать активное направление — V3C или V5.** Общие нормативные требования сохраняются, но исходники, статусы, тесты и следующие шаги у них разные.
+
 ## 4. СамЗаберу Trusted Device — уже production
 
 **2026-09-24: PRODUCTION / END-TO-END ACCEPTED.** Контракт клиента: `sz_` + 64 lowercase hex, всего 67 символов. Сайт вычисляет SHA-256 **всего значения, включая `sz_`**, чтобы получить 64-hex opaque identity для существующего общего Trusted Device service; этот сервис повторно хеширует его при хранении. Подтверждён путь:
