@@ -1,5 +1,9 @@
 # Evrasia AI Bot — Current Project Checkpoint
 
+
+> **АКТУАЛЬНАЯ ТОЧКА ПРОДОЛЖЕНИЯ SamZaberu API V5 (2026-10-12):** [`SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md). Новый чат должен начинаться **с разбора вывода** read-only `v5_native_depth_readonly.sh` (три закреплённых исходника Bitrix `Connection/MysqlCommonConnection/MysqliConnection`). Последняя GitHub-only реализация — `V5StagingNativeTransactionPermit`, **62/62 синтетических PASS**, но trusted `V5VerifiedNativeTransactionDepthPort` отсутствует и настоящий staging MySQL/Bitrix E2E ещё не проходил. `feature/samzaberu-api-v5-auth-contract` — рабочая ветка, `main` — production history/registry. **Production/V4 не менялись, V5 HTTP 503; никаких DDL, SMS и Bitrix hooks.** Для V5 это дополнение **новее** прежнего `2026-10-11` addendum и исторических TOTP-разделов.
+
+
 > **Authoritative continuation checkpoint.**
 >
 > Updated: **2026-10-03** after PR #73 production deployment/browser acceptance and permanent nginx startup-race mitigation. Older sections are retained for history and may describe earlier rollout states.
