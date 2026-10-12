@@ -179,7 +179,8 @@ Bitrix MFA хранит нативные секреты и состояние re
 | V3C native TOTP | offline/staging prototype, не развернут и не заменяет нативный Bitrix |
 | `V5AtomicFirstFactorAttemptGate` и `V5MySqlAttemptWindowStore` | **OFFLINE TESTED 144/144**, staging-only транзакционный кандидат с 4 HMAC-бюджетами; новая таблица **не создана**, реальная MySQL-конкуренция не проверена |
 | `V5CurrentLoginControlsPort`, `V5PerUserSmsEligibilityPort`, strong-trust provenance | **PENDING** достоверных site-side провайдеров и интеграции |
-| `V5SmsDispatchBudget` и `V5SmsBudgetPolicy` | **OFFLINE TESTED 111/111**, десять HMAC-квот включая общий денежный резерв; verified-phone/pricing sources и атомарный outbox **PENDING** |
+| `V5SmsDispatchBudget` и `V5SmsBudgetPolicy` | **OFFLINE TESTED 111/111**, десять HMAC-квот включая общий денежный резерв; verified-phone/pricing sources **PENDING** |
+| `V5MySqlSmsOutbox`, `V5SodiumSmsMessageFactory` | **OFFLINE TESTED 123/123** (fake PDO); три новых InnoDB-таблицы **только DDL proposal**; живой Bitrix policy, SMS-worker и реальный MySQL E2E **PENDING** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -243,12 +244,24 @@ Bitrix MFA хранит нативные секреты и состояние re
 
 **Детальный контракт:** `docs/SAMZABERU_V5_SMS_SEND_GUARDS_2026-10-11.md` в feature-ветке. Прежде чем запускать, проверить тариф/идемпотентность реального SMS-провайдера; не исследовать заново `b_user`, V4, TOTP и Trusted Device.
 
+
+
+### 2026-10-12 — транзакционный SMS-outbox V5: готов офлайн-кандидат, НЕ production
+
+На GitHub-ветке `feature/samzaberu-api-v5-auth-contract` создан `site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php` — candidate-реализация `V5AtomicSmsOutboxPort`, которая при условии работающего InnoDB должна **в одной транзакции** заблокировать существующий парольный pending SMS challenge, проверить HMAC-привязку устройства, TTL/предел 5 ошибок/cooldown 60 сек/≤3 отправок, запросить обязательную перепроверку состояния аккаунта/2FA/подтверждённого телефона **под теми же DB-locks**, зарезервировать 10 HMAC/SMS/денежных квот, обновить HMAC нового шестизначного кода и создать зашифрованную XChaCha20-Poly1305 outbox-запись с фиксированным provider-idempotency ID. При отказе последней денежной квоты откатываются предыдущие 9 обновлений.
+
+**OFFLINE TESTED 123/123 PASS** на PHP 8.4.24 с имитацией PDO. Исходник, тест и SQL побайтово сверены с GitHub. Схема `schema/PROPOSED_ev_v5_sms_challenge_outbox.sql` описывает три **новые, не созданные** таблицы: `ev_v5_auth_challenges`, `ev_v5_sms_budget_windows`, `ev_v5_sms_outbox`. Это **предложение**, не заявление о существующей DB-структуре production. Локально проверено наличие всех используемых полей в DDL, но не запускалась SQL-миграция и настоящий MySQL-конкурентный E2E.
+
+**Ещё НЕ реализованы:** доверенный `V5SmsLockedEligibilityPort` на Bitrix/verified-phone/epoch с блокировкой строк; создание password-proven challenge; SMS code verify/consume; проверенный провайдер/тариф, dispatcher с перепроверкой `current_delivery_id` и phone stamp + безопасной идемпотентностью; V5 JWT/бонусный PIN. Сам outbox не отправляет SMS и не выдаёт JWT. ИСТОРИЧЕСКИЕ пометки «транзакционный outbox ещё не написан» в более ранних разделах заменены этим новым offline-статусом, но deployment **НЕ** подтверждён.
+
+Первоисточник: `docs/SAMZABERU_V5_SMS_SEND_GUARDS_2026-10-11.md` (`5 от 2026-10-12) в feature-ветке. Новые команды для production не требуются; не повторять исследование уже проверенных таблиц Bitrix.
+
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
 1. Проверить **runtime ORM mapping** только если собираемся использовать ORM-источник. После подтверждения физической `b_user` не повторять `information_schema`; SQL-кандидат — отдельный вариант.
 2. Подключить `V5CurrentLoginControlsPort` к реальным штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
 3. Подключить `V5PerUserSmsEligibilityPort` к фактическим глобальным optional/mandatory MFA правилам и учётом деактивации.
-4. Завершить атомарное хранилище challenge и SMS-outbox, reuse Bitrix V3C TOTP с общим anti-replay, подключить десять рассчитанных SMS-квот к транзакционной БД, тарифу провайдера и серверному подтверждённому телефону.
+4. Подключить staged `V5MySqlSmsOutbox` к реальному verified-phone/Bitrix MFA/epoch locked-source и challenge creator, проверить новые таблицы и конкурентный resend на изолированном staging; затем подтверждённый SMS-тариф/отправитель и atomic code consume. Reuse V3C для native TOTP anti-replay, без нового аудита схем.
 5. Подтвердить strong-enrollment provenance Trusted Device, сделать независимые V5 JWT/refresh/assurance и защищённый PIN.
 6. Сделать staging end-to-end; затем отдельный одобренный пилот `USER_ID=880339`. **Никаких production write до отдельного разрешения оператора.**
 
