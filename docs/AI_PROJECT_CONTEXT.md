@@ -1,5 +1,9 @@
 # Evrasia AI Bot — AI Project Context
 
+
+> **ПЕРЕХОД В НОВЫЙ ЧАТ — текущий SamZaberu V5 checkpoint 2026-10-12:** [`SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md). Если первое сообщение пользователя — stdout `v5_native_depth_readonly.sh` с `SOURCE=Connection` и `TRANSACTION_RELATED_VARIABLES`, продолжать **не с нуля**, а с анализа внутренней глубины native Bitrix Mysqli transaction. Изолированный `V5StagingNativeTransactionPermit` (source blob `097a8dbd0e627a7cfbe7eedfcd9c207619b1a992`) проверен только на fake Bitrix (`62/62 PASS`); native depth port **не реализован**. `V5 HTTP=503`; никакого Bitrix runtime staging E2E/deployment, миграций, SMS, production writes. Старые Anti-Fraud production checkpoints остаются отдельными задачами.
+
+
 > **СВЕЖИЙ ТЕХНИЧЕСКИЙ КОНТЕКСТ (2026-10-11):** перед работой с сайтом Bitrix / SamZaberu auth V4/V5 сначала открыть [единый реестр структур](STRUCTURE_REGISTRY.md). В нём **production DB VERIFIED** 8/8 столбцов `b_user`; известно отличие физической схемы от статического поиска в `Bitrix\Main\UserTable.php`; зафиксированы V4, native TOTP, Trusted Device и граница GitHub-only V5. Это дополнение не означает новый deploy Anti-Fraud. Не перезапускать уже подтверждённые read-only исследования без реального изменения источника/схемы или конкретного интеграционного пробела.
 
 
