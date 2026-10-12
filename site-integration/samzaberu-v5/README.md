@@ -316,3 +316,36 @@ Even real native ORM rollback PASS is only *one* acceptance gate:
 the trusted `V5NativeBitrixExclusiveTransactionPermitPort` and complete
 native 10-path MFA/security AUTH_EPOCH/verified-phone hooks are still
 unimplemented and cannot be bypassed. V5 remains 503 and V4/prod unchanged.
+
+
+
+## 2026-10-12 — strict staging-only native transaction preflight (62/62 offline)
+
+`src/V5StagingNativeTransactionPermit.php` is a CLI-only, **nonproduction**
+candidate for the previously missing `V5NativeBitrixExclusiveTransactionPermitPort`.
+Before the existing `V5BitrixPdoCompatibilityBridge` may call
+`startTransaction()`, this guard requires an explicit isolated staging
+acknowledgement, canonical nonprod root/app host, the exact
+`evrasia_v5_test_*` DB schema and nonprod server host, the SAME
+`Application::getConnection()` instance, **two identical** read-only
+MySQL-session snapshots (database, server, connection ID, autocommit=1,
+in_transaction=0), AND an independently verified internal Bitrix
+transaction nesting depth of zero both times.
+
+**IMPORTANT:** `V5VerifiedNativeTransactionDepthPort` remains a trusted
+**unimplemented site dependency** — no default that returns zero is
+provided. Hence no real deployment/HTTP authorization is possible from
+this alone. The guard does NOT write to MySQL or begin a transaction.
+
+`tests/V5StagingNativeTransactionPermitTest.php`: **62/62 synthetic assertions
+PASS** on PHP 8.4.24; fake Bitrix/MySQL/depth only. Tested host/root/schema/
+transaction/connection-change denials, SQL failure and strict connection IDs.
+Source/test Git blobs `097a8dbd0e627a7cfbe7eedfcd9c207619b1a992` /
+`0aa6af73091c68733d0a5dcf5e6c224f2bf03bf4` match locally executed
+bytes. Real staging and native depth introspection still PENDING.
+
+Authoritative checkpoint:
+`docs/SAMZABERU_V5_STAGING_TRANSACTION_PERMIT_2026-10-12.md`. The earlier
+Bitrix ORM/native rollback acceptance remains **PREPARED, NOT RUN**,
+native MFA/epoch hook atomicity is unproven, and `api/v5/router.php` is 503.
+Production/V4 and all databases untouched.
