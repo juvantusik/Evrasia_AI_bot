@@ -1,6 +1,7 @@
 # Bitrix — START HERE: переход в новый чат
 
 > **Последняя точка:** 2026-10-11. **Рабочая ветка документации:** `docs/bitrix-v3c-handoff-20261011` (пока PR не объединён в `main`). **Текущая задача:** V3C, защищённая авторизация мобильного приложения **СамЗаберу** через существующий Bitrix. **Ничего не деплоить.**
+> **Обновление 2026-10-12:** в том же Project есть **отдельная, более новая ветка API V5**. Это не продолжение испытания V3C и не production rollout. Если новый чат о V5, начинать с [V5_AUTH_HANDOFF_2026-10-12.md](V5_AUTH_HANDOFF_2026-10-12.md), а затем читать первоисточники feature; последний V5 native-depth read-only diagnostic ещё ожидает операторского вывода.
 
 ## 0. Сначала восстановить правильную рабочую ветку
 
@@ -46,6 +47,7 @@
 
 - **2FA веб-кабинета** уже имеет контролируемый production-пилот и browser-accepted отключение 2026-09-24. Источник: [TOTP_2FA_DESIGN_CHECKPOINT](../TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md), раздел 20. Старый заголовок «PLANNED» в `AI_PROJECT_CONTEXT` относится к первоначальному этапу и **не должен перекрывать** поздний production addendum.
 - **СамЗаберу Trusted Device** уже production/E2E accepted 2026-09-24; не менять существующий конвертер `sz_ + 64hex` ради V3C.
+- **СамЗаберу API V5 (параллельный более новый проект):** текущая GitHub-only реализация и следующий gate описаны в [V5 handoff](V5_AUTH_HANDOFF_2026-10-12.md); не приписывать ей 25/25 изолированных V3C E2E и не считать её deployed.
 - **СамЗаберу legal consents при регистрации**: поправка к ТЗ принята 2026-10-02, но новая pre-JWT registration-фаза **не внедрена**. Не смешивать с V3C.
 - **Anti-Fraud bot**: отдельный production, PR #73 closed/accepted 2026-10-03; текущий GitHub default-branch и production image разные понятия.
 
@@ -61,6 +63,14 @@
 ## 5. Сообщение для нового чата
 
 > Продолжаем единый Project Evrasia AI Bot, ветка **Bitrix / SamZaberu secure auth V3C**. Открой GitHub `juvantusik/Evrasia_AI_bot`, ветку `docs/bitrix-v3c-handoff-20261011` (или `main`, если документация уже merged), прочитай `docs/Bitrix/START_HERE.md`, затем `docs/Bitrix/V3C_SECURE_AUTH_CHECKPOINT_2026-10-11.md`, `docs/Bitrix/V3C_TEST_ACCEPTANCE_2026-10-11.md` и `docs/Bitrix/INTEGRATIONS_AND_BOUNDARIES.md`. Последний проверенный E2E real verifier + real PDO + 8 triggers + original PhoneNormalizer с **синтетическим TOTP-кандидатом: 25/25 PASS, FINAL_RC=0**; MariaDB остановлена/удалена; **V3C НЕ В PRODUCTION**. Не повторяй пройденные проверки, не меняй production. Продолжай с диагностики/безопасной подготовки тестов **реального Bitrix TOTP candidate**; сначала проверь текущие SHA исходников и контракты, выдай следующий один read-only скрипт.
+
+### Если новый чат продолжает API V5, а не V3C
+
+Вместо V3C-пункта выше использовать **[V5_AUTH_HANDOFF_2026-10-12.md](V5_AUTH_HANDOFF_2026-10-12.md)**. Сначала сверить feature HEAD и прочитать документы V5 из `feature/samzaberu-api-v5-auth-contract`: `docs/SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`, `docs/SAMZABERU_V5_STAGING_TRANSACTION_PERMIT_2026-10-12.md`, `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`, затем `site-integration/samzaberu-v5/README.md`. **V5 не deployed, HTTP 503, production/V4 без изменений.** В V5 последний ожидаемый операторский результат — целевой source-only аудит внутренней transaction depth Bitrix. Не трактовать 62/62 fake permit tests как runtime-проверку, не запускать staging/prod запись без доказанной native transaction ownership.
+
+**Готовое сообщение для нового V5-чата:**
+
+> Продолжаем проект Evrasia AI Bot, направление Bitrix / СамЗаберу API V5. В GitHub `juvantusik/Evrasia_AI_bot` открой актуальную ветку `feature/samzaberu-api-v5-auth-contract` и прочитай `docs/SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`, `docs/SAMZABERU_V5_STAGING_TRANSACTION_PERMIT_2026-10-12.md` и `site-integration/samzaberu-v5/README.md`. V5 пока GitHub-only, HTTP 503, нативный transaction depth provider и 10-path MFA epoch atomicity не доказаны. Продолжай с вывода `v5_native_depth_readonly.sh`, если я его прислал; иначе начни с проверки актуального состояния feature и подготовки безопасного read-only анализа. Не повторяй выполненное, production и V4 не меняй.
 
 ## 6. Как поддерживать историю
 
