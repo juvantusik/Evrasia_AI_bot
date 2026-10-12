@@ -349,3 +349,12 @@ Authoritative checkpoint:
 Bitrix ORM/native rollback acceptance remains **PREPARED, NOT RUN**,
 native MFA/epoch hook atomicity is unproven, and `api/v5/router.php` is 503.
 Production/V4 and all databases untouched.
+
+
+## 2026-10-12 — FINAL HANDOFF FOR NEW CHAT (native transaction depth read-only output next)
+
+**Authoritative continuation:** `docs/SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`; keep canonical `docs/STRUCTURE_REGISTRY.md` identical in main + this feature. No more general b_user/V4/TOTP audits.
+
+**Next user operation** is running the exact committed `tests/diagnostics/v5_native_depth_readonly.sh` on the **existing production host `evrasia` in READ_ONLY mode** (NOT any staging writer test). Its Git blob is `5718f64f6eb6256645bffd0d526bb19ab0c0eee4` / file SHA256 `37bb42963c25c72f34430eafb6cc77672d9e550c22d263ce07c1fe3c568265e6`. The Bash syntax, embedded-PHP parser syntax, fake parser input and wrong-host denial were tested locally; the script has **NOT yet run on evrasia**. It verifies SHA of three pinned Bitrix DB source files and extracts **method/transaction nesting metadata only**; no MySQL connection, Bitrix bootstrap, raw source text, secrets, or production mutations.
+
+The operator will paste the **entire output as the FIRST message of the next chat**. The next assistant should immediately analyze `TRANSACTION_RELATED_VARIABLES`, `METHOD=startTransaction/commitTransaction/rollbackTransaction` and source SHA. A script `PASS` is ONLY evidence of successful static inspection; `V5VerifiedNativeTransactionDepthPort` remains NOT IMPLEMENTED. Latest permit source/test **62/62 fake PASS**, real isolated Bitrix/MySQL E2E NOT RUN. Preserve V5 HTTP 503, V4/production unchanged, no live hooks, SMS or DDL.
