@@ -60,3 +60,36 @@ GitHub blob SHA исходника `84aa6072d8f20a6065518b8059de23c3ad9306f0`, �
 5. Затем challenge create/consume, verified-price provider, SMS worker, independent JWT и PIN pilot после отдельного утверждения.
 
 `FINAL_STATUS=OFFLINE_PASS_80_OF_80` · `PRODUCTION_WRITE=NO` · `DATABASE_WRITE=NO` · `BITRIX_BOOTSTRAP=NO` · `SMS_SENT=NO` · `V4_UNCHANGED=YES` · `V5_HTTP=503`.
+
+
+
+## 5. 2026-10-12 — actual Bitrix ORM ↔ native transaction test prepared (not run)
+
+The previous `80/80` assertions were **fake Bitrix runtime** checks and
+did not prove the real ORM/connection transaction boundary. Prepared a
+new **STAGING ONLY** executable:
+`tests/integration/V5BitrixNativeOrmTransactionAcceptance.php` and
+the corresponding proposed test table
+`schema/PROPOSED_ev_v5_native_tx_probe.sql`.
+
+On an explicitly approved and independently isolated
+`evrasia_v5_test_*` Bitrix database, it will verify the exact
+`DataManager::getConnection() === Application::getConnection()` object
+identity, perform synthetic ORM write → native read → rollback and
+native write → ORM read → rollback, and check both rows are gone. The
+guards refuse production hosts/root, unexpected server/schema or
+InnoDB engine, and active transactions; no user/MFA/SMS tables are
+queried or mutated. The test deliberately does **not** create/drop
+the proposed table.
+
+Local PHP 8.4.24 lint **PASS**. A launch without staging environment
+variables was correctly blocked before Bitrix bootstrap / DB access.
+Git blob PHP `4263d2131a2bf67769416da347a486b0c37c6817`
+and DDL `87c7f74eb0e085119e7b7b116afd071b6e83f197` match
+the local verified files. **REAL_MYSQL_E2E=PENDING**. See
+`tests/integration/BITRIX_NATIVE_TRANSACTION_ACCEPTANCE.md`
+for exact operator-only criteria.
+
+Do not infer that `V5NativeBitrixExclusiveTransactionPermitPort`,
+native MFA/phone 10-path security hooks or shared `AUTH_EPOCH` are
+already integrated. No deploy, actual DB migration, SMS or production writes.
