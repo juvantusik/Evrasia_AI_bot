@@ -403,3 +403,26 @@ staging configuration; committed blob identities match local linted source.
 **Not performed:** actual Bitrix/MySQL staging run; SQL schema not applied.
 Native hook atomicity, permit, real verified-phone event proof, challenge
 consume and JWT remain separate unsatisfied gates. V5 router remains 503.
+
+
+
+## 31. Native Bitrix transaction ownership preflight, staging candidate (2026-10-12)
+
+New `src/V5StagingNativeTransactionPermit.php` implements a **strict
+CLI staging-only** `V5NativeBitrixExclusiveTransactionPermitPort` candidate:
+checks authenticated staging context, same Bitrix application connection,
+two consistent MySQL native session snapshots with autocommit=1, no active
+transaction and stable connection ID, and independently proven zero native
+Bitrix nesting depth via `V5VerifiedNativeTransactionDepthPort`.
+
+`tests/V5StagingNativeTransactionPermitTest.php`: **62/62 OFFLINE PASS**
+on PHP 8.4.24 using fake Bitrix/MySQL. The SHA blobs of both GitHub files
+match local tested files. There is no live native-depth provider or runtime
+staging verification, so this gate is NOT a release permit for production
+and it is NOT connected to HTTP. It cannot compensate for missing ten-path
+native MFA/epoch security mutation coverage.
+
+See `docs/SAMZABERU_V5_STAGING_TRANSACTION_PERMIT_2026-10-12.md`. Real
+`Application::getConnection()` behavior, nested transaction bookkeeping,
+and accepted ORM/native rollback remain PENDING. Production, DB, V4
+unchanged; router HTTP 503.
