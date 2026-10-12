@@ -1,0 +1,312 @@
+<?php
+declare(strict_types=1);
+
+namespace Evrasia\Samzaberu\V5;
+
+use PDO;
+use PDOStatement;
+use RuntimeException;
+use Throwable;
+
+/**
+ * REVIEW/STAGING ONLY: evidence that the Bitrix application mysqli connection
+ * is free of ALL other transactional owners at begin time, and that the V5
+ * workflow owns its full scope. A boolean flag or config toggle is NOT proof.
+ * No site/production implementation is installed with this prototype.
+ */
+interface V5NativeBitrixExclusiveTransactionPermitPort
+{
+    public function safeToBeginOn(object $nativeBitrixConnection): ?bool;
+}
+
+/**
+ * Compatibility bridge, deliberately limited to the existing V5 SQL shapes.
+ * It is NOT a native PDO driver or a native server-prepared statement layer.
+ * Positional arguments are encoded by the Bitrix SqlHelper, so the existing
+ * V5MySqlSmsOutbox, V5BitrixLockedSmsEligibility and auth epoch adapter may
+ * all use the SAME physical Application::getConnection() mysqli transaction.
+ *
+ * This implementation makes NO connection or Bitrix bootstrap. Staging-only
+ * until the exact version's SqlHelper/transaction contracts and native MFA
+ * mutation paths have been verified with live isolated MySQL concurrency.
+ */
+final class V5BitrixPdoCompatibilityBridge extends PDO
+{
+    private bool $opened = false;
+    private bool $poisoned = false;
+
+    public function __construct(
+        private object $native,
+        private V5NativeBitrixExclusiveTransactionPermitPort $permit,
+    ) {
+        if (!is_a($native, 'Bitrix\\Main\\DB\\MysqliConnection')
+            || !method_exists($native, 'getSqlHelper')
+            || !method_exists($native, 'query')
+            || !method_exists($native, 'queryExecute')
+            || !method_exists($native, 'getAffectedRowsCount')
+            || !method_exists($native, 'startTransaction')
+            || !method_exists($native, 'commitTransaction')
+            || !method_exists($native, 'rollbackTransaction')
+        ) {
+            throw new RuntimeException('v5_bitrix_native_driver_unavailable');
+        }
+        $helper = $native->getSqlHelper();
+        if (!is_object($helper) || !method_exists($helper, 'forSql')) {
+            throw new RuntimeException('v5_bitrix_sql_helper_unavailable');
+        }
+        $this->assertCurrentApplicationConnection();
+    }
+
+    public function getAttribute(int $attribute): mixed
+    {
+        return match ($attribute) {
+            PDO::ATTR_DRIVER_NAME => 'mysql',
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            default => throw new RuntimeException('v5_bitrix_attribute_unsupported'),
+        };
+    }
+
+    public function inTransaction(): bool
+    {
+        // Only a transaction successfully STARTED by this bridge is owned.
+        // A failed/denied begin MUST NOT cause the caller to roll back a
+        // transaction belonging to an unrelated Bitrix component.
+        return $this->opened;
+    }
+
+    public function beginTransaction(): bool
+    {
+        if ($this->opened || $this->poisoned) {
+            throw new RuntimeException('v5_bitrix_nested_transaction_forbidden');
+        }
+        $this->assertCurrentApplicationConnection();
+        try {
+            if ($this->permit->safeToBeginOn($this->native) !== true) {
+                throw new RuntimeException('v5_bitrix_exclusive_scope_unverified');
+            }
+            $this->native->startTransaction();
+            $this->opened = true;
+            return true;
+        } catch (Throwable) {
+            // Unknown begin outcome: never reuse this connection for V5.
+            $this->poisoned = true;
+            throw new RuntimeException('v5_bitrix_begin_unavailable');
+        }
+    }
+
+    public function commit(): bool
+    {
+        if (!$this->opened || $this->poisoned) {
+            throw new RuntimeException('v5_bitrix_commit_not_owned');
+        }
+        $this->assertCurrentApplicationConnection();
+        try {
+            $this->native->commitTransaction();
+            $this->opened = false;
+            return true;
+        } catch (Throwable) {
+            $this->poisoned = true;
+            throw new RuntimeException('v5_bitrix_commit_uncertain');
+        }
+    }
+
+    public function rollBack(): bool
+    {
+        if (!$this->opened) {
+            // In particular, never roll back somebody else's native tx
+            // after a denied/uncertain begin attempt.
+            throw new RuntimeException('v5_bitrix_rollback_not_owned');
+        }
+        try {
+            $this->assertCurrentApplicationConnection();
+            $this->native->rollbackTransaction();
+            $this->opened = false;
+            // If transaction state was already uncertain, retain a permanent
+            // poison flag: a new authenticated request must use a fresh scope.
+            return true;
+        } catch (Throwable) {
+            $this->poisoned = true;
+            throw new RuntimeException('v5_bitrix_rollback_uncertain');
+        }
+    }
+
+    public function prepare(string $query, array $options = []): PDOStatement|false
+    {
+        if ($options !== []) {
+            throw new RuntimeException('v5_bitrix_prepare_options_forbidden');
+        }
+        if ($this->poisoned) {
+            throw new RuntimeException('v5_bitrix_connection_poisoned');
+        }
+        self::assertStatementAllowed($query);
+        return new V5BitrixEmulatedStatement($this, $query);
+    }
+
+    /** @internal Only the private fixed-SQL statement adapter calls this. */
+    public function runStatement(string $template, array $params): array
+    {
+        if ($this->poisoned) {
+            throw new RuntimeException('v5_bitrix_connection_poisoned');
+        }
+        $this->assertCurrentApplicationConnection();
+        $sql = $this->encodeParameters($template, $params);
+        $isSelect = str_starts_with(ltrim($sql), 'SELECT ');
+        if (!$this->opened && (!$isSelect || str_contains(strtoupper($sql), 'FOR UPDATE'))) {
+            throw new RuntimeException('v5_bitrix_write_or_lock_without_scope');
+        }
+        try {
+            if ($isSelect) {
+                $result = $this->native->query($sql);
+                if (!is_object($result) || !method_exists($result, 'fetch')) {
+                    throw new RuntimeException('Unexpected Bitrix result');
+                }
+                $rows = [];
+                // A bounded read; all V5 reads use a single-row key or LIMIT 2.
+                // The pre-existing V5 SQL uses LIMIT 2/1 for all account reads.
+                // A SELECT lacking a LIMIT is allowed only for constants.
+                for ($i = 0; $i < 3; $i++) {
+                    $row = $result->fetch();
+                    if ($row === false || $row === null) {
+                        break;
+                    }
+                    if (!is_array($row) || $i === 2) {
+                        throw new RuntimeException('Unbounded or invalid native result');
+                    }
+                    $rows[] = $row;
+                }
+                return [$rows, 0];
+            }
+            $this->native->queryExecute($sql);
+            $affected = $this->native->getAffectedRowsCount();
+            if (!is_int($affected) && !(is_string($affected) && ctype_digit($affected))) {
+                throw new RuntimeException('Invalid native affected count');
+            }
+            return [[], (int)$affected];
+        } catch (Throwable) {
+            throw new RuntimeException('v5_bitrix_sql_execution_unavailable');
+        }
+    }
+
+    private function assertCurrentApplicationConnection(): void
+    {
+        if (!class_exists('Bitrix\\Main\\Application')
+            || !method_exists('Bitrix\\Main\\Application', 'getConnection')) {
+            throw new RuntimeException('v5_bitrix_application_unavailable');
+        }
+        try {
+            $current = \Bitrix\Main\Application::getConnection();
+        } catch (Throwable) {
+            throw new RuntimeException('v5_bitrix_application_unavailable');
+        }
+        if ($current !== $this->native) {
+            throw new RuntimeException('v5_bitrix_wrong_connection');
+        }
+    }
+
+    private static function assertStatementAllowed(string $sql): void
+    {
+        if ($sql === '' || strlen($sql) > 8000
+            || str_contains($sql, ';')
+            || str_contains($sql, '--')
+            || str_contains($sql, '/*')
+            || str_contains($sql, '#')
+        ) {
+            throw new RuntimeException('v5_bitrix_sql_shape_forbidden');
+        }
+        if ($sql === 'SELECT UNIX_TIMESTAMP()') {
+            return;
+        }
+        if (preg_match('/\ASELECT\s/i', $sql) === 1) {
+            if (preg_match('/\bFROM\s+(?:information_schema\.TABLES|ev_v5_auth_challenges|ev_v5_sms_budget_windows|ev_v5_sms_outbox|b_user|b_sec_user|b_user_phone_auth|ev_samzaberu_auth_state)\b/i', $sql) !== 1) {
+                throw new RuntimeException('v5_bitrix_select_scope_forbidden');
+            }
+            // Only indexed point reads, no bulk accidental user-data reads.
+            if (preg_match('/\bWHERE\s+(?:(?:TABLE_SCHEMA\s*=\s*DATABASE\(\)\s+AND\s+TABLE_NAME)|(?:USER_ID|ID|challenge_id|bucket_key)\s*=)/i', $sql) !== 1
+                && !str_contains($sql, 'TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?')) {
+                throw new RuntimeException('v5_bitrix_unbounded_select_forbidden');
+            }
+            return;
+        }
+        if (preg_match('/\A(?:INSERT\s+INTO|UPDATE)\s+(?:ev_v5_auth_challenges|ev_v5_sms_budget_windows|ev_v5_sms_outbox|ev_samzaberu_auth_state)\s/i', $sql) !== 1) {
+            throw new RuntimeException('v5_bitrix_write_scope_forbidden');
+        }
+    }
+
+    private function encodeParameters(string $sql, array $params): string
+    {
+        if (substr_count($sql, '?') !== count($params) || count($params) > 24) {
+            throw new RuntimeException('v5_bitrix_parameter_count_invalid');
+        }
+        $helper = $this->native->getSqlHelper();
+        $pieces = explode('?', $sql);
+        $built = array_shift($pieces);
+        foreach ($pieces as $index => $tail) {
+            $value = $params[$index] ?? null;
+            if ($value === null) {
+                $literal = 'NULL';
+            } elseif (is_int($value)) {
+                $literal = (string)$value;
+            } elseif (is_string($value) && strlen($value) <= 1048576
+                && !str_contains($value, "\0")) {
+                $escaped = $helper->forSql($value);
+                if (!is_string($escaped)) {
+                    throw new RuntimeException('v5_bitrix_sql_escaping_unavailable');
+                }
+                $literal = "'" . $escaped . "'";
+            } else {
+                throw new RuntimeException('v5_bitrix_parameter_type_forbidden');
+            }
+            $built .= $literal . $tail;
+        }
+        return $built;
+    }
+}
+
+/** @internal Minimal PDOStatement semantics used by the existing V5 code. */
+final class V5BitrixEmulatedStatement extends PDOStatement
+{
+    /** @var list<array<string,mixed>> */
+    private array $rows = [];
+    private int $offset = 0;
+    private int $affected = 0;
+
+    public function __construct(
+        private V5BitrixPdoCompatibilityBridge $bridge,
+        private string $template,
+    ) {}
+
+    public function execute(?array $params = null): bool
+    {
+        $parameters = $params ?? [];
+        if (!array_is_list($parameters)) {
+            throw new RuntimeException('v5_bitrix_positional_params_required');
+        }
+        [$this->rows, $this->affected] = $this->bridge->runStatement($this->template, $parameters);
+        $this->offset = 0;
+        return true;
+    }
+
+    public function fetch(int $mode = PDO::FETCH_DEFAULT, int $cursorOrientation = PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed
+    {
+        if ($cursorOrientation !== PDO::FETCH_ORI_NEXT || $cursorOffset !== 0
+            || !in_array($mode, [PDO::FETCH_DEFAULT, PDO::FETCH_ASSOC], true)) {
+            throw new RuntimeException('v5_bitrix_fetch_mode_unsupported');
+        }
+        return $this->rows[$this->offset++] ?? false;
+    }
+
+    public function fetchColumn(int $column = 0): mixed
+    {
+        $row = $this->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row)) {
+            return false;
+        }
+        $values = array_values($row);
+        return $values[$column] ?? false;
+    }
+
+    public function rowCount(): int
+    {
+        return $this->affected;
+    }
+}
