@@ -42,3 +42,11 @@
 **Текущий статус:** `NATIVE_HOOKS_PROVEN_ATOMIC=NO`; `V5_NATIVE_COVERAGE_PROVIDER_INSTALLED=NO`; `V3C_AUTH_STATE_TABLE_INSTALLED=NO`; `REAL_MYSQL_CONCURRENCY_E2E=NO`; `V5_HTTP=503`; `V4_UNCHANGED`; `PRODUCTION_WRITE=NO`.
 
 **Следующая рабочая точка:** узко исследовать транзакционную границу конкретных native writer entrypoints (без повторной схемы `b_user`), решить, какой штатный Bitrix transactional connection и hooks можно безопасно разделить с V5/ V3C; затем интеграционный adapter для *всех* десяти потоков, не раньше.
+
+
+
+## 4. Native transport milestone (2026-10-12) — no native event hooks yet
+
+The user provided two successful READ_ONLY source diagnostics: Bitrix settings point to **MYSQLI**, actual `MysqliConnection` source exists at lowercase `lib/db/mysqliconnection.php`, and native parent `Connection` / `MysqlCommonConnection` has `startTransaction/commitTransaction/rollbackTransaction`. The V5 source now includes a staged **same-application-connection compatibility layer** `V5BitrixPdoCompatibilityBridge.php` instead of a separate PDO connection (see `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`). **80/80 offline synthetic assertions PASS.**
+
+**No change to the ten-path compatibility verdict:** V5 native MFA writers/agent have not been shown to hold `b_user` mutex and bump shared `AUTH_EPOCH` in the same physical transaction. The live implementation of `V5NativeBitrixExclusiveTransactionPermitPort` does not exist either. A same-connection bridge alone does **NOT** solve those problems; never set `NATIVE_HOOKS_PROVEN_ATOMIC=YES` or activate V5 from these unit tests. Next: staging runtime Bitrix connection and native event coverage under a single accepted lock discipline.
