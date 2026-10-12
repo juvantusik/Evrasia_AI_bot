@@ -93,3 +93,25 @@ for exact operator-only criteria.
 Do not infer that `V5NativeBitrixExclusiveTransactionPermitPort`,
 native MFA/phone 10-path security hooks or shared `AUTH_EPOCH` are
 already integrated. No deploy, actual DB migration, SMS or production writes.
+
+
+
+## 6. 2026-10-12 — staging-only Bitrix transaction scope preflight (not release authorization)
+
+`src/V5StagingNativeTransactionPermit.php` implements a **CLI-only,
+staging-only** `V5NativeBitrixExclusiveTransactionPermitPort` candidate,
+requiring exact application connection identity, independently known
+**zero** native Bitrix nesting depth and two identical session snapshots
+(`DATABASE()`, `@@hostname`, `CONNECTION_ID()`, `autocommit=1`,
+`in_transaction=0`) under strict non-production guards. Unknown or unsafe
+facts deny. It issues no DML or transaction calls itself.
+
+`V5VerifiedNativeTransactionDepthPort` has **NO actual Bitrix implementation**:
+a SQL-only `@@in_transaction=0` check cannot establish Bitrix ORM's internal
+nesting counter. Never use a synthetic zero-depth provider in a live request.
+`tests/V5StagingNativeTransactionPermitTest.php`: **62/62 OFFLINE PASS**,
+fake runtime; 2 committed blobs match the exact local files.
+
+Full checkpoint `docs/SAMZABERU_V5_STAGING_TRANSACTION_PERMIT_2026-10-12.md`.
+Next: narrow source-backed native transaction-level evidence, then isolated
+staging ORM/native rollback and actual concurrency. No deploy, 503 stays.
