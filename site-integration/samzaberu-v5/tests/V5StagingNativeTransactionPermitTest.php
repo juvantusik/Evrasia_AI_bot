@@ -97,6 +97,10 @@ foreach (['autocommit_value'=>null,'in_transaction_value'=>null,'connection_id'=
  [$gate,$conn,$depth]=fixture();$conn->records=[validRow([$key=>$value])];
  denied(fn()=>$gate->safeToBeginOn($conn),'unknown session field: '.$key);
 }
+foreach ([77.0,' 77','077','0','-1',str_repeat('9',42)] as $badConnectionId) {
+ [$gate,$conn,$depth]=fixture();$conn->records=[validRow(['connection_id'=>$badConnectionId])];
+ denied(fn()=>$gate->safeToBeginOn($conn),'noncanonical connection identifier denied');
+}
 [$gate,$conn,$depth]=fixture();$conn->records=[validRow(),validRow(['connection_id'=>'78'])];
 denied(fn()=>$gate->safeToBeginOn($conn),'connection swap between snapshots denied');
 pass(count($conn->queried)===2,'connection swap detected from second snapshot');
