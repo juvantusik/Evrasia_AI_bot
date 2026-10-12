@@ -102,3 +102,24 @@ not installed; staging SMS/financial quotas, challenge consume, SMS
 provider/idempotency and assured V5 JWT remain outstanding.
 
 The V5 HTTP router still fails closed (503); V4 and production unchanged.
+
+
+### LOCAL SYNTHETIC SMOKE (2026-10-12)
+
+To validate the **acceptance script itself**, it was run with an
+ephemeral local-only fake `Bitrix\Main\Application`,
+`Bitrix\Main\ORM\Data\DataManager` and fake native connection.
+This was **NOT real Bitrix, NOT MariaDB/MySQL** and is not a replacement
+for the staging requirements above.
+
+- `TESTED_DIRECTIONS=2`, `TEST_ROWS_PERSISTED=0`, `FINAL_STATUS=PASS`,
+  `FINAL_RC=0` under the synthetic adapter.
+- With the expected staging database server hostname deliberately
+  mismatched, the script returned `FINAL_STATUS=FAIL`, `FINAL_RC=1`
+  **before any INSERT**.
+- Without explicit environment acknowledgement, the script returned
+  `FINAL_STATUS=FAIL`, `DATABASE_WRITE=NO` before bootstrap.
+- Source file PHP lint **PASS**, exact committed Git blob confirmed.
+
+No fake Bitrix object, synthetic database credential or test source is
+installed on the real website. `REAL_BITRIX_ORM_E2E=NOT_RUN`.
