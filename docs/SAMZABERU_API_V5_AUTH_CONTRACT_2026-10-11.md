@@ -357,3 +357,13 @@ The V5 challenge receives a 64-character HMAC auth token derived from USER_ID, a
 Strict precondition `V5NativeSecurityHookCoveragePort` is **not implemented** for the site: its trusted provider must attest native Bitrix password/MFA activation/reset/recovery/phone verification/logout/block event coverage and shared b_user mutex. The event writer itself only performs CAS increments **inside an existing caller-owned PDO transaction** and assumes native state changes were made in that same transaction. Concurrent MFA enrollment must acquire the same b_user user lock; missing `b_sec_user` row locks alone do not guarantee it. Without this atomic hook coverage, V5 authentication MUST remain disabled.
 
 Offline tests: `V5SecurityEventVersionsTest.php` **84/84**, existing `V5BitrixLockedSmsEligibilityTest.php` **88/88**, total **172/172 PASS** with fake PDO/PHP 8.4.24. Three new committed Git blobs were compared to tested local files. This is not live MySQL or Bitrix integration. Next gate is native hook transaction compatibility and targeted staging concurrency, not rediscovery of `b_user` or OTP structure.
+
+
+
+## 28. Native Bitrix event atomicity compatibility gate — 2026-10-12
+
+Previously planned native V5 `auth_epoch` and verified-phone event writers require an atomic native Bitrix transaction. Already saved source excerpts show `Otp::save()` calls `UserTable::add()`; `Otp::delete()` calls `UserTable::delete()`; a separate `OtpEvents::onRecheckDeactivate()` agent calls `UserTable::update()`; `CSecurityUser::onAfterUserUpdate()` in the audited excerpt only invalidates OTP cache. These are verified paths but **not proof of shared transaction or shared b_user row mutex**, and a post-commit callback cannot ensure atomic epoch rollback. Do NOT wire speculative native hooks or make V5 available.
+
+Added a strict **GitHub-only** `V5NativeMutationCoverage.php` release gate requiring all ten groups of native security mutation, each with source fingerprint, same PDO, b_user lock, same-tx epoch increment, same-tx rollback and real staging race acceptance. `V5TrustedInstalledNativeCoveragePort` remains a missing privileged integration dependency; HTTP-supplied proof or a simple enabled boolean is forbidden. Tests `V5NativeMutationCoverageTest.php`: **60/60 PASS** in local PHP 8.4.24 using fake PDO and synthetic positive proof. This does NOT mean any site-native hook passed.
+
+Detailed matrix and source-backed compatibility findings: `docs/SAMZABERU_V5_NATIVE_MUTATION_COVERAGE_2026-10-12.md`. Before activation, establish the transaction/connection boundary of every native writer and test concurrency against the SMS outbox and V3C epoch. Production/V4 unaffected; V5 still HTTP 503.
