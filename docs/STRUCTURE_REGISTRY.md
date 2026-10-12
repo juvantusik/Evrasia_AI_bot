@@ -183,6 +183,7 @@ Bitrix MFA хранит нативные секреты и состояние re
 | `V5MySqlSmsOutbox`, `V5SodiumSmsMessageFactory` | **OFFLINE TESTED 123/123** (fake PDO); три новых InnoDB-таблицы **только DDL proposal**; живой Bitrix policy, SMS-worker и реальный MySQL E2E **PENDING** |
 | `V5BitrixLockedSmsEligibility`, `V5BitrixVerifiedSmsPhone` | **OFFLINE TESTED 88/88** (fake PDO), реальные таблицы под блокировкой; trusted phone-event version, auth epoch, MFA-lock synchronization и production site policy **PENDING** |
 | `V5SecurityEventVersions`, `V5SecurityEventVersionWriter` | **OFFLINE TESTED 84/84** (fake PDO); общая **не установленная** V3C `ev_samzaberu_auth_state` с `AUTH_EPOCH` + event-version телефона; Bitrix hook coverage, migrations, security-event writes и real MySQL **PENDING** |
+| `V5NativeMutationCoverageMatrix`, `V5StrictNativeSecurityHookCoverage` | **OFFLINE TESTED 60/60**; выпуск V5 невозможен без доказательства транзакционного покрытия 10 путей native security / MFA / phone; site attestation provider и native hook integration **PENDING** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -282,12 +283,23 @@ Bitrix MFA хранит нативные секреты и состояние re
 
 **Следующая точка:** точечно подтвердить совместимость native Bitrix security-event entrypoints с транзакционным обновлением общего `AUTH_EPOCH` и phone event version, затем stage-only интеграция и конкурентный тест «MFA enrolment или повторное подтверждение телефона ↔ SMS enqueue»; не повторять общее изучение таблиц.
 
+
+### 2026-10-12 — native Bitrix MFA event-atomicity GAP: 10-path release gate реализован
+
+Продолжена изолированная V5-ветка без повторных аудитов структур. Из **уже сохранённого production source audit** подтверждены важные независимые нативные пути: `Otp::save()` вызывает `UserTable::add()`; `Otp::delete()` вызывает `UserTable::delete()`; `OtpEvents::onRecheckDeactivate()` отдельно выполняет `UserTable::update()` для автоматического восстановления 2FA; `CSecurityUser::onAfterUserUpdate()` в проверенном участке только очищает cache при смене ACTIVE. **Нет подтверждения, что эти мутации имеют ту же физическую PDO/MySQL транзакцию, общий `b_user FOR UPDATE` и атомарное обновление `AUTH_EPOCH` вместе с native write.** Это не означает, что Bitrix вообще не имеет транзакций: требуется исследовать именно совместимость с V5. Простая регистрация OnAfter*-хука не закрывает race/SMS downgrade.
+
+Добавлен `site-integration/samzaberu-v5/src/V5NativeMutationCoverage.php` с перечислением **10 обязательных** native security paths и fail-closed `V5StrictNativeSecurityHookCoverage`, реализующим существующий `V5NativeSecurityHookCoveragePort`. Для каждого пути нужны SHA реального writer source и доказанные: один PDO, b_user lock до native изменения, AUTH_EPOCH в той же транзакции, общий rollback, реальный staging concurrency acceptance. Если хоть один пропущен/unknown — допуск **запрещён**. Trusted deployment/user coverage evidence должен поступать через `V5TrustedInstalledNativeCoveragePort`; **такого провайдера нет ни в staging, ни в production**, синтетические доказательства не являются основанием для выпуска V5.
+
+`tests/V5NativeMutationCoverageTest.php`: **60/60 PASS**, PHP 8.4.24, синтетический fake PDO и искусственный release attestation; **не live Bitrix E2E**. Новый код и тест побайтово совпадают с GitHub. Ранее готовые 84/88 тестов на auth/phone epochs не заменяют недостающего доказательства штатных writers. Никакие Bitrix hooks или БД не модифицировались. V4 работает как прежде, V5 отвечает 503.
+
+**Новый узкий следующий gate:** по данным уже известного релиза проверить *конкретные native writer transaction boundaries*, включая агент, recovery, телефон и logout; выяснить безопасную общую Bitrix ORM/ PDO транзакционную связку и инвалидацию auth epoch **до commit**. Только после этого staged integration и конкурентные тесты SMS reserve ↔ TOTP enroll/auto-reactivation/phone reconfirm. **Не возвращаться к b_user columns / V4 / TOTP-инвентаризации.** Подробности: `docs/SAMZABERU_V5_NATIVE_MUTATION_COVERAGE_2026-10-12.md`.
+
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
 1. Проверить **runtime ORM mapping** только если собираемся использовать ORM-источник. После подтверждения физической `b_user` не повторять `information_schema`; SQL-кандидат — отдельный вариант.
 2. Подключить `V5CurrentLoginControlsPort` к реальным штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
 3. Подключить `V5PerUserSmsEligibilityPort` к фактическим глобальным optional/mandatory MFA правилам и учётом деактивации.
-4. Подключить новые V3C-совместимые `V5SecurityEventVersions` к **проверенным native Bitrix security hooks с общим b_user lock и PDO transaction**, подготовить доверенный `V5NativeSecurityHookCoveragePort` и проверенную инициализацию auth_state; только затем staging challenge creator / MySQL конкурентный SMS-resend, тарифы/worker/consume и V3C TOTP anti-replay. Структуру b_user повторно не обследовать.
+4. Устранить **подтверждённый пробел доказательств native Bitrix event atomicity**: все 10 потоков из `V5NativeMutationCoverage.php`, включая direct Otp add/delete и background OtpEvents agent, должны получить подтверждённые same-DB-transaction, b_user mutex, AUTH_EPOCH/CAS/rollback и staging concurrency. Только потом зарегистрировать реальные hooks, доверенный release-attestation, инициализировать общий `ev_samzaberu_auth_state`, выполнить isolated staging challenge/ SMS E2E; не менять production и не пересматривать уже проверенную структуру b_user.
 5. Подтвердить strong-enrollment provenance Trusted Device, сделать независимые V5 JWT/refresh/assurance и защищённый PIN.
 6. Сделать staging end-to-end; затем отдельный одобренный пилот `USER_ID=880339`. **Никаких production write до отдельного разрешения оператора.**
 
