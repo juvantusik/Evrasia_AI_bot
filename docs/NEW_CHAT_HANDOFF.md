@@ -1,5 +1,17 @@
 # Evrasia — New Chat Handoff
 
+
+## Точка продолжения V5 — 2026-10-12: вывод следующего скрипта
+
+**Самый актуальный handoff для SamZaberu API V5:** [`docs/SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md). Он **новее** старых Anti-Fraud/TOTP точек в этом файле. Источником структур остаётся [`docs/STRUCTURE_REGISTRY.md`](STRUCTURE_REGISTRY.md). Рабочий код V5 — `feature/samzaberu-api-v5-auth-contract`, НЕ production. На production Bitrix/V4 изменений по этой итерации нет; V5 HTTP 503.
+
+**Если в новом чате пользователь первым сообщением присылает консольный вывод с `SOURCE=Connection`, `SOURCE=MysqlCommonConnection`, `TRANSACTION_RELATED_VARIABLES` и `FINAL_STATUS`, это выход следующей, УЖЕ СОГЛАСОВАННОЙ read-only диагностики** `site-integration/samzaberu-v5/tests/diagnostics/v5_native_depth_readonly.sh`. Не просить пользователя снова описывать проект, не повторять `b_user`/V4/OTP аудиты. Немедленно прочитать checkpoint и **анализировать именно полученный вывод**, особенно native Bitrix `startTransaction`, `commitTransaction`, `rollbackTransaction` и внутреннюю глубину. `PASS` означает только успешную статическую инспекцию, НЕ подтверждённую runtime-транзакцию.
+
+Последняя реализация: `V5StagingNativeTransactionPermit`, **62/62 OFFLINE PASS**, но trusted `V5VerifiedNativeTransactionDepthPort` отсутствует; реальная MySQL/Bitrix staging acceptance не запускалась. Не создавать fake «всегда 0» в production, не подключать V5 к HTTP, не трогать native MFA hooks до доказательства десяти атомарных путей изменения безопасности.
+
+**В этом потоке следующий шаг — обработать stdout последнего script из нового чата.** Остальная история ниже относится к другим/более старым задачам.
+
+
 > **ОБЯЗАТЕЛЬНО ПЕРЕД ДИАГНОСТИКОЙ BITRIX / AUTH / V5 (2026-10-11):** прочитать [docs/STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). Там уже закреплены реальные таблицы `b_user` (8/8), `b_sec_user`, V4, JWT, TOTP V3C, Trusted Device, источники SHA, степень доказанности и запрет повторных широких аудитов. Не начинать новый чат с повторного поиска структур; выяснить только ещё не закрытый интеграционный вопрос. Актуальная работа V5 идёт в `feature/samzaberu-api-v5-auth-contract`, не deployed. Старые описания TOTP ниже читать в свете более нового документа.
 
 
