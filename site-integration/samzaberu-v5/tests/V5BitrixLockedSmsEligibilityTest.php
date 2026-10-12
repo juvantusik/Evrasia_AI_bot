@@ -7,7 +7,7 @@ use Evrasia\Samzaberu\V5\{
   V5BitrixLockedSmsEligibility, V5BitrixVerifiedSmsPhone, V5StrictE164Phone,
   V5SmsPhoneVerificationVersionPort, V5SmsLockedAuthEpochPort,
   V5ExistingLoginPolicyPort, V5NoMfaFallbackPolicyPort,
-  V5SmsQueueReservation, V5VerifiedSmsDestination,
+  V5SmsQueueReservation, V5VerifiedSmsDestination, V5SmsBudgetWindow, V5SmsPriceCeiling,
 };
 
 final class FakeBitrixDb extends PDO {
@@ -105,7 +105,14 @@ function fixture():array {
     $site=new V5BitrixLockedSmsEligibility($login,$mfa,$normal,$version,$epoch);
     return [$site,$reader,$db,$version,$login,$mfa,$epoch];
 }
-function reservation(V5VerifiedSmsDestination $dest): V5SmsQueueReservation {return new V5SmsQueueReservation(41,$dest);}
+function reservation(V5VerifiedSmsDestination $dest): V5SmsQueueReservation {
+    $windows=[];
+    foreach (range(0,9) as $i) {
+        $windows[]=new V5SmsBudgetWindow(str_repeat(dechex($i),64),10000,$i===9?1200:1,1800004800);
+    }
+    return new V5SmsQueueReservation(41,str_repeat('c',64),'sz_'.str_repeat('a',64),'ios',false,
+        $dest,new V5SmsPriceCeiling(1200,'RUB'),$windows);
+}
 function testRequest(): V5SmsQueueReservation {
     return reservation(new V5VerifiedSmsDestination(41,'+79120000000',str_repeat('f',64)));
 }
