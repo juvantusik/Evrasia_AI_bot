@@ -27,31 +27,41 @@ namespace Bitrix\Main\DB {
         public bool $throwRollback=false;
         public bool $throwQuery=false;
         public bool $throwExecute=false;
+        public bool $silentBeginFailure=false;
+        public bool $silentCommitFailure=false;
+        public bool $silentRollbackFailure=false;
+        public bool $silentWriteFailure=false;
         public int $beginCalls=0;
         public int $commitCalls=0;
         public int $rollbackCalls=0;
         private int $affected=0;
         private array $snapshot=[];
         public function getSqlHelper(): FakeSqlHelper { return new FakeSqlHelper(); }
-        public function startTransaction(): void {
+        public function startTransaction(): mixed {
             $this->beginCalls++;
+            if($this->silentBeginFailure)return false;
             if($this->active || $this->throwBegin)throw new \RuntimeException('native begin fault');
             $this->snapshot=[$this->budgets,$this->outbox,$this->challenge];
             $this->active=true;
+            return null;
         }
-        public function commitTransaction():void {
+        public function commitTransaction():mixed {
             $this->commitCalls++;
+            if($this->silentCommitFailure)return false;
             if($this->throwCommit)throw new \RuntimeException('native commit fault');
             if(!$this->active)throw new \RuntimeException('no active tx');
             $this->active=false;
             $this->snapshot=[];
+            return null;
         }
-        public function rollbackTransaction():void {
+        public function rollbackTransaction():mixed {
             $this->rollbackCalls++;
+            if($this->silentRollbackFailure)return false;
             if($this->throwRollback)throw new \RuntimeException('native rollback fault');
             if(!$this->active)throw new \RuntimeException('no active tx');
             [$this->budgets,$this->outbox,$this->challenge]=$this->snapshot;
             $this->active=false;
+            return null;
         }
         public function query(string $sql):FakeResult {
             $this->sql[]=$sql;
@@ -68,8 +78,9 @@ namespace Bitrix\Main\DB {
             }
             throw new \RuntimeException('unexpected fake SQL read');
         }
-        public function queryExecute(string $sql):void {
+        public function queryExecute(string $sql):mixed {
             $this->sql[]=$sql;
+            if($this->silentWriteFailure)return false;
             if(!$this->active || $this->throwExecute)throw new \RuntimeException('native write unavailable');
             $this->affected=0;
             if(str_starts_with($sql,'INSERT INTO ev_v5_sms_budget_windows')) {
@@ -86,6 +97,7 @@ namespace Bitrix\Main\DB {
             } elseif(str_starts_with($sql,'UPDATE ev_v5_auth_challenges')) {
                 $this->challenge['sms_sent_count']='1';$this->affected=1;
             } else throw new \RuntimeException('unexpected fake SQL write');
+            return null;
         }
         public function getAffectedRowsCount():int{return $this->affected;}
     }
@@ -200,6 +212,9 @@ namespace {
     rejects(fn()=>$db->rollBack(),'guard refusal cannot roll back preexisting native transaction');
     ok($native->active,'foreign native transaction remains untouched');
 
+    [$db,$native]=fixture();$native->silentBeginFailure=true;
+    rejects(fn()=>$db->beginTransaction(),'native false begin fails closed');
+    ok(!$db->inTransaction(),'native false begin cannot claim transaction');
     [$db,$native]=fixture();$native->throwBegin=true;
     rejects(fn()=>$db->beginTransaction(),'native begin fault fails closed');
     ok(!$db->inTransaction(),'begin fault does not claim ownership of unknown transaction');
@@ -209,12 +224,22 @@ namespace {
     ok($db->inTransaction(),'uncertain commit poisoned');
     ok($db->rollBack(),'cleanup rollback possible');
     rejects(fn()=>$db->beginTransaction(),'uncertain previous commit cannot be reused');
+    [$db,$native]=fixture();$db->beginTransaction();$native->silentCommitFailure=true;
+    rejects(fn()=>$db->commit(),'native false commit fails closed');
+    ok($db->inTransaction(),'native false commit remains an uncertain transaction');
+    ok($db->rollBack(),'uncertain false commit triggers owned cleanup rollback');
     [$db,$native]=fixture();$db->beginTransaction();$native->throwRollback=true;
     rejects(fn()=>$db->rollBack(),'native rollback failure rejected');
     ok($db->inTransaction(),'uncertain rollback remains poisoned');
+    [$db,$native]=fixture();$db->beginTransaction();$native->silentRollbackFailure=true;
+    rejects(fn()=>$db->rollBack(),'native false rollback fails closed');
+    ok($db->inTransaction(),'native false rollback leaves bridge poisoned');
     [$db,$native]=fixture();$native->throwQuery=true;
     $q=$db->prepare('SELECT UNIX_TIMESTAMP()');
     rejects(fn()=>$q->execute([]),'native SELECT exception fails closed');
+    [$db,$native]=fixture();$db->beginTransaction();$native->silentWriteFailure=true;
+    rejects(fn()=>$db->prepare('INSERT INTO ev_v5_sms_outbox (delivery_id) VALUES (?)')->execute([$key]),'native false SQL write fails closed');
+    ok($db->rollBack(),'native false SQL write requires rollback');
     [$db,$native]=fixture();$db->beginTransaction();$native->throwExecute=true;
     $q=$db->prepare('INSERT INTO ev_v5_sms_outbox (delivery_id) VALUES (?)');
     rejects(fn()=>$q->execute([$key]),'native write exception fails closed');
