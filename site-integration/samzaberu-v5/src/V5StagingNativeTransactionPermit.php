@@ -110,7 +110,14 @@ final readonly class V5StagingNativeTransactionPermit implements V5NativeBitrixE
         ) {
             return null;
         }
-        $id = filter_var($row['connection_id'] ?? null, FILTER_VALIDATE_INT,
+        $rawConnectionId = $row['connection_id'] ?? null;
+        if (!(is_int($rawConnectionId) && $rawConnectionId >= 1)
+            && !(is_string($rawConnectionId)
+                && preg_match('/\A[1-9][0-9]*\z/D', $rawConnectionId) === 1)
+        ) {
+            return null;
+        }
+        $id = filter_var($rawConnectionId, FILTER_VALIDATE_INT,
             ['options' => ['min_range' => 1]]);
         if ($id === false) {
             return null;
