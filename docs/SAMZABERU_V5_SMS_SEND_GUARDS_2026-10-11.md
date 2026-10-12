@@ -112,3 +112,13 @@
 **Что НЕ сделано:** Bitrix event adapters/hooks, доказательство lock+commit совместимости с нативным ядром, инициализация строк и миграция `ev_samzaberu_auth_state`, live MySQL/staging E2E, подтверждённая нормализация реального телефона, atomic challenge creator и SMS code consume. Не включать V5 по наличию одного лишь модуля. Следующий этап: **узко проверить уже известные entrypoints native security events на возможность общего transaction/lock**, затем добавить минимальную hook-интеграцию в staging и выполнить конкурентный тест enrollment/reconfirm vs SMS enqueue. Повторный аудит существующей физической `b_user`/V4/OTP схемы не нужен.
 
 **PRODUCTION_WRITE=NO · BITRIX_HOOKS_INSTALLED=NO · V5_HTTP=503 · SMS_SENT=NO.**
+
+
+
+## 8. 2026-10-12 — native Bitrix event atomicity: DO NOT activate hooks blindly
+
+Archived read-only source confirms that `Otp::save()` uses `UserTable::add()`, `Otp::delete()` uses `UserTable::delete()`, the native background `OtpEvents::onRecheckDeactivate()` uses `UserTable::update()`, and the inspected `CSecurityUser::onAfterUserUpdate()` only clears native MFA cache. None of these excerpts **proves** a V5-owned PDO transaction + initial b_user lock + atomic `AUTH_EPOCH` update. Registering a post-event handler cannot be equated with shared-commit safety. This is a blocking compatibility gap, not a justification to modify native Bitrix core without proof.
+
+Added `src/V5NativeMutationCoverage.php`: a **10-path fail-closed release guard** for password/lockout/logout, native MFA save/delete/agent/recovery/policy and verified phone confirm/reconfirm/revoke. Each path needs five accepted atomicity properties and pinned source SHA; current site trusted evidence provider `V5TrustedInstalledNativeCoveragePort` is deliberately absent, so `V5NativeSecurityHookCoveragePort` must remain unknown and SMS unapproved. `tests/V5NativeMutationCoverageTest.php` **60/60 offline PASS** with synthetic evidence. This does not alter native hooks, migrate `ev_samzaberu_auth_state`, run MySQL or enable HTTP V5.
+
+New definitive action plan: `docs/SAMZABERU_V5_NATIVE_MUTATION_COVERAGE_2026-10-12.md`. Next step is narrow evidence of native writer transaction/connection semantics (including absent MFA row under concurrent enrollment), *not* repeat audit of known Bitrix tables.
