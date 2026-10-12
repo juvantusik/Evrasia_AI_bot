@@ -38,3 +38,10 @@ GitHub test blob: `0aa6af73091c68733d0a5dcf5e6c224f2bf03bf4`.
 4. До выполнения этих условий не включать `api/v5/router.php`, не выдавать JWT, не отправлять SMS. Production/V4 не менялись.
 
 **MODE=GITHUB_ONLY · NATIVE_DEPTH_PROVIDER=NOT_IMPLEMENTED · REAL_MYSQL_E2E=NOT_RUN · DB_MIGRATION=NO · V5_HTTP=503 · PRODUCTION_WRITE=NO.**
+
+
+## 5. 2026-10-12 — новый чат начинает со stdout read-only native depth audit
+
+Для определения корректной реализации `V5VerifiedNativeTransactionDepthPort` создан и зафиксирован `site-integration/samzaberu-v5/tests/diagnostics/v5_native_depth_readonly.sh`, Git blob `5718f64f6eb6256645bffd0d526bb19ab0c0eee4`, SHA256 `37bb42963c25c72f34430eafb6cc77672d9e550c22d263ce07c1fe3c568265e6`. Точное содержание — **статический PHP `token_get_all`-инспектор трёх pinned production исходников** `connection.php / mysqlcommonconnection.php / mysqliconnection.php`; он выводит имена transaction-related переменных, наличие и строки определений методов, типы замеченных SQL/transaction вызовов, но **не содержимое исходников и не параметры подключения**. Гарантированного introspection API пока нет.
+
+Локально проверены `bash -n`, синтаксис встроенного PHP и synthetic parser, ожидаемый FAIL на неподходящем host. На `evrasia` скрипт **ещё не запускался**. Запускать его только как READ_ONLY, весь stdout прислать **первым сообщением нового чата**. Инструкция без восстановления длинного чата — `docs/SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`. При `FINAL_STATUS=PASS` читатель обязан отдельно отличать статическую структуру source от реальной внутренней глубины транзакции. Не считать этот результат staging-acceptance или разрешением MFA/SMS/JWT.
