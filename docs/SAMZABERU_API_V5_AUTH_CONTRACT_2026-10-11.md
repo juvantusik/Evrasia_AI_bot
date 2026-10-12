@@ -379,3 +379,27 @@ Production read-only static diagnostics (user-provided, `FINAL_STATUS=PASS`) con
 **80/80 isolated PHP 8.4.24 checks PASS** using a simulated Bitrix connection/ORM state, with real source/test Git blob SHA matching local. This proves only the compatibility-adapter contract, **NOT real MySQL transactional equivalence**. A mandatory unimplemented `V5NativeBitrixExclusiveTransactionPermitPort` must establish exclusive native ownership before entering a transaction. Actual native SqlHelper/Result/error semantics, ORM entity sharing this same connection, staging concurrency and all 10 native MFA security-event paths remain unverified. No hooks, migrations, site writes or SMS. V5 still HTTP 503.
 
 Detailed checkpoint: `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`. Next step: isolated staging compatibility and native mutation/epoch atomicity; do not inventory the already verified `b_user` schema again.
+
+
+
+## 30. Staging-only native ORM transaction proof prepared (2026-10-12)
+
+The candidate Bitrix Mysqli bridge (80/80 isolated tests) requires
+independent evidence that the installed native `DataManager` and
+`Application::getConnection()` use the SAME physical transaction.
+Prepared `tests/integration/V5BitrixNativeOrmTransactionAcceptance.php`,
+`tests/integration/BITRIX_NATIVE_TRANSACTION_ACCEPTANCE.md`, and
+`schema/PROPOSED_ev_v5_native_tx_probe.sql`.
+
+Two independent **rollback-only** tests use new random synthetic keys
+in `ev_v5_native_tx_probe`: ORM insert/native SELECT then rollback;
+native insert/ORM SELECT then rollback. Checks enforce one native
+Bitrix connection object, isolated `evrasia_v5_test_*` schema,
+nonproduction server, explicit acknowledgement, InnoDB and no initial
+transaction. User data, SMS and MFA are untouched.
+
+**Verified now:** PHP 8.4.24 source syntax, fail-closed preflight without
+staging configuration; committed blob identities match local linted source.
+**Not performed:** actual Bitrix/MySQL staging run; SQL schema not applied.
+Native hook atomicity, permit, real verified-phone event proof, challenge
+consume and JWT remain separate unsatisfied gates. V5 router remains 503.
