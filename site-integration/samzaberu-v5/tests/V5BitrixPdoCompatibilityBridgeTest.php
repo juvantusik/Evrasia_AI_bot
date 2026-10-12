@@ -140,6 +140,7 @@ namespace {
     rejects(fn()=>$db->prepare('SELECT * FROM evil_table WHERE ID = ?'),'unexpected table refused');
     rejects(fn()=>$db->prepare('SELECT ID FROM b_user WHERE ID = ?; DROP TABLE b_user'),'multiple statements refused');
     rejects(fn()=>$db->prepare('UPDATE b_user SET ACTIVE = ? WHERE ID = ?'),'writes to Bitrix users forbidden');
+    rejects(fn()=>$db->runStatement('DELETE FROM b_user WHERE ID = ?', [41]),'direct runStatement cannot bypass SQL allowlist');
     rejects(fn()=>$db->prepare('INSERT INTO ev_v5_sms_outbox VALUES (?)', [PDO::ATTR_EMULATE_PREPARES=>true]),'prepare options not silently accepted');
     $q=$db->prepare('INSERT INTO ev_v5_sms_budget_windows (bucket_key, used_units, expires_at) VALUES (?, 0, ?) ON DUPLICATE KEY UPDATE bucket_key = bucket_key');
     rejects(fn()=>$q->execute([$key,1800004800]),'write without owned transaction denied');
