@@ -181,6 +181,7 @@ Bitrix MFA хранит нативные секреты и состояние re
 | `V5CurrentLoginControlsPort`, `V5PerUserSmsEligibilityPort`, strong-trust provenance | **PENDING** достоверных site-side провайдеров и интеграции |
 | `V5SmsDispatchBudget` и `V5SmsBudgetPolicy` | **OFFLINE TESTED 111/111**, десять HMAC-квот включая общий денежный резерв; verified-phone/pricing sources **PENDING** |
 | `V5MySqlSmsOutbox`, `V5SodiumSmsMessageFactory` | **OFFLINE TESTED 123/123** (fake PDO); три новых InnoDB-таблицы **только DDL proposal**; живой Bitrix policy, SMS-worker и реальный MySQL E2E **PENDING** |
+| `V5BitrixLockedSmsEligibility`, `V5BitrixVerifiedSmsPhone` | **OFFLINE TESTED 88/88** (fake PDO), реальные таблицы под блокировкой; trusted phone-event version, auth epoch, MFA-lock synchronization и production site policy **PENDING** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -255,6 +256,17 @@ Bitrix MFA хранит нативные секреты и состояние re
 **Ещё НЕ реализованы:** доверенный `V5SmsLockedEligibilityPort` на Bitrix/verified-phone/epoch с блокировкой строк; создание password-proven challenge; SMS code verify/consume; проверенный провайдер/тариф, dispatcher с перепроверкой `current_delivery_id` и phone stamp + безопасной идемпотентностью; V5 JWT/бонусный PIN. Сам outbox не отправляет SMS и не выдаёт JWT. ИСТОРИЧЕСКИЕ пометки «транзакционный outbox ещё не написан» в более ранних разделах заменены этим новым offline-статусом, но deployment **НЕ** подтверждён.
 
 Первоисточник: `docs/SAMZABERU_V5_SMS_SEND_GUARDS_2026-10-11.md` (`5 от 2026-10-12) в feature-ветке. Новые команды для production не требуются; не повторять исследование уже проверенных таблиц Bitrix.
+
+
+### 2026-10-12 — V5 locked Bitrix SMS eligibility / verified phone (staging-only)
+
+В `feature/samzaberu-api-v5-auth-contract` создан `src/V5BitrixLockedSmsEligibility.php`: фактические **SELECT ... FOR UPDATE** по давно подтверждённым `b_user → b_sec_user → b_user_phone_auth` в **одной транзакции с SMS-outbox** (порядок взят из V3C), без чтения нативного OTP-секрета. Проверяются `ACTIVE`, `BLOCKED`, `PASSWORD_EXPIRED`, `LOGIN_ATTEMPTS`; наличие **любой** MFA-записи блокирует SMS downgrade. Телефон берётся только из `b_user_phone_auth` с `CONFIRMED=Y`, подтверждаются совпадение номера и user ID; отсутствующие/дублированные записи отвергаются. Есть `V5BitrixVerifiedSmsPhone` для предварительного серверного разрешения телефона. За пределами известных E.164 форматов номеров преобразование **не угадывается**.
+
+`tests/V5BitrixLockedSmsEligibilityTest.php` — **88/88 OFFLINE PASS** с fake PDO на PHP 8.4.24. Исходник и тест в GitHub побайтово совпадают с локальными тестами (учтён **настоящий** конструктор `V5SmsQueueReservation` с десятью квотами). Реальная Bitrix/MySQL интеграция по-прежнему **не** проходила E2E.
+
+**Незакрытые security gates:** провайдер версии именно *события* подтверждения телефона `V5SmsPhoneVerificationVersionPort` (должен менять версию при повторном подтверждении того же номера), `V5SmsLockedAuthEpochPort` (доказательство актуального auth epoch после пароля и при изменении MFA/блокировки), реальный Bitrix login/mandatory MFA policy, сериализация отсутствия OTP-записи с native enrollment flows. `ev_samzaberu_auth_state` был проектом V3C и **не установлен**; не подменять настоящий epoch HMAC только от телефона/пароля. Отсутствие MFA-строки под `FOR UPDATE` само по себе не подтверждает race-safe отсутствие новых enrollments без общей дисциплины lock/epoch.
+
+**Следующий этап:** проектировать/подключать event-based auth/phone epochs на подтверждённых security-событиях Bitrix, затем выполнить staging MySQL concurrency для SMS-outbox. Не возвращаться к глобальному аудиту `b_user`, V4, OTP и Trusted Device. Production/V4 без изменений, V5 HTTP 503.
 
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
