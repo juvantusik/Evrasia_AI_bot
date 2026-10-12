@@ -1,5 +1,9 @@
 # Evrasia AI Bot — Current Architecture
 
+
+> **SamZaberu API V5: ТЕКУЩАЯ КАНДИДАТ-АРХИТЕКТУРА (2026-10-12, НЕ deployed):** [`SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md`](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-12.md). `V5MySqlSmsOutbox` остаётся без переписывания бизнес-правил и использует staging-кандидат `V5BitrixPdoCompatibilityBridge`, который делегирует SQL/транзакции **штатному `Application::getConnection() / MysqliConnection`**, НЕ создавая второго PDO MySQL подключения. Критические блокеры: trusted exclusive native depth/transaction ownership (кандидат `V5StagingNativeTransactionPermit` **62/62 offline PASS** с обязательным **не реализованным** `V5VerifiedNativeTransactionDepthPort`), совместный native ORM rollback на **реальном staging**, атомарность **всех 10** MFA/phone/security mutation paths с `AUTH_EPOCH`. На production это **не подключено**, `V4` работает как прежде, `V5` отвечает HTTP 503. Не принимать описание ветки за production-схему.
+
+
 > Canonical current architecture for module naming, runtime topology and new-chat recovery.
 >
 > Last updated: **2026-10-03** after PR #73 production/browser acceptance and permanent nginx startup-race mitigation.
