@@ -182,6 +182,7 @@ Bitrix MFA хранит нативные секреты и состояние re
 | `V5SmsDispatchBudget` и `V5SmsBudgetPolicy` | **OFFLINE TESTED 111/111**, десять HMAC-квот включая общий денежный резерв; verified-phone/pricing sources **PENDING** |
 | `V5MySqlSmsOutbox`, `V5SodiumSmsMessageFactory` | **OFFLINE TESTED 123/123** (fake PDO); три новых InnoDB-таблицы **только DDL proposal**; живой Bitrix policy, SMS-worker и реальный MySQL E2E **PENDING** |
 | `V5BitrixLockedSmsEligibility`, `V5BitrixVerifiedSmsPhone` | **OFFLINE TESTED 88/88** (fake PDO), реальные таблицы под блокировкой; trusted phone-event version, auth epoch, MFA-lock synchronization и production site policy **PENDING** |
+| `V5SecurityEventVersions`, `V5SecurityEventVersionWriter` | **OFFLINE TESTED 84/84** (fake PDO); общая **не установленная** V3C `ev_samzaberu_auth_state` с `AUTH_EPOCH` + event-version телефона; Bitrix hook coverage, migrations, security-event writes и real MySQL **PENDING** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -268,12 +269,25 @@ Bitrix MFA хранит нативные секреты и состояние re
 
 **Следующий этап:** проектировать/подключать event-based auth/phone epochs на подтверждённых security-событиях Bitrix, затем выполнить staging MySQL concurrency для SMS-outbox. Не возвращаться к глобальному аудиту `b_user`, V4, OTP и Trusted Device. Production/V4 без изменений, V5 HTTP 503.
 
+
+### 2026-10-12 — общий V3C AUTH_EPOCH + события подтверждения телефона: staging-кандидат сохранён
+
+Ранее «провайдеры phone-event version и auth_epoch ещё не написаны» → теперь в `feature/samzaberu-api-v5-auth-contract` добавлен `src/V5SecurityEventVersions.php`, реализующий оба провайдера и `V5SecurityEventVersionWriter`. Защита основана на **уже согласованной** для V3C, но **не установленной** `ev_samzaberu_auth_state.AUTH_EPOCH` (целое положительное число); отдельную конкурирующую таблицу не создаём. `schema/PROPOSED_ev_samzaberu_auth_state_v5.sql` — только **неприменённый** проект первоначальной совместимой схемы, включая новые `PHONE_EVENT_VERSION` и `PHONE_BINDING_HMAC` (никаких сырых телефонов). Если V3C будет установлен с другим DDL, эта CREATE-команда **не применима как миграция**, нужен отдельный аудит конкретного DDL.
+
+Версия события подтверждения телефона является отдельным счётчиком: новое подтверждение **того же** номера обязательно меняет `PHONE_EVENT_VERSION` и делает старый SMS-челлендж недействительным. Хранится HMAC-привязка к подтверждённому E.164; изменение номера без зафиксированного события отклоняется. Auth stamp строится HMAC от user ID, `AUTH_EPOCH` и действующего сохранённого хеша пароля; смена пароля или увеличение epoch инвалидируют прежние доказательства первого фактора. Все HMAC-секреты отделены от JWT и не выводятся.
+
+`V5SecurityEventVersionWriter` предусматривает CAS-обновление epoch в **общей** PDO-транзакции после блокировки `b_user → b_sec_user → b_user_phone_auth → auth_state`, **но действующие native Bitrix handlers ещё не подключены**. Живой `V5NativeSecurityHookCoveragePort` намеренно отсутствует: при false/unknown выдача phone stamp и auth stamp запрещена. Чтобы разрешить V5 в staging, должны быть подтверждены все native password/MFA/phone/logout/block/recovery security события, общий b_user mutex и атомарность изменений native state + epoch. Из-за отсутствия MFA-строки `FOR UPDATE` само по себе не исключает параллельного enrollment — необходима общая дисциплина блокировок. Никогда не считать хеш только от номера достаточным доказательством повторной SMS-верификации.
+
+`tests/V5SecurityEventVersionsTest.php` — **84/84 PASS** на PHP 8.4.24 с fake PDO, в связке с настоящим `V5BitrixLockedSmsEligibility`; старый `V5BitrixLockedSmsEligibilityTest.php` повторно прошёл **88/88 PASS**; итого **172/172** в двух автономных наборах. Все 3 новых Git blobs совпали с локально протестированными/проверенными файлами. **Нет production/staging миграций, Bitrix hooks, SQL-коннекта и SMS; V5 HTTP 503.**
+
+**Следующая точка:** точечно подтвердить совместимость native Bitrix security-event entrypoints с транзакционным обновлением общего `AUTH_EPOCH` и phone event version, затем stage-only интеграция и конкурентный тест «MFA enrolment или повторное подтверждение телефона ↔ SMS enqueue»; не повторять общее изучение таблиц.
+
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
 1. Проверить **runtime ORM mapping** только если собираемся использовать ORM-источник. После подтверждения физической `b_user` не повторять `information_schema`; SQL-кандидат — отдельный вариант.
 2. Подключить `V5CurrentLoginControlsPort` к реальным штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
 3. Подключить `V5PerUserSmsEligibilityPort` к фактическим глобальным optional/mandatory MFA правилам и учётом деактивации.
-4. Подключить staged `V5MySqlSmsOutbox` к реальному verified-phone/Bitrix MFA/epoch locked-source и challenge creator, проверить новые таблицы и конкурентный resend на изолированном staging; затем подтверждённый SMS-тариф/отправитель и atomic code consume. Reuse V3C для native TOTP anti-replay, без нового аудита схем.
+4. Подключить новые V3C-совместимые `V5SecurityEventVersions` к **проверенным native Bitrix security hooks с общим b_user lock и PDO transaction**, подготовить доверенный `V5NativeSecurityHookCoveragePort` и проверенную инициализацию auth_state; только затем staging challenge creator / MySQL конкурентный SMS-resend, тарифы/worker/consume и V3C TOTP anti-replay. Структуру b_user повторно не обследовать.
 5. Подтвердить strong-enrollment provenance Trusted Device, сделать независимые V5 JWT/refresh/assurance и защищённый PIN.
 6. Сделать staging end-to-end; затем отдельный одобренный пилот `USER_ID=880339`. **Никаких production write до отдельного разрешения оператора.**
 
