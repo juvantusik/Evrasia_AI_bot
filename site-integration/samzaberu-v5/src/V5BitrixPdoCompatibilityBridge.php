@@ -84,7 +84,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             if ($this->permit->safeToBeginOn($this->native) !== true) {
                 throw new RuntimeException('v5_bitrix_exclusive_scope_unverified');
             }
-            $this->native->startTransaction();
+            if ($this->native->startTransaction() === false) {
+                throw new RuntimeException('Native begin failed');
+            }
             $this->opened = true;
             return true;
         } catch (Throwable) {
@@ -101,7 +103,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         }
         $this->assertCurrentApplicationConnection();
         try {
-            $this->native->commitTransaction();
+            if ($this->native->commitTransaction() === false) {
+                throw new RuntimeException('Native commit failed');
+            }
             $this->opened = false;
             return true;
         } catch (Throwable) {
@@ -119,7 +123,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         }
         try {
             $this->assertCurrentApplicationConnection();
-            $this->native->rollbackTransaction();
+            if ($this->native->rollbackTransaction() === false) {
+                throw new RuntimeException('Native rollback failed');
+            }
             $this->opened = false;
             // If transaction state was already uncertain, retain a permanent
             // poison flag: a new authenticated request must use a fresh scope.
@@ -178,7 +184,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
                 }
                 return [$rows, 0];
             }
-            $this->native->queryExecute($sql);
+            if ($this->native->queryExecute($sql) === false) {
+                throw new RuntimeException('Native write failed');
+            }
             $affected = $this->native->getAffectedRowsCount();
             if (!is_int($affected) && !(is_string($affected) && ctype_digit($affected))) {
                 throw new RuntimeException('Invalid native affected count');
