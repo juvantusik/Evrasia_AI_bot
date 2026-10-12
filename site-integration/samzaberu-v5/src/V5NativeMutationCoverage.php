@@ -31,6 +31,8 @@ enum V5NativeMutationPath: string
 /**
  * Evidence for ONE installed, reviewed native mutation path.
  * Each flag needs a concrete staging test on the target Bitrix release.
+ * The shared connection is Bitrix Application::getConnection() / Mysqli,
+ * NOT a separate PDO connection: the name reflects confirmed architecture.
  * Source hash is the deployed native writer source (not a password hash).
  */
 final readonly class V5NativeMutationProof
@@ -38,7 +40,7 @@ final readonly class V5NativeMutationProof
     public function __construct(
         public V5NativeMutationPath $path,
         public string $nativeSourceSha256,
-        public bool $usesSamePdoConnection,
+        public bool $usesSameNativeConnection,
         public bool $locksBUserBeforeMutation,
         public bool $updatesEpochInSameTransaction,
         public bool $rollsBackNativeAndEpochTogether,
@@ -51,7 +53,7 @@ final readonly class V5NativeMutationProof
 
     public function complete(): bool
     {
-        return $this->usesSamePdoConnection
+        return $this->usesSameNativeConnection
             && $this->locksBUserBeforeMutation
             && $this->updatesEpochInSameTransaction
             && $this->rollsBackNativeAndEpochTogether
