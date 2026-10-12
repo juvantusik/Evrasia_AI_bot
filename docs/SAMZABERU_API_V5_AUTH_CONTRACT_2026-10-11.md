@@ -367,3 +367,15 @@ Previously planned native V5 `auth_epoch` and verified-phone event writers requi
 Added a strict **GitHub-only** `V5NativeMutationCoverage.php` release gate requiring all ten groups of native security mutation, each with source fingerprint, same PDO, b_user lock, same-tx epoch increment, same-tx rollback and real staging race acceptance. `V5TrustedInstalledNativeCoveragePort` remains a missing privileged integration dependency; HTTP-supplied proof or a simple enabled boolean is forbidden. Tests `V5NativeMutationCoverageTest.php`: **60/60 PASS** in local PHP 8.4.24 using fake PDO and synthetic positive proof. This does NOT mean any site-native hook passed.
 
 Detailed matrix and source-backed compatibility findings: `docs/SAMZABERU_V5_NATIVE_MUTATION_COVERAGE_2026-10-12.md`. Before activation, establish the transaction/connection boundary of every native writer and test concurrency against the SMS outbox and V3C epoch. Production/V4 unaffected; V5 still HTTP 503.
+
+
+
+## 29. Shared native Bitrix Mysqli transport candidate (2026-10-12)
+
+Production read-only static diagnostics (user-provided, `FINAL_STATUS=PASS`) confirmed `Bitrix\Main\DB\MysqliConnection` and Bitrix native `startTransaction/commitTransaction/rollbackTransaction`. Existing `V5MySqlSmsOutbox` PDO connection was separate, so it could NOT share a physical transaction with native UserTable ORM by default.
+
+**Added** `src/V5BitrixPdoCompatibilityBridge.php` and `tests/V5BitrixPdoCompatibilityBridgeTest.php` on isolated V5 branch. A strictly limited `PDO`-compatible *facade* now delegates the EXISTING 10-scope SMS/outbox SQL to exactly the same `Application::getConnection()` native Mysqli object, using Bitrix SQL helper and native transaction methods. This is **NOT** a replacement PDO driver nor genuine prepared statements, and it changes none of the existing login/SMS logic. It refuses unexpected tables, destructive/unbounded SQL, named parameters, foreign DB connection and unowned transactions. After failed BEGIN it cannot rollback someone else's transaction; uncertain outcomes fail closed.
+
+**80/80 isolated PHP 8.4.24 checks PASS** using a simulated Bitrix connection/ORM state, with real source/test Git blob SHA matching local. This proves only the compatibility-adapter contract, **NOT real MySQL transactional equivalence**. A mandatory unimplemented `V5NativeBitrixExclusiveTransactionPermitPort` must establish exclusive native ownership before entering a transaction. Actual native SqlHelper/Result/error semantics, ORM entity sharing this same connection, staging concurrency and all 10 native MFA security-event paths remain unverified. No hooks, migrations, site writes or SMS. V5 still HTTP 503.
+
+Detailed checkpoint: `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`. Next step: isolated staging compatibility and native mutation/epoch atomicity; do not inventory the already verified `b_user` schema again.
