@@ -68,8 +68,10 @@ function validRow(array $more=[]):array {return array_replace([
  'schema_name'=>'evrasia_v5_test_alpha','db_hostname'=>'stage-db-01',
  'connection_id'=>'77','autocommit_value'=>'1','in_transaction_value'=>'0',
 ],$more);}
-$root=realpath(__DIR__.'/../staging-root');
-if(!$root) throw new \RuntimeException('fake test staging root absent');
+$root=sys_get_temp_dir().'/ev_v5_txpermit_'.bin2hex(random_bytes(8));
+if(!mkdir($root,0700)) throw new \RuntimeException('cannot create isolated fake staging root');
+$root=realpath($root);
+if(!$root) throw new \RuntimeException('fake test staging root unavailable');
 $oldRoot=$_SERVER['DOCUMENT_ROOT']??null;
 $_SERVER['DOCUMENT_ROOT']=$root;
 putenv('V5_STAGE_WRITE_ACK=ISOLATED_STAGING_ONLY');
@@ -157,6 +159,7 @@ foreach ([
 }
 if($oldRoot===null) unset($_SERVER['DOCUMENT_ROOT']);else $_SERVER['DOCUMENT_ROOT']=$oldRoot;
 putenv('V5_STAGE_WRITE_ACK');
+if (!rmdir($root)) throw new \RuntimeException('cannot clean isolated fake staging root');
 printf("PASS: V5 staging native transaction preflight (%d assertions)\n",$asserts);
 echo "REAL_MYSQL_CONNECTED=NO\nBITRIX_BOOTSTRAP=NO\nPRODUCTION_WRITE=NO\n";
 }
