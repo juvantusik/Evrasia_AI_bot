@@ -185,6 +185,7 @@ Bitrix MFA хранит нативные секреты и состояние re
 | `V5SecurityEventVersions`, `V5SecurityEventVersionWriter` | **OFFLINE TESTED 84/84** (fake PDO); общая **не установленная** V3C `ev_samzaberu_auth_state` с `AUTH_EPOCH` + event-version телефона; Bitrix hook coverage, migrations, security-event writes и real MySQL **PENDING** |
 | `V5NativeMutationCoverageMatrix`, `V5StrictNativeSecurityHookCoverage` | **OFFLINE TESTED 60/60**; выпуск V5 невозможен без доказательства транзакционного покрытия 10 путей native security / MFA / phone; site attestation provider и native hook integration **PENDING** |
 | `V5BitrixPdoCompatibilityBridge` | **OFFLINE TESTED 80/80** (fake MysqliConnection); transport to native `Application::getConnection()` without changing SMS business logic; trusted exclusive transaction permit, true ORM same-handle and concurrency E2E **PENDING** |
+| `V5BitrixNativeOrmTransactionAcceptance.php` | **STAGING ACCEPTANCE PREPARED, NOT RUN**: real ORM insert ↔ native SQL read with rollback in both directions on isolated synthetic InnoDB table; lint/local fake smoke PASS, real Bitrix/MySQL proof **PENDING** |
 | Атомарные SMS-челленджи, V5 JWT issuer/refresh, защищённый PIN | **PENDING**, не выдаются и не отправляются |
 | Реальные /api/v5 запросы | **НЕДОСТУПНЫ: 503; production не меняли** |
 
@@ -310,12 +311,25 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 
 **Следующая точка:** в isolated staging подтвердить trusted exclusive scope/physical ORM handle/escaping/errors и все 10 путей atomic AUTH_EPOCH через общий b_user mutex; затем real MySQL concurrency и SMS pilot. **production/V4 unchanged, V5 503**. Подробности: `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`. Не исследовать повторно `b_user` или V4.
 
+
+### 2026-10-12 — двухсторонний native ORM/MySQLi rollback acceptance подготовлен, staging ещё НЕ пройден
+
+В `feature/samzaberu-api-v5-auth-contract` создан `site-integration/samzaberu-v5/tests/integration/V5BitrixNativeOrmTransactionAcceptance.php`. Это **не ещё один fake PDO тест**, а подготовленный исполняемый **staging-only** сценарий проверки настоящего установленного `Bitrix\Main\ORM\Data\DataManager` и `Application::getConnection()` на **одной физической транзакции**. Сначала проверяются идентичность объектов connection, exact имя выделенной БД `evrasia_v5_test_*`, реальный server hostname, `@@session.autocommit=1`, `@@session.in_transaction=0` и наличие заранее созданной **только тестовой** InnoDB таблицы `ev_v5_native_tx_probe`. Production host/root и отсутствие explicit staging acknowledgement блокируются **до Bitrix bootstrap**.
+
+Два теста с одноразовыми синтетическими ключами: (1) запись через native Bitrix ORM → чтение через native MySQLi → ROLLBACK → строки нет; (2) запись через native MySQLi → чтение через Bitrix ORM → ROLLBACK → строки нет. Код не вызывает SMS, V5 HTTP, MFA, JWT, не читает/изменяет `b_user` и не делает CREATE/DROP/DELETE. DDL `schema/PROPOSED_ev_v5_native_tx_probe.sql` — **предложение только для заранее изолированного staging**, нигде не применено. Инструкция: `tests/integration/BITRIX_NATIVE_TRANSACTION_ACCEPTANCE.md`.
+
+**Локальная проверка:** PHP 8.4.24 syntax PASS; запуск без `V5_STAGE_WRITE_ACK` fail-closed (`FINAL_STATUS=FAIL`, DB_WRITE=NO). На **локальном имитаторе** Bitrix обе ветки read-your-writes/ROLLBACK выполнились (`FINAL_STATUS=PASS`, `TESTED_DIRECTIONS=2`, `TEST_ROWS_PERSISTED=0`). При подмене ожидаемого имени DB-сервера сценарий остановился **до тестовых INSERT**. PHP source blob `4263d2131a2bf67769416da347a486b0c37c6817` и DDL blob `87c7f74eb0e085119e7b7b116afd071b6e83f197` совпадают с локально проверенными файлами.
+
+**НЕ выполнялось:** реальный Bitrix/MySQL/MariaDB staging, настоящие ORM rollback acceptance, V5 bridge exclusive permit, 10 native MFA event hooks/`AUTH_EPOCH`, SMS gateway. Даже реальный PASS этой отдельной проверки **не** разрешит включение API V5: это только один из обязательных барьеров. **PRODUCTION_WRITE=NO, V4_UNCHANGED, V5_HTTP=503.**
+
+**Следующий шаг:** запустить этот конкретный тест только в согласованной *физически изолированной* staging-копии Bitrix; затем доказать эксклюзивный native transaction scope и atomic MFA event coverage, не повторяя изучение `b_user`/V4.
+
 ## 7. Реально незакрытые интеграционные вопросы (только их исследовать дальше)
 
 1. Проверить **runtime ORM mapping** только если собираемся использовать ORM-источник. После подтверждения физической `b_user` не повторять `information_schema`; SQL-кандидат — отдельный вариант.
 2. Подключить `V5CurrentLoginControlsPort` к реальным штатным lockout/event правилам (`LOGIN_ATTEMPTS`, `PASSWORD_EXPIRED`, `OnBeforeUserLogin`) без обхода существующей безопасности.
 3. Подключить `V5PerUserSmsEligibilityPort` к фактическим глобальным optional/mandatory MFA правилам и учётом деактивации.
-4. На изолированном staging проверить новый `V5BitrixPdoCompatibilityBridge`: trusted exclusive transaction permit, тот же `Application::getConnection()` / ORM physical handle, Bitrix SqlHelper/affected rows и rollback. Затем устранить **подтверждённый пробел доказательств native Bitrix event atomicity**: все 10 потоков из `V5NativeMutationCoverage.php`, включая direct Otp add/delete и background OtpEvents agent, должны получить подтверждённые same-DB-transaction, b_user mutex, AUTH_EPOCH/CAS/rollback и staging concurrency. Только потом зарегистрировать реальные hooks, доверенный release-attestation, инициализировать общий `ev_samzaberu_auth_state`, выполнить isolated staging challenge/ SMS E2E; не менять production и не пересматривать уже проверенную структуру b_user.
+4. Запустить подготовленный `V5BitrixNativeOrmTransactionAcceptance.php` **только на выделенном staging** после тестовой DDL и сверки DB identity, чтобы доказать единое ORM ↔ native connection и rollback. Далее проверить `V5BitrixPdoCompatibilityBridge`: trusted exclusive transaction permit, реальный Bitrix SqlHelper/affected rows, ошибки и реальный MySQL rollback. Затем устранить **подтверждённый пробел доказательств native Bitrix event atomicity**: все 10 потоков из `V5NativeMutationCoverage.php`, включая direct Otp add/delete и background OtpEvents agent, должны получить подтверждённые same-DB-transaction, b_user mutex, AUTH_EPOCH/CAS/rollback и staging concurrency. Только потом зарегистрировать реальные hooks, доверенный release-attestation, инициализировать общий `ev_samzaberu_auth_state`, выполнить isolated staging challenge/ SMS E2E; не менять production и не пересматривать уже проверенную структуру b_user.
 5. Подтвердить strong-enrollment provenance Trusted Device, сделать независимые V5 JWT/refresh/assurance и защищённый PIN.
 6. Сделать staging end-to-end; затем отдельный одобренный пилот `USER_ID=880339`. **Никаких production write до отдельного разрешения оператора.**
 
