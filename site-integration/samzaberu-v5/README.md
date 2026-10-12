@@ -280,3 +280,39 @@ Explicit `V5NativeBitrixExclusiveTransactionPermitPort` is mandatory: no real si
 `tests/V5BitrixPdoCompatibilityBridgeTest.php`: **80/80 PASS**, local PHP 8.4.24 using synthetic Bitrix connection and SQL helper, including commit/rollback of fake budget/outbox on the same fake native connection, CAS, no foreign rollback, uncertain commit, invalid SQL and silent native `false` returns. Source/test Git blobs **84aa6072d8f20a6065518b8059de23c3ad9306f0 / e5607ead2d3fb86b3a59c7e8b1426796d480efe5** match tested files. **NOT** real MySQL/Bitrix concurrency E2E; the existing 123 outbox assertions are previous separate work, not rerun here.
 
 Source audit provided by user: `MysqliConnection` (Bitrix settings MYSQLI), transaction methods declared in `Connection`/`MysqlCommonConnection`. Full accepted architecture/guards: `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`. Outstanding: real transaction-scope attestation, exact SqlHelper/Error semantics, native ORM same DB handle, 10-path native security/MFA atomics, staging migrations and tests. No live HTTP integration, V5 503 and V4/prod unchanged.
+
+
+
+## 2026-10-12 — Real Bitrix ORM/MySQLi transaction acceptance harness (STAGING PENDING)
+
+Added `tests/integration/V5BitrixNativeOrmTransactionAcceptance.php` and
+`tests/integration/BITRIX_NATIVE_TRANSACTION_ACCEPTANCE.md`, plus a **proposed,
+unapplied** single-table staging-only schema
+`schema/PROPOSED_ev_v5_native_tx_probe.sql`.
+
+This is the NEXT check after the 80/80 **synthetic** Bitrix bridge unit
+test: actual native `Application::getConnection()`, `DataManager::getConnection()`
+object identity, ORM INSERT visible from native SELECT and native INSERT
+visible from ORM SELECT within their native transaction, and correct InnoDB
+`ROLLBACK` in both directions on a synthetic isolated staging table.
+
+**Guards:** PHP CLI, explicit staging acknowledgement, no production hosts
+or production document root, allowlisted `evrasia_v5_test_*` schema and
+verified DB server hostname, autocommit=1 and inactive transaction before
+writes, pre-existing InnoDB test table. The script imports Bitrix **only
+after** initial guards; it never reads/writes real user or 2FA tables,
+sends SMS or issues JWT.
+
+Verified: PHP 8.4.24 lint PASS; with no stage credentials/configuration
+the runner correctly exits `FINAL_STATUS=FAIL / DATABASE_WRITE=NO` before
+Bitrix bootstrap/DB. Exact PHP source Git blob
+`4263d2131a2bf67769416da347a486b0c37c6817`,
+test DDL `87c7f74eb0e085119e7b7b116afd071b6e83f197` matched the
+local linted/tested assets. **NO REAL STAGING RUN occurred**, because
+a dedicated staging Bitrix + MariaDB/MySQL test installation is not yet
+available here.
+
+Even real native ORM rollback PASS is only *one* acceptance gate:
+the trusted `V5NativeBitrixExclusiveTransactionPermitPort` and complete
+native 10-path MFA/security AUTH_EPOCH/verified-phone hooks are still
+unimplemented and cannot be bypassed. V5 remains 503 and V4/prod unchanged.
