@@ -78,3 +78,20 @@
 **Особый guard будущего dispatch worker:** перед отправкой требуется снова проверить, что челлендж всё ещё pending, `current_delivery_id` совпадает с outbox, срок ещё действителен и verified phone stamp не изменился. Старую очередь после ресенда нельзя отправлять «вдогонку». Отправитель должен поддерживать безопасную идемпотентность; при неизвестном результате провайдера — `unknown` и отсутствие автоматического нового платного вызова. Эти проверки worker **НЕ реализованы**, не подменять их текущим кодом.
 
 **Следующая точка:** реализовать проверенный locked-site eligibility adapter на уже известной схеме Bitrix и/или изолированный staging concurrency/rollback тест новых трёх таблиц. Не повторять общие аудиты `b_user`, V4 и OTP. **V5_HTTP=503; PRODUCTION_FILES_WRITE=NO; DATABASE_MIGRATIONS=NO; SMS_SENT=NO.**
+
+
+## 6. 2026-10-12 — чтение реальных Bitrix-таблиц под SMS-lock (ещё без production)
+
+В ветке V5 добавлен `src/V5BitrixLockedSmsEligibility.php`. Это **конкретный, staging-only SQL-адаптер**, а не повторное исследование схемы. Он реализует `V5SmsLockedEligibilityPort` из `V5MySqlSmsOutbox` и использует ранее проверенные запросы V3C в порядке:
+
+`b_user (FOR UPDATE) → b_sec_user (FOR UPDATE) → b_user_phone_auth (FOR UPDATE)`.
+
+Проверяет `ACTIVE=Y`, `BLOCKED=N`, `PASSWORD_EXPIRED=N`, строгий `LOGIN_ATTEMPTS`; требует **отсутствия любой записи MFA** (даже неактивная запись запрещает SMS downgrade), `b_user_phone_auth.CONFIRMED=Y`, совпадение user ID, подтверждённого номера и его версии со снимком при создании челленджа. Нативный OTP `SECRET` не выбирает; никакой `CUser->Login()` не вызывает. Existing `V5ExistingLoginPolicyPort` и `V5NoMfaFallbackPolicyPort` должны вернуть **строго true**; false/null закрывают отправку.
+
+Дополнительный `V5BitrixVerifiedSmsPhone` получает номер **только** из подтверждённой записи Bitrix до резервирования бюджета, а основная проверка обязана повторить её внутри той же транзакции с outbox. По умолчанию `V5StrictE164Phone` принимает только готовый E.164; форматирование реальных `PHONE_NUMBER` не угадывается.
+
+**Обязательные пока НЕ реализованные доказательства:** `V5SmsPhoneVerificationVersionPort` должен выдавать версию именно *события подтверждения телефона* и менять её даже при повторном подтверждении того же номера. `V5SmsLockedAuthEpochPort` должен сверять реальный epoch после проверки пароля и менять его при смене пароля, сбросе/включении MFA, logout/block и иных security-событиях. Обычный HMAC от значения номера или пароля **недостаточен**. Ранее предложенная `ev_samzaberu_auth_state` НЕ была установлена в production; запрещено её подразумевать существующей. Отсутствие записи `b_sec_user` под FOR UPDATE ещё требует доказанной сериализации с native Bitrix enrollment/disable flows, включая shared mutex/epoch invalidation, прежде чем SMS grant сможет использоваться живым API. Реальные параметры политики входа и индивидуального SMS-разрешения также ещё не подключены.
+
+`tests/V5BitrixLockedSmsEligibilityTest.php` — **88/88 OFFLINE PASS** на PHP 8.4.24 с fake PDO и синтетическими строками; блокировки, отказы при неактивном/заблокированном аккаунте, существующей MFA, неверном/неподтверждённом телефоне, mismatch epoch/version, duplicate row, error/unknown cases. **Тест использует реальный конструктор `V5SmsQueueReservation` с 10 окнами** (исправлено при интеграционной сверке). Точные blob SHA GitHub совпали с локально тестированными исходником и тестом.
+
+**Не готово к production:** успешный fake-PDO тест не доказывает реальную работу с Bitrix/MySQL, реальную версию подтверждения номера, единую блокировку native MFA flows, создание challenge, SMS-код verify/consume, dispatcher, gateway или V5 JWT. Никаких БД-изменений, миграций или SMS-вызовов. `api/v5/router.php` по-прежнему HTTP 503. Следующий шаг — реализовать общую auth/phone event-version модель и её атомарное обновление в действующих security-событиях (или проверить *только* существующий авторитетный источник), затем отдельный staging concurrency тест.
