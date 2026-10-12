@@ -148,6 +148,8 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         if ($this->poisoned) {
             throw new RuntimeException('v5_bitrix_connection_poisoned');
         }
+        // Even direct callers may not bypass prepare()'s allowlist.
+        self::assertStatementAllowed($template);
         $this->assertCurrentApplicationConnection();
         $sql = $this->encodeParameters($template, $params);
         $isSelect = str_starts_with(ltrim($sql), 'SELECT ');
