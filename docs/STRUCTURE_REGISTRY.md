@@ -1,7 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-11 (последняя read-only проверка реальной схемы `b_user`).  
+> **Обновлено:** 2026-10-13 (последний GitHub-only шаг V5 native-depth staging; схема `b_user` последний раз production-verified 2026-10-11).  
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -363,3 +363,14 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Feature, будущий V5:** `docs/SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md`, `site-integration/samzaberu-v5/README.md` и `site-integration/samzaberu-v5/{src,tests,api}`.
 
 **Решение:** было «исходник `UserTable.php` не содержит два имени → предположение, что схема не подтверждена» → стало «физическая `b_user` имеет оба столбца (PASS), но ORM-проекция отдельно не доказана» → причина «результат реального read-only `information_schema`». Документ является исходной точкой для нового чата; подробные уже закрытые аудиты повторять запрещено без нового основания.
+
+
+### 2026-10-13 — native depth: guarded staging preflight и rollback test (GITHUB-ONLY)
+
+После предоставленного оператором **production READ_ONLY / 6/6 PASS** анализа двух pinned исходников `MysqlCommonConnection` / `MysqliConnection` подтверждено: `protected int $transactionLevel = 0`; нулевой `startTransaction()` делает `START TRANSACTION`, вложенный — `SAVEPOINT`; при внутреннем commit уровень уменьшается, физический `COMMIT` только при нуле; вложенный rollback откатывает до savepoint и бросает `TransactionException`. Тест не исполнял нативный Bitrix/SQL и не доказывает live ownership.
+
+В изолированной feature-ветке уже создан `src/V5VerifiedBitrixNativeTransactionDepth.php` (строго source-pinned Reflection-чтение; 18/18 synthetic PASS, не real Bitrix). **Новое продолжение:** `tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php` (Git blob `2fe2effbbaf634059698d4f4206eb55eb923291e`) — реальный будущий staging CLI preflight: проверяет host/root/schema, bootstrap нативного staging Bitrix, pinned depth=0 и существующий `V5StagingNativeTransactionPermit` с двойными read-only снимками MySQL-сессии. Сам скрипт **не вызывает DML/BEGIN/COMMIT/ROLLBACK**, но staging Bitrix bootstrap может иметь побочные эффекты, поэтому только на физически изолированном staging с отдельными DB credentials. Локальный PHP 8.4.24 lint PASS, два отрицательных запуска остановились **до bootstrap/DB**. Реальный положительный результат отсутствует.
+
+Подготовленный ранее `tests/integration/V5BitrixNativeOrmTransactionAcceptance.php` **защищён**: перед каждым `BEGIN` требует pinned native depth 0 + positive staging permit + стабильную идентичность MySQL-сессии; после BEGIN — глубина 1 и SQL in_transaction=1, после rollback — глубина 0 и SQL idle. При ошибке automatic rollback только после повторного независимого proof владения; иначе ручная проверка staging. Новый source Git blob `eb0e5f0ad6326eb45abb09b98964781fd0ba670c`. Вспомогательный session-state helper прошёл **14 синтетических локальных проверок**, но **полная новая acceptance-редакция и реальный staging E2E пока не запускались**; прежний fake smoke относился к старой редакции.
+
+Документы: `docs/SAMZABERU_V5_NATIVE_DEPTH_READER_2026-10-13.md` и `site-integration/samzaberu-v5/tests/integration/BITRIX_NATIVE_TRANSACTION_ACCEPTANCE.md`. Следующий минимальный реальный шаг — независимая подготовка/подтверждение изолированного staging, там запуск read-only preflight (не на production); только после PASS и отдельного разрешения — синтетический rollback тест. Все 10 native MFA/security `AUTH_EPOCH` путей остаются отдельно не доказаны. `PRODUCTION_WRITE=NO`, `V4_UNCHANGED=YES`, `V5_HTTP=503` (по последнему зафиксированному состоянию), `REAL_STAGING_E2E=NOT_RUN`.
