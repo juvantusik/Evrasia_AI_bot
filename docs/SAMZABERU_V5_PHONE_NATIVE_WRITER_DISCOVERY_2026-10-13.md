@@ -1,6 +1,6 @@
 # СамЗаберу V5 — следующий source-only этап: native phone confirmation writers
 
-**2026-10-13 · FIRST PHONE SOURCE INVENTORY PRODUCTION SOURCE-VERIFIED 5/5. SECOND CALL-ORDER AUDIT GITHUB-ONLY / NOT RUN.**
+**2026-10-13 · PHONE SOURCE INVENTORY 5/5 AND FOLLOW-UP CALL-ORDER 6/6 BOTH SOURCE-VERIFIED. REAL PHONE EVENT ATOMICITY STILL NOT PROVEN.**
 
 ## Почему это отдельная задача
 
@@ -47,3 +47,21 @@ GitHub Actions [run 38382985133](https://github.com/juvantusik/Evrasia_AI_bot/ac
 Следующий операторский stdout `v5_phone_confirmation_order_readonly.sh` позволит уточнить точный порядок `UserPhoneAuthTable` вызовов и пересечение с `CONFIRMED`. Это **статический call-site inventory**, не доказательство исполнения ветвей и не подтверждение идентичного номера при reconfirm. После разбора результата не повторять поиск класса / MFA три аудита.
 
 **Транзакционный/релизный блокер прежний:** `PHONE_EVENT_VERSION` должен увеличиваться даже при новом подтверждении того же номера, иначе сохранённый SMS challenge не отзывается; одна физическая DB transaction и общий `b_user` mutex требуются для native phone/version/epoch, но runtime isolated staging ещё не существует. `V5_HTTP=503` по последнему документированному baseline.
+
+
+## 2026-10-13 — second phone source-order result: operator 6/6 PASS
+
+Оператор выполнил на production `evrasia` `v5_phone_confirmation_order_readonly.sh`: все три SHA-256 совпали (V4 `PhoneAuth.php`, V4 `Controllers/V4/Auth.php`, native `UserPhoneAuthTable.php`), `PASS_COUNT=6`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. `DATABASE_CONNECTION=NO`, `DATABASE_WRITE=NO`, `BITRIX_BOOTSTRAP=NO`, `PRODUCTION_APPLICATION_WRITE=NO`, `SMS_SENT=NO`, `USER_DATA_READ=NO`, `SOURCE_LINES_PRINTED=NO`, `SECRETS_PRINTED=NO`.
+
+**Доказанные static call-site markers (в фактически установленном исходнике):**
+
+- `Auth::signup`: ссылки на phone-confirm helper на строках **311 / 334 / 339**, далее `UserPhoneAuthTable::add` на **372**.
+- `Auth::confirm_request`: ссылки на `CONFIRMED` **845 / 873 / 891 / 896**; вызовы native `UserPhoneAuthTable::getList` **869**, `::add` **876**, `::getRowById` **880**.
+- `Auth::confirm`: ссылка на `CONFIRMED` **1012**, но в ограниченном статическом скане **нет прямого вызова `UserPhoneAuthTable::add/update/delete`** внутри `confirm`.
+- Native `UserPhoneAuthTable::onBeforeAdd` строка **96** и `::onBeforeUpdate` **101** направляют поля на `modifyFields` на **98/103**, которое обрабатывает `PHONE_NUMBER` на **112/115**, вызывает normalizer (115). Нативный callback на этом мета-уровне **не показал запись `PHONE_EVENT_VERSION` или границу транзакции**.
+- У второго аудита `V4_PHONE_TABLE_STATIC_CALLS=4`, `V4_CONFIRMED_REFERENCES=5`, `NATIVE_CALLBACK_METADATA_MARKERS=12`. `CONFIRMED_Y_ASSIGNMENT_CANDIDATE` **не напечатан**. Это означает только, что узкий регэксп не встретил литерал `'CONFIRMED' => 'Y'` в одной строке; это **НЕ** доказательство отсутствия записи `CONFIRMED=Y` (динамические/многострочные варианты не исключены).
+
+**Вывод:** статическая карта `confirm_request` и `confirm` не раскрыла линейную точку фактического сохранения подтверждения, операции `CONFIRMED=N→Y` при том же E.164 и `PHONE_EVENT_VERSION` CAS. Не делаем предположений на основе имени `confirm` и не используем существующее `CONFIRMED=Y` как факт повторной верификации. В V5 по-прежнему `PHONE_EVENT_VERSION_WRITER=NOT_INSTALLED`, `NATIVE_PHONE_EVENT_ATOMICITY_PROVEN=NO`, release fail-closed; production и V4 не изменены.
+
+**Следующий узкий source-only шаг (только GitHub, не запускался на production):**
+`tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh`. В отличие от первых двух metadata inventories, он выводит ограниченный **санитизированный граф ветвлений и вызовов экземпляров** для `Auth::confirmation/signup/confirm_request/confirm` и `PhoneAuth::sendCode/check`; пытается найти косвенные `->update/->save/->set` и динамические изменения поля, не выводя строки PHP, номера телефонов, коды SMS или конфигурации. Перед анализом проверяет SHA обоих уже pinned V4 файлов; для native table новых копий исходника не требуется. Результат всё равно будет только source metadata и не может заменить изолированный staging rollback/concurrency proof.
