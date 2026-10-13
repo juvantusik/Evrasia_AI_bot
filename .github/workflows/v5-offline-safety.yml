@@ -46,7 +46,8 @@ jobs:
               echo "=== 2A. SERVER DIAGNOSTIC SYNTAX (NO EXECUTION) ==="
               bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
-              echo "PASS: both read-only Bitrix source audits shell syntax"
+              bash -n "$ROOT/tests/diagnostics/v5_native_recovery_final_boundary_readonly.sh"
+              echo "PASS: all three read-only Bitrix source audits shell syntax"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
