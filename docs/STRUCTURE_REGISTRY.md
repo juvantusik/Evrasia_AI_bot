@@ -1,7 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-13 (последний GitHub-only шаг V5 native-depth staging; схема `b_user` последний раз production-verified 2026-10-11).  
+> **Обновлено:** 2026-10-13 (последняя production SOURCE-VERIFIED диагностика телефона 5/5, новая script-only проверка call order подготовлена; схема `b_user` последний раз DB VERIFIED 2026-10-11).  
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -414,3 +414,18 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Код:** в рабочей feature-ветке только расширен отрицательный synthetic `tests/V5NativeMutationCoverageTest.php`: 22 дополнительных проверок для delete/recovery → общий suite **82/82 PASS**. Существующий 10-path release gate не изменён. Проверенный [GitHub CI run 38381811549](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38381811549) SUCCESS, 22/22 offline suites, 48 PHP lint, три Bash syntax check. Подробный [дизайн MFA recovery атомарности](SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md) сохранён в обоих branch docs. Актуальный [checkpoint](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md) заменяет более раннюю задачу повторного native source audit.
 
 **ВСЕ ТРИ read-only источниковедческих шага этой цепочки ЗАКРЫТЫ: 9/9, 6/6, 7/7.** Не повторять. Следующий барьер — самостоятельно изолированный Bitrix/MySQL staging (пока `STAGING_ISOLATION_ATTESTED=NO`), затем реальный native shared-connection rollback, MFA/recovery fault-injection и конкурентный single-use consume. Никаких новых production SQL, хуков, миграций или SMS; `V4_UNCHANGED=YES`, `V5_HTTP=503` по последней документации.
+
+
+### 2026-10-13 — Native phone auth source-only inventory accepted 5/5
+
+Оператор фактически выполнил на host `evrasia` только read-only `v5_phone_event_writer_inventory_readonly.sh` с `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. `BITRIX_BOOTSTRAP=NO`, `DATABASE_CONNECTION=NO`, `DATABASE_WRITE=NO`, `PRODUCTION_APPLICATION_WRITE=NO`, `USER_DATA_READ=NO`, `CONFIG_FILES_READ=NO`, `SECRETS_PRINTED=NO`, `SMS_SENT=NO`. Оба **ранее pinned** исходника V4 совпали с SHA.
+
+**Новый точно проверенный native source:** `bitrix/modules/main/lib/UserPhoneAuthTable.php`, SHA-256 `3f9c093ee81923870ef8305e1afe7b277364515995517f2136c25f33d86f4991`. Схема: `getTableName` 34, `getMap` 39, `CONFIRMED` reference 64. Native mutator-related methods: `validatePhoneNumber` 83, `onBeforeAdd` 96, `onBeforeUpdate` 101, `modifyFields` 106, `normalizePhoneNumber` 123. Наличие `onBefore*` само по себе **НЕ** означает общую транзакцию, и не подтверждает `PHONE_EVENT_VERSION`.
+
+**Верифицирована только карта V4 call-site имен, не их реализация/срабатывание:** `local/php_interface/Controllers/V4/Auth.php` прежний SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` — `signup` 263, `confirm_request` 779, `confirm` 954, `forgot_password` 551, `change_password` 680; `UserPhoneAuthTable` source markers на 372/869/876/880, `CONFIRMED` на 845/873/891/896/1012. `local/php_interface/lib/PhoneAuth.php` SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`, методы `sendCode` 65, `check` 135, `createUser` 188 (в первом мета-аудите `UserPhoneAuthTable` и `CONFIRMED` references нет).
+
+**Не доказаны:** где реально вызывается native `UserPhoneAuthTable::add/update/delete`; создаётся ли отдельное событие **повторного** `CONFIRMED=Y` для того же номера; взаимодействие с `PHONE_EVENT_VERSION` и общий DB scope. Нельзя считать совпадение HMAC от прежнего E.164 доказательством повторной phone verification.
+
+**Следующий узкий, только source-only шаг:** новый `tests/diagnostics/v5_phone_confirmation_order_readonly.sh` в feature (проверены SHA всех 3 источников, без печати оригинальных строк/значений, выдаёт лишь call tags и номера строк в `signup`, `confirm_request`, `confirm` плюс native `UserPhoneAuthTable` callback). GitHub Actions [38392077308](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38392077308) SUCCESS: Bash -n пяти diagnostic files, PHP lint 48 files, 22 offline suites, pre-bootstrap staging guards. На production **этот второй телефонный скрипт ещё не запускался**.
+
+Все три MFA/recovery read-only аудита **9/9, 6/6, 7/7** завершены и не требуют повторного исследования; real staging Bitrix/MySQL **не подтверждён**. `NATIVE_PHONE_EVENT_ATOMICITY_PROVEN=NO`; `PRODUCTION_WRITE=NO`; `V5_HTTP=503` по последнему документированному состоянию.
