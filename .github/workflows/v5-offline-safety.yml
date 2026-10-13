@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 8
     steps:
       - name: Checkout feature source (without stored credentials)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
