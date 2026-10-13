@@ -369,3 +369,12 @@ New `tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php` checks this pro
 The prepared `tests/integration/V5BitrixNativeOrmTransactionAcceptance.php` now checks pinned depth zero and the actual staging permit before **each** synthetic BEGIN, then checks native depth 1/0, `CONNECTION_ID()` stability and MySQL transaction state around each rollback. A 14-check synthetic PHP test covered its SQL-session-state helper; the updated whole file and real MySQL/Bitrix E2E remain **not accepted**. Do not treat the original fake smoke of 2026-10-12 as a rerun of this revision.
 
 See `docs/SAMZABERU_V5_NATIVE_DEPTH_READER_2026-10-13.md` and `tests/integration/BITRIX_NATIVE_TRANSACTION_ACCEPTANCE.md`. Next: independently prove staging isolation; run read-only preflight there; review full output; only afterward authorize isolated staging synthetic writes. Production/V4 untouched; V5 HTTP 503 per last confirmed documentation. 
+
+
+## 2026-10-13 — CI verified / dedicated staging still missing
+
+A feature-branch-only, no-network/read-only PHP 8.4 workflow `.github/workflows/v5-offline-safety.yml` is now active; real GitHub Actions [run 38361251912](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38361251912) **completed SUCCESS** with PHP 8.4.26: native depth **18**, staging permit **62**, PDO compatibility bridge **80** synthetic assertions (160 total); lint for eight PHP files and both mandatory negative pre-bootstrap guards. The CI does **not** bootstrap Bitrix or connect to MySQL.
+
+Canonical preparation/infrastructure contract: `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md`. A dedicated Bitrix/MySQL staging has not been independently attested; do not confuse the bot's production Compose temporary-file staging with a separate Bitrix stage. Before any staging bootstrap, independently prove nonproduction host, DB server/credentials, sanitized data and blocked external SMS/RestIS/email/Telegram agents. Start with `V5BitrixNativeDepthReadOnlyPreflight.php` there; only after real PASS and separate operator approval permit the synthetic rollback test. Neither real stage script has run.
+
+`PRODUCTION_WRITE=NO`; `V4_UNCHANGED=YES`; `REAL_STAGING_E2E=NOT_RUN`; `V5_HTTP=503` (last documented baseline).
