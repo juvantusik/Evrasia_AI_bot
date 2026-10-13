@@ -1,6 +1,17 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
-## Актуальное продолжение: Native PHONE event 5/5, далее call-order
+## Новейшая точка: phone call order 6/6 SOURCE VERIFIED → косвенные V4 writes
+
+**Фактически последний операторский результат:** `v5_phone_confirmation_order_readonly.sh`, запущен на `evrasia`, `FINAL_STATUS=PASS`, `PASS_COUNT=6`, `FAIL_COUNT=0`, SHA всех 3 PHP source совпали; режим строго read-only, Bitrix не загружался, MySQL/SMS/production writes не было.
+
+Метаданные `Auth.php` (реальный production source SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`): `signup` uses phone-confirm helper (311/334/339), `UserPhoneAuthTable::add` (372). `confirm_request` has `CONFIRMED` refs (845/873/891/896), native `UserPhoneAuthTable::getList` (869), `::add` (876), `::getRowById` (880). `confirm` starts at 954 and references `CONFIRMED` at 1012, **no direct static UserPhoneAuthTable writer in the narrow classifier**. Native `UserPhoneAuthTable.php` SHA `3f9c093ee81923870ef8305e1afe7b277364515995517f2136c25f33d86f4991` callbacks `onBeforeAdd/onBeforeUpdate` (96/101) delegate to `modifyFields` (98/103) and normalize `PHONE_NUMBER` (112/115). `V4_PHONE_TABLE_STATIC_CALLS=4`, `V4_CONFIRMED_REFERENCES=5`, no inline literal Y assignment candidate; absence of matching regex **не доказывает** отсутствие dynamic/multiline `CONFIRMED` write.
+
+**Новая следующая команда только для read-only static inspection:** `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh` в feature. Она ещё **не запускалась на production**. Строгие source SHA V4, вывод только line/method/control-flow tokens и безопасных `->save/->update/->set` method identifiers (никаких original source lines, аргументов, телефонов, SMS). От пользователя следующим ожидается её stdout; разбирать именно его, не повторяя MFA 9/6/7 и phone inventory 5/6. CI [run 38393921083](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38393921083) **SUCCESS**: 6 bash lint, 48 PHP lint, 22 offline suite PASS, wrong-host denial; **не positive Bitrix runtime/DB**.
+
+**До реального staging:** `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, real repeated same-phone confirmation atomicity and `AUTH_EPOCH` shared transaction **NOT PROVEN**; `V5_HTTP=503` по последней документации, V4/production не менялись. [Подробный phone evidence doc](SAMZABERU_V5_PHONE_NATIVE_WRITER_DISCOVERY_2026-10-13.md) обновлён в feature, общий registry синхронизирован в обеих ветках. Физически изолированный Bitrix/MySQL staging остаётся отдельным обязательным барьером.
+
+
+## Завершённый предыдущий этап: native PHONE 5/5 (заменён результатом 6/6 выше)
 
 После завершения трёх MFA/recovery source-only аудитов (9/9, 6/6, 7/7) начата **параллельная** ещё не закрытая ветка V5 `PHONE_EVENT_VERSION` / подтверждение телефона. Оператор с `evrasia` предоставил stdout `v5_phone_event_writer_inventory_readonly.sh`: **5/5 PASS**, 0 FAIL, pinned V4 source SHA совпали, без Bitrix bootstrap/DB/доступа к пользовательским телефонам/секретам/SMS/production writes. Подтверждён native `bitrix/modules/main/lib/UserPhoneAuthTable.php` SHA `3f9c093ee81923870ef8305e1afe7b277364515995517f2136c25f33d86f4991`; `onBeforeAdd` (96), `onBeforeUpdate` (101), `modifyFields` (106), `normalizePhoneNumber` (123), `CONFIRMED` field reference (64). В действующем `Auth.php` найдены `confirm_request` (779), `confirm` (954), `signup` (263) и table/CONFIRMED references.
 
