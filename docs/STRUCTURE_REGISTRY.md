@@ -396,3 +396,21 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 Вместе с предыдущим подтверждённым `Otp::save: clearByUser(370) -> UserTable::add(374)` это доказывает, что `UserTable::OnBeforeAdd` **слишком поздно**, чтобы самостоятельно заключить очистку recovery и новый TOTP в одну transaction. Нужен owner transaction scope до всей операции, общая блокировка `b_user`, epoch CAS и совместный rollback, подтверждённые real isolated staging. Это отрицательное ограничение архитектуры, а не факт уже произошедшей потери recovery.
 
 **Следующий только source-only шаг** (в feature, подготовлен, на production ещё не запускался): `tests/diagnostics/v5_native_recovery_final_boundary_readonly.sh`. Смотрит узко `UserTable` delete callbacks, конец `regenerateCodes` и `BaseMergeTrait::getCachedMergeStrategy`, не повторяя прежние OTP/ORM сканы. GitHub CI [38378187055](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38378187055) PASS: Bash syntax всех 3 аудит-скриптов, 48 PHP files lint, 22 offline suites. Реальный staging Bitrix/MySQL не подтверждён. `PRODUCTION_WRITE=NO`, `NATIVE_MFA_ATOMICITY_PROVEN=NO`, `V5_HTTP=503` по последнему baseline.
+
+
+### 2026-10-13 — Native MFA recovery last source boundary VERIFIED 7/7; source audits complete
+
+Третий фактический operator READ_ONLY аудит `v5_native_recovery_final_boundary_readonly.sh` на `evrasia` завершился `PASS_COUNT=7`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`; исходные `UserTable.php`, `RecoveryCodesTable.php`, `MergeByDefaultTrait.php` совпали с pinned SHA. Не загружал Bitrix, не открывал SQL, не изменял production.
+
+**Новые точно подтверждённые факты нативного исходника:**
+
+- `UserTable::onAfterDelete` (101–105) вызывает `RecoveryCodesTable::clearByUser(USER_ID)` **после** SQL удаления MFA; это лишь event order, а не proof общих COMMIT/ROLLBACK.
+- `RecoveryCodesTable::regenerateCodes` делает цикл отдельных `static::add($code)` и возвращает `true` без проверки каждого `Result`.
+- `RecoveryCodesTable::useCode` (143–172) читает `USED=N`, вызывает `static::update(ID, USED=Y)`, не проверяет update Result, устанавливает `found=true`. Нет видимого атомарного CAS `WHERE USED=N`, блокировки `b_user` или transaction ownership. Следовательно, **однократное успешное использование при гонке не доказано**; двойной успех потенциальен, но на production не тестировался и не утверждается.
+- Новый verified SHA `BaseMergeTrait.php = 18deb72c645694c6378662056834f5c3dd0e409d8d3c271e4f49fd910c9ce5b8`. `getCachedMergeStrategy()` кэширует `new Merge(static::getEntity())`; trait не владеет транзакцией.
+
+**Архитектурное ограничение:** transaction scope/owner должен начинаться **до первой native MFA/recovery записи**, lock `b_user` первым, native ORM и epoch CAS выполняются на одном контролируемом Bitrix Mysqli connection, все Result/postconditions проверены и rollback доказан. ORM `UserTable::OnBeforeAdd` слишком поздний для preceding `clearByUser`, `OnAfterDelete` тоже поздний для предыдущего MFA SQL. Нельзя принять `useCode() === true` за assured recovery MFA доказательство. V5 не активировать до полного 10-path MFA/security atomicity proof.
+
+**Код:** в рабочей feature-ветке только расширен отрицательный synthetic `tests/V5NativeMutationCoverageTest.php`: 22 дополнительных проверок для delete/recovery → общий suite **82/82 PASS**. Существующий 10-path release gate не изменён. Проверенный [GitHub CI run 38381811549](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38381811549) SUCCESS, 22/22 offline suites, 48 PHP lint, три Bash syntax check. Подробный [дизайн MFA recovery атомарности](SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md) сохранён в обоих branch docs. Актуальный [checkpoint](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md) заменяет более раннюю задачу повторного native source audit.
+
+**ВСЕ ТРИ read-only источниковедческих шага этой цепочки ЗАКРЫТЫ: 9/9, 6/6, 7/7.** Не повторять. Следующий барьер — самостоятельно изолированный Bitrix/MySQL staging (пока `STAGING_ISOLATION_ATTESTED=NO`), затем реальный native shared-connection rollback, MFA/recovery fault-injection и конкурентный single-use consume. Никаких новых production SQL, хуков, миграций или SMS; `V4_UNCHANGED=YES`, `V5_HTTP=503` по последней документации.
