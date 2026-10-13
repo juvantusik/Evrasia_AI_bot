@@ -50,3 +50,14 @@
 The user provided two successful READ_ONLY source diagnostics: Bitrix settings point to **MYSQLI**, actual `MysqliConnection` source exists at lowercase `lib/db/mysqliconnection.php`, and native parent `Connection` / `MysqlCommonConnection` has `startTransaction/commitTransaction/rollbackTransaction`. The V5 source now includes a staged **same-application-connection compatibility layer** `V5BitrixPdoCompatibilityBridge.php` instead of a separate PDO connection (see `docs/SAMZABERU_V5_BITRIX_TRANSACTION_BRIDGE_2026-10-12.md`). **80/80 offline synthetic assertions PASS.**
 
 **No change to the ten-path compatibility verdict:** V5 native MFA writers/agent have not been shown to hold `b_user` mutex and bump shared `AUTH_EPOCH` in the same physical transaction. The live implementation of `V5NativeBitrixExclusiveTransactionPermitPort` does not exist either. A same-connection bridge alone does **NOT** solve those problems; never set `NATIVE_HOOKS_PROVEN_ATOMIC=YES` or activate V5 from these unit tests. Next: staging runtime Bitrix connection and native event coverage under a single accepted lock discipline.
+
+
+## 5. Next parallel source-order diagnostic (2026-10-13)
+
+Separate physical Bitrix/MySQL staging is **not yet attested**, so a real native transaction E2E cannot be claimed. In parallel, a *new*, narrowly scoped source-order audit is prepared at `site-integration/samzaberu-v5/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh`. It runs **only** on production host `evrasia` as root in `MODE=READ_ONLY`, verifies **six exact pinned SHA-256 hashes** from previous source inspections, then prints bounded **Bitrix core source fragments** for `Otp::save/delete`, `OtpEvents::onRecheckDeactivate`, `CSecurityUser::update/onAfterUserUpdate`, ORM Merge strategy, and ordered markers from `DataManager::sysAddInternal/update/delete`. The audit **does not** read configuration/secrets/users, launch Bitrix, open a DB connection, install any hook, or alter production. No source excerpt is printed before all six pins match.
+
+**Status now: SCRIPT PREPARED, NOT YET RUN ON PRODUCTION.** GitHub Action on the feature branch adds **`bash -n` only** for this diagnostic; its production source audit is **not executed** by CI and is not a substitute for the operator's pinned source output.
+
+After the operator shares the full script output, use the exact source ordering to separate native writer mutation boundaries that might allow a pre-write transaction/lock from post-write/after-event hooks that cannot establish atomic `AUTH_EPOCH` updates. Avoid inventing atomicity or promoting a 10-path coverage gate. The six-source audit is **not** full coverage of all ten mutation paths; phone verification, password resets and logout/session invalidation remain separately unproven. Staging remain a separate and required release gate.
+
+`PRODUCTION_WRITE=NO`, `DATABASE_CONNECTION=NO`, `BITRIX_BOOTSTRAP=NO`, `NATIVE_EVENT_ATOMICITY_PROVEN=NO`.
