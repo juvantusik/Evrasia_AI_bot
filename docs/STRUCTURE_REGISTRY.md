@@ -1,7 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-13 (последняя production SOURCE-VERIFIED диагностика телефона 5/5, новая script-only проверка call order подготовлена; схема `b_user` последний раз DB VERIFIED 2026-10-11).  
+> **Обновлено:** 2026-10-13 (production SOURCE-VERIFIED телефонные аудиты 5/5 и 6/6 PASS; новая санитарная проверка flow только в GitHub; схема `b_user` DB VERIFIED 2026-10-11).  
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -429,3 +429,23 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Следующий узкий, только source-only шаг:** новый `tests/diagnostics/v5_phone_confirmation_order_readonly.sh` в feature (проверены SHA всех 3 источников, без печати оригинальных строк/значений, выдаёт лишь call tags и номера строк в `signup`, `confirm_request`, `confirm` плюс native `UserPhoneAuthTable` callback). GitHub Actions [38392077308](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38392077308) SUCCESS: Bash -n пяти diagnostic files, PHP lint 48 files, 22 offline suites, pre-bootstrap staging guards. На production **этот второй телефонный скрипт ещё не запускался**.
 
 Все три MFA/recovery read-only аудита **9/9, 6/6, 7/7** завершены и не требуют повторного исследования; real staging Bitrix/MySQL **не подтверждён**. `NATIVE_PHONE_EVENT_ATOMICITY_PROVEN=NO`; `PRODUCTION_WRITE=NO`; `V5_HTTP=503` по последнему документированному состоянию.
+
+
+### 2026-10-13 — V4 phone confirmation source call-order operator 6/6 PASS
+
+Оператор предоставил фактический stdout `v5_phone_confirmation_order_readonly.sh` с `evrasia`: `PASS_COUNT=6`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Пинованные SHA **трёх** источников совпали: V4 `PhoneAuth.php` `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`, V4 `Controllers/V4/Auth.php` `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, native `UserPhoneAuthTable.php` `3f9c093ee81923870ef8305e1afe7b277364515995517f2136c25f33d86f4991`. Работа строго **READ_ONLY**, без Bitrix bootstrap, SQL, SMS, пользовательских/секретных значений и изменений production.
+
+**Новый установленный порядок статических call-site refs:**
+
+- `Auth::signup` (`Auth.php` начало 263): phone-confirm helper refs в строках **311, 334, 339**; `UserPhoneAuthTable::add` **372**.
+- `Auth::confirm_request` (779): `CONFIRMED` refs **845, 873, 891, 896**; `UserPhoneAuthTable::getList` **869**, `::add` **876**, `::getRowById` **880**.
+- `Auth::confirm` (954): `CONFIRMED` ref **1012**, прямой `UserPhoneAuthTable::add/update/delete` в узком marker-скане этого метода **не выявлен**.
+- Native `UserPhoneAuthTable::onBeforeAdd` **96** → `modifyFields` **98**; `::onBeforeUpdate` **101** → `modifyFields` **103**; `modifyFields` нормализует `PHONE_NUMBER` (112/115). Мета-аудит не обнаружил явного write `PHONE_EVENT_VERSION` или transaction-owner method в этих callback ranges.
+- `V4_PHONE_TABLE_STATIC_CALLS=4`, `V4_CONFIRMED_REFERENCES=5`, `NATIVE_CALLBACK_METADATA_MARKERS=12`; `CONFIRMED_Y_ASSIGNMENT_CANDIDATE` **не показан**. Это **узкое regex-ограничение**, а не доказательство отсутствия `CONFIRMED=Y` в динамических/многострочных выражениях или других helper calls.
+
+**Не доказаны:** реальная точка линейного подтверждения `CONFIRMED=N→Y`, что происходит при повторном подтверждении *того же E.164*, появляется ли в исходниках косвенный `->update/->save/->set`, гарантирован ли отдельный `PHONE_EVENT_VERSION` bump, общий native transaction/epoch CAS. Ни имя метода `confirm`, ни уже подтверждённая строка телефона не позволяют выдавать новый сильный фактор.
+
+**Следующий узкий шаг (GITHUB ONLY, еще не run на production):**
+`site-integration/samzaberu-v5/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh`. Точно пинует два подтверждённых V4 исходника; выводит **только безопасные идентификаторы методов, классификации условий/return, строковые номера** для `confirmation / signup / confirm_request / confirm` и `PhoneAuth::sendCode/check`. Никаких исходных строк/значений, SQL или Bitrix bootstrap. [GitHub CI run 38393921083](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38393921083) **SUCCESS**: 6 Bash syntax checks, 48 PHP lint, 22 offline suite, неправильный host отсекается до чтения. Этот run проверяет **синтаксис и защитный отказ**, не положительный анализ production-исходника.
+
+**Граница проекта неизменна:** MFA source-chain 9/9 + 6/6 + 7/7 закрыта; phone inventory 5/5 и call-order 6/6 завершены; ни V4, ни production, ни БД не изменены. Пока нет физически изолированного Bitrix/MySQL staging и full 10-path hook coverage, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `NATIVE_PHONE_EVENT_ATOMICITY_PROVEN=NO`, `V5_HTTP=503` (последний документированный baseline).
