@@ -1,5 +1,17 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## Новейший операторский результат: native phone semantic boundary 4/4 PASS
+
+Оператор фактически запустил на production `evrasia` `v5_phone_confirmation_semantic_boundary_readonly.sh`. SHA `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал, `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `SOURCE_ANCHORS_VALID=YES`. Никаких SQL, Bitrix bootstrap, SMS, пользовательских/секретных данных и production writes.
+
+**Новые source-only факты:** `PHONEUSER_CONFIRMED_ASSIGNMENT_VALUE=OTHER_OR_MULTILINE` на `Auth::confirm_request` line **891** (это **не** сразу литерал `Y`/`N`, но конкретное выражение неизвестно). `ROW_READ_ASSIGNED_TO_PHONEUSER_SAME_LINE=NOT_PROVEN` на **880**. `Auth::confirm` line **1012** `CONFIRM_1012_FIELD_KIND=OTHER_REFERENCE`, `CONFIRM_1012_HAS_Y_LITERAL=NO`, `CONFIRM_1012_HAS_N_LITERAL=NO`; классификация неизвестна, **не** отсутствие проверки. `PHONEUSER_DIRECT_REFS_AFTER_891=0`, `REQUEST_AFTER_891_NATIVE_PHONE_TABLE_MUTATOR_CALLS=0`, `CONFIRM_NATIVE_PHONE_TABLE_MUTATOR_CALLS=0` — только **прямые статические совпадения** в ограниченных диапазонах. `CONFIRM_INSTANCE_MUTATOR_LINE=1026` — уже известный `$obuser->Update` на CUser. Нельзя выводить физическое сохранение `CONFIRMED=Y`, atomicity или same E.164 repeat event.
+
+**СЛЕДУЮЩАЯ ОДНА source-only команда для оператора:** в feature подготовлен `site-integration/samzaberu-v5/tests/diagnostics/V5PhoneConfirmedExpressionTokens.php` плюс guarded `v5_phone_confirmed_expression_tokens_readonly.sh` (**ещё НЕ выполнен на `evrasia`**). После pinned SHA и host guard запускает только `php -n` встроенный `token_get_all` без include/eval/Bitrix bootstrap, печатает **только маскированную структуру** 16 фиксированных строк вокруг 891 и 1012 (класс токена и whitelisted `CONFIRMED`/`Y`/`N`/`$phoneuser`; нет реальных литералов/значений). Его положительный и два отрицательных synthetic tests, no secret leakage и wrong-host denial подтверждены [GitHub Actions run 38436298620](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38436298620), `completed/success` (22/22 approved PHP offline suites, PHP lint). Не путать с реальным Bitrix runtime.
+
+Не повторять уже закрытые MFA source audits 9/9+6/6+7/7 и phone source audits inventory 5/5, call order 6/6, flow 5/5, update receiver 4/4, array lineage corrected 4/4, semantic boundary 4/4. Нет отдельного проверенного Bitrix staging, native hooks/epoch/same-phone version bump не реализованы/не доказаны. Последний документированный V5 HTTP baseline = 503, V4/production unchanged.
+
+---
+
 ## АКТУАЛЬНЫЙ операторский результат: исправленная CONFIRMED lineage 4/4 PASS
 
 Оператор реально выполнил на production `evrasia` исправленный shell+`awk -f` source-only `v5_phone_confirmed_array_lineage_readonly.sh`: `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `SOURCE_ANCHORS_VALID=YES`. SHA проверенного `local/php_interface/Controllers/V4/Auth.php` — `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`. Bitrix, SQL, SMS, конфигурация и реальные данные пользователей не трогались. Предыдущий AWK-syntax FAIL исправлен, **повторно не проверять**.
