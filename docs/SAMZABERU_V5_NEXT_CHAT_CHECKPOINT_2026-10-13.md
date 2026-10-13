@@ -31,14 +31,26 @@
 
 Поскольку в уже проверенном `Otp::save()` `clearByUser()` вызывается **раньше** `UserTable::add()`, `UserTable::OnBeforeAdd` срабатывает слишком поздно, чтобы начинать транзакцию, охватывающую весь перевыпуск TOTP/recovery. Нужен owner scope **до удаления recovery**, общая блокировка `b_user`, epoch CAS и rollback на том же native DB handle. Это **техническое отрицательное ограничение**, НЕ доказательство реальной порчи recovery и НЕ подтверждение наличия такого owner scope. V5 остаётся закрытым.
 
-## 4. ТЕКУЩИЙ следующий шаг — НЕ РЕАЛИЗОВАН НА PRODUCTION
+## 4. ТРЕТИЙ ФАКТИЧЕСКИЙ production source-only аудит — 7/7 PASS
 
-Подготовлен **новый, ещё НЕ ВЫПОЛНЕННЫЙ** source-only `site-integration/samzaberu-v5/tests/diagnostics/v5_native_recovery_final_boundary_readonly.sh`, который проверяет только **3 exact source SHA** и выводит `UserTable` delete event (94–175), части `RecoveryCodesTable` (1–82, 125–175) и `BaseMergeTrait::getCachedMergeStrategy` со SHA. Не переизучать предыдущие исходники. Скрипт не загружает Bitrix, не подключается к БД, не читает пользователя и не пишет production.
+Оператор выполнил ранее подготовленный `v5_native_recovery_final_boundary_readonly.sh` на `evrasia`. Результат: `MODE=READ_ONLY`, `PASS_COUNT=7`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, три pinned SHA совпали, без Bitrix bootstrap, SQL и изменения production.
 
-GitHub Actions [38378187055](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38378187055) **SUCCESS**: `bash -n` всех трёх диагностик; PHP 8.4.26, 48 PHP lint PASS, 22 offline suite PASS, оба staging entrypoint без разрешения отказывают. **CI никогда не исполняет производственные source-audit скрипты**, только проверяет Bash-синтаксис.
+**Новые факты:**
+- `UserTable::onAfterDelete()` (101–105) вызывает `RecoveryCodesTable::clearByUser(USER_ID)` **после** нативного SQL удаления MFA. Один `OnAfterDelete` не доказывает общую транзакцию.
+- `RecoveryCodesTable::regenerateCodes()` (111–133) вызывает отдельные `static::add($code)` для десяти кодов и затем возвращает true, не проверяя каждую ORM Result.
+- `RecoveryCodesTable::useCode()` (143–172) выбирает `USED=N`, вызывает `static::update(ID, USED=Y)`, не проверяет Result и устанавливает `found=true` при совпадении строки. Атомарного условного consume `USED=N -> Y` в проверенном нативном методе нет. При конкуренции возможны два успешных ответа, но **это гипотеза безопасности, НЕ production incident / E2E proof**.
+- Впервые pinned `BaseMergeTrait.php` SHA `18deb72c645694c6378662056834f5c3dd0e409d8d3c271e4f49fd910c9ce5b8`: `getCachedMergeStrategy()` кэширует `new Merge(static::getEntity())`. Этот trait не является владельцем транзакции.
 
-Если следующее сообщение пользователя — stdout со строками `BASE_MERGE_TRAIT_SHA256`, `SOURCE=...UserTable.php`, `SOURCE=...BaseMergeTrait.php`, `FINAL_STATUS`, **сначала разбирать именно его**, не повторять 9/9 и 6/6 диагностики. Никаких production changes или полного переаудита `b_user`.
+**Все три связанные source-only диагностики завершены:** 9/9, 6/6, 7/7 PASS. Их **НЕ повторять**. В коде Bitrix production ничего не менялось.
 
-Независимый следующий барьер: отдельный физически изолированный Bitrix/MySQL staging согласно `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md`, **сначала** real read-only depth/permit preflight, и только после согласования — synthetic staging rollback. Ни один успешный источник/staging smoke не открывает V5: требуется ещё **10 независимых native MFA/security mutation paths**, общий `b_user` lock, `AUTH_EPOCH` + `PHONE_EVENT_VERSION`, конкурентный rollback и финансовые SMS guards.
+## 5. Принятое техническое ограничение и актуальная точка продолжения
 
-`PRODUCTION_WRITE=NO` · `DB_WRITE=NO` · `SMS_SENT=NO` · `V5_HTTP=503` (last documented baseline) · `STAGING_BITRIX_ATTESTED=NO` · `NATIVE_MFA_ATOMICITY_PROVEN=NO`.
+Полный доказательный разбор и **предложенный, ещё не реализованный** atomic owner-scope:
+[`SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md`](SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md).
+Главное: для MFA secret replacement / delete / recovery требуется один транзакционный scope **до первых recovery операций**, общий `b_user FOR UPDATE` mutex, один настоящий native Bitrix `Application::getConnection()`, проверка результатов или postconditions, `AUTH_EPOCH` CAS и доказанный rollback. `OnBeforeAdd` начинается уже после `clearByUser`, `OnAfterDelete` начинается после native DELETE. Нельзя считать `useCode() === true` доказательством безопасного одноразового recovery-подтверждения для V5.
+
+**Минимальное изменение кода только в GitHub feature**: расширены негативные `V5NativeMutationCoverageTest.php` для `OtpDeleteAndDisable` / `OtpRecoveryAndReset`. Действующий 10-path `V5NativeMutationCoverageMatrix` не менялся, дополнительный release gate НЕ создан. Проверенный [GitHub Actions run 38381811549](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38381811549) SUCCESS: **82/82 MFA coverage synthetic assertions**, **22/22 offline suite PASS**, 48 PHP lint PASS. Реальных MFA операций и БД тестов не было.
+
+**Следующий технический шаг** — не новые диагностические скрипты на production. Сначала независимое подтверждение/выделение изолированного Bitrix+MySQL staging согласно `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md`. На нём только после инфраструктурных guards — ранее подготовленный read-only native depth/permit preflight; затем, после отдельного разрешения, synthetic ORM/native rollback, fault-injection для OTP/recovery и конкурентный `useCode` consume, а также доказательство всех десяти native mutation paths с `AUTH_EPOCH`. Нельзя подменять staging одиночными успешными offline checks.
+
+`PRODUCTION_WRITE=NO` · `DB_WRITE=NO` · `SMS_SENT=NO` · `V5_HTTP=503` (последний документированный baseline) · `STAGING_BITRIX_ATTESTED=NO` · `NATIVE_MFA_ATOMICITY_PROVEN=NO`.
