@@ -8,6 +8,7 @@ FILE="$ROOT/$REL"
 PIN='72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362'
 PASS_COUNT=0
 FAIL_COUNT=0
+TOKENIZER_EXECUTED=NO
 pass() { PASS_COUNT=$((PASS_COUNT+1)); printf 'PASS: %s\n' "$1"; }
 fail() { FAIL_COUNT=$((FAIL_COUNT+1)); printf 'FAIL: %s\n' "$1"; }
 
@@ -18,7 +19,7 @@ finish() {
   printf 'MODE=READ_ONLY\nPRODUCTION_APPLICATION_WRITE=NO\n'
   printf 'DATABASE_CONNECTION=NO\nDATABASE_WRITE=NO\n'
   printf 'BITRIX_BOOTSTRAP=NO\nSITE_PHP_EXECUTED=NO\n'
-  printf 'PHP_TOKENIZER_EXECUTED=YES\nPHP_INI_LOADED=NO\n'
+  printf 'PHP_TOKENIZER_EXECUTED=%s\nPHP_INI_LOADED=NO\n' "$TOKENIZER_EXECUTED"
   printf 'USER_DATA_READ=NO\nCONFIG_FILES_READ=NO\n'
   printf 'SOURCE_LINES_PRINTED=NO\nSECRETS_PRINTED=NO\nSMS_SENT=NO\n'
   printf 'PHONE_EVENT_VERSION_WRITER=NOT_PROVEN\n'
@@ -80,6 +81,7 @@ fi
 pass 'PHP tokenizer available with php.ini disabled'
 
 printf '\n=== 4. EXACT TWO CONFIRMED EXPRESSIONS / SANITIZED TOKEN SHAPES ===\n'
+TOKENIZER_EXECUTED=YES
 if ! php -n "$PARSER" --source-only "$FILE"; then
   fail 'static target token classification failed'
   exit 1
