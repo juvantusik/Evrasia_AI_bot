@@ -47,7 +47,15 @@ jobs:
               bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_final_boundary_readonly.sh"
-              echo "PASS: all three read-only Bitrix source audits shell syntax"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_event_writer_inventory_readonly.sh"
+              echo "PASS: all four read-only Bitrix source audits shell syntax"
+              if bash "$ROOT/tests/diagnostics/v5_phone_event_writer_inventory_readonly.sh" > /tmp/v5-phone-inventory-denial.log 2>&1; then
+                echo "FAIL: production-only phone inventory accepted CI sandbox"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-inventory-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-inventory-denial.log
+              echo "PASS: phone audit refused wrong host before source access"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
