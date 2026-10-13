@@ -1,7 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-13 (production SOURCE-VERIFIED телефонные аудиты 5/5 и 6/6 PASS; новая санитарная проверка flow только в GitHub; схема `b_user` DB VERIFIED 2026-10-11).  
+> **Обновлено:** 2026-10-13 (production SOURCE-VERIFIED телефонные аудиты 5/5 + 6/6 + 5/5 PASS; новый pin-only update receiver audit GitHub-only; схема `b_user` DB VERIFIED 2026-10-11).  
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -449,3 +449,15 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh`. Точно пинует два подтверждённых V4 исходника; выводит **только безопасные идентификаторы методов, классификации условий/return, строковые номера** для `confirmation / signup / confirm_request / confirm` и `PhoneAuth::sendCode/check`. Никаких исходных строк/значений, SQL или Bitrix bootstrap. [GitHub CI run 38393921083](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38393921083) **SUCCESS**: 6 Bash syntax checks, 48 PHP lint, 22 offline suite, неправильный host отсекается до чтения. Этот run проверяет **синтаксис и защитный отказ**, не положительный анализ production-исходника.
 
 **Граница проекта неизменна:** MFA source-chain 9/9 + 6/6 + 7/7 закрыта; phone inventory 5/5 и call-order 6/6 завершены; ни V4, ни production, ни БД не изменены. Пока нет физически изолированного Bitrix/MySQL staging и full 10-path hook coverage, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `NATIVE_PHONE_EVENT_ATOMICITY_PROVEN=NO`, `V5_HTTP=503` (последний документированный baseline).
+
+### 2026-10-13 — V4 phone confirmation indirect update source flow 5/5
+
+**Фактический операторский вывод:** `v5_phone_confirmation_transition_flow_readonly.sh` на production `evrasia`: `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Два pinned V4 source SHA совпали (`Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, `PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`). Исключительно **SOURCE ONLY**, без PHP/Bitrix bootstrap, SQL, SMS, пользователей, конфигурации и production-записей; оригинальные строки PHP не печатались.
+
+**Точное новое наблюдение:** `Auth::confirmation` (method 60) имеет `getList` 96, `fetch` 100, **`->update` 137**. `Auth::confirm_request` (779) содержит `CONFIRMED` reference 845, **`->update` 851**, затем native `UserPhoneAuthTable::getList` 869, `::add` 876, `::getRowById` 880, ещё `CONFIRMED` references 873/891/896. `Auth::confirm` (954) содержит `CONFIRMED` reference 1012 и **`->update` 1026**. СИНТАКСИЧЕСКИЙ `->update` **не определяет владельца таблицы**: ни обновление `b_user_phone_auth.CONFIRMED=Y`, ни повторная телефонная верификация на основании этих меток ещё не доказаны.
+
+`PhoneAuth::sendCode` (65–123) вызывает `sendSms` на 115, `PhoneAuth::check` (135–179) содержит проверку токенов (`createTokens` 162) и ветвления без явных native phone-table writes в этом ограниченном скане. Это не доказательство успешной SMS-доставки и не исключение опосредованной записи.
+
+**Следующий только read-only сценарий** (GITHUB-ONLY, на production ещё НЕ запускался): `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_update_receiver_readonly.sh`. Жёстко проверяет SHA текущего `Auth.php` и строки 137/851/1026, выводит только source identifiers receiver-переменных, whitelisted reference tags полей `CONFIRMED/PHONE_NUMBER/ACTIVE/USER_ID`, basic provenance и control-flow line numbers; нет исходного кода или значений. CI GitHub Actions [38396960091](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38396960091) **SUCCESS**: 7 Bash -n, 48 PHP lint, 22 offline suite, wrong-host denial новой диагностики. CI не доказывает положительный запуск на Bitrix.
+
+Все прежние MFA source-only аудиты 9/9, 6/6, 7/7 и телефонные инвентаризации 5/5, 6/6, новый source-flow 5/5 уже приняты — **не повторять**. Отдельный Bitrix+MySQL staging не подтверждён, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, same E.164 reconfirm bump и native ORM/epoch atomicity не доказаны, V5 HTTP 503 по последнему документированному baseline; V4/production не изменялись.
