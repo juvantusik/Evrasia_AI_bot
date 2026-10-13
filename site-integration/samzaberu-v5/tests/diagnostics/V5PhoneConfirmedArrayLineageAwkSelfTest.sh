@@ -2,9 +2,9 @@
 # Pure synthetic fixture: positively parse and exercise exact production AWK.
 set -Eeuo pipefail
 umask 077
-[[ "\${1:-}" == '--synthetic-only' ]] || { echo 'FAIL: must select --synthetic-only'; exit 1; }
+[[ "${1:-}" == '--synthetic-only' ]] || { echo 'FAIL: must select --synthetic-only'; exit 1; }
 
-here="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd)"
+here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 analyzer="$here/v5_phone_confirmed_array_lineage.awk"
 [[ -f "$analyzer" && -r "$analyzer" && ! -L "$analyzer" ]] || exit 1
 
