@@ -1,6 +1,20 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
-## Последняя подтверждённая точка: PHONE flow 5/5 → update receiver
+## Последняя принятая диагностика: PHONE update receiver 4/4 → CONFIRMED array lineage
+
+Оператор выполнил на `evrasia` `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_update_receiver_readonly.sh`, предоставил stdout: **PASS_COUNT=4, FAIL_COUNT=0, FINAL_STATUS=PASS, FINAL_RC=0**; pinned `Controllers/V4/Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал. Не было Bitrix bootstrap/SQL/SMS/изменений production, PHP-source/значения не печатались.
+
+Установлены синтаксические receiver для всех 3 известных `->update`: **`$obuser`** в `Auth::confirmation()` line **137**, `Auth::confirm_request()` **851**, `Auth::confirm()` **1026**. В каждом методе рядом найден `new CUser` (136, 835, 1025) и обращение к `ACTIVE` (138, 852, 1027). Значит это **CUser update ветки**, а не прямые `UserPhoneAuthTable::update`; тип и состав аргументов полностью не печатались. Самостоятельно от них в `confirm_request` на строке **891** есть **`$ARRAY['CONFIRMED']=...`** (имя конкретного array receiver пока неизвестно); `UserPhoneAuthTable::getList` **869**, `::add` **876**, `::getRowById` **880**. `Auth::confirm()` reference к `CONFIRMED` **1012**. Запись PHP array НЕ доказывает персистентное `CONFIRMED=Y`, общий `PHONE_EVENT_VERSION` CAS и single-event reconfirm того же E.164.
+
+**СЛЕДУЮЩИЙ и ТОЛЬКО следующий операторский шаг:** `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh` (есть только в feature branch, **ещё не запускался на `evrasia`**). Скрипт проверяет pinned SHA `Auth.php`, exact anchors 869/876/880/891/1012, сообщает только `CONFIRMED_ARRAY_VARIABLE`, символические ссылки на использование переменной после строки 891 и whitelist class/method tags. Нет PHP statements, values/phone/SMS, config, Bitrix bootstrap или SQL. При `FAIL` исследовать причину, **не перепроверять** предыдущие 4 аудита и MFA.
+
+GitHub CI [38398655750](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38398655750) `completed/success`: **8 Bash lints, 48 PHP files lint, 22 offline suites PASS, wrong-host denial** нового диагностического скрипта. Это НЕ реальный Bitrix proof.
+
+**Текущие незакрытые gates:** `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, native same-phone reconfirm revocation не доказана, нет независимого Bitrix/MySQL staging и общего 10-path `AUTH_EPOCH` atomicity. В V4 и production не вносились изменения, HTTP V5 503 — **последний документированный baseline**, а не новый runtime-check. Предыдущие MFA source audits 9/9+6/6+7/7, phone inventory 5/5, call order 6/6, flow 5/5, receiver 4/4 **ЗАВЕРШЕНЫ и не требуют повторного запуска**.
+
+---
+
+## Предыдущий закрытый этап: PHONE flow 5/5 → update receiver
 
 Оператор прислал stdout `v5_phone_confirmation_transition_flow_readonly.sh` с production `evrasia`. **5/5 PASS**, SHA pinned `Controllers/V4/Auth.php` и `lib/PhoneAuth.php` совпали; SQL/Bitrix bootstrap/SMS/production writes = NO. Новый подтверждённый source факт: `Auth::confirmation()->update` **строка 137**, `Auth::confirm_request()->update` **851**, `Auth::confirm()->update` **1026**. Последний имеет reference к `CONFIRMED` в строке **1012**, `confirm_request` — **845/873/891/896**. Другие источники ранее показали `UserPhoneAuthTable::getList` 869, `::add` 876, `::getRowById` 880 и нативную `UserPhoneAuthTable.php` SHA `3f9c093ee81923870ef8305e1afe7b277364515995517f2136c25f33d86f4991`. Этого НЕ достаточно, чтобы утверждать, какой update меняет поле `CONFIRMED` или используется при reconfirm того же номера.
 
@@ -12,7 +26,7 @@
 
 ---
 
-## Новейшая точка: phone call order 6/6 SOURCE VERIFIED → косвенные V4 writes
+## Ранее закрытый этап: phone call order 6/6 SOURCE VERIFIED
 
 **Фактически последний операторский результат:** `v5_phone_confirmation_order_readonly.sh`, запущен на `evrasia`, `FINAL_STATUS=PASS`, `PASS_COUNT=6`, `FAIL_COUNT=0`, SHA всех 3 PHP source совпали; режим строго read-only, Bitrix не загружался, MySQL/SMS/production writes не было.
 
