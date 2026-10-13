@@ -1,7 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-13 (phone native source-only последовательность 5/5 + 6/6 + 5/5 + 4/4 + исправленный 4/4 PASS; N/Y semantic-source-only этап подготовлен и позитивно проверен в CI; схема `b_user` DB VERIFIED 2026-10-11).
+> **Обновлено:** 2026-10-13 (Native phone audits 5/5+6/6+5/5+4/4+4/4+semantic 4/4 source-only PASS; следующий masked-tokenizer аудит GitHub-only и CI VERIFIED; `b_user` DB SOURCE 2026-10-11).
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -491,3 +491,13 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Следующий без изменений production:** в feature добавлены только `tests/diagnostics/v5_phone_confirmation_semantic_boundary.awk`, guarded `v5_phone_confirmation_semantic_boundary_readonly.sh` и synthetic-only `V5PhoneConfirmationSemanticBoundarySelfTest.sh`. Классифицируют RHS `CONFIRMED` присвоения на строке 891 как N/Y/OTHER и ссылку на 1012, а также отмечают native phone-table mutator calls в ограниченном методном диапазоне; это уточнит фактический request/confirm контракт. До source-only запуска пользователем на `evrasia` результат **неизвестен**. GitHub Actions [38434850663](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38434850663) SUCCESS: AWK parser N/Y positives, tampered anchor negatives, wrong-host denial, 48 PHP lint PASS, 22 offline suites PASS. CI не читал production PHP.
 
 Общий release gate остаётся **fail closed**: `NATIVE_PHONE_EVENT_ATOMICITY_PROVEN=NO`, `SAME_PHONE_RECONFIRM_ATOMICITY=NOT_PROVEN`, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, isolated Bitrix staging не подтверждён, V5 HTTP 503 по последней документации. Production/V4 не менялись.
+
+### 2026-10-13 — Native phone request and confirm semantic source 4/4 PASS
+
+Оператор запустил на `evrasia` source-only `v5_phone_confirmation_semantic_boundary_readonly.sh` из предыдущего шага: `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `SOURCE_ANCHORS_VALID=YES`, pinned `Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал. **Никаких production V4/DB/SMS writes и Bitrix bootstrap не было.**
+
+Проверено **только статически**: `Auth::confirm_request` line 891 `$phoneuser['CONFIRMED']` содержит `OTHER_OR_MULTILINE` — значение не равно простому `'Y'/'N'` сразу после `=`, точный RHS ещё неизвестен. На 880 `ROW_READ_ASSIGNED_TO_PHONEUSER_SAME_LINE=NOT_PROVEN`. В `Auth::confirm` line 1012 `CONFIRM_1012_FIELD_KIND=OTHER_REFERENCE`, `CONFIRM_1012_HAS_Y_LITERAL=NO`, `CONFIRM_1012_HAS_N_LITERAL=NO`. После 891 до 938 прямых `$phoneuser` refs = 0 и прямых `UserPhoneAuthTable` mutator calls = 0; в confirm прямых native phone mutator calls = 0. При этом `CUser` instance `Update` 1026 существует. Это ограниченный static result, не доказательство отсутствия подтверждения телефона в других слоях Bitrix.
+
+**Следующая готовая диагностика только в GitHub feature:** `tests/diagnostics/V5PhoneConfirmedExpressionTokens.php` и guarded `v5_phone_confirmed_expression_tokens_readonly.sh`. PHP built-in `token_get_all` с `php -n`, без PHP/Bitrix include/eval, строго pinned SHA исходника, 16 whitelisted line positions, output только fixed token types/whitelisted `CONFIRMED`, `Y/N`, `$phoneuser`, literal/variable/unknown identifier значения всегда маскируются. Полный позитивный + два негативных synthetic parser executions и `wrong-host` guards [GitHub Actions 38436298620](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38436298620) SUCCESS; 22 approved offline suites PASS и PHP lint PASS. **На `evrasia` новый токенизатор ещё не запускался**.
+
+Для release V5 нужно доказать native phone verification event и **same E.164 reconfirm** bump в той же physical Bitrix/MySQL transaction с `PHONE_EVENT_VERSION`, `AUTH_EPOCH`, и 10 native write paths. Эти контракты ещё `NOT_PROVEN`, независимого Bitrix/MySQL staging нет; `V5_HTTP=503` только по последнему документированному baseline. MFA/recovery audits и все прежние phone inventories закрыты, повторять нельзя.
