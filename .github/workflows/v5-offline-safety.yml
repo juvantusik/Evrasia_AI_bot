@@ -52,7 +52,11 @@ jobs:
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_update_receiver_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh"
-              echo "PASS: eight read-only Bitrix source audit scripts linted"
+              bash -n "$ROOT/tests/diagnostics/V5PhoneConfirmedArrayLineageAwkSelfTest.sh"
+              echo "PASS: eight read-only Bitrix source audit scripts and parser selftest shell syntax linted"
+              echo "=== 2B. POSITIVE + NEGATIVE POSIX AWK REGRESSION (SYNTHETIC ONLY) ==="
+              bash "$ROOT/tests/diagnostics/V5PhoneConfirmedArrayLineageAwkSelfTest.sh" --synthetic-only
+              echo "PASS: real POSIX AWK executed safe synthetic source; altered anchors fail closed"
               if bash "$ROOT/tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh" > /tmp/v5-phone-lineage-denial.log 2>&1; then
                 echo "FAIL: phone lineage audit incorrectly accepted CI sandbox"
                 exit 1
