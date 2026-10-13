@@ -1,5 +1,19 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## АКТУАЛЬНЫЙ операторский результат: исправленная CONFIRMED lineage 4/4 PASS
+
+Оператор реально выполнил на production `evrasia` исправленный shell+`awk -f` source-only `v5_phone_confirmed_array_lineage_readonly.sh`: `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `SOURCE_ANCHORS_VALID=YES`. SHA проверенного `local/php_interface/Controllers/V4/Auth.php` — `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`. Bitrix, SQL, SMS, конфигурация и реальные данные пользователей не трогались. Предыдущий AWK-syntax FAIL исправлен, **повторно не проверять**.
+
+Критический установленный source-факт: **`$phoneuser['CONFIRMED'] = ...` в `Auth::confirm_request()` на строке 891**. `CONFIRMED_ARRAY_VARIABLE=$phoneuser`, `CONFIRMED_RECEIVER_REUSES_AFTER_891=0` (только прямое текстовое использование на строках 892–938, не реальное runtime absence). `UserPhoneAuthTable::getList` 869, `::add` 876 и `::getRowById` 880 идут РАНЬШЕ присвоения на 891. `Auth::confirm()` на строке 1012 имеет `CONFIRMED` reference, но переменная владельца этого выражения не определена (`CONFIRM_METHOD_CONFIRMED_RECEIVER=UNRESOLVED`). Пять class call markers включают `cuser::generatephonecode` 901, `usertable::getlist` 992, `Auth::confirm()` instance mutation 1026 (ранее receiver `$obuser` — CUser). **Прямой записи в БД `CONFIRMED=N→Y` и PHONE_EVENT_VERSION bump этот результат не доказывает.**
+
+**Текущий следующий узкий шаг:** создана в feature, ещё **НЕ выполнялась на production**, `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_confirmation_semantic_boundary_readonly.sh` вместе с `v5_phone_confirmation_semantic_boundary.awk`. Использует тот же pinned SHA, отмечает классификацию RHS для `$phoneuser['CONFIRMED']` на строке 891 (`LITERAL_N`, `LITERAL_Y`, `OTHER_OR_MULTILINE`), классификацию `CONFIRMED` reference на 1012 и scoped native phone-table mutator call counts после 891 и в confirm, без вывода исходных строк или значений телефонов/SMS. Только source-metadata, не физическая транзакция. Два предыдущих source-аудита 4/4 и все MFA/phone инвентаризации не повторять.
+
+Перед подготовкой пользователю диагностического блока положительные и отрицательные **реальные AWK исполнения на синтетических PHP-строках** прошли [GitHub Actions run 38434850663](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38434850663) `completed/success` на commit `c7d26fc2e649759ec387833ff35886b7ecfe69fb`: N/Y literal classification, tampered 891/1012 rejection, wrong-host denial, 48 PHP lint, 22 offline suites, 9 audit shell lints + selftests.
+
+**Неактивное состояние неизменно:** `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `SAME_PHONE_RECONFIRM_ATOMICITY=NOT_PROVEN`, native shared DB transaction / 10-path mutation coverage NOT PROVEN, отдельного проверенного Bitrix+MySQL staging НЕТ; `V5_HTTP=503` — последний документированный baseline. Production/V4/SMS/DB не менялись; source-only аудит не является E2E runtime proof.
+
+---
+
 ## АКТУАЛЬНО: phone array lineage — первый запуск FAIL из-за AWK, исправление offline CI PASS
 
 Поступил и разобран полный stdout **последнего** production read-only `v5_phone_confirmed_array_lineage_readonly.sh` на `evrasia`. **Это FAIL, не PASS**: `PASS_COUNT=2`, `FAIL_COUNT=1`, `FINAL_STATUS=FAIL`, `FINAL_RC=1`. Host guard и проверка ранее pinned V4 `Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` прошли. На AWK `emit(` с переносом сразу после открывающей скобки пришло `unexpected newline or end of string` (cmd line 79), поэтому анализ `CONFIRMED_ARRAY_VARIABLE` **НЕ состоялся**. Никаких Bitrix bootstrap, DB, SMS или production writes. Не трактовать FAIL как сбой функционала.
