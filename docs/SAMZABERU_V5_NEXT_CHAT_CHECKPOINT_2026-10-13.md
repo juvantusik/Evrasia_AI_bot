@@ -1,6 +1,18 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
-## Последняя принятая диагностика: PHONE update receiver 4/4 → CONFIRMED array lineage
+## АКТУАЛЬНО: phone array lineage — первый запуск FAIL из-за AWK, исправление offline CI PASS
+
+Поступил и разобран полный stdout **последнего** production read-only `v5_phone_confirmed_array_lineage_readonly.sh` на `evrasia`. **Это FAIL, не PASS**: `PASS_COUNT=2`, `FAIL_COUNT=1`, `FINAL_STATUS=FAIL`, `FINAL_RC=1`. Host guard и проверка ранее pinned V4 `Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` прошли. На AWK `emit(` с переносом сразу после открывающей скобки пришло `unexpected newline or end of string` (cmd line 79), поэтому анализ `CONFIRMED_ARRAY_VARIABLE` **НЕ состоялся**. Никаких Bitrix bootstrap, DB, SMS или production writes. Не трактовать FAIL как сбой функционала.
+
+**Только GitHub feature исправлен диагностический парсер**: `tests/diagnostics/v5_phone_confirmed_array_lineage.awk` — отдельный POSIX AWK файл; wrapper `tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh` теперь вызывает `awk -f`; CI selftest `tests/diagnostics/V5PhoneConfirmedArrayLineageAwkSelfTest.sh` выполняет именно этот AWK на **синтетической** 1040-строчной фикстуре с правильными 869/876/880/891/1012 и двумя отклонениями, все положительные и отрицательные сценарии PASS. Проверен [GitHub Actions 38425322406](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38425322406) `completed/success`: POSIX awk execution positive + two malformed anchors negative, 48 PHP lint, 22 offline suites, wrong-host denial. Предыдущие CI-checks только lint bash и wrong-host; недостающий позитивный AWK тест теперь добавлен. **На настоящем `Auth.php` исправленный код ещё НЕ запускали**.
+
+**Следующий ответ пользователя ожидается от исправленного ОДНОГО wrapper-командного блока**, генерирующего локальный temporary AWK через heredoc и проверяющего точный SHA исходника. Из вывода интересуют только `SOURCE_ANCHORS_VALID`, `CONFIRMED_ARRAY_VARIABLE`, `CONFIRMED_RECEIVER_REUSES_AFTER_891`, `FINAL_STATUS`, без повторения других проверок.
+
+Уже завершено и не повторять: MFA source checks 9/9+6/6+7/7, phone inventory 5/5, phone call-order 6/6, phone flow 5/5, receiver 4/4; сбой был **только** в последнем parser. Без isolated Bitrix/MySQL staging и native 10-path proof сохраняются `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `SAME_PHONE_RECONFIRM_ATOMICITY=NOT_PROVEN`, `V5_HTTP=503` по последнему baseline. Никаких production/V4 изменений.
+
+---
+
+## Предыдущая принятая диагностика: PHONE update receiver 4/4 → CONFIRMED array lineage
 
 Оператор выполнил на `evrasia` `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_update_receiver_readonly.sh`, предоставил stdout: **PASS_COUNT=4, FAIL_COUNT=0, FINAL_STATUS=PASS, FINAL_RC=0**; pinned `Controllers/V4/Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал. Не было Bitrix bootstrap/SQL/SMS/изменений production, PHP-source/значения не печатались.
 
