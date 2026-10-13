@@ -50,7 +50,15 @@ jobs:
               bash -n "$ROOT/tests/diagnostics/v5_phone_event_writer_inventory_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh"
-              echo "PASS: all six read-only Bitrix source audits shell syntax"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_update_receiver_readonly.sh"
+              echo "PASS: seven read-only Bitrix source audit scripts linted"
+              if bash "$ROOT/tests/diagnostics/v5_phone_update_receiver_readonly.sh" > /tmp/v5-phone-update-denial.log 2>&1; then
+                echo "FAIL: targeted phone update audit accepted CI host"
+                exit 1
+              fi
+              grep -Fxq "BITRIX_BOOTSTRAP=NO" /tmp/v5-phone-update-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-update-denial.log
+              echo "PASS: update-receiver diagnostic fails closed outside pinned production host"
               if bash "$ROOT/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh" > /tmp/v5-phone-flow-denial.log 2>&1; then
                 echo "FAIL: phone transition flow accepted CI sandbox"
                 exit 1
