@@ -1,7 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-13 (production SOURCE-VERIFIED телефонные аудиты 5/5 + 6/6 + 5/5 PASS; новый pin-only update receiver audit GitHub-only; схема `b_user` DB VERIFIED 2026-10-11).  
+> **Обновлено:** 2026-10-13 (production SOURCE-VERIFIED телефонные аудиты 5/5 + 6/6 + 5/5 + 4/4 PASS; новый CONFIRMED field-array lineage audit GitHub-only; схема `b_user` DB VERIFIED 2026-10-11).  
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -461,3 +461,15 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Следующий только read-only сценарий** (GITHUB-ONLY, на production ещё НЕ запускался): `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_update_receiver_readonly.sh`. Жёстко проверяет SHA текущего `Auth.php` и строки 137/851/1026, выводит только source identifiers receiver-переменных, whitelisted reference tags полей `CONFIRMED/PHONE_NUMBER/ACTIVE/USER_ID`, basic provenance и control-flow line numbers; нет исходного кода или значений. CI GitHub Actions [38396960091](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38396960091) **SUCCESS**: 7 Bash -n, 48 PHP lint, 22 offline suite, wrong-host denial новой диагностики. CI не доказывает положительный запуск на Bitrix.
 
 Все прежние MFA source-only аудиты 9/9, 6/6, 7/7 и телефонные инвентаризации 5/5, 6/6, новый source-flow 5/5 уже приняты — **не повторять**. Отдельный Bitrix+MySQL staging не подтверждён, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, same E.164 reconfirm bump и native ORM/epoch atomicity не доказаны, V5 HTTP 503 по последнему документированному baseline; V4/production не изменялись.
+
+### 2026-10-13 — V4 phone writer update receivers 4/4 PASS, CONFIRMED array assignment
+
+Оператор выполнил на `evrasia` `v5_phone_update_receiver_readonly.sh`. `FINAL_STATUS=PASS`, `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_RC=0`, точный SHA V4 `Auth.php = 72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал. Это **статический SOURCE-ONLY аудит**: Bitrix не загружен, нет SQL, SMS, секретов/PII, исходные строки PHP не выводились и production не изменялся.
+
+**Три статически подтверждённых update receiver:** `Auth::confirmation` — `new CUser` (стр. 136) рядом с `$obuser->update` (**137**); `Auth::confirm_request` — `new CUser` (835), `$obuser->update` (**851**); `Auth::confirm` — `new CUser` (1025), `$obuser->update` (**1026**). У всех трёх рядом ссылки на `ACTIVE` — соответственно **138, 852, 1027**. Эти вызовы **не являются прямыми `UserPhoneAuthTable::update()`**. По данным мета-аудита нельзя утверждать тип всех аргументов и факт записи phone confirmation.
+
+**Новый важный source-факт:** `Auth::confirm_request()` строка **891** — `FIELD_CONFIRMED_SUBSCRIPT_WRITE`, запись в элемент PHP массива `['CONFIRMED']`; далее `CONFIRMED` reference **896**. Native phone table `::getList` **869**, `::add` **876**, `::getRowById` **880**, но факт сохранения изменённого массива, успешного `CONFIRMED=N→Y` и отдельного события повторной верификации того же E.164 **НЕ доказан**. В `Auth::confirm()` есть `CONFIRMED` reference **1012**, но три найденных instance update вызываются на `$obuser`, не непосредственно на phone table.
+
+**Следующий подготовленный ТОЛЬКО read-only source шаг**: `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh` (feature GitHub-only, на production ещё **НЕ запускался**). Pinned SHA V4 `Auth.php`, строго проверяет source anchors 869/876/880/891/1012, печатает только имя receiver массива `CONFIRMED`, классы/методы из whitelist и символические метки дальнейших использований до 938 и в confirm 992–1034. Никаких source values/строк, SQL/Bitrix/SMS, пользовательских данных. На `FAIL` не продолжать изменения.
+
+Проверенный CI [38398655750](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38398655750) SUCCESS (PHP lint 48, offline suites 22, Bash lint 8, wrong-host deny нового скрипта). Это ещё **не положительный run скрипта на production**. Ранее завершённые MFA read-only audits 9/9+6/6+7/7 и phone audits 5/5+6/6+5/5+4/4 повторять не нужно. `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, native reconfirm+epoch transaction и десять writer coverage pathways не доказаны, staging Bitrix+MySQL не аттестован, V5 HTTP 503 по последнему документированному baseline. Production/V4 не менялись.
