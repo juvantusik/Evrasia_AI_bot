@@ -378,3 +378,10 @@ A feature-branch-only, no-network/read-only PHP 8.4 workflow `.github/workflows/
 Canonical preparation/infrastructure contract: `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md`. A dedicated Bitrix/MySQL staging has not been independently attested; do not confuse the bot's production Compose temporary-file staging with a separate Bitrix stage. Before any staging bootstrap, independently prove nonproduction host, DB server/credentials, sanitized data and blocked external SMS/RestIS/email/Telegram agents. Start with `V5BitrixNativeDepthReadOnlyPreflight.php` there; only after real PASS and separate operator approval permit the synthetic rollback test. Neither real stage script has run.
 
 `PRODUCTION_WRITE=NO`; `V4_UNCHANGED=YES`; `REAL_STAGING_E2E=NOT_RUN`; `V5_HTTP=503` (last documented baseline).
+
+
+## 2026-10-13 — Full reviewed offline CI coverage: 22 suites
+
+The feature-only, network-isolated / read-only GitHub Action now tests the entire reviewed V5 offline matrix rather than only the newest native transaction classes. [Run 38363042677](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38363042677) at commit `e034a9c751c99315307c648094c509103322edb4` **SUCCESS** on PHP 8.4.26: **48 PHP files lint PASS**, **22 approved offline test suites PASS**, and both staging entrypoints reject missing authorization before Bitrix bootstrap. The full regression covers authentication, TOTP decision/fallback, account reader and password proof, first-factor attempt budgets, SMS quota/outbox/verified phone, event epoch/10-path coverage, V5 session policy, native Mysqli bridge and depth reader. Tests remain synthetic/static only.
+
+**Do not run positive real integration on production.** A separately isolated staging Bitrix / MySQL instance and security-isolated credentials have not been confirmed; the next real step is staging isolation attestation per `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md`, then the already prepared read-only staging depth preflight. `V4_UNCHANGED=YES`, `PRODUCTION_WRITE=NO`, `V5_HTTP=503` (last confirmed baseline).
