@@ -33,3 +33,14 @@ The existing `tests/integration/V5BitrixNativeOrmTransactionAcceptance.php` was 
 **Next approved sequence:** establish isolated staging Bitrix+MySQL with independently controlled credentials; run only the read-only preflight, capture its complete result; after a real preflight PASS and explicit staging-write approval, lint and run the separately guarded ORM/native rollback test on the *synthetic-only* test table; then independently investigate the 10-path native MFA/security event atomics. No staging test has actually been run.
 
 `PRODUCTION_WRITE=NO` · `BITRIX_SITE_WRITE=NO` · `V4_UNCHANGED=YES` · `V5_HTTP=503` (last documented state) · `REAL_STAGING_E2E=NOT_RUN`.
+
+
+## 2026-10-13 — isolated PHP CI and staging readiness
+
+GitHub-only `.github/workflows/v5-offline-safety.yml` added in the V5 feature branch. Runs only for that branch's V5 path/workflow changes or manually; restricted `permissions: contents: read`, `actions/checkout@v5` with `persist-credentials: false`, Docker PHP 8.4 CLI with `--network none`, `--read-only`, read-only source mount and ephemeral `/tmp`. It does not use repository secrets, start Bitrix, connect to MySQL, send SMS, build the server image, or deploy.
+
+**Actually verified GitHub Actions run:** [38361251912](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38361251912), commit `8feacb94810b6ba8ff11c5382b3bfe1ee482b094`, `completed/success`, PHP **8.4.26**. Source tests: pinned native-depth reader **18 assertions PASS**, staging permit **62 PASS**, Bitrix Mysqli compatibility bridge **80 PASS** (total **160 synthetic assertions**). Eight PHP source/test/entrypoint lint checks passed, and **both** staging preflight/rollback entrypoints correctly failed before bootstrap/DB when the staging acknowledgement was absent. This is a checked CI run, not a real Bitrix runtime / staging E2E.
+
+A **physically isolated Bitrix staging is not recorded as provisioned** in the current GitHub docs. Historical `staging` Compose changes for the production bot are NOT an isolated Bitrix. New phase gates and independence requirements are recorded at `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md` (feature branch only). Do not run `V5BitrixNativeDepthReadOnlyPreflight.php` on `evrasia`: even though it has no explicit DML or BEGIN, the Bitrix bootstrap may have side effects.
+
+**Current blocking condition:** `STAGING_ISOLATION_ATTESTED=NO`; `REAL_STAGING_BITRIX_RUNTIME_PROOF=NOT_RUN`; `REAL_ORM_MYSQL_ROLLBACK=NOT_RUN`; `V5_HTTP=503` (last documented production baseline). No production or V4 writes.
