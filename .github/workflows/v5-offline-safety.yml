@@ -43,6 +43,9 @@ jobs:
             php:8.4-cli sh -eu -c '
               php -v | head -n 1
               ROOT=site-integration/samzaberu-v5
+              echo "=== 2A. SERVER DIAGNOSTIC SYNTAX (NO EXECUTION) ==="
+              bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
+              echo "PASS: MFA read-only production source audit syntax"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
