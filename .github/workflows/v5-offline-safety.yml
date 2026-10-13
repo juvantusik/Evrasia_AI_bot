@@ -1,0 +1,80 @@
+name: V5 offline safety checks
+
+on:
+  push:
+    branches:
+      - feature/samzaberu-api-v5-auth-contract
+    paths:
+      - '.github/workflows/v5-offline-safety.yml'
+      - 'site-integration/samzaberu-v5/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v5-offline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-php:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout feature source (without stored credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Execute isolated PHP checks (no network or writable source)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== 1. ENVIRONMENT ==='
+          echo 'MODE=OFFLINE_PHP_ONLY'
+          echo 'BITRIX_BOOTSTRAP=NO'
+          echo 'DATABASE_CONNECTION=NO'
+          echo 'PRODUCTION_WRITE=NO'
+          echo 'SMS_SENT=NO'
+
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=32m \
+            -v "$PWD:/workspace:ro" -w /workspace \
+            php:8.4-cli sh -eu -c '
+              php -v | head -n 1
+              ROOT=site-integration/samzaberu-v5
+              echo "=== 2. PHP LINT ==="
+              for file in \
+                "$ROOT/src/V5VerifiedBitrixNativeTransactionDepth.php" \
+                "$ROOT/src/V5StagingNativeTransactionPermit.php" \
+                "$ROOT/src/V5BitrixPdoCompatibilityBridge.php" \
+                "$ROOT/tests/V5VerifiedBitrixNativeTransactionDepthTest.php" \
+                "$ROOT/tests/V5StagingNativeTransactionPermitTest.php" \
+                "$ROOT/tests/V5BitrixPdoCompatibilityBridgeTest.php" \
+                "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" \
+                "$ROOT/tests/integration/V5BitrixNativeOrmTransactionAcceptance.php"; do
+                php -l "$file"
+              done
+              echo "=== 3. SYNTHETIC REGRESSION ==="
+              php "$ROOT/tests/V5VerifiedBitrixNativeTransactionDepthTest.php"
+              php "$ROOT/tests/V5StagingNativeTransactionPermitTest.php"
+              php "$ROOT/tests/V5BitrixPdoCompatibilityBridgeTest.php"
+              echo "=== 4. NEGATIVE PRE-BOOTSTRAP GUARDS ==="
+              if php "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" > /tmp/v5-preflight-denial.log 2>&1; then
+                echo "FAIL: preflight accepted missing staging acknowledgement"
+                exit 1
+              fi
+              grep -Fxq "STAGING_BITRIX_BOOTSTRAP=NO" /tmp/v5-preflight-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-preflight-denial.log
+              if php "$ROOT/tests/integration/V5BitrixNativeOrmTransactionAcceptance.php" > /tmp/v5-rollback-denial.log 2>&1; then
+                echo "FAIL: rollback accepted missing staging acknowledgement"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-rollback-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-rollback-denial.log
+              echo "PASS: both staging entrypoints rejected before bootstrap"
+              echo "=== 5. RESULT ==="
+              echo "FINAL_STATUS=PASS"
+              echo "FINAL_RC=0"
+              echo "REAL_STAGING_E2E=NOT_RUN"
+            '
