@@ -1,5 +1,17 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## Последняя подтверждённая точка: PHONE flow 5/5 → update receiver
+
+Оператор прислал stdout `v5_phone_confirmation_transition_flow_readonly.sh` с production `evrasia`. **5/5 PASS**, SHA pinned `Controllers/V4/Auth.php` и `lib/PhoneAuth.php` совпали; SQL/Bitrix bootstrap/SMS/production writes = NO. Новый подтверждённый source факт: `Auth::confirmation()->update` **строка 137**, `Auth::confirm_request()->update` **851**, `Auth::confirm()->update` **1026**. Последний имеет reference к `CONFIRMED` в строке **1012**, `confirm_request` — **845/873/891/896**. Другие источники ранее показали `UserPhoneAuthTable::getList` 869, `::add` 876, `::getRowById` 880 и нативную `UserPhoneAuthTable.php` SHA `3f9c093ee81923870ef8305e1afe7b277364515995517f2136c25f33d86f4991`. Этого НЕ достаточно, чтобы утверждать, какой update меняет поле `CONFIRMED` или используется при reconfirm того же номера.
+
+**Следующая команда:** подготовлен в **feature-only** `site-integration/samzaberu-v5/tests/diagnostics/v5_phone_update_receiver_readonly.sh`; точный static SHA для `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`; script prints only whitelisted metadata and receiver PHP variable identifiers around известных update lines 137/851/1026. Принимаем stdout только после запуска оператором на `evrasia` под root. При `FAIL` сначала разобрать причины, а не запускать повторный ORM/MFA скан. Скрипт еще **НЕ запускался на production**.
+
+**CI подтверждён:** GitHub Actions [38396960091](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38396960091) `completed/success` по commit `a34cda2a295a5ab31fabd72f6e82e5ba9a4d0a2e`; **7 Bash lints, 48 PHP lint, 22 offline suite, guarded wrong-host denial**. CI — не real Bitrix source-flow execution/transaction proof.
+
+Завершённые шаги **не повторять**: MFA/recovery source 9/9, 6/6, 7/7; phone inventory 5/5, phone call-order 6/6, phone flow 5/5. Документ: `docs/SAMZABERU_V5_PHONE_NATIVE_WRITER_DISCOVERY_2026-10-13.md` (feature). Истина release-гейта неизменна: `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, same E.164 reconfirm bump не доказан, native 10-path coverage и изолированный staging Bitrix/MySQL **не подтверждены**. V5 HTTP 503 по последнему документированному baseline, V4/production/SQL/SMS не изменялись.
+
+---
+
 ## Новейшая точка: phone call order 6/6 SOURCE VERIFIED → косвенные V4 writes
 
 **Фактически последний операторский результат:** `v5_phone_confirmation_order_readonly.sh`, запущен на `evrasia`, `FINAL_STATUS=PASS`, `PASS_COUNT=6`, `FAIL_COUNT=0`, SHA всех 3 PHP source совпали; режим строго read-only, Bitrix не загружался, MySQL/SMS/production writes не было.
