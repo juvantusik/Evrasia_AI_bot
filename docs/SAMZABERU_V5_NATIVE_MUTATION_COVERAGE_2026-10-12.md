@@ -107,51 +107,51 @@ This is a **verified source-order negative design constraint**, not evidence of 
 
 ## 9. Final MFA recovery/source boundary audit: 7/7 PASS (2026-10-13)
 
-Operator actually ran the third, previously prepared production **source-only** script \`v5_native_recovery_final_boundary_readonly.sh\`:
-\`PASS_COUNT=7\`, \`FAIL_COUNT=0\`, \`FINAL_STATUS=PASS\`, \`FINAL_RC=0\`,
-\`BITRIX_BOOTSTRAP=NO\`, \`DATABASE_CONNECTION=NO\`, \`DATABASE_WRITE=NO\`,
-\`PRODUCTION_APPLICATION_WRITE=NO\`. Three pinned source SHA-256 checks passed.
+Operator actually ran the third, previously prepared production **source-only** script `v5_native_recovery_final_boundary_readonly.sh`:
+`PASS_COUNT=7`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`,
+`BITRIX_BOOTSTRAP=NO`, `DATABASE_CONNECTION=NO`, `DATABASE_WRITE=NO`,
+`PRODUCTION_APPLICATION_WRITE=NO`. Three pinned source SHA-256 checks passed.
 
-- \`UserTable::onAfterDelete\` (native \`UserTable.php\` 101–105) invokes
-  \`RecoveryCodesTable::clearByUser(USER_ID)\` **after** the ORM \`b_sec_user\` DELETE
+- `UserTable::onAfterDelete` (native `UserTable.php` 101–105) invokes
+  `RecoveryCodesTable::clearByUser(USER_ID)` **after** the ORM `b_sec_user` DELETE
   SQL. This is not a proven single transaction: a callback after SQL cannot
   retroactively encompass an already autocommitted native operation.
-- \`RecoveryCodesTable.php\`, SHA \`a5ff49a123bd7f3864acfc1fee9010965a8d9d3775d774442de66d5667d5e357\`:
-  \`regenerateCodes\` finishes its repeated \`static::add($code)\` calls at line 129
-  and returns \`true\` at 132 without checking ORM \`Result\` objects.
-  \`useCode\` (143–172) reads \`USED=N\`, then \`static::update(ID, USED=Y)\`,
-  **ignores the update Result**, sets \`$found=true\` and returns it. Native
-  method does not use a conditional write \`WHERE USED=N\` and does not visibly
+- `RecoveryCodesTable.php`, SHA `a5ff49a123bd7f3864acfc1fee9010965a8d9d3775d774442de66d5667d5e357`:
+  `regenerateCodes` finishes its repeated `static::add($code)` calls at line 129
+  and returns `true` at 132 without checking ORM `Result` objects.
+  `useCode` (143–172) reads `USED=N`, then `static::update(ID, USED=Y)`,
+  **ignores the update Result**, sets `$found=true` and returns it. Native
+  method does not use a conditional write `WHERE USED=N` and does not visibly
   lock or serialize this consume. **Two concurrent successes / false proof on
   silent DB failure are potential risks, NOT proven incidents.**
-- \`BaseMergeTrait.php\`, **new discovered verified SHA**
-  \`18deb72c645694c6378662056834f5c3dd0e409d8d3c271e4f49fd910c9ce5b8\`.
-  Its \`getCachedMergeStrategy()\` caches one strategy per class;
-  \`getMergeStrategy()\` constructs \`new Merge(static::getEntity())\`.
+- `BaseMergeTrait.php`, **new discovered verified SHA**
+  `18deb72c645694c6378662056834f5c3dd0e409d8d3c271e4f49fd910c9ce5b8`.
+  Its `getCachedMergeStrategy()` caches one strategy per class;
+  `getMergeStrategy()` constructs `new Merge(static::getEntity())`.
   Neither opens or owns a transaction. Previous Merge source ties the SQL
   execution to the ORM native connection, which itself is not ownership proof.
 
-**Decision (no core patch):** Neither \`UserTable::OnBeforeAdd\` (runs after recovery
-clear), \`UserTable::OnAfterDelete\` (runs after MFA delete), nor a checked
-\`MergeByDefaultTrait\` version suffices to guarantee single-unit MFA, recovery,
-and \`AUTH_EPOCH\` changes. A controlled transaction must begin **before** the
-earliest recovery/MFA write, lock \`b_user\` with stable lock ordering,
+**Decision (no core patch):** Neither `UserTable::OnBeforeAdd` (runs after recovery
+clear), `UserTable::OnAfterDelete` (runs after MFA delete), nor a checked
+`MergeByDefaultTrait` version suffices to guarantee single-unit MFA, recovery,
+and `AUTH_EPOCH` changes. A controlled transaction must begin **before** the
+earliest recovery/MFA write, lock `b_user` with stable lock ordering,
 run native writes and epoch CAS on one verified native DB handle, check
 success/postconditions, and commit only after all pass. The remaining
 non-V5-owned/admin/agent paths must separately prove this same discipline.
 
 **Native recovery code consumption is not accepted as automatically trusted
 V5 strong-MFA evidence** until isolated staging proves a single-use atomic
-\`USED=N -> Y\` transition and concurrency safety; an unexamined
-\`useCode() === true\` must not upgrade V5 session assurance.
+`USED=N -> Y` transition and concurrency safety; an unexamined
+`useCode() === true` must not upgrade V5 session assurance.
 
 Full source-verified negative constraints, proposed owner scope, fault-injection
-and concurrency acceptance: \`docs/SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md\`.
+and concurrency acceptance: `docs/SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md`.
 
-No replacement gate was created: the existing \`V5NativeMutationCoverageMatrix\`
+No replacement gate was created: the existing `V5NativeMutationCoverageMatrix`
 already requires five independent proofs for every one of ten categories.
-\`V5NativeMutationCoverageTest.php\` gained **22 extra synthetic assertions**
-covering false-positive \`OtpDeleteAndDisable\` and \`OtpRecoveryAndReset\`
+`V5NativeMutationCoverageTest.php` gained **22 extra synthetic assertions**
+covering false-positive `OtpDeleteAndDisable` and `OtpRecoveryAndReset`
 proofs. Actual GitHub Actions run [38381811549](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38381811549) **SUCCESS**:
 82/82 assertions for native coverage, all 22 offline test suites PASS,
 48 PHP lint PASS, and pre-bootstrap staging denials PASS. This is NOT a
