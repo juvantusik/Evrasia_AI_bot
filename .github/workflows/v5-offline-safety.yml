@@ -43,22 +43,46 @@ jobs:
             php:8.4-cli sh -eu -c '
               php -v | head -n 1
               ROOT=site-integration/samzaberu-v5
-              echo "=== 2. PHP LINT ==="
-              for file in \
-                "$ROOT/src/V5VerifiedBitrixNativeTransactionDepth.php" \
-                "$ROOT/src/V5StagingNativeTransactionPermit.php" \
-                "$ROOT/src/V5BitrixPdoCompatibilityBridge.php" \
-                "$ROOT/tests/V5VerifiedBitrixNativeTransactionDepthTest.php" \
-                "$ROOT/tests/V5StagingNativeTransactionPermitTest.php" \
-                "$ROOT/tests/V5BitrixPdoCompatibilityBridgeTest.php" \
-                "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" \
-                "$ROOT/tests/integration/V5BitrixNativeOrmTransactionAcceptance.php"; do
-                php -l "$file"
+              echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
+              find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
+              test -s /tmp/v5-php-file-manifest
+              lint_count=0
+              while IFS= read -r file; do
+                php -l "$file" >/dev/null
+                lint_count=$((lint_count + 1))
+              done < /tmp/v5-php-file-manifest
+              printf "PASS: linted %s PHP files\n" "$lint_count"
+              echo "=== 3. SYNTHETIC REGRESSION (PINNED 22 SUITES) ==="
+              suite_count=0
+              for suite in \
+                AuthDecisionTest.php \
+                ChallengeRulesTest.php \
+                V5AuthHttpHandlerTest.php \
+                V5AuthPoliciesTest.php \
+                V5BitrixLockedSmsEligibilityTest.php \
+                V5BitrixPasswordProofPortTest.php \
+                V5BitrixPdoCompatibilityBridgeTest.php \
+                V5FirstFactorAttemptGateTest.php \
+                V5LoginWorkflowTest.php \
+                V5MySqlAttemptWindowStoreTest.php \
+                V5MySqlSmsOutboxTest.php \
+                V5NativeMutationCoverageTest.php \
+                V5NativeTotpStatusTest.php \
+                V5PdoUserRowSourceTest.php \
+                V5RewriteContractTest.php \
+                V5RouteMapTest.php \
+                V5SecurityEventVersionsTest.php \
+                V5SessionAssurancePolicyTest.php \
+                V5SiteAccountReaderTest.php \
+                V5SmsDispatchBudgetTest.php \
+                V5StagingNativeTransactionPermitTest.php \
+                V5VerifiedBitrixNativeTransactionDepthTest.php; do
+                test -f "$ROOT/tests/$suite"
+                php "$ROOT/tests/$suite"
+                suite_count=$((suite_count + 1))
               done
-              echo "=== 3. SYNTHETIC REGRESSION ==="
-              php "$ROOT/tests/V5VerifiedBitrixNativeTransactionDepthTest.php"
-              php "$ROOT/tests/V5StagingNativeTransactionPermitTest.php"
-              php "$ROOT/tests/V5BitrixPdoCompatibilityBridgeTest.php"
+              test "$suite_count" -eq 22
+              printf "PASS: %s approved offline suites completed\n" "$suite_count"
               echo "=== 4. NEGATIVE PRE-BOOTSTRAP GUARDS ==="
               if php "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" > /tmp/v5-preflight-denial.log 2>&1; then
                 echo "FAIL: preflight accepted missing staging acknowledgement"
