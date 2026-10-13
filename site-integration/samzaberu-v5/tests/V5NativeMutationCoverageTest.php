@@ -84,6 +84,26 @@ foreach (range(0, 4) as $field) {
     good(!$matrix->fullyCovered(), 'any missing atomic property denies');
     good($matrix->uncoveredPaths() === ['otp_save_and_enrollment'], 'failed property isolated');
 }
+
+// Source-verified 2026-10-13: TOTP delete uses an after-delete recovery
+// cleanup, while recovery usage ignores the native update result. These
+// paths cannot be attested by a matching source hash or a callback alone.
+// Every transaction/lock/rollback/concurrency proof is independently required.
+foreach ([V5NativeMutationPath::OtpDeleteAndDisable, V5NativeMutationPath::OtpRecoveryAndReset] as $path) {
+    foreach (range(0, 4) as $missingField) {
+        $given = all();
+        foreach ($given as $idx => $proofItem) {
+            if ($proofItem->path === $path) {
+                $given[$idx] = proof($path, $missingField);
+            }
+        }
+        $matrix = new V5NativeMutationCoverageMatrix($given);
+        good(!$matrix->fullyCovered(), 'native delete/recovery missing property denies: '.$path->value);
+        good($matrix->uncoveredPaths() === [$path->value],
+            'native delete/recovery false attestation isolated: '.$path->value);
+    }
+}
+
 shouldReject(fn()=>new V5NativeMutationProof(V5NativeMutationPath::OtpSaveAndEnrollment, 'unverified', true,true,true,true,true),'invalid source SHA denied');
 shouldReject(fn()=>new V5NativeMutationCoverageMatrix([proof($paths[0]),proof($paths[0])]),'duplicate event denied');
 shouldReject(fn()=>new V5NativeMutationCoverageMatrix([proof($paths[0]),'unknown-proof']),'wrong evidence datatype denied');
@@ -103,6 +123,14 @@ good($gate->fullyCovered($db, 41) === null, 'agent / phone missing denies whole 
 $source->proofs = all();
 $source->proofs[5] = proof(V5NativeMutationPath::OtpAutomaticReactivation, 0);
 good($gate->fullyCovered($db, 41) === null, 'background MFA agent not same-PDO denies');
+$source->proofs = all();
+$source->proofs[4] = proof(V5NativeMutationPath::OtpDeleteAndDisable, 3);
+good($gate->fullyCovered($db, 41) === null,
+    'native MFA after-delete recovery cleanup not proven rollback-atomic');
+$source->proofs = all();
+$source->proofs[6] = proof(V5NativeMutationPath::OtpRecoveryAndReset, 4);
+good($gate->fullyCovered($db, 41) === null,
+    'unverified recovery-code concurrent reuse prevents release');
 $source->proofs = all();
 good($gate->fullyCovered($db, 41) === true, 'fully trusted synthetic complete release fixture');
 $source->proofs = [proof($paths[0]),proof($paths[0])];
