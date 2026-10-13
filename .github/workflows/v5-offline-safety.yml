@@ -48,7 +48,8 @@ jobs:
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_final_boundary_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_event_writer_inventory_readonly.sh"
-              echo "PASS: all four read-only Bitrix source audits shell syntax"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_order_readonly.sh"
+              echo "PASS: all five read-only Bitrix source audits shell syntax"
               if bash "$ROOT/tests/diagnostics/v5_phone_event_writer_inventory_readonly.sh" > /tmp/v5-phone-inventory-denial.log 2>&1; then
                 echo "FAIL: production-only phone inventory accepted CI sandbox"
                 exit 1
