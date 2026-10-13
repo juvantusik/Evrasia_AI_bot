@@ -1,5 +1,7 @@
 # Evrasia — New Chat Handoff
 
+> **НОВОЕ V5 ПЕРЕДАЧА / 2026-10-13 (заменяет старый 2026-10-12 текст ниже):** [SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md). Принят результат `v5_native_mfa_writer_order_readonly.sh`: production READ_ONLY 9 PASS/0 FAIL, 6 SHA pins; исследован ORM before/write/after, OTP recovery clear перед UserTable merge и фоновый MFA агент. Сейчас в feature подготовлен `v5_native_recovery_merge_readonly.sh`, следующий полученный вывод нужно анализировать **без переповтора предыдущих проверок**. Отдельный Bitrix/MySQL staging не подтверждён, native 10-path AUTH_EPOCH атомарность НЕ доказана, V5 HTTP 503 по последнему baseline. GitHub offline CI 22/22 suites, 48 PHP lint PASS. Ни prod, ни V4, ни DB не менялись.
+
 
 ## Точка продолжения V5 — 2026-10-12: вывод следующего скрипта
 
