@@ -1,6 +1,6 @@
 # V5 — staging acceptance for native Bitrix ORM ↔ MySQLi transaction identity
 
-**Status: PREPARED / PHP 8.4.24 lint PASS / NOT EXECUTED WITH REAL BITRIX OR MYSQL.**
+**Status 2026-10-13: GUARDED GITHUB CANDIDATE / READ-ONLY PREFLIGHT LOCAL LINT PASS / REAL BITRIX + MYSQL E2E NOT RUN.** The previous lint/fake smoke status below refers to the **2026-10-12 original revision**, not a new post-change acceptance run.
 
 This is a narrow acceptance test of the **existing** Bitrix native
 `Application::getConnection()` and `DataManager` transaction relationship.
@@ -10,7 +10,7 @@ Bitrix staging installation backed by its own synthetic MySQL schema**.
 
 ## Scope and hard safeguards
 
-Test file: `V5BitrixNativeOrmTransactionAcceptance.php`.
+Test files: `V5BitrixNativeDepthReadOnlyPreflight.php` (first, read-only) and `V5BitrixNativeOrmTransactionAcceptance.php` (separate, operator-approved rollback test).
 
 - Requires CLI, `V5_STAGE_WRITE_ACK=ISOLATED_STAGING_ONLY` and staging
   root path `V5_STAGE_BITRIX_ROOT` that is canonical and not the known
@@ -24,6 +24,8 @@ Test file: `V5BitrixNativeOrmTransactionAcceptance.php`.
   `@@session.in_transaction` from the **native** Bitrix connection;
   before any writes, requires the expected schema/host, autocommit 1,
   and no active native transaction.
+- Requires the exact source-pinned PHP `V5VerifiedBitrixNativeTransactionDepth.php` reader and the existing `V5StagingNativeTransactionPermit`: the native `MysqlCommonConnection::transactionLevel` must be zero before **each** `BEGIN`. The permit checks two identical MySQL session snapshots and the identity of `Application::getConnection()`; the acceptance additionally requires the same `CONNECTION_ID()` before/inside/after transactions, depth 1 and `in_transaction=1` after `BEGIN`, then depth 0 and idle session after `ROLLBACK`.
+- In a failure handler, automatic rollback is attempted only while the same application connection, SQL session ID, staging schema/host, active transaction and native depth 1 can still be proven. Otherwise it stops and requires operator reconciliation.
 - Requires a precreated, known `ev_v5_native_tx_probe` **InnoDB** table
   in the dedicated staging schema. SQL proposal only:
   `../../schema/PROPOSED_ev_v5_native_tx_probe.sql`; DO NOT apply on production.
@@ -57,6 +59,14 @@ ORM is on the same native connection and that InnoDB rollback works. It
 does **not** prove V5's exclusive transaction permit, all 10 native MFA
 writers sharing b_user locks, or SMS outbox concurrency.
 
+## Mandatory first step: READ-ONLY staging preflight (NOT on production)
+
+Before authorizing any probe-table write, use `V5BitrixNativeDepthReadOnlyPreflight.php` on an operator-provisioned, physically isolated Bitrix staging copy. It requires CLI, explicit `V5_STAGE_WRITE_ACK=ISOLATED_STAGING_ONLY`, the known nonproduction hostname, canonical `V5_STAGE_BITRIX_ROOT`, `V5_STAGE_DB_NAME=evrasia_v5_test_*`, and the exact server-reported `V5_STAGE_DB_HOSTNAME`. It loads the actual staging Bitrix classes and reads the pinned protected `$transactionLevel` with Reflection. Then it invokes the existing staging permit, which performs only two SELECT session snapshots. It makes **no BEGIN/COMMIT/ROLLBACK, DML or DDL calls**.
+
+**Important:** Bitrix bootstrap is not inherently side-effect-free. This script must never bootstrap the production site or a staging installation pointing at production credentials. Stage DB permissions/isolation must be proven by the operator *before* bootstrap. An offline denial test can prove only that missing/invalid environment is rejected before bootstrap.
+
+Run `php -l tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php`, then `php tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php` under the nonsecret staging environment values described below. Require `FINAL_STATUS=PASS`, `FINAL_RC=0`, and `STAGING_BITRIX_BOOTSTRAP=YES` on a real isolated staging server. **No such real result exists yet.** A successful preflight is not a grant to run the write test: it is only a prerequisite.
+
 ## Operator-only staging procedure (NOT for production)
 
 Provision a dedicated staging Bitrix copy with a database whose name
@@ -71,7 +81,7 @@ nonsecret environment values locally on the staging host:
 - `V5_STAGE_DB_HOSTNAME` = literal output of `SELECT @@hostname` for the
   isolated test server (not an application/production host)
 
-Execute `php -l tests/integration/V5BitrixNativeOrmTransactionAcceptance.php`
+**Only after a positive real preflight and separate approval for synthetic staging writes**, execute `php -l tests/integration/V5BitrixNativeOrmTransactionAcceptance.php`
 first, then `php tests/integration/V5BitrixNativeOrmTransactionAcceptance.php`
 from the `site-integration/samzaberu-v5` directory on **staging only**.
 Do not paste credentials into GitHub issues/chats or set the test variables
@@ -123,3 +133,10 @@ for the staging requirements above.
 
 No fake Bitrix object, synthetic database credential or test source is
 installed on the real website. `REAL_BITRIX_ORM_E2E=NOT_RUN`.
+
+## 2026-10-13 hardening and verification status
+
+- New read-only preflight source `tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php`: PHP 8.4.24 lint PASS. Two local denied launches (missing stage acknowledgement; invalid staging root) correctly returned `FINAL_RC=1`, `STAGING_BITRIX_BOOTSTRAP=NO` before any DB connection. Git blob `2fe2effbbaf634059698d4f4206eb55eb923291e` matched the locally linted file.
+- Existing rollback acceptance **source updated** to require the pinned native-depth reader and the staging permit at both transaction boundaries, plus session-ID/depth/in-transaction checks. Its SQL session-state helper passed **14 synthetic checks** under PHP 8.4.24, including malformed connection IDs, wrong schema/host, multiple rows and exceptions. New Git blob `eb0e5f0ad6326eb45abb09b98964781fd0ba670c`.
+- The full revised rollback acceptance script has **not yet been exercised on real Bitrix or MySQL**, and its original synthetic E2E from 2026-10-12 predates this hardening. Do not count the earlier fake acceptance as a regression pass for the updated file. Re-run full lint and guarded negative tests on the exact checked-out staging revision before any staging write.
+- No Bitrix core/site files, production services or database tables were changed. `V5_HTTP=503`, `V4_UNCHANGED=YES`, `REAL_STAGING_E2E=NOT_RUN`.
