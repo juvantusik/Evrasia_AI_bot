@@ -55,6 +55,45 @@ function observedOrmRow(string $marker): ?array
     return is_array($first) ? $first : null;
 }
 
+/**
+ * Read only the actual native MySQL transaction/session state, never SQL write.
+ * Return null on connection/identity changes or unknown driver behavior.
+ * @return array{id:string,active:bool}|null
+ */
+function nativeSessionState(object $connection, string $schema, string $dbHost): ?array
+{
+    try {
+        $result = $connection->query(
+            'SELECT DATABASE() AS schema_name, @@hostname AS server_hostname, '
+            . 'CONNECTION_ID() AS connection_id, '
+            . '@@session.autocommit AS autocommit_value, '
+            . '@@session.in_transaction AS in_transaction_value'
+        );
+        if (!is_object($result) || !method_exists($result, 'fetch')) {
+            return null;
+        }
+        $row = $result->fetch();
+        if (!is_array($row) || $result->fetch() !== false
+            || ($row['schema_name'] ?? null) !== $schema
+            || ($row['server_hostname'] ?? null) !== $dbHost
+            || !in_array($row['autocommit_value'] ?? null, [1, '1'], true)
+            || !in_array($row['in_transaction_value'] ?? null, [0, '0', 1, '1'], true)
+        ) {
+            return null;
+        }
+        $rawId = $row['connection_id'] ?? null;
+        if (!(is_int($rawId) || is_string($rawId))
+            || preg_match('/\A[1-9][0-9]*\z/D', (string)$rawId) !== 1
+        ) {
+            return null;
+        }
+        return ['id' => (string)$rawId,
+            'active' => (string)$row['in_transaction_value'] === '1'];
+    } catch (Throwable) {
+        return null;
+    }
+}
+
 output('=== 1. STAGING GUARDS ===');
 output('MODE=ISOLATED_STAGING_TRANSACTION_ROLLBACK_TEST');
 output('PRODUCTION_WRITE=NO');
@@ -70,7 +109,9 @@ $hostname = strtolower(explode('.', gethostname() ?: '')[0]);
 try {
     check(PHP_SAPI === 'cli', 'CLI only');
     check(getenv('V5_STAGE_WRITE_ACK') === 'ISOLATED_STAGING_ONLY', 'Explicit staging acknowledgement missing');
-    check($hostname !== '' && !in_array($hostname, ['evrasia', 'eur-bot-01'], true), 'Production host forbidden');
+    check($hostname !== '' && !in_array($hostname, ['evrasia', 'eur-bot-01', 'prod', 'production'], true)
+        && preg_match('/(?:^|[._-])(?:prod|production)(?:$|[._-])/i', $hostname) !== 1,
+        'Production host forbidden');
     check(is_string($root) && str_starts_with($root, '/'), 'Staging Bitrix root required');
     check(is_string($dbName) && preg_match('/\Aevrasia_v5_test_[a-z0-9_]{1,30}\z/D', $dbName) === 1,
         'Dedicated staging schema required');
@@ -82,6 +123,9 @@ try {
     check($actualRoot !== '/home/site_evrasia/web/evrasia.spb.ru/public_html', 'Production document root forbidden');
     $bootstrap = $actualRoot . '/bitrix/modules/main/include/prolog_before.php';
     check(is_file($bootstrap) && is_readable($bootstrap) && !is_link($bootstrap), 'Bitrix staging bootstrap unavailable');
+    $depthReaderFile = __DIR__ . '/../../src/V5VerifiedBitrixNativeTransactionDepth.php';
+    check(is_file($depthReaderFile) && is_readable($depthReaderFile) && !is_link($depthReaderFile),
+        'Pinned native depth source unavailable');
 } catch (Throwable) {
     output('FAIL: staging entry guard');
     output('DATABASE_WRITE=NO');
@@ -97,6 +141,7 @@ try {
     ob_start();
     require_once $bootstrap;
     ob_end_clean();
+    require_once $depthReaderFile;
     check(class_exists('Bitrix\\Main\\Application'), 'Bitrix application unavailable');
     check(class_exists('Bitrix\\Main\\ORM\\Data\\DataManager'), 'Bitrix ORM unavailable');
     check(class_exists('Bitrix\\Main\\ORM\\Fields\\StringField'), 'Bitrix ORM string field unavailable');
@@ -133,6 +178,8 @@ $native = null;
 $owned = false;
 $rollbackRequired = false;
 $completed = 0;
+$sessionId = null;
+$depthReader = null;
 
 try {
     output('PASS: entry guard and staging bootstrap');
@@ -159,7 +206,17 @@ try {
         . "AND TABLE_NAME = 'ev_v5_native_tx_probe' LIMIT 1"
     )->fetch();
     check(is_array($eng) && ($eng['ENGINE'] ?? null) === 'InnoDB', 'Synthetic test table is not InnoDB');
-    output('PASS: same Bitrix connection object and isolated InnoDB test table');
+    $depthReader = new \Evrasia\Samzaberu\V5\V5VerifiedBitrixNativeTransactionDepth();
+    $permit = new \Evrasia\Samzaberu\V5\V5StagingNativeTransactionPermit(
+        $depthReader, gethostname(), $actualRoot, $dbName, $dbHost,
+    );
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($session !== null && $session['active'] === false, 'Initial native session unavailable');
+    $sessionId = $session['id'];
+    check($depthReader->depthFor($native) === 0
+        && $permit->safeToBeginOn($native) === true,
+        'Pinned native transaction depth/permit not verified');
+    output('PASS: same Bitrix connection object, isolated InnoDB table, pinned native depth=0');
     output('DATABASE_SCHEMA_MATCH=YES');
     output('NATIVE_TRANSACTION_IDLE=YES');
     output('BITRIX_ORM_CONNECTION_IDENTITY=PASS');
@@ -168,24 +225,44 @@ try {
     $markerB = bin2hex(random_bytes(32));
 
     output('=== 3. ORM WRITE -> NATIVE READ -> ROLLBACK ===');
+    check($permit->safeToBeginOn($native) === true, 'Unowned native transaction scope');
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($session !== null && $session['id'] === $sessionId && !$session['active'],
+        'Native session changed before first BEGIN');
     check($native->startTransaction() !== false, 'Native BEGIN failed');
     $owned = true;
     $rollbackRequired = true;
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($depthReader->depthFor($native) === 1
+        && $session !== null && $session['id'] === $sessionId && $session['active'],
+        'Native BEGIN did not establish an owned physical transaction');
     $add = V5NativeTxProbeTable::add(['MARKER' => $markerA, 'ORIGIN' => 'ORM']);
     check(is_object($add) && method_exists($add, 'isSuccess') && $add->isSuccess(), 'ORM test INSERT failed');
     $inside = observedRow($native, $markerA);
     check($inside !== null && ($inside['ORIGIN'] ?? null) === 'ORM', 'Native SELECT cannot see ORM INSERT in transaction');
     check($native->rollbackTransaction() !== false, 'Native rollback failed');
     $owned = false;
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($depthReader->depthFor($native) === 0
+        && $session !== null && $session['id'] === $sessionId && !$session['active'],
+        'Native transaction not idle after first rollback');
     check(observedRow($native, $markerA) === null, 'ORM INSERT survived native rollback');
     $rollbackRequired = false;
     $completed++;
     output('PASS: ORM INSERT was visible to native SQL and rolled back');
 
     output('=== 4. NATIVE WRITE -> ORM READ -> ROLLBACK ===');
+    check($permit->safeToBeginOn($native) === true, 'Unowned native transaction scope');
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($session !== null && $session['id'] === $sessionId && !$session['active'],
+        'Native session changed before second BEGIN');
     check($native->startTransaction() !== false, 'Native BEGIN failed');
     $owned = true;
     $rollbackRequired = true;
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($depthReader->depthFor($native) === 1
+        && $session !== null && $session['id'] === $sessionId && $session['active'],
+        'Second native BEGIN did not establish an owned physical transaction');
     check($native->queryExecute(
         "INSERT INTO ev_v5_native_tx_probe (MARKER, ORIGIN) VALUES ('" . $markerB . "', 'SQL')"
     ) !== false, 'Native test INSERT failed');
@@ -193,6 +270,10 @@ try {
     check($inside !== null && ($inside['ORIGIN'] ?? null) === 'SQL', 'ORM SELECT cannot see native INSERT in transaction');
     check($native->rollbackTransaction() !== false, 'Native rollback failed');
     $owned = false;
+    $session = nativeSessionState($native, $dbName, $dbHost);
+    check($depthReader->depthFor($native) === 0
+        && $session !== null && $session['id'] === $sessionId && !$session['active'],
+        'Native transaction not idle after second rollback');
     check(observedOrmRow($markerB) === null && observedRow($native, $markerB) === null,
         'Native INSERT survived ORM/native rollback');
     $rollbackRequired = false;
@@ -205,6 +286,7 @@ try {
     output('SMS_SENT=NO');
     output('USER_TABLE_WRITE=NO');
     output('NATIVE_MFA_HOOK_COVERAGE_VERIFIED=NO');
+    output('STAGING_NATIVE_DEPTH_PERMIT=PASS');
     output('V5_BRIDGE_PERMIT_VERIFIED=NO');
     output('DATABASE_WRITE=TEST_TABLE_ONLY_ROLLED_BACK');
     output('FINAL_STATUS=PASS');
@@ -213,8 +295,16 @@ try {
 } catch (Throwable) {
     if ($rollbackRequired && $owned && is_object($native)) {
         try {
-            $native->rollbackTransaction();
-            $owned = false;
+            $session = nativeSessionState($native, $dbName, $dbHost);
+            if ($depthReader !== null && $depthReader->depthFor($native) === 1
+                && \Bitrix\Main\Application::getConnection() === $native
+                && $session !== null && $session['id'] === $sessionId && $session['active']
+            ) {
+                $native->rollbackTransaction();
+                $owned = false;
+            } else {
+                output('FAIL: unable to prove owned rollback; manual staging reconciliation required');
+            }
         } catch (Throwable) {
             output('FAIL: synthetic rollback uncertain, manual staging reconciliation required');
         }
