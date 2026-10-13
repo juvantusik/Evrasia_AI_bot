@@ -33,7 +33,7 @@ V5 использует нативное `Bitrix\Main\DB\MysqliConnection` и о
 | Проверка | Статус |
 |---|---|
 | PHP source, staging preflight и acceptance кандидат | GITHUB ONLY / PREPARED |
-| Offline PHP CI `.github/workflows/v5-offline-safety.yml` | Первый GitHub run 38361115762 **SUCCESS**: PHP lint, 18 + 62 + 80 синтетических проверок, отрицательные pre-bootstrap guards |
+| Offline PHP CI `.github/workflows/v5-offline-safety.yml` | Последний GitHub Actions run [38363042677](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38363042677) **SUCCESS**: PHP lint **48 файлов**, автономные тестовые наборы **22/22 PASS** (включая 18 + 62 + 80 транзакционных синтетических проверок), отрицательные pre-bootstrap guards для обоих staging entrypoints. Только офлайн, не real staging |
 | Выделенный staging application host | NOT VERIFIED |
 | Отдельная staging DB и credential isolation | NOT VERIFIED |
 | Отсутствие побочных эффектов Bitrix bootstrap | NOT VERIFIED |
