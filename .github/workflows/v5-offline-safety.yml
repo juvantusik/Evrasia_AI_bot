@@ -51,7 +51,15 @@ jobs:
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_update_receiver_readonly.sh"
-              echo "PASS: seven read-only Bitrix source audit scripts linted"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh"
+              echo "PASS: eight read-only Bitrix source audit scripts linted"
+              if bash "$ROOT/tests/diagnostics/v5_phone_confirmed_array_lineage_readonly.sh" > /tmp/v5-phone-lineage-denial.log 2>&1; then
+                echo "FAIL: phone lineage audit incorrectly accepted CI sandbox"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-lineage-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-lineage-denial.log
+              echo "PASS: phone field lineage audit denied without production source access"
               if bash "$ROOT/tests/diagnostics/v5_phone_update_receiver_readonly.sh" > /tmp/v5-phone-update-denial.log 2>&1; then
                 echo "FAIL: targeted phone update audit accepted CI host"
                 exit 1
