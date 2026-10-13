@@ -55,7 +55,20 @@ jobs:
               bash -n "$ROOT/tests/diagnostics/V5PhoneConfirmedArrayLineageAwkSelfTest.sh"
               bash -n "$ROOT/tests/diagnostics/v5_phone_confirmation_semantic_boundary_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/V5PhoneConfirmationSemanticBoundarySelfTest.sh"
-              echo "PASS: nine read-only Bitrix source audit scripts and parser selftests shell syntax linted"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_confirmed_expression_tokens_readonly.sh"
+              bash -n "$ROOT/tests/diagnostics/V5PhoneConfirmedExpressionTokensSelfTest.sh"
+              php -n -l "$ROOT/tests/diagnostics/V5PhoneConfirmedExpressionTokens.php"
+              echo "PASS: ten source-only scripts and parser selftests shell syntax, PHP tokenizer linted"
+              echo "=== 2D. SANITIZED PHP TOKENS OF CONFIRMED EXPRESSIONS (SYNTHETIC) ==="
+              bash "$ROOT/tests/diagnostics/V5PhoneConfirmedExpressionTokensSelfTest.sh" --synthetic-only
+              echo "PASS: tokenizer ran positive and tampered source fixtures with no literal leaks"
+              if bash "$ROOT/tests/diagnostics/v5_phone_confirmed_expression_tokens_readonly.sh" > /tmp/v5-phone-tokens-denial.log 2>&1; then
+                echo "FAIL: token reader accepted CI sandbox as production"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-tokens-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-tokens-denial.log
+              echo "PASS: source-token diagnostic fails closed outside pinned production host"
               echo "=== 2C. PHONE CONFIRMATION RHS + PERSISTENCE SOURCE PARSER REGRESSION ==="
               bash "$ROOT/tests/diagnostics/V5PhoneConfirmationSemanticBoundarySelfTest.sh" --synthetic-only
               echo "PASS: actual POSIX AWK executed both confirmation state fixtures and tamper denials"
