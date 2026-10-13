@@ -61,3 +61,21 @@ Separate physical Bitrix/MySQL staging is **not yet attested**, so a real native
 After the operator shares the full script output, use the exact source ordering to separate native writer mutation boundaries that might allow a pre-write transaction/lock from post-write/after-event hooks that cannot establish atomic `AUTH_EPOCH` updates. Avoid inventing atomicity or promoting a 10-path coverage gate. The six-source audit is **not** full coverage of all ten mutation paths; phone verification, password resets and logout/session invalidation remain separately unproven. Staging remain a separate and required release gate.
 
 `PRODUCTION_WRITE=NO`, `DATABASE_CONNECTION=NO`, `BITRIX_BOOTSTRAP=NO`, `NATIVE_EVENT_ATOMICITY_PROVEN=NO`.
+
+
+## 6. REAL production source-order result (2026-10-13)
+
+The operator completed the previously prepared `v5_native_mfa_writer_order_readonly.sh` on `evrasia`. Exact production output: `MODE=READ_ONLY`, six source SHA pins matched, `PASS_COUNT=9`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, no Bitrix bootstrap, DB connection, user-data read or application write.
+
+**Verified order in the installed native code:**
+
+- `Otp::save()`, Otp.php lines 344-379: if `regenerated`, calls `RecoveryCodesTable::clearByUser($userId)` at 370, then `UserTable::add($fields)` at 374 (with the MergeByDefaultTrait pathway indicated by the native comment), then clears the MFA cache. **At least two distinct native write calls** are visible in that source; **no explicit transaction wrapper within `save()`**. Do not assume they are atomically committed.
+- `Otp::delete()`, lines 386-394: calls `UserTable::delete($userId)` then clears MFA cache.
+- `OtpEvents::onRecheckDeactivate()`, lines 14-40: directly updates the MFA `UserTable` via `UserTable::update` per user, then clears cache, without a transaction wrapper in the shown method. This background writer must remain a separate one of ten proof categories.
+- `CSecurityUser::update()`, lines 53-147: administrator/user actions can call `$otp->deactivate()`, `$otp->delete()`, `$otp->regenerate()` and `->setActive(true)->save()`. `onAfterUserUpdate()`, lines 159-166, only invalidates MFA cache on `ACTIVE`, **not** a shared epoch-CAS proof.
+- `DataManager::sysAddInternal` native source lines 906 `callOnBeforeAddEvent`, 939 `callOnAddEvent`, 956 `$strategy->add(...)`, 1015 `callOnAfterAddEvent`. `update` lines 1277/1306 before, actual SQL `queryExecute` 1337, after event 1362. `delete` lines 1665/1674 before, actual SQL `queryExecute` 1691, after event 1702.
+- The native Merge strategy uses `prepareMerge` and `Helper::executeAndGetInsertedId` (lines 89-100). **Event invocation order is static-source evidence, not transaction ownership**: a before callback may run before SQL yet cannot on its own establish a transaction enclosing the native writer; `OnAfter` is also too late when the SQL autocommits.
+
+**Consequence / no premature release:** a release relying on `OnAfterUserUpdate` alone cannot satisfy native MFA/recovery/agent event and shared `AUTH_EPOCH` atomicity. The native writer paths require a separately proven outer transaction/lock discipline, consistent user-row mutex, and verified rollback/concurrency behavior on truly isolated staging. `NATIVE_EVENT_ATOMICITY_PROVEN=NO`; `10_PATH_ATOMICITY=NOT_VERIFIED`.
+
+**Next narrow source-only check:** locate and inspect the actual `RecoveryCodesTable::clearByUser` body and MFA `UserTable` merge trait wiring (not re-auditing database schema or whole Bitrix). Confirm whether any method itself starts/commits, dispatches events or uses another DB connection. Then decide which parts can be included in one call-owned transaction; do not install hooks or migrate.
