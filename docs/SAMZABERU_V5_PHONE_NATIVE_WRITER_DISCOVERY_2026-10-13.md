@@ -65,3 +65,20 @@ GitHub Actions [run 38382985133](https://github.com/juvantusik/Evrasia_AI_bot/ac
 
 **Следующий узкий source-only шаг (только GitHub, не запускался на production):**
 `tests/diagnostics/v5_phone_confirmation_transition_flow_readonly.sh`. В отличие от первых двух metadata inventories, он выводит ограниченный **санитизированный граф ветвлений и вызовов экземпляров** для `Auth::confirmation/signup/confirm_request/confirm` и `PhoneAuth::sendCode/check`; пытается найти косвенные `->update/->save/->set` и динамические изменения поля, не выводя строки PHP, номера телефонов, коды SMS или конфигурации. Перед анализом проверяет SHA обоих уже pinned V4 файлов; для native table новых копий исходника не требуется. Результат всё равно будет только source metadata и не может заменить изолированный staging rollback/concurrency proof.
+
+## Третий phone source-flow аудит: operator 5/5 PASS, кандидаты на запись найдены
+
+**Фактический stdout оператора 2026-10-13:** `v5_phone_confirmation_transition_flow_readonly.sh` на production host `evrasia` завершился `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Обе SHA-256 исходников V4 совпали с pinned `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` и `PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`. Прочитаны **только статические исходники**, `BITRIX_BOOTSTRAP=NO`, `DATABASE_CONNECTION=NO`, `PRODUCTION_APPLICATION_WRITE=NO`, `SMS_SENT=NO`, исходные PHP строки и секреты не печатались.
+
+**Новые точные позиции вызовов экземпляров, которые не показывались предыдущими двумя статическими сканами:**
+
+- `Auth::confirmation()` (метод от 60): `getList()` 96, `fetch()` 100, и **`->update()` строка 137** — владелец экземпляра/таблица ещё не идентифицированы.
+- `Auth::confirm_request()` (779): прямые `UserPhoneAuthTable::getList` 869, `::add` 876, `::getRowById` 880; дополнительно **`->update()` строка 851**; рядом `CONFIRMED` ссылка 845. Не доказано, что этот `update` относится к phone auth или меняет `CONFIRMED`.
+- `Auth::confirm()` (954): ссылка на `CONFIRMED` 1012, **`->update()` строка 1026**, при этом прямого статического `UserPhoneAuthTable::update()` найдено не было. Для выяснения фактической таблицы следует найти receiver и field map, не угадывать.
+- `PhoneAuth::sendCode()` (65–123): `->sendSms()` на строке 115; `PhoneAuth::check()` (135–179): проверки/возвраты и генерация tokens (`createTokens` 162), в этом диапазоне прямые phone-table writes не выявлены. Результат является **source metadata**, не проверкой SMS delivery/code validation runtime.
+
+**Границы доказательства:** вывод `INSTANCE_METHOD_CALL update` — это синтаксический факт наличия метода с таким именем, не факт обновления `b_user_phone_auth`. Поля аргументов / SQL и успешный native transaction не исследовались. `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `PHONE_SAME_NUMBER_RECONFIRM_ATOMICITY=NOT_PROVEN`. При повторном подтверждении того же E.164 нельзя полагаться на HMAC номера как на свидетельство нового подтверждения.
+
+**Следующий ровно один source-only шаг (GITHUB ONLY, на prod ещё не запускался):** `tests/diagnostics/v5_phone_update_receiver_readonly.sh`. Привязан к точному SHA V4 `Auth.php` и строго к трём строкам 137/851/1026. Печатает только безопасные идентификаторы PHP-переменных receiver, whitelisted field-reference tags (`CONFIRMED`, `PHONE_NUMBER`, `ACTIVE`, `USER_ID`) и приблизительную provenance/branch-структуру; никакого PHP-source, аргументов, кодов SMS, телефонов, SQL, Bitrix bootstrap или production changes. Если одна из уже подтверждённых позиций перестала соответствовать источнику, `FINAL_STATUS=FAIL`. Результат не станет real DB proof. На isolated staging отдельно остаётся требование доказать SAME-number reconfirm bump `PHONE_EVENT_VERSION` и совместный `AUTH_EPOCH` CAS.
+
+Первый source inventory 5/5 и второй call-order 6/6 **закрыты**, третий flow 5/5 тоже **закрыт**. Не повторять. Все три MFA source-audits 9/9 + 6/6 + 7/7 **также закрыты**. Никакой V5 security hook не установлен; V4 и prod без изменений.
