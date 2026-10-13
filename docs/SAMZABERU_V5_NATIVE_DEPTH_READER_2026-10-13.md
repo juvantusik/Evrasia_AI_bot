@@ -44,3 +44,12 @@ GitHub-only `.github/workflows/v5-offline-safety.yml` added in the V5 feature br
 A **physically isolated Bitrix staging is not recorded as provisioned** in the current GitHub docs. Historical `staging` Compose changes for the production bot are NOT an isolated Bitrix. New phase gates and independence requirements are recorded at `docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md` (feature branch only). Do not run `V5BitrixNativeDepthReadOnlyPreflight.php` on `evrasia`: even though it has no explicit DML or BEGIN, the Bitrix bootstrap may have side effects.
 
 **Current blocking condition:** `STAGING_ISOLATION_ATTESTED=NO`; `REAL_STAGING_BITRIX_RUNTIME_PROOF=NOT_RUN`; `REAL_ORM_MYSQL_ROLLBACK=NOT_RUN`; `V5_HTTP=503` (last documented production baseline). No production or V4 writes.
+
+
+## 2026-10-13 — full V5 offline CI regression: 22 suites
+
+The previous 3-suite CI risked missing regressions outside native transaction code (login, MFA, SMS cost, outbox, auth epoch). The existing feature-only workflow `.github/workflows/v5-offline-safety.yml` was updated to lint **all 48 PHP files** in `src`, `tests` and `api` and run a **fixed reviewed list of 22 offline synthetic test suites**. Staging integration executables are **linted but NOT executed positively**. Both missing-ack staging pre-bootstrap tests remain mandatory negative checks. Same Docker controls: `--network none`, `--read-only`, read-only checkout mount, tmpfs `/tmp`, PHP 8.4 CLI, no production credentials.
+
+**Verified GitHub Actions run 38363042677** at commit `e034a9c751c99315307c648094c509103322edb4` finished `completed/success` with PHP 8.4.26, **PHP lint 48/48**, **offline suite PASS 22/22**, both negative staging entrypoint guards PASS, `FINAL_STATUS=PASS` and `FINAL_RC=0`. This supersedes the earlier narrower 3-suite CI run as the newest test coverage. Some test suites report cases rather than individual assertions; do not misleadingly sum heterogeneous counters or claim real-world E2E. All 22 remain synthetic or static source-contract checks.
+
+**Current remaining blocker:** no authoritative evidence of an independently provisioned/isolated Bitrix + MariaDB/MySQL staging host. Real native Reflection depth proof, Bitrix bootstrap, physical ORM/MySQLi rollback and 10-path native security-event atomics remain untested. Do not run staging scripts on production `evrasia` or production bot `eur-bot-01`. Production/V4/DB/SMS unchanged; V5 503 last recorded baseline.
