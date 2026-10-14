@@ -6,7 +6,8 @@ if ($argc < 4 || $argv[1] !== '--source-only' || $argv[2] !== '--approved-scope'
     fwrite(STDERR, "FAIL: source-only approved scope and PHP paths required\n");
     exit(2);
 }
-$paths = array_slice($argv, 3);
+$locateObjectChecks = ($argv[3] ?? null) === '--locate-object-checks';
+$paths = array_slice($argv, $locateObjectChecks ? 4 : 3);
 if (count($paths) < 1 || count($paths) > 80) {
     fwrite(STDERR, "FAIL: scan file count guard\n");
     exit(2);
@@ -56,10 +57,29 @@ function sourceLabel(string $path): string {
     }
     return $rel;
 }
+// These labels describe adjacent syntax only, never a receiver's class.
+function objectCheckReceiverShape(array $tokens, int $operatorIndex): string {
+    $p = previousVisible($tokens, $operatorIndex - 1);
+    $receiverEnd = $tokens[$p] ?? null;
+    if ($receiverEnd === ')') return 'PARENTHESIZED_OR_CALL';
+    if ($receiverEnd === ']') return 'INDEXED_EXPRESSION';
+    if (is_array($receiverEnd) &&
+        in_array($receiverEnd[0], [T_VARIABLE, T_STRING], true)) {
+        $before = $tokens[previousVisible($tokens, $p - 1)] ?? null;
+        if (is_array($before) &&
+            in_array($before[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)) {
+            return 'PROPERTY_CHAIN_MASKED';
+        }
+        if ($receiverEnd[0] === T_VARIABLE) return 'VARIABLE_MASKED';
+    }
+    return 'UNKNOWN';
+}
 $globalCall=0; $globalAlias=0; $globalInst=0;
 $globalObjCheck=0; $globalCandidateFiles=0;
 $globalFiles=0; $globalTokens=0;
 $emitted=0;
+$objectCheckLocations = [];
+$objectCheckLocationCount = 0;
 foreach ($paths as $path) {
     $label = sourceLabel($path);
     if (!is_file($path) || is_link($path) || !is_readable($path) ||
@@ -80,6 +100,7 @@ foreach ($paths as $path) {
     $aliases = ['phoneauth' => true];
     $imports = 0; $calls = 0; $instances = 0; $objChecks = 0;
     $matches = [];
+    $locations = [];
     // A PHP "use ... PhoneAuth as Alias" import is a source-level hint;
     // alias names are never printed.
     for ($i = 0; $i < $n; $i++) {
@@ -138,6 +159,17 @@ foreach ($paths as $path) {
                 strtolower($tokens[$j][1]) !== 'check' ||
                 !nextIsCall($tokens, $j)) continue;
             $objChecks++;
+            if ($locateObjectChecks) {
+                $objectCheckLocationCount++;
+                if ($objectCheckLocationCount > 80) {
+                    fwrite(STDERR, "FAIL: object check location cap exceeded\n");
+                    exit(2);
+                }
+                $locations[] = 'OBJECT_CHECK_LOCATION LINE=' . $line .
+                    ' METHOD_TOKEN_LINE=' . $tokens[$j][2] .
+                    ' OPERATOR=' . ($id === T_NULLSAFE_OBJECT_OPERATOR ? 'NULLSAFE' : 'OBJECT') .
+                    ' RECEIVER_SHAPE=' . objectCheckReceiverShape($tokens, $i);
+            }
         }
     }
     $globalAlias += $imports;
@@ -146,15 +178,38 @@ foreach ($paths as $path) {
     $globalObjCheck += $objChecks;
     if ($calls + $instances + $imports > 0) {
         $globalCandidateFiles++;
-        echo 'CANDIDATE_SOURCE=', $label, "\n";
-        foreach ($matches as $match) {
-            echo $match, "\n";
+        if (!$locateObjectChecks) {
+            echo 'CANDIDATE_SOURCE=', $label, "\n";
+            foreach ($matches as $match) {
+                echo $match, "\n";
+            }
+            echo 'CANDIDATE_ACTIVE_STATIC_CALLS=', $calls,
+                 ' IMPORT_HINTS=', $imports,
+                 ' ACTIVE_INSTANTIATIONS=', $instances,
+                 ' OBJECT_CHECK_RECEIVER_UNRESOLVED=', $objChecks, "\n";
         }
-        echo 'CANDIDATE_ACTIVE_STATIC_CALLS=', $calls,
-             ' IMPORT_HINTS=', $imports,
-             ' ACTIVE_INSTANTIATIONS=', $instances,
-             ' OBJECT_CHECK_RECEIVER_UNRESOLVED=', $objChecks, "\n";
     }
+    if ($locateObjectChecks && $locations !== []) {
+        $objectCheckLocations[] = [
+            'label' => $label,
+            'sha256' => hash('sha256', $source),
+            'locations' => $locations,
+        ];
+    }
+}
+// Publish nothing about locations until every supplied source passed its guards.
+if ($locateObjectChecks) {
+    foreach ($objectCheckLocations as $locationSource) {
+        echo 'OBJECT_CHECK_SOURCE=', $locationSource['label'], "\n";
+        echo 'OBJECT_CHECK_SOURCE_SHA256=', $locationSource['sha256'], "\n";
+        foreach ($locationSource['locations'] as $location) {
+            echo $location, "\n";
+        }
+    }
+    echo 'OBJECT_CHECK_LOCATIONS_EMITTED=', $objectCheckLocationCount, "\n";
+    echo 'OBJECT_CHECK_SOURCE_FILES=', count($objectCheckLocations), "\n";
+    echo "RECEIVER_CLASS_PROVEN=NO\n";
+    echo "REAL_SMS_SUCCESS_AND_HTTP_ROUTE_PROVEN=NO\n";
 }
 echo "SCANNED_APPROVED_PHP_FILES=", $globalFiles, "\n";
 echo "ACTIVE_PHONEAUTH_STATIC_CALLS=", $globalCall, "\n";
@@ -162,7 +217,7 @@ echo "ACTIVE_PHONEAUTH_INSTANTIATIONS=", $globalInst, "\n";
 echo "PHONEAUTH_IMPORT_HINTS=", $globalAlias, "\n";
 echo "OBJECT_CHECK_CALLS_UNRESOLVED=", $globalObjCheck, "\n";
 echo "CANDIDATE_SOURCE_FILES=", $globalCandidateFiles, "\n";
-echo "OUTPUT_CAPPED=", ($emitted >= 100 ? 'YES' : 'NO'), "\n";
+echo "OUTPUT_CAPPED=", (!$locateObjectChecks && $emitted >= 100 ? 'YES' : 'NO'), "\n";
 echo "SCANNED_TOKEN_COUNT=", $globalTokens, "\n";
 echo "SCOPE_LIMIT=V4_CONTROLLERS_AND_NAMED_PHONE_AUTH_SMS_LIBS\n";
 echo "ALIAS_AND_DYNAMIC_DISPATCH_COVERAGE=PARTIAL\n";
