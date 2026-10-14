@@ -1,5 +1,8 @@
 # Evrasia AI Bot — AI Project Context
 
+> **НОВЕЙШАЯ ТОЧКА ПРОДОЛЖЕНИЯ ВСЕГО PROJECT — 2026-10-14:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Последний **фактический** операторский V5 source-only скрипт `v5_phone_check_masked_control_flow_readonly.sh` на `evrasia` уже завершился **5/5 PASS**; в отдельном активном `Controllers/V4/Auth.php` прямых `PhoneAuth::check/sendCode` caller sites **0** (только этот файл). Новый **неисполненный** CI-tested шаг — `v5_phone_check_active_caller_discovery_readonly.sh` в feature (CI 38571136784 SUCCESS). Исторические указания ниже о recovery/native depth и предыдущих скриптах **НЕ являются текущим следующим шагом**. Production/V4/DB/SMS не изменялись; V5 и isolated Bitrix/MySQL staging не развернуты.
+
+
 > **ПРИОРИТЕТНАЯ ТОЧКА ПРОДОЛЖЕНИЯ V5 (2026-10-13):** [SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md) — актуальнее всех старых ссылок ниже. Последняя source-only диагностика native MFA writer/events на `evrasia` завершена 9/9 PASS; `Otp::save` очищает recovery перед merge, DataManager before/after порядок доказан. V5 pinned native depth уже реализован **только в GitHub feature**, 22/22 offline suites PASS; isolated Bitrix staging отсутствует. Следующий stdout — `v5_native_recovery_merge_readonly.sh`; не повторять старые source/DB проверки. Production/V4 не изменялись; V5 503 по последней документации.
 
 
