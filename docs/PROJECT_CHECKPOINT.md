@@ -1,5 +1,8 @@
 # Evrasia AI Bot — Current Project Checkpoint
 
+> **НОВЕЙШАЯ ТОЧКА ПРОДОЛЖЕНИЯ ВСЕГО PROJECT — 2026-10-14:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Последний **фактический** операторский V5 source-only скрипт `v5_phone_check_masked_control_flow_readonly.sh` на `evrasia` уже завершился **5/5 PASS**; в отдельном активном `Controllers/V4/Auth.php` прямых `PhoneAuth::check/sendCode` caller sites **0** (только этот файл). Новый **неисполненный** CI-tested шаг — `v5_phone_check_active_caller_discovery_readonly.sh` в feature (CI 38571136784 SUCCESS). Исторические указания ниже о recovery/native depth и предыдущих скриптах **НЕ являются текущим следующим шагом**. Production/V4/DB/SMS не изменялись; V5 и isolated Bitrix/MySQL staging не развернуты.
+
+
 > **ТЕКУЩАЯ ТОЧКА V5 / 2026-10-13 (заменяет задачу старого скрипта ниже):** [SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md). Верифицирован последний stdout `v5_native_mfa_writer_order_readonly.sh` 9/9 PASS и порядок native ORM событий; staging Bitrix/DB ещё не подтверждён. В GitHub feature prepared `v5_native_recovery_merge_readonly.sh`, ожидается именно его вывод, не повторять `v5_native_depth_readonly.sh`. 22 offline suites/48 PHP lint PASS; V4/production untouched; V5 503 по последнему baseline.
 
 
