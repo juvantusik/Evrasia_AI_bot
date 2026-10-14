@@ -3,7 +3,7 @@
 > **АКТУАЛЬНОЕ ОГРАНИЧЕНИЕ (2026-10-14):** текстовые совпадения старых телефонных скриптов с V4 `Auth.php` около 869–896 и 1009–1014 **находятся в комментариях**. Нельзя повторно использовать их как действующие нативные SMS/phone verification writers. Latest source-only evidence and one next approved active-code inventory: см. секцию `Production PHP lexical truth` внизу этого реестра.
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-14 (production active signup phone add 5/5 PASS: `USER_ID`,`PHONE_NUMBER`, no explicit `CONFIRMED` key; `PhoneAuth` 106/153/160 static-owner diagnostic CI tested, production not run; native event/Bitrix staging not proven).
+> **Обновлено:** 2026-10-14 (production `PhoneAuth::check` static owners 4/4 PASS: `\Evrasia\Orm\PhoneAuthCodeTable`, не native phone verification table; `PHONE_EVENT_VERSION` not proven, staging not attested).
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -561,3 +561,13 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Один новый, но ещё НЕ выполненный на production шаг:** feature-only `V5PhoneAuthCheckStaticOwners.php` и guarded `v5_phone_auth_check_static_owners_readonly.sh`. Проверяют source SHA `PhoneAuth.php`, активные токены 106/add,153/delete,160/delete, печатают только безопасные PHP class symbol receiver, тип первого argument и labels branch/return/throw в `check()`, значения/телефоны/SMS не печатаются. `CLASS OWNER` — source-only, не runtime proof. Синтетические positive и два negative fixtures плюс wrong-host denial, 22 offline V5 suites verified [CI 38561431918](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38561431918) SUCCESS. На реальном `evrasia` этот новый helper owner audit ещё не проводили.
 
 Сохраняются `NATIVE_PHONE_VERIFICATION_PROVEN=NO`, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, same-number reconfirm `NOT_PROVEN`, общая `AUTH_EPOCH` Bitrix/MySQL транзакция, 10-path mutation coverage и отдельный Bitrix staging не аттестованы. V5 HTTP 503 — только последний документированный baseline. Production не изменяли.
+
+### 2026-10-14 — Custom PhoneAuthCodeTable source owners verified on production (4/4 PASS)
+
+Source-only `v5_phone_auth_check_static_owners_readonly.sh` реально запущен на production `evrasia` оператором: pinned `PhoneAuth.php` SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`, `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. SYSTEM tokenizer via trusted `/usr/lib/php/.../tokenizer.so`, no php.ini/Bitrix/site PHP execution/DB/SMS/users/config/production writes.
+
+**ФАКТ (active PHP):** `PhoneAuth::sendCode` line106 static `\Evrasia\Orm\PhoneAuthCodeTable::add(...)`, first arg SHORT_ARRAY; `PhoneAuth::check` lines153,160 static **`\Evrasia\Orm\PhoneAuthCodeTable::delete(...)`** с first arg VARIABLE. Значит операции относятся к кастомным SMS/auth code records, **не** `UserPhoneAuthTable` / `b_user_phone_auth`. Формальное успешное завершение SMS challenge / подтверждение native phone verification и события версии **не доказаны**.
+
+`PhoneAuth::check` active conditional lines **146,152**, return lines **147,149,155,179,185**, throw count=0. Return values/branch predicates в этом сканере маскировались, поэтому нельзя считать все `return` успехом или все `delete` фактическими. Следующий шаг — **только** source-only return/branch lexical shapes активного `check` и subsequent true success handler, не повторять 4/4/5/5 и старые комментированные V4 functions.
+
+Не менялись production/V4/БД, никаких SMS. Незакрыты release gates V5: native phone success event, same E.164 reconfirm version bump, `PHONE_EVENT_VERSION`/ `AUTH_EPOCH` one-connection transaction and 10 mutation paths, independent Bitrix/MySQL staging. V5 HTTP 503 — последнее документированное состояние.
