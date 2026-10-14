@@ -3,7 +3,7 @@
 > **АКТУАЛЬНОЕ ОГРАНИЧЕНИЕ (2026-10-14):** текстовые совпадения старых телефонных скриптов с V4 `Auth.php` около 869–896 и 1009–1014 **находятся в комментариях**. Нельзя повторно использовать их как действующие нативные SMS/phone verification writers. Latest source-only evidence and one next approved active-code inventory: см. секцию `Production PHP lexical truth` внизу этого реестра.
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-14 (production whole-file PHP lexer CONFIRMED anchors 891 и 1012: `COMMENT`, не active PHP; прежние V4 phone static writer hypotheses superseded; следующий active-source map CI success; staging Bitrix/MySQL не подтверждён).
+> **Обновлено:** 2026-10-14 (production V4 whole-file PHP lexical source map 5/5 PASS: `confirmation`, `signup` active; `confirm_request`, `confirm` comments; single active native phone `add` 372; Bitrix staging/atomicity not proven).
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -533,3 +533,15 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **CI** [38544913782](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38544913782) `completed/success`: реальный PHP tokenizer на синтетическом активном `Auth::confirm`/закомментированном `confirm_request`, `UserPhoneAuthTable` и `CONFIRMED` inside multi-line comment negative, arbitrary identifiers/string canary not disclosed, guard wrong host denied. Все 22 approved V5 offline suites PASS. Это **не** доказательство активных методов в реальном production source.
 
 **Ограничения:** текущие native phone handlers, `PHONE_EVENT_VERSION`, same E.164 reconfirm и `AUTH_EPOCH` transaction/10-path proof всё ещё `NOT_PROVEN`. Изолированный Bitrix/MySQL staging не аттестован. V5 HTTP 503 — последнее документированное состояние, не новый online check. Production/V4 не изменялись.
+
+### 2026-10-14 — Active V4 phone lexical map production 5/5, only signup::phone add
+
+Оператор выполнил на `evrasia` строго read-only, SHA-pinned `v5_active_v4_phone_lexical_map_readonly.sh` с полным PHP `token_get_all`. **FINAL_STATUS=PASS, PASS_COUNT=5, FAIL_COUNT=0, FINAL_RC=0**; SHA `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, `PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27` совпали, system tokenizer `EXPLICIT_ROOT_OWNED_TOKENIZER_SO`, никаких `php.ini`/Bitrix bootstrap/SQL/SMS/PII/production writes.
+
+**В ACTIVE PHP `Auth.php`:** `sendSms()` line 22, `confirmation()` **60**, `signup()` **263**, `forgot_password()` **551**, `change_password()` **680** (`ACTIVE_METHOD_DECLARATIONS=5`). Прямой **единственный** активный `UserPhoneAuthTable::add` **372** (span `signup()`); `ACTIVE_NATIVE_PHONE_STATIC_CALLS=1`, `ACTIVE_CONFIRMED_FIELD_REFERENCES=0`, `ACTIVE_INSTANCE_MUTATOR_CALLS=6` (137/361/381/386/406/769). Метки «active» означают живой лексический код, не runtime/HTTP proof.
+
+**Закомментированы:** `function confirm_request` line **779**, `function confirm` **954** (`COMMENTED_METHOD_TEXT_MATCHES=2`) и содержащие телефонные/CONFIRMED записи локальные comment regions 845/869/873/876/880/891/896/1012 (`COMMENT_PHONE_TEXT_REGIONS=8`). Прежние regex `getList/add/getRowById` строки 869/876/880, `CONFIRMED` write 891 и `confirm` 1012 **не являются active writer**; до официальной лексической проверки они ошибочно учитывались как candidates.
+
+**В ACTIVE PHP `PhoneAuth.php`:** `sendCode` **65**, `check` **135**, `createUser` **188**, `sendSms` **220**, instance `->add` **210**. `ACTIVE_METHOD_DECLARATIONS=4`, `ACTIVE_NATIVE_PHONE_STATIC_CALLS=0`, `ACTIVE_CONFIRMED_FIELD_REFERENCES=0`, `COMMENTED_METHOD_TEXT_MATCHES=0`.
+
+**Далее без повторов:** только read-only source-token classification синтаксических аргументов **активного** `UserPhoneAuthTable::add` line 372 и точных whitelisted method calls в ACTIVE `confirmation/signup` и `PhoneAuth::sendCode/check/createUser`. Не делать заключений о verified phone state или event bump из `add`/`check`; physical `b_user_phone_auth` persistence, successful code check, same-E.164 reconfirm, shared `AUTH_EPOCH` transaction и 10 native paths не доказаны. Нет аттестованного Bitrix/MySQL staging; V5 HTTP 503 — последний documented baseline. V4 и production не меняли.
