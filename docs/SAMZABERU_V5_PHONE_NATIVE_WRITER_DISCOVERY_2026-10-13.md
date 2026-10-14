@@ -1,5 +1,8 @@
 # СамЗаберу V5 — следующий source-only этап: native phone confirmation writers
 
+**⚠ АКТУАЛЬНО 2026-10-14: production whole-file PHP lexer подтвердил, что V4 `Auth.php` строки 891 и 1012 — КОММЕНТАРИИ, не активный PHP. Все ранее опубликованные `UserPhoneAuthTable`/ `CUser` / `CONFIRMED` текстовые совпадения в диапазонах 880–896 и 1009–1014 НЕЛЬЗЯ считать действующими write paths. Нижеследующая история source inventories — историческая, пересмотрена ниже.**
+
+
 **2026-10-13 · PHONE SOURCE INVENTORY 5/5 AND FOLLOW-UP CALL-ORDER 6/6 BOTH SOURCE-VERIFIED. REAL PHONE EVENT ATOMICITY STILL NOT PROVEN.**
 
 ## Почему это отдельная задача
@@ -169,3 +172,19 @@ GitHub Actions [38525901881](https://github.com/juvantusik/Evrasia_AI_bot/action
 **Новая положительная и отрицательная проверка на настоящем PHP 8.4 токенизаторе в CI:** [38528408976](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38528408976) `completed/success` — активный fake PHP source, обе tampered source anchors, fake `//` comments, реальные `/*...*/` spanning comments, смесь live PHP и комментария на той же строке; 22 offline suites PASS, PHP lint PASS, wrong-host denial. Успех CI **НЕ значит**, что реальный `Auth.php` содержит live PHP на этих строках — это и должен установить следующий операторский source-only запуск.
 
 **Следующая точка:** присланный оператором результат **исправленной full-file PHP lexer диагностики**, не повторять прошлые MFA 9/9+6/6+7/7 и все прежние phone inventories/scans. Интерпретировать `SOURCE_ANCHOR_891_LEXICAL_KIND`, `SOURCE_ANCHOR_1012_LEXICAL_KIND`, `BOTH_SOURCE_ANCHORS_ACTIVE_PHP`, `SOURCE_LINE_891/1012_TOKEN_SHAPE`, `FINAL_STATUS`; при `COMMENT` не искать немедленно mutation hooks в предполагаемых live методах. Не доказаны shared Bitrix/MySQL transaction, single-event same E.164 re-verify, `PHONE_EVENT_VERSION`, `AUTH_EPOCH`, 10 native paths; V5 HTTP 503 по последнему документированному baseline.
+
+## 2026-10-14 — confirmed on production: both V4 phone anchors belong to PHP comments
+
+Оператор фактически выполнил последнюю source-only диагностику **whole-file** `token_get_all($source)` на `evrasia`. Пинованный SHA `local/php_interface/Controllers/V4/Auth.php = 72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал. `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `TOKENIZER_LOAD_MODE=EXPLICIT_ROOT_OWNED_TOKENIZER_SO`, `PHP_INI_LOADED=NO`, `BITRIX_BOOTSTRAP=NO`, `DATABASE_CONNECTION=NO`, `DATABASE_WRITE=NO`, `SMS_SENT=NO`, `PRODUCTION_APPLICATION_WRITE=NO`.
+
+**Критический факт с настоящим PHP lexical state:**
+- `SOURCE_TEXT_ANCHORS_VALID=YES` — текст в файле присутствует, но это само по себе не PHP-код.
+- `SOURCE_ANCHOR_891_LEXICAL_KIND=COMMENT` и `SOURCE_ANCHOR_1012_LEXICAL_KIND=COMMENT`; `BOTH_SOURCE_ANCHORS_ACTIVE_PHP=NO`.
+- `SOURCE_LINE_880`, `SOURCE_LINE_889..896`, `SOURCE_LINE_1009..1014` — `LEXICAL_CLASS=COMMENT_ONLY`, `TOKEN_SHAPE=NONE`. `SOURCE_LINE_1015_LEXICAL_CLASS=NO_ACTIVE_TOKENS`.
+- `COMMENT_OR_INLINE_ANCHOR_NEEDS_REVIEW=YES`, `ACTUAL_DB_PERSISTENCE_PROVEN=NO`.
+
+**Переоценка ранее принятого (БЫЛО → СТАЛО → ПРИЧИНА):** `Auth::confirm_request` line 891 `$phoneuser['CONFIRMED'] = ...`, `Auth::confirm` line 1012, `UserPhoneAuthTable::getList/add/getRowById` lines 869/876/880 и `CUser->Update` line 851/1026 считались кандидатами на реальные операции. **СТАЛО:** по крайней мере названные проверенные source ranges **закомментированы**, а потому **не являются исполняемыми PHP-вызовами**. Ранее regex/row-focused анализаторы находили текст даже внутри комментариев и давали локальный `PASS` за корректность совпадений; это не доказывало активность. Старые 5/5, 6/6, 5/5, 4/4, 4/4, 4/4 остаются честной историей source-text diagnostics, но **НЕ доказательством native phone mutation coverage**.
+
+**Граница вывода:** не исследованы все другие участки `Auth.php`, `PhoneAuth.php`, runtime роутинг Bitrix или смежные контроллеры. Нельзя заключать, что весь V4 не работает или что в проекте нет другой действующей ветки подтверждения телефона. Нужно найти **настоящие T_FUNCTION / T_STRING call sites из полного PHP-токенизатора**, строго отдельно от комментариев. Не выдавать конфигурационные secrets, SQL/пользовательские номера, исходный текст, не выполнять Bitrix. На production целевой активный путь ещё НЕ обнаружен.
+
+**Следующий этап:** сначала узкий source-only lexical inventory именно активных методов/вызовов в pinned V4 `Auth.php` и `PhoneAuth.php` с `token_get_all` на полном файле; затем, по фактическому результату, исследовать только активную ветку V4. Реальная atomic phone version + `AUTH_EPOCH` всё ещё требует отдельно изолированного Bitrix/MySQL staging; нет native writer proof, нет 10-path proof, V5 HTTP 503 по последнему документированному baseline.
