@@ -1,5 +1,21 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## 2026-10-14 — production ACTIVE V4 phone map 5/5, next signup binding args source-only
+
+**Последний операторский stdout** — `v5_active_v4_phone_lexical_map_readonly.sh` на production `evrasia`: `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Пинованы `Controllers/V4/Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` и `lib/PhoneAuth.php` SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`. Full-file PHP `token_get_all()` только с root-owned system `tokenizer.so` без php.ini; Bitrix/DB/SMS/production writes не выполнялись.
+
+**ACTUAL ACTIVE V4 source**: `Auth.php` методы `sendSms` line 22, `confirmation` line **60**, `signup` line **263**, `forgot_password` 551, `change_password` 680. **Единственный** ACTIVE прямой `UserPhoneAuthTable::add` **372**, в активном `signup` (1 native phone table call total). Active instance mutator line 137,361,381,386,406,769 без аттестации receiver и аргументов. `ACTIVE_CONFIRMED_FIELD_REFERENCES=0` по whitelist.
+
+**COMMENT ONLY**: `Auth::confirm_request` line 779 и `Auth::confirm` line 954 — текстовые функции внутри PHP-comment, НЕ методы. Старые phone refs 845,869,873,876,880,891,896,1012 относятся к комментариям. `PhoneAuth.php` ACTIVE методы `sendCode` 65, `check` 135, `createUser` 188, `sendSms` 220; instance `->add` 210, `ACTIVE_NATIVE_PHONE_STATIC_CALLS=0`, `ACTIVE_CONFIRMED_FIELD_REFERENCES=0`. В ходе диагностики реальный HTTP route/execution, persistent `CONFIRMED`/SMS confirmation, same E.164 reconfirm **не проверялись**.
+
+**Следующий ровно один подготовленный source-only шаг, на production ЕЩЁ НЕ запускали:** `site-integration/samzaberu-v5/tests/diagnostics/v5_active_phone_signup_boundary_readonly.sh` с `V5ActivePhoneSignupBoundary.php` — tokenizes только оба SHA-pinned V4 source, проверяет active method-name anchors `confirmation` line60, `signup` line263, `PhoneAuth::sendCode/check/createUser` 65/135/188 и единственный **active** native phone table `add` at 372. Печатает только тип первого аргумента, whitelist field keys (USER_ID / PHONE_NUMBER / CONFIRMED / ACTIVE / PHONE), whitelist source method calls и их строки; **не** выводит переменные/другие имена/значения/source statements/секреты. `PHONE_ADD_VARIABLE_OR_DYNAMIC_FIELDS_MAY_BE_HIDDEN=YES`, вывод не доказывает DB write. If SHA/anchors changed, fail-closed. `tokenizer.so` read-only production уже verified.
+
+**Проверка до выдачи на production:** GitHub Actions [38547236447](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38547236447) `completed/success`: реальный PHP lexer classifier positive synthetic inline field keys, two commented/mutated call negatives, wrong-host denial; 22 approved V5 offline suites PASS. Первые CI попытки падали из-за diagnostic-only имени `baseName`, коллизии с PHP `basename()`; исправлено на `v5ShortClassName`, **не production defect**. На production эта новая диагностика ещё не запускалась.
+
+Ничего не переделывать из подтверждённых старых MFA 9/9+6/6+7/7 и phone discovery, включая завершённый active lex map 5/5. Не возвращаться к закомментированным `confirm_request`/`confirm`. Незакрыты: `PHONE_EVENT_VERSION_WRITER`, `AUTH_EPOCH` native shared DB transaction, same-E.164 re-confirm, all 10 mutation paths, independent Bitrix+MySQL staging. V5 HTTP 503 по документированному baseline, V4/production unchanged.
+
+---
+
 ## АКТУАЛЬНО 2026-10-14: оба V4 телефонных якоря — PHP COMMENTS; следующий active-code inventory
 
 **Последний принятый stdout оператора:** на production host `evrasia` read-only whole-original-file PHP tokenizer с root-owned `tokenizer.so`. Exact pinned SHA V4 `Controllers/V4/Auth.php = 72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`; `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. `SOURCE_ANCHOR_891_LEXICAL_KIND=COMMENT`, `SOURCE_ANCHOR_1012_LEXICAL_KIND=COMMENT`, **`BOTH_SOURCE_ANCHORS_ACTIVE_PHP=NO`**. All probed lines 880, 889–896, 1009–1014 = `COMMENT_ONLY`, token shape NONE, line 1015 = `NO_ACTIVE_TOKENS`. Source-only; no Bitrix bootstrap/DB/SMS/config/user values/production writes.
