@@ -40,7 +40,7 @@ if [[ "$(hostname -s)" != evrasia || "$(id -u)" -ne 0 ||
   fail 'pinned root/host/source guard'
   exit 1
 fi
-for bin in php sha256sum realpath wc; do
+for bin in php sha256sum realpath wc stat; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     fail "required tool unavailable: $bin"
     exit 1
@@ -69,10 +69,41 @@ printf 'SOURCE=%s\nSOURCE_SHA256=%s\n' "$REL" "$sha"
 pass 'production source checksum pinned'
 
 printf '\n=== 3. SAFE PHP CLI TOKENIZER AVAILABILITY ===\n'
-if ! php -n -r 'exit(function_exists("token_get_all") ? 0 : 2);'; then
-  fail 'php -n tokenizer unavailable (no site code executed)'
-  exit 1
+# PHP -n disables php.ini and any automatically enabled shared modules.
+# On the production Debian CLI tokenizer may be packaged as tokenizer.so.
+# Enable ONLY the root-owned system tokenizer, not php.ini or third-party modules.
+PHP_ARGS=(-n)
+TOKENIZER_LOAD_MODE='UNAVAILABLE'
+if php -n -r 'exit(function_exists("token_get_all") ? 0 : 2);' 2>/dev/null; then
+  TOKENIZER_LOAD_MODE='BUILT_IN'
+else
+  EXTENSION_DIR="$(php -n -r 'echo ini_get("extension_dir");' 2>/dev/null)" || {
+    fail 'cannot resolve safe default PHP extension directory'
+    exit 1
+  }
+  case "$EXTENSION_DIR" in
+    /usr/lib/php/*) ;;
+    *)
+      fail 'PHP extension_dir is not under trusted /usr/lib/php; no module loaded'
+      exit 1
+      ;;
+  esac
+  TOKENIZER_MODULE="$EXTENSION_DIR/tokenizer.so"
+  if [[ ! -f "$TOKENIZER_MODULE" || ! -r "$TOKENIZER_MODULE" ||
+        -L "$TOKENIZER_MODULE" ||
+        "$(realpath -- "$TOKENIZER_MODULE")" != "$TOKENIZER_MODULE" ||
+        "$(stat -c '%u' -- "$TOKENIZER_MODULE")" != '0' ]]; then
+    fail 'trusted root-owned tokenizer.so not found at expected PHP extension path'
+    exit 1
+  fi
+  PHP_ARGS=(-n -d "extension=$TOKENIZER_MODULE")
+  if ! php "${PHP_ARGS[@]}" -r 'exit(function_exists("token_get_all") ? 0 : 2);' 2>/dev/null; then
+    fail 'token_get_all unavailable with explicit tokenizer.so; no further modules loaded'
+    exit 1
+  fi
+  TOKENIZER_LOAD_MODE='EXPLICIT_ROOT_OWNED_TOKENIZER_SO'
 fi
+printf 'TOKENIZER_LOAD_MODE=%s\n' "$TOKENIZER_LOAD_MODE"
 PARSER="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/V5PhoneConfirmedExpressionTokens.php"
 if [[ ! -f "$PARSER" || ! -r "$PARSER" || -L "$PARSER" ]]; then
   fail 'expected static tokenizer not present'
@@ -82,7 +113,7 @@ pass 'PHP tokenizer available with php.ini disabled'
 
 printf '\n=== 4. EXACT TWO CONFIRMED EXPRESSIONS / SANITIZED TOKEN SHAPES ===\n'
 TOKENIZER_EXECUTED=YES
-if ! php -n "$PARSER" --source-only "$FILE"; then
+if ! php "${PHP_ARGS[@]}" "$PARSER" --source-only "$FILE"; then
   fail 'static target token classification failed'
   exit 1
 fi
