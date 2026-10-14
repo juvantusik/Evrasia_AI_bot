@@ -3,7 +3,7 @@
 > **АКТУАЛЬНОЕ ОГРАНИЧЕНИЕ (2026-10-14):** текстовые совпадения старых телефонных скриптов с V4 `Auth.php` около 869–896 и 1009–1014 **находятся в комментариях**. Нельзя повторно использовать их как действующие нативные SMS/phone verification writers. Latest source-only evidence and one next approved active-code inventory: см. секцию `Production PHP lexical truth` внизу этого реестра.
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-14 (production `PhoneAuth::check` static owners 4/4 PASS: `\Evrasia\Orm\PhoneAuthCodeTable`, не native phone verification table; `PHONE_EVENT_VERSION` not proven, staging not attested).
+> **Обновлено:** 2026-10-14 (production `PhoneAuth::check` 2 conditions / 5 returns kinds source-only 4/4 PASS; full masked expression + V4 active caller CI 38567983693 success; phone native verification/epoch/staging unproven).
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -575,3 +575,13 @@ Source-only `v5_phone_auth_check_static_owners_readonly.sh` реально за�
 **2026-10-14 · validated next static PhoneAuth check condition/return probe (CI-only):**
 
 `site-integration/samzaberu-v5/tests/diagnostics/V5PhoneAuthCheckReturnKinds.php` и guarded `v5_phone_auth_check_return_kinds_readonly.sh` + fake-source `V5PhoneAuthCheckReturnKindsSelfTest.sh` созданы **только** в feature. Active `PhoneAuth::check()` on source lines 135–187, `if` 146/152, `return` 147/149/155/179/185; сканер full-file lexical, выводит только типы выражений, whitelisted операторы и counts без исходных идентификаторов/значений. Синтетический positive и два commented-anchor negatives, wrong-host denial, 22 V5 suites прошли [GitHub Actions 38565584768](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38565584768) SUCCESS. **На реальном production не запускался**; это единственный следующий операторский read-only шаг. Предыдущие телефонные/MFA скрипты повторять нельзя. Success SMS-code / native `b_user_phone_auth.CONFIRMED`/phone version/epoch transaction по-прежнему `NOT_PROVEN`.
+
+### 2026-10-14 — PhoneAuth check return kinds operator 4/4; next full masked token patterns + live V4 call sites
+
+**Real production read-only source lexer** на `evrasia`: `v5_phone_auth_check_return_kinds_readonly.sh` вернул `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0` при exact `PhoneAuth.php` SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`. No Bitrix/PHP site execution, DB/SMS, PII/config/production code writes.
+
+**Source-only:** active check if146 uses logical `NEGATION` + one masked variable; if152 comparison `GREATER` + two masked variables. Return kinds 147/`NAME_OR_CALL`, 149/`FALSE_LITERAL_OR_EXPRESSION`, 155/`NAME_OR_CALL`, 179/`NAME_OR_CALL`, 185/`OTHER_EXPRESSION`. Все пяти `return` нельзя приравнять к known success/failure: scanner показывал только первый токен. `CHECK_SUCCESS_SEMANTICS_PROVEN=NO`, `NATIVE_CONFIRMED_WRITE_PROVEN=NO`, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`.
+
+**Next operator-only, not yet run:** `tests/diagnostics/V5PhoneCheckMaskedControlFlow.php` + guarded `v5_phone_check_masked_control_flow_readonly.sh` (feature), treats both V4 Auth/PhoneAuth SHA-pinned files as complete PHP source. Prints a capped masked token-kind sequence of the **five return expressions** and two conditions, and active class-qualified `PhoneAuth::check/sendCode` call-site counts/line numbers in `Auth.php` (plus unrelated object `->check` separately without known receiver). Comments ignored, no values/statements/real phone, no Bitrix/DB. Release proof remains NO. Positive/negative fixtures including commented decoys and wrong-host denial, all 22 offline V5 suites PASS [CI 38567983693](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38567983693), completed/success. Need real operator output to learn production shapes and caller sites.
+
+Do not repeat old 5/5, 4/4, MFA audits. Same E.164 reconfirm, `PHONE_EVENT_VERSION`, native `AUTH_EPOCH`/ten paths and isolated Bitrix/MySQL staging all unproven. V5 HTTP 503 only documented baseline, production V4 not modified.
