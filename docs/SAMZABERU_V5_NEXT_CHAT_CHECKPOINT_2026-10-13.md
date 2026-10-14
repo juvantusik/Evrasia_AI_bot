@@ -1,5 +1,19 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## АКТУАЛЬНО 2026-10-14: оба V4 телефонных якоря — PHP COMMENTS; следующий active-code inventory
+
+**Последний принятый stdout оператора:** на production host `evrasia` read-only whole-original-file PHP tokenizer с root-owned `tokenizer.so`. Exact pinned SHA V4 `Controllers/V4/Auth.php = 72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`; `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. `SOURCE_ANCHOR_891_LEXICAL_KIND=COMMENT`, `SOURCE_ANCHOR_1012_LEXICAL_KIND=COMMENT`, **`BOTH_SOURCE_ANCHORS_ACTIVE_PHP=NO`**. All probed lines 880, 889–896, 1009–1014 = `COMMENT_ONLY`, token shape NONE, line 1015 = `NO_ACTIVE_TOKENS`. Source-only; no Bitrix bootstrap/DB/SMS/config/user values/production writes.
+
+**ГЛАВНАЯ КОРРЕКЦИЯ ПРОЕКТНОГО КОНТЕКСТА (БЫЛО → СТАЛО → ПОЧЕМУ):** ранее многочисленные текстовые grep/AWK методы описывали `Auth::confirm_request` около 869/876/880/891, `Auth::confirm` 1012 и `CUser->Update` в соседних интервалах как возможный **действующий** путь подтверждения телефона. **СТАЛО:** эти проверенные snippets — PHP-комментарии; они НЕ могут быть активными обработчиками PHP на указанных строках. Старые аудиты и выводы о «кандидатах на write» — исключительно исторические `SOURCE_TEXT_ONLY`, для release gate не подходят. Настоящий выполняемый обработчик phone verification **НЕ НАЙДЕН**. Не делать из этого вывод, что весь V4 не работает; другие реальные методы/интеграции ещё не проверены.
+
+**Один следующий шаг оператора:** запустить подготовленную новую feature-only read-only диагностику `site-integration/samzaberu-v5/tests/diagnostics/v5_active_v4_phone_lexical_map_readonly.sh` с `V5ActiveV4PhoneLexicalMap.php`. Два точных source SHA: `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, `PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`. Системный tokenizer на `evrasia` уже проверен; парсится **полный** PHP, печатаются только активно объявленные белосписочные auth методы, live `UserPhoneAuthTable::` calls/CONFIRMED refs и отдельно текстовые попадания внутри комментариев. Original PHP/значения не печатать. Этот скрипт **на production ещё НЕ запускали**. При FAIL анализировать отказ, не возвращаться к старым V4 комментариям.
+
+**Тесты самого алгоритма:** [GitHub Actions 38544913782](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38544913782) `completed/success`; реальный PHP tokenizer synthetic active class/phone call positives, commented legacy negative, sensitive canary suppressed, host refusal, 22 approved V5 offline suites PASS. Это не тест actual production source.
+
+**ЗАПРЕТ НА ПОВТОРЫ:** MFA 9/9+6/6+7/7, phone metadata 5/5, 6/6, 5/5, 4/4, 4/4, 4/4 и whole-file lexical 4/4 закрыты. Не возвращаться к `Auth.php` строкам 869–1026 как доказанным working writers; сначала новый verified active-method map. Native `PHONE_EVENT_VERSION`/same-number reconfirm/`AUTH_EPOCH` 10-path transaction доказаны НЕ БЫЛИ, isolated Bitrix+MySQL staging не аттестован. `V5_HTTP=503` — последнее документированное состояние. V4/production не менялись.
+
+---
+
 ## 2026-10-14 — tokenizer module работает, но COMMENT_MASKED 16/16 не является исходным кодом
 
 Последний операторский пакет содержит **ДВА запуска** на `evrasia`: (1) старый `php -n` preflight **2 PASS / 1 FAIL** из-за отсутствия `token_get_all`; (2) исправленный read-only wrapper **`PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`**, `TOKENIZER_LOAD_MODE=EXPLICIT_ROOT_OWNED_TOKENIZER_SO`, PHP ini не загружен, exact SHA `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал. Реально подтвердили, что на production есть и успешно загружается root-owned отдельный `tokenizer.so`. Нет Bitrix bootstrap/DB/SMS/production changes/PII.
