@@ -134,6 +134,19 @@ jobs:
               grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-masked-check-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-masked-check-denial.log
               echo "PASS: masked source scanner denies CI host before production PHP reads"
+              echo "=== 2J. BOUNDED ACTIVE V4 PHONEAUTH CALLER DISCOVERY (SYNTHETIC) ==="
+              php -n -l "$ROOT/tests/diagnostics/V5PhoneCheckActiveCallerDiscovery.php"
+              bash -n "$ROOT/tests/diagnostics/V5PhoneCheckActiveCallerDiscoverySelfTest.sh"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_check_active_caller_discovery_readonly.sh"
+              bash "$ROOT/tests/diagnostics/V5PhoneCheckActiveCallerDiscoverySelfTest.sh" --synthetic-only
+              echo "PASS: active aliased and full-class callers counted, PHP comments and sensitive source names excluded"
+              if bash "$ROOT/tests/diagnostics/v5_phone_check_active_caller_discovery_readonly.sh" > /tmp/v5-phone-active-caller-denial.log 2>&1; then
+                echo "FAIL: active caller discovery accepted CI host"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-active-caller-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-active-caller-denial.log
+              echo "PASS: active caller discovery refuses nonproduction host before source access"
 
 
               echo "=== 2C. PHONE CONFIRMATION RHS + PERSISTENCE SOURCE PARSER REGRESSION ==="
