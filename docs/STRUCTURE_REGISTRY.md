@@ -1,5 +1,8 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
+> **НОВЫЙ ЧАТ / Актуальный handoff 14.10.2026:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Принят `masked control flow` **5/5 PASS**, в проверенном `Auth.php` прямых PhoneAuth caller sites **0**; следующий CI-tested шаг — **ограниченный поиск действующих вызывающих мест в других V4 PHP**. Исторические телефонные grep-результаты около 891/1012 — **PHP комментарии**, не native writers. Текущие release gates остаются CLOSED.
+
+
 > **АКТУАЛЬНОЕ ОГРАНИЧЕНИЕ (2026-10-14):** текстовые совпадения старых телефонных скриптов с V4 `Auth.php` около 869–896 и 1009–1014 **находятся в комментариях**. Нельзя повторно использовать их как действующие нативные SMS/phone verification writers. Latest source-only evidence and one next approved active-code inventory: см. секцию `Production PHP lexical truth` внизу этого реестра.
 
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
