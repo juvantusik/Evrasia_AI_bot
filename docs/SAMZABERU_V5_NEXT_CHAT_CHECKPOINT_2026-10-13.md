@@ -1,5 +1,17 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## 2026-10-14 — prepared next PhoneAuth::check return-shape audit (CI success)
+
+**ФАКТ последнего production запуска:** `v5_phone_auth_check_static_owners_readonly.sh` уже завершён **4/4 PASS** на `evrasia`, `PhoneAuth.php` SHA pinned. All active static `PhoneAuthCodeTable::add` line106 и `::delete` lines153,160 принадлежат кастомной `\Evrasia\Orm\PhoneAuthCodeTable`, не native Bitrix UserPhoneAuthTable. `PhoneAuth::check` if/elseif 146/152, returns 147/149/155/179/185, throw 0. Семантика success return **не установлена**. No SQL/SMS/production changes.
+
+**СЛЕДУЮЩИЙ ОДИН операторский source-only шаг** (подготовлен только feature, на production **ЕЩЁ НЕ ВЫПОЛНЕН**): `tests/diagnostics/v5_phone_auth_check_return_kinds_readonly.sh` + `V5PhoneAuthCheckReturnKinds.php`. Полный PHP-tokenizer с проверенным system root-owned `tokenizer.so` (php.ini disabled), SHA `PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`; exactly active two `if` (146/152) + five `return` (147,149,155,179,185). Только типы выражений (`TRUE/FALSE/NULL/VARIABLE/ARRAY...` с оговоркой `OR_EXPRESSION`) и whitelist comparison operators/counts, все реальные переменные/literals/исходные строки/коды/телефоны скрыты. Никакого Bitrix/bootstrap/DB.
+
+**CI принят:** [GitHub Actions run 38565584768](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38565584768) `completed/success`: positive synthetic two conditions/five returns PASS, commented return/condition negative denial PASS, wrong-host guard PASS, 22 approved offline suites PASS. CI не читал production PHP и не доказывает что `check()` реально обрабатывал SMS-code.
+
+**После следующего stdout** анализировать `CHECK_CONDITION_LINE`, `CHECK_RETURN_LINE`, `FINAL_STATUS`; затем только доказательный поиск native phone verified event или routing настоящего V4 SMS flow. Не повторять source owner 4/4, signup 5/5 и предыдущие phone/MFA checks. Незакрыты `NATIVE_PHONE_VERIFICATION_PROVEN=NO`, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, same-E164 reconfirm, shared `AUTH_EPOCH` native transaction + 10-path proof, independent Bitrix+MySQL staging. `V5_HTTP=503` последний documented baseline, V4/production unchanged.
+
+---
+
 ## 2026-10-14 — PhoneAuth active static owners 4/4 PASS (last production stdout)
 
 **Последний операторский production stdout**: `v5_phone_auth_check_static_owners_readonly.sh` на `evrasia` — `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Pinned `PhoneAuth.php` SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27` совпал. Trusted root-owned system `tokenizer.so` через `php -n`, no Bitrix bootstrap/site PHP/config/DB/SMS/user data/production writes.
