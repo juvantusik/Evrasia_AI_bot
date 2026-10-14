@@ -134,6 +134,12 @@ jobs:
               grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-masked-check-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-masked-check-denial.log
               echo "PASS: masked source scanner denies CI host before production PHP reads"
+              echo "=== 2N. TWO PINNED PHP CLASS OWNER / CONSTRUCTOR LINKAGE (SYNTHETIC) ==="
+              php -n -l "$ROOT/tests/diagnostics/V5ObjectCheckClassLinkage.php"
+              bash -n "$ROOT/tests/diagnostics/v5_object_check_class_linkage_readonly.sh"
+              bash -n "$ROOT/tests/diagnostics/V5ObjectCheckClassLinkageSelfTest.sh"
+              bash "$ROOT/tests/diagnostics/V5ObjectCheckClassLinkageSelfTest.sh" --synthetic-only
+              echo "PASS: class owner and FQCN comparison with masking, checksum and host denials"
               echo "=== 2M. PINNED OBJECT CHECK RECEIVER ORIGIN / IMPORTS (SYNTHETIC) ==="
               php -n -l "$ROOT/tests/diagnostics/V5ObjectCheckOriginNamespace.php"
               bash -n "$ROOT/tests/diagnostics/v5_object_check_origin_namespace_readonly.sh"
