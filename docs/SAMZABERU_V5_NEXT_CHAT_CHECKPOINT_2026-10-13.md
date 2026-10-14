@@ -1,5 +1,17 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## 2026-10-14 — последний production запуск PHP lexical probe FAILED до парсинга
+
+Оператор (production `evrasia`) выполнил предыдущий one-block `v5_phone_confirmed_expression_tokens_readonly.sh`. **Не выдавать за успех:** `FINAL_STATUS=FAIL`, `PASS_COUNT=2`, `FAIL_COUNT=1`, `FINAL_RC=1`. Guards hostname/root, checksum real `local/php_interface/Controllers/V4/Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, PHP tokenizer-file lint PASS. Аварийная остановка на `=== 3. PHP TOKENIZER AVAILABILITY ===`: **`php -n` не предоставляет `token_get_all()`**. `PHP_TOKENIZER_EXECUTED=NO`, никакого вывода `SOURCE_LINE_891/1012_TOKEN_SHAPE` или source analysis. Данные пользователей, PHP site code, Bitrix bootstrap, SQL, SMS, production writes не затронуты. Это инструментальный отказ PHP CLI extension, не функциональный отказ V4/Bitrix.
+
+**Следующее одно безопасное действие:** в feature обновлён `tests/diagnostics/v5_phone_confirmed_expression_tokens_readonly.sh` — при отсутствии встроенного tokenizer делает только `php -n -r 'echo ini_get("extension_dir")'` (php.ini по-прежнему отключён), разрешает root-owned non-symlink `tokenizer.so` строго из `/usr/lib/php/*`, затем запускает `php -n -d extension=<trusted tokenizer.so>` и проверяет наличие функции до анализа. Если shared extension отсутствует или не загрузится, безопасный `FINAL_STATUS=FAIL`, дальнейшая работа — разбор конкретного stdout без запуска другого PHP runtime. **Работоспособность shared tokenizer на production пока не подтверждена.**
+
+Предыдущий GitHub CI run [38525901881](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38525901881) `SUCCESS` в isolated PHP container: source token positive/negative fake tests, 22 offline suites; это не доказывает доступности `tokenizer.so` именно на `evrasia` (в CI tokenizer был доступен при `-n`).
+
+Зафиксированная до отказа цепочка не менялась: `Auth::confirm_request` line 891 `$phoneuser['CONFIRMED']` RHS `OTHER_OR_MULTILINE`, `Auth::confirm` line 1012 `OTHER_REFERENCE`, прямых phone-table mutators в ограниченных диапазонах не увидели, но не доказан реальный phone DB write. Ни один из предыдущих MFA/phone audits **не повторять**. Нет проверенного Bitrix/MySQL staging и native 10-path transaction proof; `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `SAME_PHONE_RECONFIRM_ATOMICITY=NOT_PROVEN`, V5 HTTP 503 — последний документированный baseline. Production/V4 не менялись.
+
+---
+
 ## Новейший операторский результат: native phone semantic boundary 4/4 PASS
 
 Оператор фактически запустил на production `evrasia` `v5_phone_confirmation_semantic_boundary_readonly.sh`. SHA `Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` совпал, `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `SOURCE_ANCHORS_VALID=YES`. Никаких SQL, Bitrix bootstrap, SMS, пользовательских/секретных данных и production writes.
