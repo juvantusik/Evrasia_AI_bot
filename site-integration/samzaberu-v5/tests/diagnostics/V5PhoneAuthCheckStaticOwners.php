@@ -43,7 +43,7 @@ function classOwner(array|string|null $part): array {
         return ['DYNAMIC_OR_UNRESOLVED','NOT_LITERAL_CLASS'];
     }
     $name=$part[1];
-    if (strlen($name)>110 || preg_match('/^[\\a-zA-Z_][\\a-zA-Z0-9_]*$/D', $name)!==1) {
+    if (strlen($name)>110 || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', str_replace('\\', '', $name))!==1) {
         return ['MASKED_NONSTANDARD_CLASS','NOT_LITERAL_CLASS'];
     }
     // Source-code class symbol only. Never a PHP variable or string literal.
