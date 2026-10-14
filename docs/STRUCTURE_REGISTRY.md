@@ -1,5 +1,7 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
+> **НОВЕЙШИЕ ФАКТЫ 14.10.2026:** production `v5_object_check_origin_namespace_readonly.sh` **5/5 PASS**, wrapper **5/5 PASS**: в `PinCode.php` конструктор line44 использует absolute `FULLY_QUALIFIED` class name, в одном braced block с `->check` line46, но управление потоком/достижимость не доказаны. В `PhoneAuth.php` вызов line46 — `$this->check()` внутри function27; параметры/capture исключены, origin class и связь с `check` declaration135 не доказаны. Два pinned SHA без drift. Следующая новая **feature-only**, production NOT RUN: masked cross-file `V5ObjectCheckClassLinkage.php` / `v5_object_check_class_linkage_readonly.sh` code `a88c7199ee0bdf808afee6c5aa9fca6b09e46fbb`; [CI 38605496088](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38605496088) SUCCESS. Native phone writer, same-number reconfirm, PHONE_EVENT_VERSION, AUTH_EPOCH atomicity, separate Bitrix/MySQL staging, V5 HTTP deployment remain unproven. Предыдущие пункты ниже — исторические.
+
 > **АКТУАЛЬНО 14.10.2026 / переход в новый чат:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Receiver-binding production **6/6 PASS**: PinCode source new-expression assignment44 (class masked), check46; PhoneAuth check46 in function27, zero detected direct assignments with partial coverage. Receiver classes, namespace, control flow unresolved. Next origin/import question is planned only; completed caller/locator/binding/MFA/phone probes must not repeat.
 
 
