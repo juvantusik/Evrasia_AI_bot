@@ -1,5 +1,8 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+> **ТОЧКА ПЕРЕХОДА В НОВЫЙ ЧАТ — 14.10.2026:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Операторский `v5_phone_check_masked_control_flow_readonly.sh` **5/5 PASS уже принят**; следующий и единственный новый шаг — **не запущенный** на production `v5_phone_check_active_caller_discovery_readonly.sh` (уже проверен в CI 38571136784). Не повторять предыдущие скрипты; новые V5 изменения только feature, production/V4 не менялись.
+
+
 ## 2026-10-14 — masked PhoneAuth check flow on production 5/5 PASS; next bounded caller discovery
 
 **Последний фактический операторский production stdout**: `v5_phone_check_masked_control_flow_readonly.sh` на host `evrasia` `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Exact pinned SHA `Controllers/V4/Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, `lib/PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`. `TOKENIZER_LOAD_MODE=EXPLICIT_ROOT_OWNED_TOKENIZER_SO`. No target PHP execution, php.ini, Bitrix bootstrap, SQL/SMS, PII/config or application writes.
