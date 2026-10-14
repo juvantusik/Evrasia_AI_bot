@@ -82,6 +82,20 @@ jobs:
               grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-v4-active-map-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-v4-active-map-denial.log
               echo "PASS: active V4 source map refuses wrong host before reading PHP"
+              echo "=== 2F. ACTIVE V4 SIGNUP PHONE TABLE ARGUMENTS (SYNTHETIC) ==="
+              php -n -l "$ROOT/tests/diagnostics/V5ActivePhoneSignupBoundary.php"
+              bash -n "$ROOT/tests/diagnostics/V5ActivePhoneSignupBoundarySelfTest.sh"
+              bash -n "$ROOT/tests/diagnostics/v5_active_phone_signup_boundary_readonly.sh"
+              bash "$ROOT/tests/diagnostics/V5ActivePhoneSignupBoundarySelfTest.sh" --synthetic-only
+              echo "PASS: active signup phone-add and helper method classifier accepts safe fixture and rejects commented decoys"
+              if bash "$ROOT/tests/diagnostics/v5_active_phone_signup_boundary_readonly.sh" > /tmp/v5-signup-boundary-denial.log 2>&1; then
+                echo "FAIL: active signup boundary accepted nonproduction host"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-signup-boundary-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-signup-boundary-denial.log
+              echo "PASS: signup boundary audit fails closed on CI sandbox"
+
 
               echo "=== 2C. PHONE CONFIRMATION RHS + PERSISTENCE SOURCE PARSER REGRESSION ==="
               bash "$ROOT/tests/diagnostics/V5PhoneConfirmationSemanticBoundarySelfTest.sh" --synthetic-only
