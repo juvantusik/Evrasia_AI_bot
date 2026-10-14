@@ -112,7 +112,7 @@ function safeShape(array $expression): array {
     return [implode('|',array_slice($shapes,0,48)), count($shapes),
         count($shapes)>48?'YES':'NO'];
 }
-function baseName(string $name): string {
+function v5MaskedOwnerBaseName(string $name): string {
     $p=strrpos($name,'\\');
     return strtolower($p===false?$name:substr($name,$p+1));
 }
@@ -195,7 +195,7 @@ for($i=0,$n=count($controller);$i<$n;$i++){
     $owner=$controller[$prev]??null;
     $isPhone=is_array($owner) &&
         in_array($owner[0],[T_STRING,T_NAME_QUALIFIED,T_NAME_FULLY_QUALIFIED],true) &&
-        baseName($owner[1])==='phoneauth';
+        v5MaskedOwnerBaseName($owner[1])==='phoneauth';
     if($isPhone) {
         if($staticPhone<20)
             echo "ACTIVE_CONTROLLER_PHONEAUTH_STATIC_CALL_LINE=",$line,
