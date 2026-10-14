@@ -108,6 +108,19 @@ jobs:
               grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-owners-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-owners-denial.log
               echo "PASS: helper static-owner audit fails closed outside pinned production"
+              echo "=== 2H. PHONEAUTH CHECK CONTROL: TWO CONDITIONS AND FIVE RETURNS ==="
+              php -n -l "$ROOT/tests/diagnostics/V5PhoneAuthCheckReturnKinds.php"
+              bash -n "$ROOT/tests/diagnostics/V5PhoneAuthCheckReturnKindsSelfTest.sh"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_auth_check_return_kinds_readonly.sh"
+              bash "$ROOT/tests/diagnostics/V5PhoneAuthCheckReturnKindsSelfTest.sh" --synthetic-only
+              echo "PASS: real PHP lexer classified check condition/return kinds and rejected commented decoys"
+              if bash "$ROOT/tests/diagnostics/v5_phone_auth_check_return_kinds_readonly.sh" > /tmp/v5-check-return-denial.log 2>&1; then
+                echo "FAIL: PhoneAuth check return diagnostic accepted wrong CI host"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-check-return-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-check-return-denial.log
+              echo "PASS: check return diagnostics deny other hosts before reading production sources"
 
 
               echo "=== 2C. PHONE CONFIRMATION RHS + PERSISTENCE SOURCE PARSER REGRESSION ==="
