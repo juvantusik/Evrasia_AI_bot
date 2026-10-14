@@ -26,7 +26,7 @@
 | Staging Bitrix/MySQL | **НЕ АТТЕСТОВАН/НЕ ПОДТВЕРЖДЁН**. Staging Docker Compose бота не считается независимым staging сайта |
 | API V5 | HTTP **503 по последнему документированному baseline**, не новая online verification; V4 production не менялся |
 
-**Индекс уже установленных структур всех подсистем**, Bitrix, Trusted Device, Bot Anti-Fraud, юрсогласий, V4, MFA, источников БД: [STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). **Весь текущий прогресс V5**: [SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md), читать первый раздел 2026-10-14; нижние разделы исторические. **Телефонная source форензика**: [SAMZABERU_V5_PHONE_NATIVE_WRITER_DISCOVERY_2026-10-13.md](SAMZABERU_V5_PHONE_NATIVE_WRITER_DISCOVERY_2026-10-13.md) в feature. Общая бот/Anti-Fraud/Consent история: [NEW_CHAT_HANDOFF.md](NEW_CHAT_HANDOFF.md), [PROJECT_CHECKPOINT.md](PROJECT_CHECKPOINT.md), [AI_PROJECT_CONTEXT.md](AI_PROJECT_CONTEXT.md); правила выдачи команд: [SERVER_SCRIPT_RULES.md](SERVER_SCRIPT_RULES.md).
+**Индекс уже установленных структур всех подсистем**, Bitrix, Trusted Device, Bot Anti-Fraud, юрсогласий, V4, MFA, источников БД: [STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). **Весь текущий прогресс V5**: [SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md](SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md), читать первый раздел 2026-10-14; нижние разделы исторические. **Телефонная source форензика**: [SAMZABERU_V5_PHONE_NATIVE_WRITER_DISCOVERY_2026-10-13.md](https://github.com/juvantusik/Evrasia_AI_bot/blob/feature/samzaberu-api-v5-auth-contract/docs/SAMZABERU_V5_PHONE_NATIVE_WRITER_DISCOVERY_2026-10-13.md) в feature. Общая бот/Anti-Fraud/Consent история: [NEW_CHAT_HANDOFF.md](NEW_CHAT_HANDOFF.md), [PROJECT_CHECKPOINT.md](PROJECT_CHECKPOINT.md), [AI_PROJECT_CONTEXT.md](AI_PROJECT_CONTEXT.md); правила выдачи команд: [SERVER_SCRIPT_RULES.md](SERVER_SCRIPT_RULES.md).
 
 **Не путать readiness:** GitHub Actions 22 V5 offline suites PASS — не означает, что V5 route, миграции, JWT, outbox, SMS worker или native hooks существуют на production. Build image main success — не свидетельство deploy на eur-bot-01 или связки V5 с Bitrix.
 
@@ -40,7 +40,7 @@
 - SamZaberu Trusted Device: `device_id="sz_"+64 lowercase hex`, SHA-256 хеш всего ID **с префиксом**, не менять core service.
 - Консенсы/оферты, антифрод, статусы «Новый», блокировки и UI — отдельные ранее реализованные подсистемы. Не переделывать или переносить их в V5 без новой задачи.
 
-Контракт: [SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md](SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md), source directory `site-integration/samzaberu-v5/README.md` — feature.
+Контракт: [SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md](https://github.com/juvantusik/Evrasia_AI_bot/blob/feature/samzaberu-api-v5-auth-contract/docs/SAMZABERU_API_V5_AUTH_CONTRACT_2026-10-11.md), source directory `site-integration/samzaberu-v5/README.md` — feature.
 
 ## 4. Что уже доказано про телефон; какое следующее действие
 
@@ -74,7 +74,7 @@ Wrapper строго проверяет host `evrasia`, root, SHA двух ба�
 - `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`; **повторное подтверждение ТОГО ЖЕ E.164** обязано увеличивать событие/версию, не только изменение phone string.
 - `AUTH_EPOCH` one-connection transaction/CAS/rollback, ordered `b_user → b_sec_user → b_user_phone_auth → auth_state` lock, все **10 native MFA/security/phone mutation paths** — real runtime аттестация отсутствует. Proposed `ev_samzaberu_auth_state` schema только в GitHub, миграции не было.
 - MFA/recovery probes **9/9, 6/6, 7/7** source-only завершены. Знаем ordering: `Otp::save` clears recovery **до** merge, `onAfterDelete` cleanup **после** удаления, `RecoveryCodesTable::useCode` не доказывает atomic single-use CAS и игнорирует результат update; это risk gap, не доказанный exploit. [MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md](SAMZABERU_V5_MFA_RECOVERY_ATOMICITY_DECISION_2026-10-13.md). Не повторять source audits.
-- Нет проверенного изолированного Bitrix/MySQL staging и proof actual ORM↔native SQL rollback/concurrent use; [ISOLATED_STAGING_READINESS_2026-10-13.md](SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md). Docker staging бота не подходит. Real test writes ONLY after explicit staging guards and separate authorization.
+- Нет проверенного изолированного Bitrix/MySQL staging и proof actual ORM↔native SQL rollback/concurrent use; [ISOLATED_STAGING_READINESS_2026-10-13.md](https://github.com/juvantusik/Evrasia_AI_bot/blob/feature/samzaberu-api-v5-auth-contract/docs/SAMZABERU_V5_ISOLATED_STAGING_READINESS_2026-10-13.md). Docker staging бота не подходит. Real test writes ONLY after explicit staging guards and separate authorization.
 - Component inventory `AuthDecision / V5LoginWorkflow / V5SmsBudget / V5MySqlSmsOutbox / V5SecurityEventVersions / native 10-path coverage` в GitHub feature уже существует и проверен только offline; не разрабатывать параллельные реализации без изменения требований. `V5_HTTP=503` — last documented baseline, not new curl check.
 
 ## 6. Процесс работы в новом чате
