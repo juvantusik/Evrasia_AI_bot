@@ -1,5 +1,11 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+> **НОВЕЙШИЙ CHECKPOINT 14.10.2026 (ПОСЛЕ ПРЕДЫДУЩИХ 6/6):** операторский `v5_object_check_origin_namespace_readonly.sh` на `evrasia` **5/5 PASS**, обёртка **5/5 PASS**, два exact SHA verified. PinCode: new FULLY_QUALIFIED line44, namespace declaration line2, 5 import records, same braced block as check46, branch present, dominance not proven. PhoneAuth: check46 receiver **$this**, no parameter/capture/direct origin records in conservative subset. Следующий `V5ObjectCheckClassLinkage.php` + `v5_object_check_class_linkage_readonly.sh` только в feature, код `a88c7199ee0bdf808afee6c5aa9fca6b09e46fbb`, [CI 38605496088](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38605496088) **SUCCESS**, **production NOT RUN**. Назначение: точно и маскированно сравнить абсолютный класс `new` PinCode с лексическим владельцем `$this` PhoneAuth и проверить, метод `check` line135 в том же классе или нет. Никакого переназначения типа по догадке, никаких V4 writes. Старые разделы ниже — история.
+
+---
+
+## Предыдущая точка перехода — receiver binding 6/6 (закрыта)
+
 > **АКТУАЛЬНАЯ ТОЧКА ПЕРЕХОДА — 14.10.2026:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Latest production receiver binding **6/6 PASS**: PinCode check46 / assignment44 NEW_CLASS_EXPRESSION OTHER_CLASS_MASKED; PhoneAuth check46 / no detected direct assignments in function27/body27–63 (partial coverage). Both receiver classes unresolved. Next narrow origin/namespace question is **PLANNED, NOT IMPLEMENTED, NOT RUN**; no repeated audits or production changes.
 
 
