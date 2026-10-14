@@ -1,7 +1,27 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
-> **АКТУАЛЬНАЯ ТОЧКА ПРОДОЛЖЕНИЯ — 14.10.2026:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Bounded caller discovery на production **5/5 PASS**, 18 files, PhoneAuth static/new/import=0, unresolved object check=2. Следующий **не выполненный на production** шаг — `v5_object_check_locations_readonly.sh` с opt-in режимом того же анализатора. Старые audits не повторять; V4/production не менялись.
+> **АКТУАЛЬНАЯ ТОЧКА ПРОДОЛЖЕНИЯ — 14.10.2026:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Object locator на production **5/5 PASS**: PinCode.php line46 и PhoneAuth.php line46, оба VARIABLE_MASKED; receiver class неизвестен. Следующий **не выполненный на production** шаг — `v5_object_check_receiver_binding_readonly.sh`, только две pinned source anchors. Старые caller/locator/MFA/phone audits не повторять; V4/production не менялись.
 
+
+## 2026-10-14 — object check locations production 5/5 PASS; exact PinCode and PhoneAuth line 46
+
+**Latest accepted operator stdout:** `v5_object_check_locations_readonly.sh` on production `evrasia`: `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `RUN_RC=0`, `LAUNCHER_RC=0`, `WRAPPER_FINAL_RC=0`. Diagnostic commit `5bfc1cb6bef8a43999cdffeb5fad20eedea6dab7`; shell SHA-256 `c0436aa98a0520d50c9dbdef618aae1f99d63f420139c5c8a182d7ee2b172e38`, analyzer SHA-256 `8f128d2a67acd2246882a8f74508ca10cbe75f2a1d81df1f11bac8c2874299f9`; Bash syntax and PHP lint RC=0. Previously pinned Auth.php/PhoneAuth.php SHA matched; trusted root-owned system tokenizer.so under `php -n`.
+
+**New source-only facts:** `OBJECT_CHECK_LOCATIONS_EMITTED=2`, `OBJECT_CHECK_SOURCE_FILES=2`:
+- `local/php_interface/Controllers/V4/PinCode.php`, SHA-256 `7734ddbaba0e7ec9ddfc9f0a9008c0da0c0a1523e505e52caebac2bbaf637cd0`: object operator line **46**, `METHOD_TOKEN_LINE=46`, `RECEIVER_SHAPE=VARIABLE_MASKED`.
+- `local/php_interface/lib/PhoneAuth.php`, SHA-256 `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`: object operator line **46**, `METHOD_TOKEN_LINE=46`, `RECEIVER_SHAPE=VARIABLE_MASKED`.
+
+`METHOD_TOKEN_LINE` is the called `check` token, not an enclosing method declaration. Receiver class/variable identity/assignment origin was not disclosed or established. In particular, the `check` call in PhoneAuth.php at line46 is not evidence that its receiver is `PhoneAuth::check()` (the previously mapped method declaration is line135). Same basename or same line in two files does not establish equal receivers.
+
+**Inventory unchanged as counts:** 18 approved PHP files / 32465 tokens; `SKIPPED_SENSITIVE_FILENAMES=0`, PhoneAuth static/new/import=0, candidate files=0, unresolved object checks=2, `OUTPUT_CAPPED=NO`. This comparison is counts only, not checksum proof of all 18 files or runtime/route evidence. `RECEIVER_CLASS_PROVEN=NO`, `REAL_SMS_SUCCESS_AND_HTTP_ROUTE_PROVEN=NO`, `NATIVE_PHONE_VERIFIED_EVENT_PROVEN=NO`, `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`.
+
+**Было → Стало → Причина:** two unresolved object-check sites counted without locations → located at exact source/line/SHA in PinCode.php and PhoneAuth.php, both simple variable receivers → accepted production locator stdout. Completed bounded caller inventory and locator must not be repeated.
+
+**One next step, not production-run:** `v5_object_check_receiver_binding_readonly.sh` with narrow `V5ObjectCheckReceiverBinding.php`. Three source SHA guards (Auth, PhoneAuth, newly current PinCode) before analysis; PHP reads only PinCode.php and PhoneAuth.php and requires the exact active line46 simple-variable call anchors; expected SHA is also checked against the exact PHP-read buffer before tokenization. Reports enclosing lexical scope/assignment lines, masked RHS kinds and allowlisted class-basename enums as **source hints only**, without source statements/receiver names/arbitrary class or namespace names/arguments/literals. Direct assignment coverage is partial; parameter/reference bindings and string interpolations are excluded or unresolved, so zero assignment records do not prove no receiver origin. Class namespace, control flow, aliasing, runtime receiver and HTTP/SMS outcome remain unresolved. No rescan of the 18-file discovery scope. CI: [38595306842](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38595306842) `completed/success`: PHP lint, synthetic exact-buffer SHA mismatch refusal, lexical function/nested scope/class exclusions, string/interpolation masking and bounded assignment records, wrong-host denial, prior diagnostics regression and 22 approved V5 offline suites PASS. No production runtime/SQL/SMS tests..
+
+**Mode/release boundaries:** READ_ONLY; no php.ini, Bitrix bootstrap, site PHP execution, SQL/database connections/writes, SMS, real user data, config files or production app changes; no source values/secrets printed. Native phone verification writer, PHONE_EVENT_VERSION bump for reconfirming the same E.164, atomic AUTH_EPOCH/native MFA and all ten mutation paths, independent Bitrix/MySQL staging remain unproven. V5 HTTP 503 remains last documented baseline only. Do not repeat masked flow/phone/MFA audits or redesign V5.
+
+---
 
 ## 2026-10-14 — bounded active caller discovery production 5/5 PASS; two unresolved object checks
 
