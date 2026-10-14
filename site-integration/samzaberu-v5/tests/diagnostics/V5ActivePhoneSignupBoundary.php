@@ -60,13 +60,13 @@ foreach (['AUTH'=>$argv[2], 'HELPER'=>$argv[3]] as $label=>$file) {
         $scope=sourceScope($label,$line);
         if ($id===T_FUNCTION) {
             $j=skipTrivia($tokens,$i+1);
-            if ($tokens[$j]??null==='&') $j=skipTrivia($tokens,$j+1);
+            if (($tokens[$j] ?? null) === '&') $j=skipTrivia($tokens,$j+1);
             if (tokenAt($tokens,$j,T_STRING)) {
                 $method=strtolower($tokens[$j][1]);
                 if (isset($required[$label][$method]) &&
-                    $line===$required[$label][$method]) {
+                    $tokens[$j][2]===$required[$label][$method]) {
                     $seen[$method]=true;
-                    echo "ACTIVE_ANCHOR_METHOD=",$method," LINE=",$line,"\n";
+                    echo "ACTIVE_ANCHOR_METHOD=",$method," LINE=",$tokens[$j][2],"\n";
                 }
             }
         }
