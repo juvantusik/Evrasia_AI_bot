@@ -95,6 +95,19 @@ jobs:
               grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-signup-boundary-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-signup-boundary-denial.log
               echo "PASS: signup boundary audit fails closed on CI sandbox"
+              echo "=== 2G. ACTIVE PHONE SMS TOKEN STORE CLASS OWNER SCAN (SYNTHETIC) ==="
+              php -n -l "$ROOT/tests/diagnostics/V5PhoneAuthCheckStaticOwners.php"
+              bash -n "$ROOT/tests/diagnostics/V5PhoneAuthCheckStaticOwnersSelfTest.sh"
+              bash -n "$ROOT/tests/diagnostics/v5_phone_auth_check_static_owners_readonly.sh"
+              bash "$ROOT/tests/diagnostics/V5PhoneAuthCheckStaticOwnersSelfTest.sh" --synthetic-only
+              echo "PASS: static phone helper class owners tested against real namespaced PHP source and comment tampering"
+              if bash "$ROOT/tests/diagnostics/v5_phone_auth_check_static_owners_readonly.sh" > /tmp/v5-phone-owners-denial.log 2>&1; then
+                echo "FAIL: PhoneAuth source-only class-owner audit accepted wrong host"
+                exit 1
+              fi
+              grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-owners-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-owners-denial.log
+              echo "PASS: helper static-owner audit fails closed outside pinned production"
 
 
               echo "=== 2C. PHONE CONFIRMATION RHS + PERSISTENCE SOURCE PARSER REGRESSION ==="
