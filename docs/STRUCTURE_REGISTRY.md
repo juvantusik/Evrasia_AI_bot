@@ -1,7 +1,9 @@
 # Evrasia — единый реестр исследованных структур и контрактов
 
+> **АКТУАЛЬНОЕ ОГРАНИЧЕНИЕ (2026-10-14):** текстовые совпадения старых телефонных скриптов с V4 `Auth.php` около 869–896 и 1009–1014 **находятся в комментариях**. Нельзя повторно использовать их как действующие нативные SMS/phone verification writers. Latest source-only evidence and one next approved active-code inventory: см. секцию `Production PHP lexical truth` внизу этого реестра.
+
 > **Назначение:** единая точка восстановления фактов о сайте Bitrix, API V4, Trusted Device, TOTP/V3C и разработке API V5, чтобы не повторять одни и те же исследования.  
-> **Обновлено:** 2026-10-14 (PHP tokenizer root-owned module production PASS, но `COMMENT_MASKED` 16/16 не доказывает active PHP; whole-file lexical parser positive/negative CI проверен; native transaction proof ещё нет).
+> **Обновлено:** 2026-10-14 (production whole-file PHP lexer CONFIRMED anchors 891 и 1012: `COMMENT`, не active PHP; прежние V4 phone static writer hypotheses superseded; следующий active-source map CI success; staging Bitrix/MySQL не подтверждён).
 > **Статус документа:** документация, **не** признак развёртывания нового API.  
 > **Источник при конфликте:** фактический production → актуальный код/ветка GitHub → staging/test → документация → старые обсуждения.
 
@@ -519,3 +521,15 @@ Read-only диагностика production **PASS**: `bitrix/.settings.php` д�
 **Новый защищённый source-only шаг в feature** (на production **ещё не запускался**): переработан тот же `tests/diagnostics/V5PhoneConfirmedExpressionTokens.php` — токенизация **полного исходного файла в реальном лексическом контексте** и проверка токена на точных byte offsets якорей 891/1012; выпускает `SOURCE_ANCHOR_*_LEXICAL_KIND=PHP_CODE|COMMENT|INLINE_HTML`, `BOTH_SOURCE_ANCHORS_ACTIVE_PHP`, 16 `LEXICAL_CLASS`, 16 маскированных `TOKEN_SHAPE`. Wrapper для system tokenizer сохранился. [GitHub Actions 38528408976](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38528408976) SUCCESS: фальшивый live PHP, изменённые anchors, `//` комментарии, spanning `/*...*/`, смешанный PHP/inline comment, 22/22 offline suites PASS. **CI не является доказательством состояния реального `Auth.php`.**
 
 Точка продолжения: дождаться только stdin/stdout **новой whole-file static tokenizer диагностики** от оператора (одним guarded copy-paste блоком, никаких изменений сайта). MFA/recovery 9/9+6/6+7/7 и все старые телефонные source audits не повторять. Изолированного Bitrix/MySQL staging нет; V5 HTTP 503 — последний документированный baseline, V4/prod unchanged.
+
+### 2026-10-14 — Production PHP lexical truth: phone confirmation V4 anchors 891/1012 are comments
+
+**Фактический результат оператора на production `evrasia`:** `v5_phone_confirmed_expression_tokens_readonly.sh` whole-file variant, exact pinned `Controllers/V4/Auth.php` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, trusted system tokenizer `EXPLICIT_ROOT_OWNED_TOKENIZER_SO`. Без Bitrix bootstrap, php.ini, SQL, SMS, PII, production application writes.
+
+**Новая истина > старые предположения:** `SOURCE_ANCHOR_891_LEXICAL_KIND=COMMENT`, `SOURCE_ANCHOR_1012_LEXICAL_KIND=COMMENT`, `BOTH_SOURCE_ANCHORS_ACTIVE_PHP=NO`. Строки **880, 889–896, 1009–1014** `LEXICAL_CLASS=COMMENT_ONLY`, `TOKEN_SHAPE=NONE`. Строка 1015 `NO_ACTIVE_TOKENS`. Следовательно, прежние строки `UserPhoneAuthTable::getList/add/getRowById` 869/876/880, предполагаемая запись `$phoneuser['CONFIRMED']` 891, предполагаемая проверка `CONFIRMED` 1012 и `CUser->Update` 1026 на этих участках **не являются подтверждённым исполняемым phone path**. Ранее source-regex audits действительны лишь как инвентаризация буквального текста; первоначальная интерпретация «обнаружен активный writer» **отменена**. По другим участкам `Auth.php` и `PhoneAuth.php` вывод не делался. Это не инцидент Bitrix, не сбой работающего V4.
+
+**Следующий только source-only шаг (GITHUB-ONLY, production НЕ запускался):** подготовлены `site-integration/samzaberu-v5/tests/diagnostics/V5ActiveV4PhoneLexicalMap.php` и guarded `v5_active_v4_phone_lexical_map_readonly.sh`. `token_get_all` полного двух pinned V4 исходников, строго отдельные `ACTIVE_METHOD`, `COMMENTED_METHOD_TEXT`, `ACTIVE_NATIVE_PHONE_STATIC_CALL`, `ACTIVE_CONFIRMED_FIELD_REFERENCE` и счётчики. Никаких PHP statements, caller data, Bitrix/bootstrap/SQL. `Auth.php` SHA выше, `PhoneAuth.php` pinned SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27`. При mismatch fail-closed.
+
+**CI** [38544913782](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38544913782) `completed/success`: реальный PHP tokenizer на синтетическом активном `Auth::confirm`/закомментированном `confirm_request`, `UserPhoneAuthTable` и `CONFIRMED` inside multi-line comment negative, arbitrary identifiers/string canary not disclosed, guard wrong host denied. Все 22 approved V5 offline suites PASS. Это **не** доказательство активных методов в реальном production source.
+
+**Ограничения:** текущие native phone handlers, `PHONE_EVENT_VERSION`, same E.164 reconfirm и `AUTH_EPOCH` transaction/10-path proof всё ещё `NOT_PROVEN`. Изолированный Bitrix/MySQL staging не аттестован. V5 HTTP 503 — последнее документированное состояние, не новый online check. Production/V4 не изменялись.
