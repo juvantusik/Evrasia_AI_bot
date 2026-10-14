@@ -11,7 +11,7 @@ function skipTrivia(array $t, int $i): int {
     }
     return $i;
 }
-function baseName(string $s): string {
+function v5ShortClassName(string $s): string {
     $p=strrpos($s, '\\'); return strtolower($p===false?$s:substr($s,$p+1));
 }
 function tokenAt(array $t, int $i, ?int $id=null): bool {
@@ -99,7 +99,7 @@ foreach (['AUTH'=>$argv[2], 'HELPER'=>$argv[3]] as $label=>$file) {
         }
         if ($label!=='AUTH' || $line!==372 ||
             !in_array($id,[T_STRING,T_NAME_QUALIFIED,T_NAME_FULLY_QUALIFIED],true) ||
-            baseName($value)!=='userphoneauthtable') continue;
+            v5ShortClassName($value)!=='userphoneauthtable') continue;
         $j=skipTrivia($tokens,$i+1);
         if (!tokenAt($tokens,$j,T_DOUBLE_COLON)) continue;
         $k=skipTrivia($tokens,$j+1);
