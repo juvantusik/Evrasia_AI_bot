@@ -99,18 +99,18 @@ refuse_scan(){
   PASS_COUNT=$((PASS_COUNT+1))
 }
 
-make_pin Vendor\PhoneAuth
+make_pin 'Vendor\PhoneAuth'
 make_phone Vendor
 expect_ok
 grep -Fxq 'PIN_CONSTRUCTOR_FQCN_MATCHES_PHONE_OWNER=YES' "$TMP/out"
 grep -Fxq 'PHONE_THIS_OWNER_AND_CHECK_DECLARATION_SAME_CLASS=YES' "$TMP/out"
 grep -Fxq 'PHONE_OWNER_BASENAME_HINT=PHONEAUTH_BASENAME' "$TMP/out"
 
-make_pin Vendor\DifferentClass
+make_pin 'Vendor\DifferentClass'
 expect_ok
 grep -Fxq 'PIN_CONSTRUCTOR_FQCN_MATCHES_PHONE_OWNER=NO' "$TMP/out"
 
-make_pin Vendor\PhoneAuth
+make_pin 'Vendor\PhoneAuth'
 make_phone OtherNamespace
 expect_ok
 grep -Fxq 'PIN_CONSTRUCTOR_FQCN_MATCHES_PHONE_OWNER=NO' "$TMP/out"
