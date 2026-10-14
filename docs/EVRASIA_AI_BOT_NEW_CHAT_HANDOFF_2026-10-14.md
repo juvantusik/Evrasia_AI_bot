@@ -1,5 +1,13 @@
 # Evrasia AI Bot — передача проекта в новый чат (14 октября 2026)
 
+> **НАЧАТЬ С ЭТОГО / АКТУАЛЬНО ПО ОПЕРАТОРСКОМУ STDOUT 14.10.2026.** Новый production source-only origin/namespace probe **5/5 PASS**, wrapper **5/5 PASS**, RUN_RC=0; завершён, повторять нельзя. PinCode.php44: **FULLY_QUALIFIED** absolute constructor, line46 check, shared braced block, conditional context and **NO dominance proof**. PhoneAuth.php46: receiver exactly **$this** in function27, no parameter/capture/direct binding records. Exact two source SHA stayed pinned: PinCode 7734ddbaba0e7ec9ddfc9f0a9008c0da0c0a1523e505e52caebac2bbaf637cd0; PhoneAuth a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27. **Unresolved:** class owner of $this and whether PhoneAuth.php check method declaration at135 belongs to same class; PinCode fully qualified constructor class actual identity still masked. No runtime, native verified phone writer, PHONE_EVENT_VERSION or deployment proof.
+
+> **NEXT — PREPARED / CI PASS / PRODUCTION NOT RUN:** Feature code commit `a88c7199ee0bdf808afee6c5aa9fca6b09e46fbb`; [V5 CI run 38605496088](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38605496088) completed/success, all V5 offline checks and synthetic positive/mismatched FQCN/other-class/comment/string/SHA/wrong-host fixtures. Narrow two-file SHA-pinned diagnostic `tests/diagnostics/V5ObjectCheckClassLinkage.php` + `v5_object_check_class_linkage_readonly.sh` compares PinCode new absolute name with the lexical class declaration containing PhoneAuth $this on line46, plus checks direct method declaration check135. Only allowlisted masked enums and numeric lines print. No V4/site/DB/SMS writes. Ask operator for **one guarded Bash block** and analyze next stdout, not old 5/5 or 6/6 runs. The following 6/6 handoff section is HISTORICAL.
+
+---
+
+## Предыдущий завершённый этап: receiver binding 6/6 (историческая запись)
+
 > **НАЧАТЬ ЗДЕСЬ / ОБНОВЛЕНО ПО ПОСЛЕДНЕМУ STDOUT.** Это тот же Project и та же общая история. Последний операторский этап уже выполнен **6/6 PASS**; не просить этот вывод повторно и не запускать старые скрипты. Следующий narrow source-only вопрос описан ниже как **PLANNED / NOT IMPLEMENTED / NOT RUN**. Сначала сверить live GitHub feature/code/docs/CI; затем подготовить и протестировать следующий минимальный probe. Production факт > текущий GitHub > staging/test > актуальная документация > старые обсуждения.
 
 ## 1. Последняя подтверждённая точка
