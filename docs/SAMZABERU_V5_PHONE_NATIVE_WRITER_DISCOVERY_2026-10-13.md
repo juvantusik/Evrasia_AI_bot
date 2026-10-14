@@ -214,3 +214,18 @@ GitHub Actions [38525901881](https://github.com/juvantusik/Evrasia_AI_bot/action
 **Active `PhoneAuth::sendCode()` [65–134]**: `->createUser` 81, `::add` **106**, `->sendSms` **115**, `->createTokens` 132; whitelisted fields `PHONE` 100, `USER_ID` 107. **Active `PhoneAuth::check()` [135–187]**: static `::delete` **153** и **160**, `->createTokens` 162. **Active `PhoneAuth::createUser()` [188–219]**: field `ACTIVE` 199, `->add` 210. У трёх статических вызовов 106/153/160 **имя класса-получателя пока UNKNOWN**; нельзя называть их native phone auth table или считать `check()` verified-phone DB write. Ни один из этих PHP-кодов реально не выполнялся диагностикой.
 
 **ВЫВОД И СЛЕДУЮЩАЯ ТОЧКА:** отдельно и только исходниками установить active PHP class owners для статических `PhoneAuth.php` calls `::add` line 106 / `::delete` lines 153,160, признаки веток результата `check()` и, при необходимости, native default `b_user_phone_auth.CONFIRMED` в native Bitrix table metadata. Не возвращаться к комментариям V4 `confirm_request` / `confirm`; не повторять уже закрытые 5/5 source scans. `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `SAME_PHONE_RECONFIRM_ATOMICITY=NOT_PROVEN`, independent Bitrix+MySQL staging NOT ATTESTED; V5 HTTP 503 по последнему документированному baseline. V4 / production / DB / SMS не менялись.
+
+## 2026-10-14 — production PhoneAuthCodeTable static owners, 4/4 PASS
+
+Оператор фактически выполнил на `evrasia` `v5_phone_auth_check_static_owners_readonly.sh`: **`PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`**. Pinned SHA `local/php_interface/lib/PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27` совпал. `TOKENIZER_LOAD_MODE=EXPLICIT_ROOT_OWNED_TOKENIZER_SO`, `MODE=READ_ONLY`, `PHP_INI_LOADED=NO`, `SITE_PHP_EXECUTED=NO`, `BITRIX_BOOTSTRAP=NO`, `DATABASE_CONNECTION=NO`, `DATABASE_WRITE=NO`, `SMS_SENT=NO`, `PRODUCTION_APPLICATION_WRITE=NO`, no user data/source statements/values/config disclosed.
+
+**Точные active static владельцы** (source-only, не runtime подтверждение):
+- `PhoneAuth::sendCode()` **line 106** — `\Evrasia\Orm\PhoneAuthCodeTable::add(...)`, `FIRST_ARG_KIND=SHORT_ARRAY`.
+- `PhoneAuth::check()` **line 153** — `\Evrasia\Orm\PhoneAuthCodeTable::delete(...)`, `FIRST_ARG_KIND=VARIABLE`.
+- `PhoneAuth::check()` **line 160** — `\Evrasia\Orm\PhoneAuthCodeTable::delete(...)`, `FIRST_ARG_KIND=VARIABLE`.
+
+**Ключевой вывод:** эти three active static operations управляют **кастомной ORM-таблицей кодов телефонной авторизации**, а не Bitrix native `UserPhoneAuthTable`/`b_user_phone_auth`. Эти call sites **не доказывают** native `CONFIRMED=N→Y` event, завершение SMS-подтверждения или same-number reconfirm bump. Нельзя приравнивать успешное удаление OTP-кода к атомарному событию `PHONE_EVENT_VERSION`.
+
+В `PhoneAuth::check()` source `if/elseif` обнаружены на **146,152**, пять `return` на **147,149,155,179,185**, `CHECK_BRANCH_CONDITIONS=2`, `CHECK_RETURN_STATEMENTS=5`, `CHECK_THROW_STATEMENTS=0`. Однако конкретный тип возвращаемых значений/семантика успешного результата `check()` и вызывающие стороны ПОКА НЕ УСТАНОВЛЕНЫ. Из этого source-only результата не следует, что операция всегда удаляет код или что она доступна через фактический V4 HTTP endpoint.
+
+**Следующий узкий source-only шаг:** определить без исходных значений реальные формы `return` и `if` внутри активного `PhoneAuth::check()` и локальные call-site aliases, при необходимости native `UserPhoneAuthTable` default `CONFIRMED`. НЕ повторять 5/5 предыдущий active signup audit, комментарии `confirm_request`/`confirm` или эту 4/4 owner probe. Любые реальное Bitrix/MySQL транзакционное доказательство и release-unblock — только isolated staging. V5 HTTP 503 остаётся последним документированным baseline.
