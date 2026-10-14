@@ -133,7 +133,7 @@ unset($variable);
 if (count($pinAssignments) !== 1) refuse('PinCode pinned absolute constructor');
 $pinNew = $pinAssignments[0] + 2;
 $pinFqcn = strtolower(ltrim(ts($pinTokens, $pinNew + 1), '\\'));
-if ($pinFqcn === '' || strpos($pinFqcn, '\\') === false) refuse('PinCode absolute FQCN shape');
+if ($pinFqcn === '') refuse('PinCode absolute FQCN shape');
 
 // PhoneAuth: only active $this->check() on line 46.
 $phoneCalls = [];
