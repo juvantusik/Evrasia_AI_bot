@@ -1,5 +1,17 @@
 # Evrasia / СамЗаберу API V5 — актуальная точка продолжения 2026-10-13
 
+## 2026-10-14 — PhoneAuth active static owners 4/4 PASS (last production stdout)
+
+**Последний операторский production stdout**: `v5_phone_auth_check_static_owners_readonly.sh` на `evrasia` — `PASS_COUNT=4`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`. Pinned `PhoneAuth.php` SHA `a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27` совпал. Trusted root-owned system `tokenizer.so` через `php -n`, no Bitrix bootstrap/site PHP/config/DB/SMS/user data/production writes.
+
+**SOURCE-VERIFIED ТОЛЬКО ACTIVE PHP:** `PhoneAuth::sendCode` static `\Evrasia\Orm\PhoneAuthCodeTable::add` line **106**, первый аргумент `SHORT_ARRAY`. `PhoneAuth::check` static `\Evrasia\Orm\PhoneAuthCodeTable::delete` lines **153** и **160**, first arg `VARIABLE` у обоих. Это кастомная ORM кодов телефонной авторизации, **не Bitrix native `UserPhoneAuthTable`** и НЕ доказательство `b_user_phone_auth.CONFIRMED` или `PHONE_EVENT_VERSION`. `PhoneAuth::check` имеет `if/elseif` lines 146,152, `return` lines 147,149,155,179,185, `throw`=0. Значения `return`, реальные успешные/неуспешные ветви и HTTP call chain **ещё неизвестны**.
+
+**Новая точка продолжения:** без повторения исходников/старых скриптов, ограниченная source-only проверка выражений `return`/`if` только в активном `PhoneAuth::check()` 135–187 и, по необходимости, native phone table default `CONFIRMED`. Сканер не должен печатать аргументы, номера, SMS, secrets/оригинальные исходные PHP строки. После этого определить какой обработчик реально помечает номер как VERIFIED; не принимать `PhoneAuthCodeTable::delete` за телефонный verified event. Любое runtime proof — только independent Bitrix+MySQL staging, ещё не аттестован.
+
+Старые проверки MFA 9/9+6/6+7/7; phone/active map 5/5 and signup-boundary 5/5 и static-owner 4/4 **ЗАВЕРШЕНЫ, НЕ ПОВТОРЯТЬ**. `PHONE_EVENT_VERSION_WRITER=NOT_PROVEN`, `SAME_PHONE_RECONFIRM_ATOMICITY=NOT_PROVEN`, `NATIVE_PHONE_VERIFICATION_PROVEN=NO`, ten mutation paths + `AUTH_EPOCH` transaction NOT PROVEN. V5 HTTP 503 — последний документированный baseline. V4/production НЕ менялись.
+
+---
+
 ## 2026-10-14 — 5/5 ACTIVE signup phone-add fields and PhoneAuth check calls; next static owners
 
 **Последний операторский production stdout** — `v5_active_phone_signup_boundary_readonly.sh` на `evrasia`, `PASS_COUNT=5`, `FAIL_COUNT=0`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `TOKENIZER_LOAD_MODE=EXPLICIT_ROOT_OWNED_TOKENIZER_SO`, site PHP/Bitrix/SQL/SMS не запускались, writes/PII/секретов в выводе нет. Точный SHA `Controllers/V4/Auth.php=72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`, `lib/PhoneAuth.php=a25f8583f461b5645220f3d3f057db653894cd721d863b6398d42469b8039d27` совпал.
