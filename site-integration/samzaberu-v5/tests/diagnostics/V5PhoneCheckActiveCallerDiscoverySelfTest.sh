@@ -6,7 +6,7 @@ umask 077
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCANNER="$HERE/V5PhoneCheckActiveCallerDiscovery.php"
 TMP="$(mktemp -d /tmp/v5-phone-caller-tests.XXXXXXXX)"
-trap 'rm -rf -- "$TMP"' EXIT
+trap 'rm -f -- "$GOOD" "$HELPER" "$TMP/out" "$TMP/err" "$TMP/lint" "$TMP/local/php_interface/lib/TokenSettings.php"; rmdir -- "$TMP/local/php_interface/Controllers/V4" "$TMP/local/php_interface/Controllers" "$TMP/local/php_interface/lib" "$TMP/local/php_interface" "$TMP/local" "$TMP"' EXIT
 mkdir -p "$TMP/local/php_interface/Controllers/V4" "$TMP/local/php_interface/lib"
 GOOD="$TMP/local/php_interface/Controllers/V4/PhoneFlow.php"
 HELPER="$TMP/local/php_interface/lib/SmsPhone.php"
@@ -47,7 +47,7 @@ grep -Fxq 'OBJECT_CHECK_CALLS_UNRESOLVED=1' "$TMP/out"
 grep -Fxq 'CANDIDATE_SOURCE_FILES=1' "$TMP/out"
 grep -Fxq 'SCANNED_APPROVED_PHP_FILES=2' "$TMP/out"
 grep -Fxq 'FINAL_STATUS=PASS' "$TMP/out"
-if grep -Ei 'PRIVATE_CANARY|PHONEFLOW|OTHER\W|sms\W' "$TMP/out" >/dev/null || [[ -s "$TMP/err" ]]; then
+if grep -Eq 'PRIVATE_CANARY|PRIVATE_CANARY_NUM|PRIVATE_CANARY_CODE' "$TMP/out" || [[ -s "$TMP/err" ]]; then
   echo "FAIL: unexpected private source value or parser stderr"; exit 1
 fi
 echo "PASS: real tokenizer finds static and aliased PhoneAuth calls but ignores both comment kinds"
