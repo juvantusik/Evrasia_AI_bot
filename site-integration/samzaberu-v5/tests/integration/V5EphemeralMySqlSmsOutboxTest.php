@@ -815,12 +815,15 @@ final class CiSmsDispatchSafety implements V5LockedSmsDispatchSafetyPort {
     public bool $allow=true;
     public int $calls=0;
     public function stillSafeWithChallengeLocks(
-        PDO $db,int $userId,string $challengeEpoch,string $verificationStamp
+        PDO $db,int $userId,string $challengeEpoch,string $verificationStamp,
+        int $authorizedMaxPriceMinor,string $currency
     ):bool {
         $this->calls++;
+        // SYNTHETIC contractual provider quote: any price >1200 RUB denied.
         return $this->allow && $db->inTransaction()
             && $userId===41 && $challengeEpoch===SMS_EPOCH
-            && $verificationStamp===SMS_STAMP;
+            && $verificationStamp===SMS_STAMP
+            && $authorizedMaxPriceMinor===1200 && $currency==='RUB';
     }
 }
 function ciClaimRace(string $deliveryId):int {
@@ -903,6 +906,14 @@ smsChallenge($db,$noNativeId);
 $noNativeQueue=smsStore($db)->reserveAndQueue(
     smsRequest($noNativeId,smsWindows(192,3600))
 );
+// A rate change between reservation and claiming must be detected
+// BEFORE any paid gateway is attempted. The site proof/quote is mandatory.
+$q=$db->prepare('UPDATE ev_v5_sms_outbox SET max_price_minor=? '
+    .'WHERE delivery_id=?');
+$q->execute([5000,$noNativeQueue->deliveryId]);
+smsCheck($dispatch->claimQueuedOnce($noNativeQueue->deliveryId)===null,
+    'changed provider price above original ceiling prevents SMS claim');
+$q->execute([1200,$noNativeQueue->deliveryId]);
 $disSafety->allow=false;
 smsCheck($dispatch->claimQueuedOnce($noNativeQueue->deliveryId)===null,
     'missing native phone/epoch safety blocks paid send before claim');
