@@ -1,5 +1,7 @@
 # SamZaberu API V5 — отдельный Bitrix staging: обязательные условия допуска
 
+> **Additional staged artifact 2026-10-15 — NOT DEPLOYED:** feature `src/V5MySqlStrongSessionStore.php` + `schema/PROPOSED_ev_v5_strong_sessions.sql` provide one-use V5 refresh CAS and strong session persistence design, with 165 fake-PDO offline assertions PASS in [GitHub Actions 38709333879](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38709333879) and 24/24 CI suites PASS. This is NOT a real DB concurrency test, native Bitrix proof integration or permission to use any production MySQL. Before staging run, independently attest separated host/database, operator-approved exact schema, ensure actual MySQL+Bitrix PDO bridge supports the new SQL allowlist and single owned native scope, verify grant proofs/epoch/native MFA and verified phone writer, execute controlled transactional tests with synthetic accounts. Old staging gates A→B→C still mandatory; staging status remains UNATTESTED, V5 production status unchanged. Do not install proposed SQL on evrasia or eur-bot-01.
+
 **Дата:** 2026-10-13. **Статус:** проектная инструкция для отдельного staging; физический staging Bitrix/MySQL **НЕ ПОДТВЕРЖДЁН**. Изменений production нет.
 
 ## 1. Почему здесь нужна отдельная среда
