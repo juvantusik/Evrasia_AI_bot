@@ -194,6 +194,7 @@ namespace Bitrix\Main {
 namespace {
     require_once __DIR__ . '/../src/V5MySqlSessionActions.php';
     require_once __DIR__ . '/../src/V5BitrixPdoCompatibilityBridge.php';
+    require_once __DIR__ . '/../src/V5HttpTransportBoundary.php';
 
     use Bitrix\Main\Application;
     use Bitrix\Main\DB\MysqliConnection;
@@ -204,7 +205,8 @@ namespace {
         V5LockedBonusPinReaderPort,V5AccessJwtCodec,V5OpaqueRefreshTokens,
         V5SecurityEventVersions,V5SecurityEventVersionWriter,
         V5StrictE164Phone,PasswordVerifiedAccount,
-        V5AuthHttpHandler,V5LoginWorkflow,V5PasswordProofPort,
+        V5AuthHttpHandler,V5HttpTransportBoundary,V5StagedHttpRequest,
+        V5LoginWorkflow,V5PasswordProofPort,
         V5TrustProofPort,V5AtomicChallengePort,MobileTrustAssessment,
         PendingLoginChallenge,ConsumedLoginChallenge,ChallengeKind
     };
@@ -509,6 +511,86 @@ namespace {
     bridgeCheck($httpPin->reads===1
         && $httpChallenges->begins===0,
         'revoked/V4 HTTP routes never invoke PIN reader or SMS challenge');
+
+
+    // FULL canonical transport -> JSON handler -> workflow -> locked native
+    // Bitrix adapter -> committed V5 JWT -> protected PIN -> refresh -> revoke.
+    [$wireStore,$wireActions,$wireNative,$wirePermit,$wireProof,$wireCoverage,$wirePin,$wireCodec]
+        =bridgeSetup();
+    $wirePassword=new SyntheticHttpPasswordProof();
+    $wireTrust=new SyntheticHttpTrustProof();
+    $wireChallenges=new SyntheticHttpChallenges();
+    $wireHandler=new V5AuthHttpHandler(
+        new V5LoginWorkflow($wirePassword,$wireTrust,$wireChallenges,$wireStore),
+        $wireActions
+    );
+    $wire=new V5HttpTransportBoundary($wireHandler);
+    $wireRequest=static function(
+        string $path,array $payload,string $method='POST',bool $tls=true
+    ):V5StagedHttpRequest {
+        $encoded=json_encode($payload,JSON_THROW_ON_ERROR);
+        return new V5StagedHttpRequest(
+            $method,$path,$tls,'application/json',$encoded,(string)strlen($encoded)
+        );
+    };
+    $wireBody=[
+        'login'=>'synthetic.user','password'=>'test-password',
+        'device_id'=>$device,'platform'=>'ios',
+        'trust_token'=>'synthetic-trust-strong',
+    ];
+    $guarded=$wire->dispatch($wireRequest('/api/v5/auth/signin',$wireBody,'POST',false));
+    bridgeCheck($guarded->status===403 && $wirePassword->calls===0,
+        'unauthenticated HTTP transport refuses insecure password BEFORE backend');
+    $guarded=$wire->dispatch($wireRequest('/api/v5/auth/signin?access_token=unsafe',$wireBody));
+    bridgeCheck($guarded->status===404 && $wirePassword->calls===0,
+        'V5 transport rejects query-string credentials before proof provider');
+    $guarded=$wire->dispatch($wireRequest('/api/v5/auth/signin',$wireBody,'GET'));
+    bridgeCheck($guarded->status===405 && $wirePassword->calls===0,
+        'V5 transport rejects GET without touching password provider');
+    $off=new V5HttpTransportBoundary();
+    bridgeCheck($off->dispatch($wireRequest('/api/v5/auth/signin',$wireBody))->status===503,
+        'V5 transport is 503-disabled without explicit staging handler');
+    $wireReply=$wire->dispatch($wireRequest('/api/v5/auth/signin',$wireBody));
+    $wirePayload=json_decode($wireReply->jsonBody,true,8,JSON_THROW_ON_ERROR);
+    bridgeCheck($wireReply->status===200 && isset($wirePayload['access_token'],
+        $wirePayload['refresh_token']) && $wireNative->commits===1,
+        'real request boundary composes with one committed synthetic native transaction');
+    bridgeCheck($wireChallenges->begins===0,
+        'strong trust V5 transport login avoids extra SMS');
+    bridgeCheck(str_contains($wireReply->headers['Cache-Control'],'no-store')
+        && !isset($wireReply->headers['Set-Cookie'])
+        && !isset($wireReply->headers['Access-Control-Allow-Origin']),
+        'wire response disallows caches, implicit cookies and CORS');
+    $wirePin=$wire->dispatch($wireRequest('/api/v5/loyalty/pin',[
+        'access_token'=>$wirePayload['access_token']
+    ]));
+    $wirePinValue=json_decode($wirePin->jsonBody,true,8,JSON_THROW_ON_ERROR);
+    bridgeCheck($wirePin->status===200 && ($wirePinValue['pin']??null)==='00037'
+        && $wireChallenges->begins===0,
+        'protected wire PIN needs no second challenge after strong login');
+    $wireRotated=$wire->dispatch($wireRequest('/api/v5/auth/refresh',[
+        'refresh_token'=>$wirePayload['refresh_token']
+    ]));
+    $wireRotatedData=json_decode($wireRotated->jsonBody,true,8,JSON_THROW_ON_ERROR);
+    bridgeCheck($wireRotated->status===200
+        && ($wireRotatedData['refresh_token']??'')!==$wirePayload['refresh_token'],
+        'wire refresh produces new token from native committed CAS');
+    bridgeCheck($wire->dispatch($wireRequest('/api/v5/auth/refresh',[
+        'refresh_token'=>$wirePayload['refresh_token']
+    ]))->status===401,
+        'wire refresh replay rejected before returning credentials');
+    bridgeCheck($wireStore->revokeAccess($wireRotatedData['access_token']),
+        'native V5 session revocation applied to wire-issued credentials');
+    bridgeCheck($wire->dispatch($wireRequest('/api/v5/loyalty/pin',[
+        'access_token'=>$wireRotatedData['access_token']
+    ]))->status===401,
+        'wire PIN blocked after session revocation');
+    bridgeCheck($wire->dispatch($wireRequest('/api/v5/auth/refresh',[
+        'refresh_token'=>$wireRotatedData['refresh_token']
+    ]))->status===401,
+        'wire refresh blocked after session revocation');
+    bridgeCheck($wirePinValue['pin']==='00037' && $wirePin->status===200,
+        'protected synthetic PIN never stripped leading zeros');
 
     echo "PASS: V5 native Bitrix bridge + strong session E2E ($passed assertions)\n";
     echo "FAKE_BITRIX_ONLY=YES\nMYSQL_CONNECTION=NO\nPRODUCTION_WRITE=NO\n";
