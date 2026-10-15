@@ -59,7 +59,7 @@ unset($raw);
 function tid(int $i): ?int {global $tokens;return $tokens[$i][0]??null;}
 function ts(int $i): string {global $tokens;return $tokens[$i][1]??'';}
 function tl(int $i): int {global $tokens;return $tokens[$i][2]??0;}
-function base(string $name): string {return strtolower(substr($name,strrpos('\\'.$name,'\\')+1));}
+function base(string $name): string { $p=strrpos($name,'\\'); return strtolower($p===false?$name:substr($name,$p+1)); }
 function nameToken(?int $id):bool {return in_array($id,[T_STRING,T_NAME_QUALIFIED,T_NAME_FULLY_QUALIFIED,T_NAME_RELATIVE],true);}
 function lit(int $i): ?string {
     if (tid($i)!==T_CONSTANT_ENCAPSED_STRING)return null;
