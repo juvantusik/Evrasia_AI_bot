@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/V5MySqlStrongSessionStore.php';
 require_once __DIR__ . '/../src/V5BitrixPdoCompatibilityBridge.php';
+require_once __DIR__ . '/../src/V5MySqlSessionActions.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlStrongSessionStore, V5LockedStrongSessionProofPort,
     V5NativeSecurityHookCoveragePort, V5AccessJwtCodec,
     V5OpaqueRefreshTokens, V5SessionAssurancePolicy,
     PasswordVerifiedAccount, ConsumedLoginChallenge, ChallengeKind,
-    AuthenticationRejected, AuthenticatedV5Session, V5LockedBonusPinReaderPort
+    AuthenticationRejected, AuthenticatedV5Session, V5LockedBonusPinReaderPort, V5MySqlSessionActions
 };
 
 final class SessionFakePdo extends PDO
@@ -415,6 +416,29 @@ denies(fn()=>new V5MySqlStrongSessionStore(
     new V5OpaqueRefreshTokens(str_repeat('R',64)),
     new SessionFakeProof(),new SessionFakeCoverage(),'short'
 ),'weak device/grant binding key denied');
+
+
+[$integrationStore,$integrationDb]=environment();
+$integrationReader=new SessionFakePinReader();
+$adapter=new V5MySqlSessionActions($integrationStore,$integrationReader);
+$initialStrong=trusted($integrationStore);
+yes($adapter->readBonusPin($initialStrong->accessToken)==='0042',
+    'staging session-to-HTTP adapter enforces V5 locked PIN reader');
+$refreshedStrong=$adapter->rotateRefresh($initialStrong->refreshToken);
+yes($refreshedStrong instanceof AuthenticatedV5Session &&
+    $refreshedStrong->refreshToken!==$initialStrong->refreshToken,
+    'staging session-to-HTTP adapter rotates opaque V5 refresh');
+yes($adapter->readBonusPin($refreshedStrong->accessToken)==='0042',
+    'rotated access JWT still allows PIN without additional OTP');
+yes($integrationReader->calls===2,'sensitive PIN reader called once per valid access');
+denies(fn()=>$adapter->rotateRefresh($initialStrong->refreshToken),
+    'adapter cannot replay consumed refresh bearer');
+$integrationDb->state['AUTH_EPOCH']='8';
+$beforeReaders=$integrationReader->calls;
+yes($adapter->readBonusPin($refreshedStrong->accessToken)===null,
+    'adapter denies PIN on changed shared Bitrix epoch');
+yes($integrationReader->calls===$beforeReaders,
+    'stale V5 token cannot reach site PIN adapter');
 
 echo "PASS: V5 transactional strong session/refresh store ($checkCount assertions)\n";
 echo "MODE=OFFLINE_ONLY\nREAL_MYSQL_CONNECTED=NO\nBITRIX_BOOTSTRAP=NO\n";
