@@ -199,16 +199,9 @@ final readonly class V5MySqlSmsDispatchClaims
                 return false;
             }
         }
-        try{
-            $q=$this->query('UPDATE ev_v5_sms_outbox SET status = ? '
-                .'WHERE delivery_id = ? AND provider_idempotency_key = ? '
-                .'AND status = ?',[
-                $outcome->value,$deliveryId,$providerIdempotencyKey,'claimed',
-            ]);
-            return $q->rowCount()===1;
-        }catch(Throwable){
-            throw new RuntimeException('v5_sms_provider_ack_unavailable');
-        }
+        return $this->commitProviderOutcome(
+            $deliveryId,$providerIdempotencyKey,$outcome,'claimed'
+        );
     }
 
     /**
@@ -251,15 +244,46 @@ final readonly class V5MySqlSmsDispatchClaims
         // unexpectedly opened by a provider. Its owner must resolve that scope.
         if($this->db->inTransaction())
             throw new RuntimeException('v5_sms_reconciliation_foreign_transaction');
+        return $this->commitProviderOutcome(
+            $deliveryId,$providerIdempotencyKey,
+            V5SmsProviderTerminalOutcome::Sent,'unknown'
+        );
+    }
+
+    /**
+     * Provider attestation has ALREADY finished before this owned DB scope.
+     * Required for the Bitrix bridge: it never permits autocommit writes.
+     * Return success only AFTER COMMIT, not from an uncommitted rowCount.
+     * Recheck readiness after provider code; never adopt/rollback its scope.
+     * No provider call, envelope access, quota change or resend in this method.
+     */
+    private function commitProviderOutcome(
+        string $deliveryId,string $providerIdempotencyKey,
+        V5SmsProviderTerminalOutcome $outcome,string $expectedStatus
+    ):bool {
+        $this->assertReady();
+        $started=false;
         try{
+            if(!$this->db->beginTransaction())
+                throw new RuntimeException('v5_sms_provider_ack_tx_unavailable');
+            $started=true;
             $q=$this->query('UPDATE ev_v5_sms_outbox SET status = ? '
                 .'WHERE delivery_id = ? AND provider_idempotency_key = ? '
                 .'AND status = ?',[
-                'sent',$deliveryId,$providerIdempotencyKey,'unknown',
+                $outcome->value,$deliveryId,$providerIdempotencyKey,$expectedStatus,
             ]);
-            return $q->rowCount()===1;
+            $affected=$q->rowCount();
+            if($affected!==0 && $affected!==1)
+                throw new RuntimeException('v5_sms_provider_ack_cas_invalid');
+            if(!$this->db->commit())
+                throw new RuntimeException('v5_sms_provider_ack_commit_uncertain');
+            $started=false;
+            return $affected===1;
         }catch(Throwable){
-            throw new RuntimeException('v5_sms_reconciliation_unavailable');
+            if($started && $this->db->inTransaction()){
+                try{$this->db->rollBack();}catch(Throwable){}
+            }
+            throw new RuntimeException('v5_sms_provider_ack_unavailable');
         }
     }
 

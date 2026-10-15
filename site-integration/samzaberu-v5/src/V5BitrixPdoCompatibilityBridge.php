@@ -232,6 +232,24 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             . 'WHERE sid = ? AND status = ? AND auth_epoch = ?',
     ];
 
+    /**
+     * Exact indexed outbox reads used by dispatch, reconciliation and consume.
+     * Do not expand the generic WHERE regex to accept arbitrary delivery reads.
+     * Ciphertext is read only by the locked, single-delivery dispatch template.
+     * @var list<string>
+     */
+    private const SMS_OUTBOX_READ_SQL = [
+        'SELECT challenge_id,user_id FROM ev_v5_sms_outbox '
+            . 'WHERE delivery_id = ? LIMIT 2',
+        'SELECT delivery_id,challenge_id,user_id,send_ordinal,encrypted_envelope,'
+            . 'provider_idempotency_key,verification_stamp,max_price_minor,currency,status '
+            . 'FROM ev_v5_sms_outbox WHERE delivery_id = ? FOR UPDATE',
+        'SELECT status FROM ev_v5_sms_outbox WHERE delivery_id = ? '
+            . 'AND provider_idempotency_key = ? LIMIT 1',
+        'SELECT status,verification_stamp,send_ordinal FROM ev_v5_sms_outbox '
+            . 'WHERE delivery_id = ? AND challenge_id = ? FOR UPDATE',
+    ];
+
     private static function assertStatementAllowed(string $sql): void
     {
         if ($sql === '' || strlen($sql) > 8000
@@ -255,6 +273,12 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             return;
         }
         if (preg_match('/\ASELECT\s/i', $sql) === 1) {
+            if (stripos($sql, 'ev_v5_sms_outbox') !== false) {
+                if (!in_array($sql, self::SMS_OUTBOX_READ_SQL, true)) {
+                    throw new RuntimeException('v5_bitrix_sms_outbox_read_forbidden');
+                }
+                return;
+            }
             if (preg_match('/\bFROM\s+(?:information_schema\.TABLES|ev_v5_auth_challenges|ev_v5_sms_budget_windows|ev_v5_sms_outbox|b_user|b_sec_user|b_user_phone_auth|ev_samzaberu_auth_state)\b/i', $sql) !== 1) {
                 throw new RuntimeException('v5_bitrix_select_scope_forbidden');
             }
