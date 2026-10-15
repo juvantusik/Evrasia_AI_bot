@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Two anonymous HTTPS GETs against the installed, disabled V5 entry only.
+# Two anonymous origin HTTPS GETs; canonical Host/SNI and full TLS verification.
 set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C
@@ -9,6 +9,7 @@ V5HOME="$BASE/private/samzaberu-v5"
 CODE=0caa0248c783188939398a71543ba740f064bb90
 RELEASE="$V5HOME/releases/$CODE"
 BACKUP=/root/ev-v5-off-backup.f89wzMkA
+readonly VHOST=evrasia.rest ORIGIN_IPV4=192.168.103.141
 WORK='' HTTP_COUNT=0 HTTP_PASS=0
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 2; }
 finish() {
@@ -27,6 +28,7 @@ finish() {
   printf 'APPLICATION_WRITE=NO\nDIRECT_DATABASE_CONNECTION=NO\nSERVICE_RELOAD=NO\nPILOT_ACTIVATION_PERFORMED=NO\n'
   printf 'WEB_ACCESS_LOG_MAY_CHANGE=YES\nNATIVE_SIDE_EFFECTS_INSTRUMENTED=NO\n'
   printf 'PHP_HTTPS_AND_PEER_MAPPING=NOT_ATTESTED\nV4_HTTP_FUNCTIONAL_TEST=NOT_RUN\n'
+  printf 'HTTPS_SCOPE=LOCAL_ORIGIN_CANONICAL_SNI\nPUBLIC_EDGE_TEST=NOT_RUN\nDNS_CONFIGURATION_CHANGED=NO\n'
   exit "$rc"
 }
 trap finish EXIT
@@ -55,10 +57,20 @@ PINS
   [ "$(cat "$RELEASE/CODE_COMMIT")" = "$CODE" ] || fail 'Unexpected release'
   [ "$(find "$DOCROOT/api/v5" -mindepth 1 -maxdepth 1 | wc -l)" -eq 2 ] || fail 'Unexpected public files'
 }
+# Reuse the documented self-call target; do not guess loopback or public NAT.
+# A changed host address/listener stops before any HTTP request.
+check_origin() {
+  ip -4 -o address show | awk -v ip="$ORIGIN_IPV4" '
+    $3 == "inet" { split($4, cidr, "/"); if (cidr[1] == ip) found=1 }
+    END { exit !found }' || fail 'Documented origin IP is not assigned to this host'
+  ss -H -ltn4 'sport = :443' | awk -v endpoint="$ORIGIN_IPV4:443" '
+    $4 == endpoint || $4 == "0.0.0.0:443" || $4 == "*:443" { found=1 }
+    END { exit !found }' || fail 'No matching local IPv4 HTTPS listener'
+}
 printf '=== 1. HOST / ENVIRONMENT ===\nHOST=%s\nUSER=%s\n' "$(hostname -s)" "$(id -un)"
-printf 'MODE=READ_ONLY_OFF_HTTP_CHECK\nSITE_FILE_WRITE=NO\nTEMPORARY_FILES_ONLY=YES\nCREDENTIALS_SENT=NO\n'
+printf 'MODE=READ_ONLY_OFF_ORIGIN_HTTPS_CHECK\nSITE_FILE_WRITE=NO\nTEMPORARY_FILES_ONLY=YES\nCREDENTIALS_SENT=NO\n'
 [ "$(hostname -s)" = evrasia ] && [ "$(id -u)" -eq 0 ] || fail 'Run as root on evrasia'
-for cmd in curl sha256sum cmp stat realpath awk find wc mktemp; do
+for cmd in curl sha256sum cmp stat realpath awk find wc mktemp ip ss; do
   command -v "$cmd" >/dev/null || fail "Missing tool: $cmd"
 done
 printf '\n=== 2. GUARDS ===\n'
@@ -71,6 +83,8 @@ bash -n "$BACKUP/rollback.sh"
 plain "$BACKUP/backup.sha256"
 sha256sum -c --status "$BACKUP/backup.sha256" || fail 'Backup checksum mismatch'
 echo 'PASS: OFF package, V4 baseline and saved rollback verified'
+check_origin
+printf 'ORIGIN_IPV4=%s\nTLS_SERVER_NAME=%s\nLOCAL_ADDRESS_AND_443_LISTENER=PASS\n' "$ORIGIN_IPV4" "$VHOST"
 WORK="$(mktemp -d /tmp/ev-v5-http.XXXXXXXX)"
 cat > "$WORK/header-check.awk" <<'AWK'
 BEGIN { type=0; cache=0; cookie=0; redirect=0; cors=0; age=0; seen=0 }
@@ -90,7 +104,7 @@ END {
 }
 AWK
 probe() {
-  local path="$1" code tls extra curl_rc=0 body_ok=NO headers_ok=YES
+  local path="$1" code tls remote extra curl_rc=0 body_ok=NO headers_ok=YES
   case "$path" in /api/v5/router.php|/api/v5/auth/signin) ;; *) fail 'Unexpected HTTP target';; esac
   check_state
   printf 'PATH=%s\n' "$path"
@@ -100,17 +114,20 @@ probe() {
   ( ulimit -f 64
     exec env -i PATH="$PATH" LC_ALL=C HOME="$WORK" curl -q --silent \
       --noproxy '*' --proto '=https' --max-redirs 0 \
+      --ipv4 --resolve "$VHOST:443:$ORIGIN_IPV4" \
       --connect-timeout 5 --max-time 20 --max-filesize 16384 \
       --header 'Accept: application/json' --header 'Cache-Control: no-cache' \
-      --header 'Pragma: no-cache' --user-agent 'Evrasia-V5-Off-Check/1' \
+      --header 'Pragma: no-cache' --user-agent 'Evrasia-V5-Off-Origin-Check/2' \
       --dump-header "$WORK/headers" --output "$WORK/body" \
-      --write-out '%{http_code} %{ssl_verify_result}\n' \
-      "https://evrasia.rest$path"
+      --write-out '%{http_code} %{ssl_verify_result} %{remote_ip}\n' \
+      "https://$VHOST$path"
   ) > "$WORK/meta" 2> "$WORK/error" || curl_rc=$?
   printf 'CURL_RC=%s\n' "$curl_rc"
-  [ "$curl_rc" -eq 0 ] || fail 'HTTPS transport failed; no redirect or insecure retry attempted'
-  read -r code tls extra < "$WORK/meta"
+  [ "$curl_rc" -eq 0 ] || fail 'Origin HTTPS transport failed; no public-IP, redirect or insecure retry attempted'
+  read -r code tls remote extra < "$WORK/meta"
   [[ "$code" =~ ^[0-9]{3}$ ]] && [[ "$tls" =~ ^[0-9]+$ ]] && [ -z "$extra" ] || fail 'Invalid curl metadata'
+  [ "$remote" = "$ORIGIN_IPV4" ] || fail 'Unexpected HTTPS peer address'
+  printf 'CONNECTED_ORIGIN_IP=%s\n' "$remote"
   if printf '%s' '{"error":"v5_unavailable"}' | cmp -s - "$WORK/body"; then body_ok=YES; fi
   printf 'HTTP_STATUS=%s\nTLS_VERIFY_RESULT=%s\nEXPECTED_OFF_JSON=%s\n' "$code" "$tls" "$body_ok"
   awk -f "$WORK/header-check.awk" "$WORK/headers" || headers_ok=NO
@@ -119,11 +136,11 @@ probe() {
   HTTP_PASS=$((HTTP_PASS+1))
   echo 'PASS: HTTPS returned the expected disabled V5 response'
 }
-printf '\n=== 3. PUBLIC HTTPS: DIRECT ENTRY THEN NESTED ROUTE ===\n'
+printf '\n=== 3. ORIGIN HTTPS: DIRECT ENTRY THEN NESTED ROUTE ===\n'
 probe /api/v5/router.php
 probe /api/v5/auth/signin
 printf '\n=== 4. VERIFY ===\n'
 check_state
 printf 'PASS: package, OFF configuration, V4 and shared rewrite unchanged\n'
-printf 'V5_INSTALLED_DISABLED=YES\nV5_MODE=off\nHTTP_OFF_BOUNDARY=PASS\n'
+printf 'V5_INSTALLED_DISABLED=YES\nV5_MODE=off\nHTTP_OFF_BOUNDARY=PASS\nLOCAL_ORIGIN_OFF_BOUNDARY=PASS\n'
 printf 'REAL_NATIVE_AUTHENTICATION_TEST=NOT_RUN\n'
