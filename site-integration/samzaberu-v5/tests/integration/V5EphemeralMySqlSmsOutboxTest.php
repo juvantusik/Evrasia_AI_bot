@@ -21,11 +21,14 @@ if (getenv('GITHUB_ACTIONS')!=='true'
 }
 
 require_once __DIR__ . '/../../src/V5MySqlSmsOutbox.php';
+require_once __DIR__ . '/../../src/V5MySqlChallengeConsumption.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlSmsOutbox,V5SmsLockedEligibilityPort,V5SmsQueueReservation,
     V5VerifiedSmsDestination,V5SmsPriceCeiling,V5SmsBudgetWindow,
-    V5SodiumSmsMessageFactory,V5SmsQueuedDelivery,AuthenticationRejected
+    V5SodiumSmsMessageFactory,V5SmsQueuedDelivery,AuthenticationRejected,
+    V5MySqlChallengeConsumption,V5LockedChallengeNativeFactorPort,
+    ConsumedLoginChallenge,ChallengeKind
 };
 
 const DEVICE_ID='sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -253,6 +256,176 @@ $q=$db->prepare('SELECT sms_sent_count FROM ev_v5_auth_challenges WHERE challeng
 $q->execute([$raceChallenge]);
 smsCheck((int)$q->fetchColumn()===1,
     'concurrent challenge SMS send count increments only once');
+
+
+/**
+ * Native Bitrix verifier is NOT present. This mandatory synthetic callback
+ * proves only transaction placement; real MFA, phone/epoch and TOTP replay
+ * checks must be supplied by the actual attested Bitrix staging provider.
+ */
+final class CiChallengeNativeFactor implements V5LockedChallengeNativeFactorPort {
+    public bool $allow=true;
+    public int $totpChecks=0;
+    public function currentFactorEligibleWithLocks(
+        PDO $db,int $userId,ChallengeKind $kind,
+        string $challengeAuthEpoch,?string $verifiedPhoneStamp
+    ):bool {
+        return $this->allow && $db->inTransaction()
+            && $userId===41 && $challengeAuthEpoch===SMS_EPOCH
+            && ($kind===ChallengeKind::SMS
+                ? $verifiedPhoneStamp===SMS_STAMP
+                : $verifiedPhoneStamp===null);
+    }
+    public function consumeNativeTotpWithLocks(PDO $db,int $userId,string $code):bool {
+        $this->totpChecks++;
+        return $this->allow && $db->inTransaction()
+            && $userId===41 && $code==='123456';
+    }
+}
+function ciConsumer(PDO $db,?CiChallengeNativeFactor $native=null):V5MySqlChallengeConsumption {
+    return new V5MySqlChallengeConsumption(
+        $db,$native??new CiChallengeNativeFactor(),BIND_KEY,SMS_HMAC_KEY
+    );
+}
+function ciSmsCode(PDO $db,string $id):string {
+    $q=$db->prepare('SELECT delivery_id,encrypted_envelope FROM ev_v5_sms_outbox '
+        .'WHERE challenge_id=? ORDER BY send_ordinal DESC LIMIT 1');
+    $q->execute([$id]);$row=$q->fetch(PDO::FETCH_ASSOC);
+    if(!is_array($row))throw new RuntimeException('CI encrypted synthetic SMS not found');
+    $bytes=base64_decode($row['encrypted_envelope'],true);
+    $nonceLen=SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
+    if(!is_string($bytes)||strlen($bytes)<$nonceLen+16)
+        throw new RuntimeException('CI nonce/ciphertext unavailable');
+    $decoded=sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+        substr($bytes,$nonceLen),
+        "evrasia:v5:sms-outbox:v1\0".$row['delivery_id'],
+        substr($bytes,0,$nonceLen),SMS_ENVELOPE_KEY
+    );
+    if(!is_string($decoded))throw new RuntimeException('synthetic decrypt failure');
+    $message=json_decode($decoded,true,8,JSON_THROW_ON_ERROR);
+    if(!preg_match('/([0-9]{6})/',$message['text']??'',$m))
+        throw new RuntimeException('synthetic SMS code format absent');
+    return $m[1]; // synthetic CI only; NEVER print code or real envelope.
+}
+function ciConsumedRace(string $id):int {
+    try {
+        $db=smsDb();
+        $grant=ciConsumer($db)->verifyAndConsume($id,'123456',DEVICE_ID,'ios');
+        return $grant instanceof ConsumedLoginChallenge?0:1;
+    }catch(Throwable){return 2;}
+}
+
+$db=smsDb();
+$smsVerifiedId=str_repeat('1',64);
+smsChallenge($db,$smsVerifiedId);
+$verifierStore=smsStore($db);
+$pendingDelivery=$verifierStore->reserveAndQueue(
+    smsRequest($smsVerifiedId,smsWindows(64,3600))
+);
+$code=ciSmsCode($db,$smsVerifiedId);
+$verify=ciConsumer($db);
+smsCheck($verify->verifyAndConsume($smsVerifiedId,'999999',DEVICE_ID,'ios')===null,
+    'incorrect six-digit SMS code denied in actual InnoDB transaction');
+$q=$db->prepare('SELECT failed_attempts,status FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$smsVerifiedId]);$wrong=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck((int)$wrong['failed_attempts']===1 && $wrong['status']==='pending',
+    'incorrect SMS attempt is durably charged');
+smsCheck($verify->verifyAndConsume($smsVerifiedId,$code,DEVICE_ID,'ios')===null,
+    'queued SMS must NOT authorize a code without a positive sent record');
+$q=$db->prepare('SELECT failed_attempts FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$smsVerifiedId]);
+smsCheck((int)$q->fetchColumn()===2,
+    'guess against queued delivery counts as an unsuccessful attempt');
+// Simulate a positive provider acknowledgement ONLY in this isolated
+// database. There is no real gateway and no sending of the synthetic SMS.
+$q=$db->prepare('UPDATE ev_v5_sms_outbox SET status=? WHERE delivery_id=?');
+$q->execute(['sent',$pendingDelivery->deliveryId]);
+$native=new CiChallengeNativeFactor();
+$verified=ciConsumer($db,$native);
+$grant=$verified->verifyAndConsume($smsVerifiedId,$code,DEVICE_ID,'ios');
+smsCheck($grant instanceof ConsumedLoginChallenge && $grant->kind===ChallengeKind::SMS
+    && $grant->grantReference===$smsVerifiedId,
+    'real InnoDB accepts valid HMAC for ONLY provider-confirmed sent SMS');
+$q=$db->prepare('SELECT status,sms_code_hmac FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$smsVerifiedId]);$done=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck($done['status']==='consumed' && $done['sms_code_hmac']===null,
+    'successful code is atomically consumed and SMS HMAC cleared');
+smsCheck($verified->verifyAndConsume($smsVerifiedId,$code,DEVICE_ID,'ios')===null,
+    'SMS challenge cannot be consumed twice, even with correct code');
+smsCheck($verified->verifyAndConsume($smsVerifiedId,$code,DEVICE_ID,'android')===null,
+    'changing mobile platform cannot bypass challenge binding');
+
+$totpId=str_repeat('2',64);
+smsChallenge($db,$totpId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$totpId]);
+$totpNative=new CiChallengeNativeFactor();
+$totpVerify=ciConsumer($db,$totpNative);
+smsCheck($totpVerify->verifyAndConsume($totpId,'000000',DEVICE_ID,'ios')===null,
+    'synthetic native TOTP wrong code denied');
+$q=$db->prepare('SELECT failed_attempts FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$totpId]);smsCheck((int)$q->fetchColumn()===1,
+    'wrong TOTP attempt is durably charged in InnoDB');
+$totpGrant=$totpVerify->verifyAndConsume($totpId,'123456',DEVICE_ID,'ios');
+smsCheck($totpGrant instanceof ConsumedLoginChallenge
+    && $totpGrant->kind===ChallengeKind::TOTP
+    && $totpNative->totpChecks===2,
+    'synthetic native TOTP factor is consumed only in owned DB transaction');
+smsCheck($totpVerify->verifyAndConsume($totpId,'123456',DEVICE_ID,'ios')===null,
+    'consumed synthetic native TOTP cannot replay');
+
+$blockedId=str_repeat('3',64);
+smsChallenge($db,$blockedId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$blockedId]);
+$deniedNative=new CiChallengeNativeFactor();$deniedNative->allow=false;
+smsCheck(ciConsumer($db,$deniedNative)->verifyAndConsume(
+    $blockedId,'123456',DEVICE_ID,'ios')===null,
+    'unverified Bitrix native status refuses to consume challenge');
+$q=$db->prepare('SELECT status FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$blockedId]);
+smsCheck($q->fetchColumn()==='pending','native denial never changes challenge to consumed');
+
+$lockoutId=str_repeat('4',64);
+smsChallenge($db,$lockoutId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$lockoutId]);
+for($i=0;$i<5;$i++)
+    smsCheck(ciConsumer($db)->verifyAndConsume(
+        $lockoutId,'000000',DEVICE_ID,'ios')===null,
+        'invalid TOTP code never consumed while exhausting five attempts');
+$q=$db->prepare('SELECT status,failed_attempts FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$lockoutId]);$locked=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck($locked['status']==='cancelled' && (int)$locked['failed_attempts']===5,
+    'five invalid attempts atomically cancel a challenge');
+smsCheck(ciConsumer($db)->verifyAndConsume(
+    $lockoutId,'123456',DEVICE_ID,'ios')===null,
+    'correct code after lockout never reopens cancelled challenge');
+
+// Exactly one successful grant when two independent real connections
+// race an existing TOTP challenge.
+$raceId=str_repeat('5',64);
+smsChallenge($db,$raceId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$raceId]);
+unset($db,$verify,$verified,$totpVerify,$totpNative,$verifierStore,$grant,$totpGrant,$native);
+gc_collect_cycles();
+$pid=pcntl_fork();
+if($pid===-1)throw new RuntimeException('ephemeral consume race fork failed');
+if($pid===0)exit(ciConsumedRace($raceId));
+$parent=ciConsumedRace($raceId);
+$waited=pcntl_waitpid($pid,$status);
+$child=pcntl_wifexited($status)?pcntl_wexitstatus($status):2;
+smsCheck($waited===$pid && in_array($parent,[0,1],true)
+    && in_array($child,[0,1],true)
+    && ($parent===0?1:0)+($child===0?1:0)===1,
+    'two InnoDB processes can consume same TOTP challenge only once');
+$db=smsDb();
+$q=$db->prepare('SELECT status,failed_attempts FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$raceId]);$state=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck($state['status']==='consumed' && (int)$state['failed_attempts']===0,
+    'one committed TOTP grant and zero failed attempts after race');
+
 
 echo "PASS: real ephemeral MariaDB SMS quota/outbox ($checks assertions)\n";
 echo "MODE=GITHUB_EPHEMERAL_CI_ONLY\nREAL_MARIADB_INNODB=YES\n";
