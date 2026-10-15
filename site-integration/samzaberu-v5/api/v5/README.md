@@ -1,65 +1,97 @@
-# V5 entry alongside the existing V4 API
+# V5 private pilot entry alongside V4
 
-Status: implemented and offline-tested in feature; NOT installed on the site.
-Accepted placement: existing Bitrix host, same domain, existing accounts and DB.
-No new VM, whole-site container copy or second MySQL instance is required.
+Feature code, NOT installed on the site. No separate VM, whole-site copy, second
+MySQL instance or second customer database is required. Existing host: evrasia.
 
-## Composition contract
+## Entry chain and real remaining dependency
 
-`router.php` uses the existing V5RouteMap, request factory, HTTP transport and handler.
-It never includes the V4 router and never redirects an invalid V5 request to V4.
-Both server-only configuration items are mandatory:
+Public `/api/v5/router.php` (rendered deployment/public-router.php template)
+loads PRIVATE `api/v5/site.php`, which loads V5PrivatePilotConfig and then the
+existing package router/ParallelHttpEntry/transport/handler.
 
-- `EVRASIA_SAMZABERU_V5_ROUTER_READY` must be the boolean `true` (not a string).
-- `$GLOBALS['EVRASIA_SAMZABERU_V5_HTTP_FACTORY']` must be a Closure returning
-  `V5HttpTransportBoundary` configured with verified site providers.
+The private release must contain fixed `site-config.json` and `site-factory.php`
+next to its src/ and api/ directories. The latter must return the EXISTING
+V5HttpTransportBoundary with verified real site providers. **That native factory
+is NOT supplied by this change.** Do not substitute a permissive proof provider.
+An empty transport remains503; admission to the pilot does not authenticate.
 
-The factory registration must NOT bootstrap Bitrix. Only invoking the lazy
-factory after input validation may initialize the approved V5 services.
-The flag is an operational kill switch, not an authentication or mutation-coverage
-attestation. Do not populate configuration from GET/POST/cookies/headers.
-A ready flag without a factory remains503. A default empty transport remains503.
-This repository supplies neither a permissive native factory nor live credentials.
-A separate server-side pilot restriction is still required before activation.
+The existing low-level router still accepts the strict server-ready constant and
+Closure contract documented by the earlier entry increment. The public pilot
+shim must go through site.php, NOT include that low-level router directly and
+NOT register a shared auto-prepend for V4. site.php clears any previous factory.
 
-## Deployment layout to prepare, not an executed deployment
+## Private JSON schema
 
-The package layout assumes `api/v5/router.php` and `src/` remain in the same
-release tree. Do NOT copy router.php alone into the live docroot: its relative
-require resolves within its original package. Prefer a private release directory
-outside the public docroot and a minimal fixed-path `/api/v5/router.php` shim
-loading V5-only private configuration and then the package entry.
-Exact private path, file owner, public shim and activation method must be verified
-and recorded in the targeted deployment plan; none has been installed by this change.
-Do not add an eager V5/Bitrix load to a shared auto-prepend file used by V4.
+The disabled example in deployment/site-config.example.json contains exactly:
+`mode`, `pilot_key_sha256`, `expires_at`, `allowed_peer_ips`.
 
-The current `.htaccess` still targets only `/api/v5/`. Real Apache/Nginx precedence,
-PHP handler, HTTPS metadata and direct-router behavior need a targeted acceptance
-before installation. Existing root and V4 rewrites must remain unchanged unless a
-specific necessary change is reviewed and separately approved. Do not infer live
-coexistence from the CLI tests.
+Only `mode: "pilot"` can admit requests. Off, unknown mode, missing or malformed
+config denies. Pilot needs an integer future Unix expiry no more than24hours
+away, a lower-case SHA256 digest, and1-16 unique literal peer IP addresses.
+There is deliberately no unrestricted/public mode in this initial pilot loader.
+Future public rollout must be a separately reviewed change, not a made-up config.
 
-## Request and failure behavior
+The pilot request supplies a separately generated32-byte random key encoded as
+64 lower-case hex characters in `X-Evrasia-V5-Pilot`, over verified HTTPS.
+Store only its SHA256 in config; never put the real key in GitHub/chat/URL/logs
+or a publicly distributed mobile build. No production key was generated here.
+site.php removes this header from PHP $_SERVER before native composition, but
+web/proxy/custom access logging must also omit it. Duplicate-header behavior
+must be checked at the actual edge; a comma-joined value fails this parser.
 
-Off/missing factory:503 before body I/O or factory invocation.
-On: exact canonical V5 path, verified server HTTPS, POST, JSON media type,
-Content-Length and 8192-byte maximum, JSON object/depth validation before factory.
-Input reads are capped at8193 bytes to detect overflow. All existing handler,
-strong-session and native proof checks still execute after composition.
-No-store responses; generic failures; V5 emitter suppresses response cookies,
-redirects and ordinary accidental buffered factory output. The factory must be
-reviewed trusted code; this emitter is not a sandbox for hostile PHP.
+REMOTE_ADDR must match a configured literal address. Forwarded/X-Forwarded-For
+and X-Forwarded-Proto do not attest peer identity or TLS. When PHP sees a shared
+proxy address, allowing that peer is NOT proof of a particular client: the pilot
+key is still mandatory. Verify the existing web-server/CGI metadata topology.
 
-## Verification boundary
+**The pilot key is request admission only, not password, second factor, account
+allowlist, native mutation coverage or permission to send paid SMS.** Restrict
+actual test accounts in the real factory and preserve all existing V5 checks.
 
-`tests/V5ParallelHttpEntryTest.php` runs through existing `V5RouteMapTest.php`:
-198 offline assertions, including three actual child executions of router.php.
-Credential test doubles reject all logins; no fake successful authentication,
-Bitrix bootstrap, database access or SMS occurs in these entry tests.
-The existing ephemeral MariaDB regression remains separate (329 checks).
-TOTP verifier/native events, SMS lifecycle/provider and RestIS integration are
-not implemented by this entry and must not be bypassed to activate it.
+## Filesystem and release layout
 
-Current project authority: `docs/SAMZABERU_V5_START_HERE_2026-10-15.md` in feature.
-Historical STAGING-only text elsewhere describes earlier test/deployment plans;
-it is not a renewed requirement for a separate server.
+Both shim literals are fixed by a guarded installer, never request values.
+Known site docroot: /home/site_evrasia/web/evrasia.spb.ru/public_html.
+Private parent from prior project history: /home/site_evrasia/web/evrasia.spb.ru/private.
+Its current layout/permissions/open_basedir and web aliases still require the
+prepared targeted installation preflight. Example candidate release layout:
+`<private parent>/samzaberu-v5/releases/<approved code SHA>/` (not yet created).
+
+Use a canonical private release path outside docroot, without symlink components.
+The loader rejects a world-accessible or group/world-writable release directory;
+config/factory must share its owner, have no world access or group/world write,
+be regular non-symlink single-link files, and be within bounded sizes.
+Typical release0750 and files0640 can work with an explicitly verified owner/group
+and FPM identity. Do not blindly apply these permissions to existing site trees.
+Ancestors, aliases, group membership, immutable code and PHP open_basedir must
+also be checked; string-prefix checks do not prove a directory is not web-served.
+
+Before the lazy factory is invoked, hashes/permissions/expiry are rechecked.
+Changing mode to off invalidates a previously loaded config at this boundary.
+This does NOT undo an already-started request, eliminate all filesystem races,
+or sandbox malicious PHP owned by a trusted deployer. Keep the release trusted
+and publish configuration atomically. No native fault tests on production.
+
+## Installation boundary and rollback
+
+First inspect the exact existing public targets and their owner/SHA without DB
+or Bitrix bootstrap. Prepare a backup of ONLY files to be changed, verify it,
+render fixed shim paths and syntax-check the selected PHP version. Install the
+private package OFF and only the V5 shim/rewrite after specific approval.
+Do not replace V4/router/root rewrites or enable real providers as a side effect.
+Verify V4 unchanged and V5 disabled response on the actual web stack. Roll back
+only the V5 files from the checked backup; do not delete shared databases.
+
+Database setup, true native providers, account allowlist, pilot activation and
+paid SMS are separate approvals/acceptance steps. CI synthetic SQL fixtures are
+NEVER installation migrations. Do not copy tests/config secrets into docroot.
+
+## Evidence
+
+Code/test0caa0248c783188939398a71543ba740f064bb90: offline38750965561 SUCCESS,
+86 PHP lint,26 suites,198 earlier entry +59 private-pilot assertions. Tests
+exercise real child PHP shim/site/router, not Apache/Nginx/TLS/Bitrix. Existing
+MariaDB regression38750966026 SUCCESS; unchanged329 tests. No production deployment,
+site DB connection, actual SMS or authenticated native success in this increment.
+
+Authority: docs/SAMZABERU_V5_START_HERE_2026-10-15.md in feature.
