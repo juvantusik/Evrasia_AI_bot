@@ -545,7 +545,7 @@ smsCheck(is_array($jwt->verifyAccess($credentials['access_token'],time())),
     'HTTP-confirmed grant issues a valid V5 access JWT from committed SQL');
 $replay=$boundary->dispatch($httpReq('/api/v5/auth/challenge/verify',$verifyBody));
 smsCheck($replay->status===401
-    && $replay->jsonBody==='{"error":"verification_failed"}',
+    && $replay->jsonBody==='{"error":"authentication_failed"}',
     'replaying same code through HTTP cannot issue a second session');
 $pinResponse=$boundary->dispatch($httpReq('/api/v5/loyalty/pin',[
     'access_token'=>$credentials['access_token']
