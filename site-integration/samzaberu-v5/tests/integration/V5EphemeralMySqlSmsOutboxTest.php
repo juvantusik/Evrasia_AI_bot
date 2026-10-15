@@ -26,6 +26,7 @@ require_once __DIR__ . '/../../src/V5MySqlConsumedChallengeProof.php';
 require_once __DIR__ . '/../../src/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/../../src/V5MySqlSessionActions.php';
 require_once __DIR__ . '/../../src/V5HttpTransportBoundary.php';
+require_once __DIR__ . '/../../src/V5MySqlPasswordBoundTotpIssuer.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlSmsOutbox,V5SmsLockedEligibilityPort,V5SmsQueueReservation,
@@ -39,7 +40,8 @@ use Evrasia\Samzaberu\V5\{
     V5MySqlChallengeHttpPort,V5MySqlSessionActions,
     V5PasswordProofPort,V5TrustProofPort,MobileTrustAssessment,
     V5LockedBonusPinReaderPort,V5LoginWorkflow,
-    V5AuthHttpHandler,V5HttpTransportBoundary,V5StagedHttpRequest
+    V5AuthHttpHandler,V5HttpTransportBoundary,V5StagedHttpRequest,
+    V5MySqlPasswordBoundTotpIssuer,V5LockedPasswordTotpChallengeProofPort
 };
 
 const DEVICE_ID='sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -277,12 +279,23 @@ smsCheck((int)$q->fetchColumn()===1,
 final class CiChallengeNativeFactor implements V5LockedChallengeNativeFactorPort {
     public bool $allow=true;
     public int $totpChecks=0;
+    public bool $enforceCurrentEpoch=false;
     public function currentFactorEligibleWithLocks(
         PDO $db,int $userId,ChallengeKind $kind,
         string $challengeAuthEpoch,?string $verifiedPhoneStamp
     ):bool {
+        $epochStamp=SMS_EPOCH;
+        if ($this->enforceCurrentEpoch) {
+            $query=$db->prepare('SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state '
+                .'WHERE USER_ID=? FOR UPDATE');
+            $query->execute([$userId]);
+            $current=$query->fetchColumn();
+            if(!is_string($current) && !is_int($current))return false;
+            $epochStamp=hash_hmac('sha256',
+                "ci:locked-totp-epoch:v1\0".$current,str_repeat('J',64));
+        }
         return $this->allow && $db->inTransaction()
-            && $userId===41 && $challengeAuthEpoch===SMS_EPOCH
+            && $userId===41 && $challengeAuthEpoch===$epochStamp
             && ($kind===ChallengeKind::SMS
                 ? $verifiedPhoneStamp===SMS_STAMP
                 : $verifiedPhoneStamp===null);
@@ -573,6 +586,196 @@ smsCheck($boundary->dispatch($httpReq('/api/v5/loyalty/pin',[
     'revoked code-authenticated HTTP token cannot fetch PIN');
 smsCheck($httpPinReader->calls===1,
     'revocation is enforced before reading sensitive PIN');
+
+
+/**
+ * Real InnoDB initial TOTP issuance after HTTP password proof. The external
+ * first-factor fixture deliberately accepts a stale password, whereas the
+ * site-native SYNTHETIC locked recheck rejects it before any challenge insert.
+ * Neither fake verifier is a substitute for actual Bitrix auth/MFA methods.
+ */
+final class CiHttpTotpInitialPassword implements V5PasswordProofPort {
+    public int $calls=0;
+    public function verifyWithoutLogin(string $login,string $password):?PasswordVerifiedAccount {
+        $this->calls++;
+        if($login!=='synthetic-totp-user'
+            || !in_array($password,['ci-fresh-password','ci-stale-password'],true))return null;
+        return new PasswordVerifiedAccount(41,true,true);
+    }
+}
+final class CiLockedPasswordTotpProof implements V5LockedPasswordTotpChallengeProofPort {
+    public int $calls=0;
+    public bool $allow=true;
+    public function reverifyCurrentPasswordAndTotpWithUserLock(
+        PDO $db,PasswordVerifiedAccount $account,string $login,
+        string $password,int $lockedAuthEpoch
+    ):?string {
+        $this->calls++;
+        if(!$this->allow || !$db->inTransaction()
+            || $account->userId!==41 || !$account->nativeTotpActive
+            || $login!=='synthetic-totp-user'
+            || $password!=='ci-fresh-password'
+            || $lockedAuthEpoch<=0) return null;
+        // REAL DB epoch, SYNTHETIC revalidation of password and native MFA.
+        $q=$db->prepare('SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state '
+            .'WHERE USER_ID=? FOR UPDATE');
+        $q->execute([41]);
+        if((int)$q->fetchColumn()!==$lockedAuthEpoch)return null;
+        return hash_hmac('sha256',
+            "ci:locked-totp-epoch:v1\0".$lockedAuthEpoch,str_repeat('J',64));
+    }
+}
+$reproof=new CiLockedPasswordTotpProof();
+$totpIssuer=new V5MySqlPasswordBoundTotpIssuer($db,$reproof,BIND_KEY);
+$totpFactor=new CiChallengeNativeFactor();
+$totpFactor->enforceCurrentEpoch=true;
+$totpProof=new V5MySqlConsumedChallengeProof(
+    new CiNoTrustProof(),$totpFactor,BIND_KEY
+);
+$totpSessions=new V5MySqlStrongSessionStore(
+    $db,new V5AccessJwtCodec(['totp_ci'=>str_repeat('K',64)],'totp_ci'),
+    new V5OpaqueRefreshTokens(str_repeat('R',64)),
+    $totpProof,new CiGrantSessionCoverage(),str_repeat('Z',64),3600
+);
+$totpPort=new V5MySqlChallengeHttpPort(
+    ciConsumer($db,$totpFactor),$totpIssuer
+);
+$totpFirst=new CiHttpTotpInitialPassword();
+$totpBoundary=new V5HttpTransportBoundary(
+    new V5AuthHttpHandler(
+        new V5LoginWorkflow($totpFirst,new CiHttpTrustDisabled(),
+            $totpPort,$totpSessions),
+        new V5MySqlSessionActions($totpSessions,$httpPinReader)
+    )
+);
+$totpLogin=[
+    'login'=>'synthetic-totp-user','password'=>'ci-fresh-password',
+    'device_id'=>DEVICE_ID,'platform'=>'ios',
+];
+$pendingBefore=(int)$db->query('SELECT COUNT(*) FROM ev_v5_auth_challenges')
+    ->fetchColumn();
+$smsBefore=smsCount($db,'ev_v5_sms_outbox');
+$badLogin=$totpLogin;$badLogin['password']='ci-stale-password';
+$bad=$totpBoundary->dispatch($httpReq('/api/v5/auth/signin',$badLogin));
+smsCheck($bad->status===401 && $reproof->calls===1,
+    'outdated external password proof reverified and refused UNDER user lock');
+smsCheck((int)$db->query('SELECT COUNT(*) FROM ev_v5_auth_challenges')
+    ->fetchColumn()===$pendingBefore,
+    'stale password cannot insert an epoch-bound challenge');
+
+smsDeny(fn()=>$totpIssuer->begin(
+    41,DEVICE_ID,'ios',ChallengeKind::TOTP),
+    'userId-only TOTP issuance cannot bypass password-bound native recheck');
+smsDeny(fn()=>$totpPort->begin(
+    41,DEVICE_ID,'ios',ChallengeKind::TOTP),
+    'V5AtomicChallengePort legacy shortcut always denied');
+smsDeny(fn()=>$totpIssuer->beginBound(
+    new PasswordVerifiedAccount(41,true,false),
+    'synthetic-totp-user','ci-fresh-password',DEVICE_ID,'ios',
+    ChallengeKind::TOTP),
+    'missing native TOTP activation cannot create challenge');
+smsDeny(fn()=>$totpIssuer->beginBound(
+    new PasswordVerifiedAccount(41,true,true),
+    'synthetic-totp-user','ci-fresh-password',DEVICE_ID,'ios',
+    ChallengeKind::SMS),
+    'SMS challenge issuance disabled without paid gateway and atomic quotas');
+$reproof->allow=false;
+smsDeny(fn()=>$totpBoundary->dispatch($httpReq(
+    '/api/v5/auth/signin',$totpLogin
+))->status===202?null:throw new RuntimeException('locked proof refused'),
+    'disabled locked native proof fails closed');
+$reproof->allow=true;
+// Recheck a native account block in the b_user row; synthetic fixture only.
+$db->exec("UPDATE b_user SET BLOCKED='Y' WHERE ID=41");
+$blocked=$totpBoundary->dispatch($httpReq('/api/v5/auth/signin',$totpLogin));
+smsCheck($blocked->status===401,
+    'native blocked account cannot create challenge after password proof');
+$db->exec("UPDATE b_user SET BLOCKED='N' WHERE ID=41");
+smsCheck((int)$db->query('SELECT COUNT(*) FROM ev_v5_auth_challenges')
+    ->fetchColumn()===$pendingBefore,
+    'all rejected initial proofs have zero persistent challenge rows');
+
+$firstBegin=$totpBoundary->dispatch($httpReq('/api/v5/auth/signin',$totpLogin));
+$firstTicket=json_decode($firstBegin->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($firstBegin->status===202
+    && ($firstTicket['status']??null)==='challenge_required'
+    && ($firstTicket['challenge_type']??null)==='totp'
+    && ($firstTicket['expires_in']??null)===300
+    && preg_match('/\A[a-f0-9]{64}\z/D',$firstTicket['challenge_id']??'')===1,
+    'real InnoDB HTTP login creates a fresh 300s locked password-proven TOTP ticket');
+$firstId=$firstTicket['challenge_id'];
+$q=$db->prepare('SELECT * FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$firstId]);$issuedRow=$q->fetch(PDO::FETCH_ASSOC);
+$expectedStamp=hash_hmac('sha256',
+    "ci:locked-totp-epoch:v1\0".$db->query(
+        'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state WHERE USER_ID=41'
+    )->fetchColumn(),str_repeat('J',64));
+smsCheck($issuedRow['password_proven']==='Y'
+    && $issuedRow['kind']==='totp'
+    && $issuedRow['status']==='pending'
+    && $issuedRow['auth_epoch']===$expectedStamp
+    && $issuedRow['verification_stamp']===null
+    && $issuedRow['sms_code_hmac']===null
+    && $issuedRow['current_delivery_id']===null
+    && (int)$issuedRow['sms_sent_count']===0,
+    'real challenge stores keyed current epoch, device binding and no SMS data');
+smsCheck(smsCount($db,'ev_v5_sms_outbox')===$smsBefore,
+    'fresh TOTP issuance neither queues nor sends paid SMS');
+
+$staleVerify=[
+    'challenge_id'=>$firstId,'code'=>'123456',
+    'device_id'=>DEVICE_ID,'platform'=>'ios'
+];
+$db->beginTransaction();
+$db->query('SELECT ID FROM b_user WHERE ID=41 FOR UPDATE')->fetch();
+$db->exec('UPDATE ev_samzaberu_auth_state '
+    .'SET AUTH_EPOCH=AUTH_EPOCH+1 WHERE USER_ID=41');
+$db->commit();
+$staleResponse=$totpBoundary->dispatch($httpReq(
+    '/api/v5/auth/challenge/verify',$staleVerify
+));
+smsCheck($staleResponse->status===401,
+    'password/MFA epoch mutation invalidates pending TOTP ticket before verification');
+$q=$db->prepare('SELECT status FROM ev_v5_auth_challenges WHERE challenge_id=?');
+$q->execute([$firstId]);
+smsCheck($q->fetchColumn()==='pending',
+    'invalidated TOTP ticket was NOT silently accepted/consumed');
+
+$active=$totpBoundary->dispatch($httpReq('/api/v5/auth/signin',$totpLogin));
+$activeTicket=json_decode($active->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($active->status===202
+    && $activeTicket['challenge_id']!==$firstId,
+    'new password-bound TOTP challenge uses current committed epoch');
+$codeRequest=[
+    'challenge_id'=>$activeTicket['challenge_id'],'code'=>'123456',
+    'device_id'=>DEVICE_ID,'platform'=>'ios'
+];
+$access=$totpBoundary->dispatch($httpReq(
+    '/api/v5/auth/challenge/verify',$codeRequest
+));
+$jwtRow=json_decode($access->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($access->status===200
+    && isset($jwtRow['access_token'],$jwtRow['refresh_token']),
+    'HTTP TOTP challenge validates native callback and creates V5 JWT on real SQL');
+$totpJwtCodec=new V5AccessJwtCodec(
+    ['totp_ci'=>str_repeat('K',64)],'totp_ci'
+);
+smsCheck(is_array($totpJwtCodec->verifyAccess($jwtRow['access_token'],time())),
+    'real InnoDB TOTP login returned properly signed post-commit access JWT');
+smsCheck($totpBoundary->dispatch($httpReq(
+    '/api/v5/auth/challenge/verify',$codeRequest
+))->status===401,
+    'used TOTP code/challenge cannot mint another session');
+$beforePinReads=$httpPinReader->calls;
+$totpPin=$totpBoundary->dispatch($httpReq('/api/v5/loyalty/pin',[
+    'access_token'=>$jwtRow['access_token']
+]));
+$totpPinData=json_decode($totpPin->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($totpPin->status===200 && ($totpPinData['pin']??null)==='00037'
+    && $httpPinReader->calls===$beforePinReads+1,
+    'confirmed TOTP session reveals PIN without a second SMS');
+smsCheck(smsCount($db,'ev_v5_sms_outbox')===$smsBefore,
+    'entire TOTP HTTP login path never pays for or queues an SMS');
 
 // Exactly one successful grant when two independent real connections
 // race an existing TOTP challenge.
