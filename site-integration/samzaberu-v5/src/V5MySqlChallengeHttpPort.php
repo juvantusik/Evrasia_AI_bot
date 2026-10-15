@@ -25,6 +25,14 @@ interface V5ChallengeLifecyclePort
 }
 
 /**
+ * A lifecycle which supplies strong first-factor evidence, as opposed to
+ * the legacy userId-only method.
+ */
+interface V5PasswordBoundChallengeLifecyclePort
+    extends V5ChallengeLifecyclePort, V5PasswordBoundChallengePort
+{}
+
+/**
  * Partial, fail-closed V5AtomicChallengePort: full real PDO SMS/TOTP code
  * consumption is implemented, but initial password-bound issuance and SMS
  * resend require an explicit verified site-native lifecycle dependency.
@@ -32,7 +40,8 @@ interface V5ChallengeLifecyclePort
  * Keeping them separated avoids advertising "challenge_sent" for a message
  * that has only been queued in an outbox and not actually delivered.
  */
-final readonly class V5MySqlChallengeHttpPort implements V5AtomicChallengePort
+final readonly class V5MySqlChallengeHttpPort
+    implements V5AtomicChallengePort, V5PasswordBoundChallengePort
 {
     public function __construct(
         private V5MySqlChallengeConsumption $consumption,
@@ -42,9 +51,24 @@ final readonly class V5MySqlChallengeHttpPort implements V5AtomicChallengePort
     public function begin(
         int $userId,string $deviceId,string $platform,ChallengeKind $kind
     ):PendingLoginChallenge {
-        if($this->lifecycle===null)
+        // NO unbound user ID can ever create a password-proven row.
+        throw new \RuntimeException('challenge_unavailable');
+    }
+
+    public function beginBound(
+        PasswordVerifiedAccount $account,
+        #[\SensitiveParameter] string $login,
+        #[\SensitiveParameter] string $password,
+        string $deviceId,
+        string $platform,
+        ChallengeKind $kind,
+    ):PendingLoginChallenge {
+        if (!$this->lifecycle instanceof V5PasswordBoundChallengeLifecyclePort) {
             throw new \RuntimeException('challenge_unavailable');
-        return $this->lifecycle->begin($userId,$deviceId,$platform,$kind);
+        }
+        return $this->lifecycle->beginBound(
+            $account,$login,$password,$deviceId,$platform,$kind
+        );
     }
 
     public function verifyAndConsume(
