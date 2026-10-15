@@ -27,6 +27,7 @@ require_once __DIR__ . '/../../src/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/../../src/V5MySqlSessionActions.php';
 require_once __DIR__ . '/../../src/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/../../src/V5MySqlPasswordBoundTotpIssuer.php';
+require_once __DIR__ . '/../../src/V5MySqlSmsDispatchClaims.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlSmsOutbox,V5SmsLockedEligibilityPort,V5SmsQueueReservation,
@@ -41,7 +42,9 @@ use Evrasia\Samzaberu\V5\{
     V5PasswordProofPort,V5TrustProofPort,MobileTrustAssessment,
     V5LockedBonusPinReaderPort,V5LoginWorkflow,
     V5AuthHttpHandler,V5HttpTransportBoundary,V5StagedHttpRequest,
-    V5MySqlPasswordBoundTotpIssuer,V5LockedPasswordTotpChallengeProofPort
+    V5MySqlPasswordBoundTotpIssuer,V5LockedPasswordTotpChallengeProofPort,
+    V5MySqlSmsDispatchClaims,V5LockedSmsDispatchSafetyPort,
+    V5ClaimedSmsForOneAttempt,V5SmsProviderTerminalOutcome
 };
 
 const DEVICE_ID='sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -801,6 +804,160 @@ $q->execute([$raceId]);$state=$q->fetch(PDO::FETCH_ASSOC);
 smsCheck($state['status']==='consumed' && (int)$state['failed_attempts']===0,
     'one committed TOTP grant and zero failed attempts after race');
 
+
+
+/**
+ * Real DB PAID-SMS pre-dispatch gate, but ZERO actual provider requests.
+ * The provider/safety port is mandatory and synthetic only in this CI test.
+ * A claimed/unknown delivery is never automatically re-queued or retried.
+ */
+final class CiSmsDispatchSafety implements V5LockedSmsDispatchSafetyPort {
+    public bool $allow=true;
+    public int $calls=0;
+    public function stillSafeWithChallengeLocks(
+        PDO $db,int $userId,string $challengeEpoch,string $verificationStamp
+    ):bool {
+        $this->calls++;
+        return $this->allow && $db->inTransaction()
+            && $userId===41 && $challengeEpoch===SMS_EPOCH
+            && $verificationStamp===SMS_STAMP;
+    }
+}
+function ciClaimRace(string $deliveryId):int {
+    try {
+        $connection=smsDb();
+        $c=new V5MySqlSmsDispatchClaims($connection,new CiSmsDispatchSafety());
+        return $c->claimQueuedOnce($deliveryId) instanceof V5ClaimedSmsForOneAttempt
+            ?0:1;
+    }catch(Throwable){return 2;}
+}
+$db=smsDb();
+$disSafety=new CiSmsDispatchSafety();
+$dispatch=new V5MySqlSmsDispatchClaims($db,$disSafety);
+$dispatchId=str_repeat('7',64);
+smsChallenge($db,$dispatchId);
+$queued=smsStore($db)->reserveAndQueue(
+    smsRequest($dispatchId,smsWindows(160,3600))
+);
+smsCheck($dispatch->claimQueuedOnce('not-a-delivery')===null,
+    'malformed paid-SMS delivery ID cannot start provider attempt');
+smsCheck($dispatch->recordProviderOutcome('bad','bad',
+    V5SmsProviderTerminalOutcome::Sent)===false,
+    'malformed ack cannot certify a paid SMS as sent');
+$claimed=$dispatch->claimQueuedOnce($queued->deliveryId);
+smsCheck($claimed instanceof V5ClaimedSmsForOneAttempt
+    && $claimed->providerIdempotencyKey===$queued->deliveryId
+    && $claimed->encryptedEnvelope!=='',
+    'real MariaDB worker claims encrypted provider-idempotent SMS once');
+$q=$db->prepare('SELECT status FROM ev_v5_sms_outbox WHERE delivery_id=?');
+$q->execute([$queued->deliveryId]);
+smsCheck($q->fetchColumn()==='claimed',
+    'claim writes durable claimed state BEFORE any paid provider call');
+smsCheck($dispatch->claimQueuedOnce($queued->deliveryId)===null,
+    'duplicate worker cannot claim already claimed message');
+$code=ciSmsCode($db,$dispatchId);
+smsCheck(ciConsumer($db)->verifyAndConsume(
+    $dispatchId,$code,DEVICE_ID,'ios')===null,
+    'claimed-but-not-sent SMS cannot authorize guest login');
+smsCheck($dispatch->recordProviderOutcome($queued->deliveryId,
+    str_repeat('0',64),V5SmsProviderTerminalOutcome::Sent)===false,
+    'forged provider idempotency key cannot acknowledge delivery');
+smsCheck($dispatch->recordProviderOutcome(
+    $queued->deliveryId,$claimed->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Sent)===true,
+    'positive synthetic provider receipt changes claimed into sent ONCE');
+smsCheck($dispatch->recordProviderOutcome(
+    $queued->deliveryId,$claimed->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Sent)===false,
+    'duplicate provider acknowledgement cannot mutate sent delivery twice');
+smsCheck($dispatch->claimQueuedOnce($queued->deliveryId)===null,
+    'already sent paid delivery cannot be reclaimed/retried');
+smsCheck(ciConsumer($db)->verifyAndConsume(
+    $dispatchId,$code,DEVICE_ID,'ios') instanceof ConsumedLoginChallenge,
+    'real InnoDB challenge now permits code only after positive sent outcome');
+
+$unknownId=str_repeat('8',64);
+smsChallenge($db,$unknownId);
+$unknownQueued=smsStore($db)->reserveAndQueue(
+    smsRequest($unknownId,smsWindows(176,3600))
+);
+$unknownClaimed=$dispatch->claimQueuedOnce($unknownQueued->deliveryId);
+smsCheck($unknownClaimed instanceof V5ClaimedSmsForOneAttempt,
+    'ambiguous-provider fixture claimed once');
+smsCheck($dispatch->recordProviderOutcome(
+    $unknownQueued->deliveryId,$unknownClaimed->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Unknown)===true,
+    'uncertain provider result persists UNKNOWN, not sent');
+smsCheck($dispatch->claimQueuedOnce($unknownQueued->deliveryId)===null,
+    'UNKNOWN outcome cannot automatically trigger another provider charge');
+smsCheck($dispatch->recordProviderOutcome(
+    $unknownQueued->deliveryId,$unknownClaimed->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Sent)===false,
+    'late fabricated sent acknowledgement cannot overwrite UNKNOWN');
+smsCheck(ciConsumer($db)->verifyAndConsume(
+    $unknownId,ciSmsCode($db,$unknownId),DEVICE_ID,'ios')===null,
+    'ambiguous paid SMS cannot be used as a verified login factor');
+
+$noNativeId=str_repeat('9',64);
+smsChallenge($db,$noNativeId);
+$noNativeQueue=smsStore($db)->reserveAndQueue(
+    smsRequest($noNativeId,smsWindows(192,3600))
+);
+$disSafety->allow=false;
+smsCheck($dispatch->claimQueuedOnce($noNativeQueue->deliveryId)===null,
+    'missing native phone/epoch safety blocks paid send before claim');
+$q=$db->prepare('SELECT status FROM ev_v5_sms_outbox WHERE delivery_id=?');
+$q->execute([$noNativeQueue->deliveryId]);
+smsCheck($q->fetchColumn()==='queued',
+    'native callback refusal left paid outbox unclaimed/unspent');
+$disSafety->allow=true;
+$failedClaim=$dispatch->claimQueuedOnce($noNativeQueue->deliveryId);
+smsCheck($failedClaim instanceof V5ClaimedSmsForOneAttempt,
+    'native verification restoration enables one trusted attempt');
+smsCheck($dispatch->recordProviderOutcome(
+    $noNativeQueue->deliveryId,$failedClaim->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Failed)===true,
+    'explicit no-send/provider failure persisted as FAILED');
+smsCheck($dispatch->claimQueuedOnce($noNativeQueue->deliveryId)===null,
+    'failed provider outcome cannot retry same paid delivery');
+
+$expiredId=str_repeat('e',64);
+smsChallenge($db,$expiredId);
+$expiredQueued=smsStore($db)->reserveAndQueue(
+    smsRequest($expiredId,smsWindows(208,3600))
+);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET expires_at=UNIX_TIMESTAMP()-1 '
+    .'WHERE challenge_id=?');
+$q->execute([$expiredId]);
+smsCheck($dispatch->claimQueuedOnce($expiredQueued->deliveryId)===null,
+    'expired SMS challenge cannot be dispatched even if already queued');
+
+$claimRaceId=str_repeat('f',64);
+smsChallenge($db,$claimRaceId);
+$raceQueued=smsStore($db)->reserveAndQueue(
+    smsRequest($claimRaceId,smsWindows(224,3600))
+);
+$raceDeliveryId=$raceQueued->deliveryId;
+unset($db,$dispatch,$disSafety,$claimed,$unknownClaimed,$failedClaim);
+gc_collect_cycles();
+$pid=pcntl_fork();
+if($pid===-1)throw new RuntimeException('ephemeral SMS claim fork unavailable');
+if($pid===0)exit(ciClaimRace($raceDeliveryId));
+$parent=ciClaimRace($raceDeliveryId);
+$waited=pcntl_waitpid($pid,$status);
+$child=pcntl_wifexited($status)?pcntl_wexitstatus($status):2;
+smsCheck($waited===$pid && in_array($parent,[0,1],true)
+    && in_array($child,[0,1],true)
+    && (($parent===0?1:0)+($child===0?1:0))===1,
+    'two real MariaDB workers race same paid SMS: EXACTLY ONE CLAIMED');
+$db=smsDb();
+$q=$db->prepare('SELECT status FROM ev_v5_sms_outbox WHERE delivery_id=?');
+$q->execute([$raceDeliveryId]);
+smsCheck($q->fetchColumn()==='claimed',
+    'concurrent paid-SMS claim commits exactly one attempt, no duplicate charge');
+smsCheck((new V5MySqlSmsDispatchClaims($db,new CiSmsDispatchSafety()))
+    ->claimQueuedOnce($raceDeliveryId)===null,
+    'claimed after crash stays claimed and cannot auto-retry uncertain send');
 
 echo "PASS: real ephemeral MariaDB SMS quota/outbox ($checks assertions)\n";
 echo "MODE=GITHUB_EPHEMERAL_CI_ONLY\nREAL_MARIADB_INNODB=YES\n";
