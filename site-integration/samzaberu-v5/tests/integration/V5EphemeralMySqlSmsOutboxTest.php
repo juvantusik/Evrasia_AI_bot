@@ -328,7 +328,8 @@ $pendingDelivery=$verifierStore->reserveAndQueue(
 );
 $code=ciSmsCode($db,$smsVerifiedId);
 $verify=ciConsumer($db);
-smsCheck($verify->verifyAndConsume($smsVerifiedId,'999999',DEVICE_ID,'ios')===null,
+$knownWrongCode=$code==='999999'?'999998':'999999';
+smsCheck($verify->verifyAndConsume($smsVerifiedId,$knownWrongCode,DEVICE_ID,'ios')===null,
     'incorrect six-digit SMS code denied in actual InnoDB transaction');
 $q=$db->prepare('SELECT failed_attempts,status FROM ev_v5_auth_challenges WHERE challenge_id=?');
 $q->execute([$smsVerifiedId]);$wrong=$q->fetch(PDO::FETCH_ASSOC);
