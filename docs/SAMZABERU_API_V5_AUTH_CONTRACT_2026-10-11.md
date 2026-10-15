@@ -1,5 +1,7 @@
 # SamZaberu mobile — API V5 authorization contract
 
+> **Implementation update 2026-10-15 (feature-only):** `site-integration/samzaberu-v5/src/V5SessionTokens.php` implements cryptographic V5-exclusive HS256 **access** JWT signing/verification, strict V5 issuer/audience/token-use/version validation, key rotation and short TTL, and separate opaque refresh token generation/digests. `V5SessionTokensTest.php` **87 assertions PASS** in GitHub Actions [38706946637](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38706946637), whole suite **23/23 PASS**. This does **NOT** complete checklist item 'V5 JWT assurance and refresh implemented': no durable server-side assurance store, no atomic refresh rotation, no V5StrongSessionPort wiring, no revocation/epoch runtime attestation, no isolated Bitrix+MySQL staging and no V5 HTTP release. Token codec must only receive authoritative committed strong sessions; `V5SessionAssurancePolicy` must check current server revocation/epoch before protected actions. Prior V4 remains unchanged; production unchanged.
+
 > Status: **ISOLATED OFFLINE COMPONENTS IMPLEMENTED / SITE INTEGRATION PENDING / NOT DEPLOYED**
 >
 > Date: **2026-10-11**
