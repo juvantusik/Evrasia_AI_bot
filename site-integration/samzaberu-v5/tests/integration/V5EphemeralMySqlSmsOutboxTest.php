@@ -22,13 +22,17 @@ if (getenv('GITHUB_ACTIONS')!=='true'
 
 require_once __DIR__ . '/../../src/V5MySqlSmsOutbox.php';
 require_once __DIR__ . '/../../src/V5MySqlChallengeConsumption.php';
+require_once __DIR__ . '/../../src/V5MySqlConsumedChallengeProof.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlSmsOutbox,V5SmsLockedEligibilityPort,V5SmsQueueReservation,
     V5VerifiedSmsDestination,V5SmsPriceCeiling,V5SmsBudgetWindow,
     V5SodiumSmsMessageFactory,V5SmsQueuedDelivery,AuthenticationRejected,
     V5MySqlChallengeConsumption,V5LockedChallengeNativeFactorPort,
-    ConsumedLoginChallenge,ChallengeKind
+    ConsumedLoginChallenge,ChallengeKind,V5MySqlConsumedChallengeProof,
+    V5LockedStrongSessionProofPort,V5NativeSecurityHookCoveragePort,
+    V5MySqlStrongSessionStore,V5AccessJwtCodec,V5OpaqueRefreshTokens,
+    PasswordVerifiedAccount,AuthenticatedV5Session
 };
 
 const DEVICE_ID='sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -373,6 +377,73 @@ smsCheck($totpGrant instanceof ConsumedLoginChallenge
     'synthetic native TOTP factor is consumed only in owned DB transaction');
 smsCheck($totpVerify->verifyAndConsume($totpId,'123456',DEVICE_ID,'ios')===null,
     'consumed synthetic native TOTP cannot replay');
+
+
+/** Staging proof composition: the trusted-device proof is separate and
+ * disabled in this synthetic SMS/TOTP-only end-to-end fixture. */
+final class CiNoTrustProof implements V5LockedStrongSessionProofPort {
+    public function verifiedTrustWithUserLock(
+        PDO $db,PasswordVerifiedAccount $account,string $deviceId,
+        string $platform,string $trustToken
+    ):bool {return false;}
+    public function verifiedConsumedGrantWithUserLock(
+        PDO $db,ConsumedLoginChallenge $grant
+    ):bool {return false;}
+}
+final class CiGrantSessionCoverage implements V5NativeSecurityHookCoveragePort {
+    public function fullyCovered(PDO $db,int $userId):?bool {
+        return $db->inTransaction() && $userId===41;
+    }
+}
+$grantNative=new CiChallengeNativeFactor();
+$grantProof=new V5MySqlConsumedChallengeProof(
+    new CiNoTrustProof(),$grantNative,BIND_KEY
+);
+$jwt=new V5AccessJwtCodec(['v5_ci'=>str_repeat('K',64)],'v5_ci');
+$sessions=new V5MySqlStrongSessionStore(
+    $db,$jwt,new V5OpaqueRefreshTokens(str_repeat('R',64)),
+    $grantProof,new CiGrantSessionCoverage(),str_repeat('Z',64),3600
+);
+$beforeIssued=(int)$db->query('SELECT COUNT(*) FROM ev_v5_strong_sessions')
+    ->fetchColumn();
+$grantNative->allow=false;
+smsDeny(fn()=>$sessions->afterConsumedChallenge($grant),
+    'unattested native factor state prevents JWT issuance after consumed SMS');
+smsCheck((int)$db->query('SELECT COUNT(*) FROM ev_v5_strong_sessions')
+    ->fetchColumn()===$beforeIssued,
+    'native recheck denial cannot mint a V5 session');
+$grantNative->allow=true;
+$auth=$sessions->afterConsumedChallenge($grant);
+$authClaims=$jwt->verifyAccess($auth->accessToken,time());
+smsCheck($auth instanceof AuthenticatedV5Session
+    && is_array($authClaims)
+    && $authClaims['auth_epoch']>=1
+    && $authClaims['sid']!=='' ,
+    'consumed sent-SMS proof issues a real committed InnoDB V5 session');
+$q=$db->prepare('SELECT assurance,grant_digest FROM ev_v5_strong_sessions WHERE sid=?');
+$q->execute([$authClaims['sid']]);$issued=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck($issued['assurance']==='sms'
+    && preg_match('/\A[a-f0-9]{64}\z/D',$issued['grant_digest'])===1,
+    'SMS session stores strong-factor evidence only as keyed grant digest');
+smsDeny(fn()=>$sessions->afterConsumedChallenge($grant),
+    'same SMS challenge cannot create a second V5 session');
+smsCheck((int)$db->query('SELECT COUNT(*) FROM ev_v5_strong_sessions')
+    ->fetchColumn()===$beforeIssued+1,
+    'DB UNIQUE grant digest prohibits duplicate JWT session from SMS grant');
+
+$totpAuth=$sessions->afterConsumedChallenge($totpGrant);
+$totpClaims=$jwt->verifyAccess($totpAuth->accessToken,time());
+$q=$db->prepare('SELECT assurance,grant_digest FROM ev_v5_strong_sessions WHERE sid=?');
+$q->execute([$totpClaims['sid']]);$totpRow=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck(is_array($totpClaims) && $totpRow['assurance']==='totp'
+    && $totpRow['grant_digest']!==$issued['grant_digest'],
+    'synthetic native TOTP consumed grant issues separate strong V5 session');
+smsDeny(fn()=>$sessions->afterConsumedChallenge($totpGrant),
+    'same synthetic native TOTP grant cannot create second V5 session');
+smsCheck((int)$db->query('SELECT COUNT(*) FROM ev_v5_strong_sessions')
+    ->fetchColumn()===$beforeIssued+2,
+    'real InnoDB consumed SMS/TOTP grant-to-session path commits two unique rows');
+
 
 $blockedId=str_repeat('3',64);
 smsChallenge($db,$blockedId);
