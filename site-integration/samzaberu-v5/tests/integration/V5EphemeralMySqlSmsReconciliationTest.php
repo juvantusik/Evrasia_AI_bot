@@ -87,6 +87,9 @@ function reconFixture(PDO $db, string $label, string $state = 'unknown'): array 
         $windows[] = new V5SmsBudgetWindow(hash('sha256', $cid . ':bucket:' . $i),
             $i === 9 ? 3600 : 4, $i === 9 ? 1200 : 1, time() + 3600);
     }
+    // Match the existing canonical lock order; never weaken the store guard.
+    usort($windows, static fn(V5SmsBudgetWindow $a, V5SmsBudgetWindow $b): int
+        => strcmp($a->bucketKey, $b->bucketKey));
     $queued = smsStore($db)->reserveAndQueue(smsRequest($cid, $windows));
     $did = $queued->deliveryId;
     $receipt = new ReconReceipt($did);
