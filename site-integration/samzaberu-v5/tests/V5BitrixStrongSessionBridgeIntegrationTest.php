@@ -203,7 +203,10 @@ namespace {
         V5LockedStrongSessionProofPort,V5NativeSecurityHookCoveragePort,
         V5LockedBonusPinReaderPort,V5AccessJwtCodec,V5OpaqueRefreshTokens,
         V5SecurityEventVersions,V5SecurityEventVersionWriter,
-        V5StrictE164Phone,PasswordVerifiedAccount
+        V5StrictE164Phone,PasswordVerifiedAccount,
+        V5AuthHttpHandler,V5LoginWorkflow,V5PasswordProofPort,
+        V5TrustProofPort,V5AtomicChallengePort,MobileTrustAssessment,
+        PendingLoginChallenge,ConsumedLoginChallenge,ChallengeKind
     };
 
     final class SyntheticPermit implements V5NativeBitrixExclusiveTransactionPermitPort {
@@ -238,6 +241,42 @@ namespace {
         public function readLockedBonusPin(PDO $db,int $userId):?string {
             if(!$db->inTransaction()||$userId!==41)throw new \RuntimeException('not authorized');
             $this->reads++;return '00037';
+        }
+    }
+
+    /**
+     * These providers deliberately simulate password proof + strongly
+     * enrolled trust ONLY for the offline HTTP acceptance fixture. They are
+     * never installed on a real Bitrix site and cannot reach production.
+     */
+    final class SyntheticHttpPasswordProof implements V5PasswordProofPort {
+        public int $calls=0;
+        public function verifyWithoutLogin(string $login,string $password):?PasswordVerifiedAccount {
+            $this->calls++;
+            return $login==='synthetic.user' && $password==='test-password'
+                ? new PasswordVerifiedAccount(41,true,false) : null;
+        }
+    }
+    final class SyntheticHttpTrustProof implements V5TrustProofPort {
+        public int $calls=0;
+        public function evaluate(int $userId,string $deviceId,string $platform,string $token):MobileTrustAssessment {
+            $this->calls++;
+            $accepted=$userId===41 && $platform==='ios'
+                && $token==='synthetic-trust-strong';
+            return new MobileTrustAssessment($accepted,$accepted);
+        }
+    }
+    final class SyntheticHttpChallenges implements V5AtomicChallengePort {
+        public int $begins=0;
+        public function begin(int $userId,string $deviceId,string $platform,ChallengeKind $kind):PendingLoginChallenge {
+            $this->begins++;
+            throw new \RuntimeException('offline challenge intentionally unavailable');
+        }
+        public function verifyAndConsume(string $challengeId,string $code,string $deviceId,string $platform):?ConsumedLoginChallenge {
+            return null;
+        }
+        public function resendSms(string $challengeId,string $deviceId,string $platform):PendingLoginChallenge {
+            throw new \RuntimeException('offline resend intentionally unavailable');
         }
     }
 
@@ -389,6 +428,87 @@ namespace {
         new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
     ),'native uncertain commit does not return tokens');
     bridgeCheck($native->sessions===[],'uncertain fake commit rolled back local state');
+
+
+    // Full application JSON -> workflow -> trusted proof -> owned native
+    // transaction -> signed JWT -> refresh -> protected PIN -> revoke.
+    // Purely synthetic Bitrix, no production routes or real SMS.
+    [$httpStore,$httpActions,$httpNative,$httpPermit,$httpProof,$httpCoverage,$httpPin,$httpCodec]
+        =bridgeSetup();
+    $httpPassword=new SyntheticHttpPasswordProof();
+    $httpTrust=new SyntheticHttpTrustProof();
+    $httpChallenges=new SyntheticHttpChallenges();
+    $httpWorkflow=new V5LoginWorkflow(
+        $httpPassword,$httpTrust,$httpChallenges,$httpStore
+    );
+    $http=new V5AuthHttpHandler($httpWorkflow,$httpActions);
+    $offlineBody=[
+        'login'=>'synthetic.user','password'=>'test-password',
+        'device_id'=>$device,'platform'=>'ios',
+        'trust_token'=>'synthetic-trust-strong',
+    ];
+    $badLogin=$offlineBody;
+    $badLogin['password']='incorrect';
+    $reply=$http->handleJson('signin',json_encode($badLogin,JSON_THROW_ON_ERROR));
+    bridgeCheck($reply->status===401 && $httpNative->sessions===[],
+        'HTTP password rejection prevents any native V5 session write');
+    $reply=$http->handleJson('signin',json_encode($offlineBody,JSON_THROW_ON_ERROR));
+    bridgeCheck($reply->status===200
+        && ($reply->body['status']??null)==='authenticated'
+        && isset($reply->body['access_token'],$reply->body['refresh_token']),
+        'trusted-device HTTP sign-in reaches committed signed V5 session');
+    bridgeCheck($httpPassword->calls===2 && $httpTrust->calls===1
+        && $httpChallenges->begins===0,
+        'strong trusted HTTP sign-in requires no SMS or challenge');
+    bridgeCheck($httpNative->commits===1 && count($httpNative->sessions)===1,
+        'HTTP-initiated V5 session committed on one native Bitrix transaction');
+
+    $access=$reply->body['access_token'];
+    $refresh=$reply->body['refresh_token'];
+    $pinResponse=$http->handleJson('showBonusPin',
+        json_encode(['access_token'=>$access],JSON_THROW_ON_ERROR));
+    bridgeCheck($pinResponse->status===200
+        && ($pinResponse->body['pin']??null)==='00037'
+        && !array_key_exists('refresh_token',$pinResponse->body),
+        'HTTP PIN returns only protected PIN after strong V5 session');
+    bridgeCheck($httpPin->reads===1 && $httpChallenges->begins===0,
+        'protected HTTP PIN read requires no repeated SMS');
+    $renewed=$http->handleJson('refresh',
+        json_encode(['refresh_token'=>$refresh],JSON_THROW_ON_ERROR));
+    bridgeCheck($renewed->status===200
+        && isset($renewed->body['access_token'],$renewed->body['refresh_token'])
+        && $renewed->body['refresh_token']!==$refresh,
+        'HTTP V5 refresh uses real session store CAS and returns new bearer');
+    $replay=$http->handleJson('refresh',
+        json_encode(['refresh_token'=>$refresh],JSON_THROW_ON_ERROR));
+    bridgeCheck($replay->status===401
+        && $replay->body===['error'=>'authentication_failed'],
+        'replaying consumed refresh through HTTP returns generic 401');
+    bridgeCheck($http->handleJson('showBonusPin',
+        json_encode(['access_token'=>'v4.invalid.jwt'],JSON_THROW_ON_ERROR))->status===401,
+        'V4 bearer cannot disclose PIN through full HTTP+Bitrix fixture');
+    $disabled=new V5AuthHttpHandler($httpWorkflow);
+    bridgeCheck($disabled->handleJson('refresh',
+        json_encode(['refresh_token'=>$renewed->body['refresh_token']],JSON_THROW_ON_ERROR))->status===503,
+        'default HTTP handler has NO implicitly enabled refresh provider');
+    bridgeCheck($disabled->handleJson('showBonusPin',
+        json_encode(['access_token'=>$renewed->body['access_token']],JSON_THROW_ON_ERROR))->status===503,
+        'default HTTP handler has NO implicitly enabled PIN provider');
+    bridgeCheck($httpStore->revokeAccess($renewed->body['access_token']),
+        'strong V5 HTTP-issued access credential can revoke native session');
+    $noPin=$http->handleJson('showBonusPin',
+        json_encode(['access_token'=>$renewed->body['access_token']],JSON_THROW_ON_ERROR));
+    bridgeCheck($noPin->status===401
+        && $noPin->body===['error'=>'authentication_failed'],
+        'HTTP PIN denied immediately after native session revoke');
+    $noRefresh=$http->handleJson('refresh',
+        json_encode(['refresh_token'=>$renewed->body['refresh_token']],JSON_THROW_ON_ERROR));
+    bridgeCheck($noRefresh->status===401
+        && $noRefresh->body===['error'=>'authentication_failed'],
+        'HTTP refresh denied immediately after native session revoke');
+    bridgeCheck($httpPin->reads===1
+        && $httpChallenges->begins===0,
+        'revoked/V4 HTTP routes never invoke PIN reader or SMS challenge');
 
     echo "PASS: V5 native Bitrix bridge + strong session E2E ($passed assertions)\n";
     echo "FAKE_BITRIX_ONLY=YES\nMYSQL_CONNECTION=NO\nPRODUCTION_WRITE=NO\n";
