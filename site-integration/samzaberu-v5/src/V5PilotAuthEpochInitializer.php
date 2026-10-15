@@ -122,7 +122,8 @@ final readonly class V5PilotAuthEpochInitializer
             || (string)($created['USER_ID'] ?? '') !== (string)$userId
             || (string)($created['AUTH_EPOCH'] ?? '') !== '1'
             || (string)($created['PHONE_EVENT_VERSION'] ?? '') !== '0'
-            || ($created['PHONE_BINDING_HMAC'] ?? 'unexpected') !== null) {
+            || !array_key_exists('PHONE_BINDING_HMAC', $created)
+            || $created['PHONE_BINDING_HMAC'] !== null) {
             throw new RuntimeException('v5_initial_epoch_insert_verify_failed');
         }
         // No COMMIT: caller owns one complete, independently accepted transaction.
