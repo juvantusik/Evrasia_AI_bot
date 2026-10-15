@@ -213,6 +213,25 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         }
     }
 
+    /** @var list<string> */
+    private const STRONG_SESSION_SQL = [
+        'SELECT sid, user_id FROM ev_v5_strong_sessions '
+            . 'WHERE refresh_digest = ? LIMIT 2',
+        'SELECT sid, user_id, auth_epoch, assurance, assured_at, '
+            . 'expires_at, status, refresh_digest, refresh_generation '
+            . 'FROM ev_v5_strong_sessions WHERE sid = ? FOR UPDATE',
+        'INSERT INTO ev_v5_strong_sessions '
+            . '(sid, user_id, auth_epoch, assurance, device_binding, platform, '
+            . 'assured_at, expires_at, status, refresh_digest, refresh_generation, '
+            . 'grant_digest, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'UPDATE ev_v5_strong_sessions SET refresh_digest = ?, '
+            . 'refresh_generation = ?, updated_at = ? '
+            . 'WHERE sid = ? AND refresh_digest = ? AND refresh_generation = ? '
+            . 'AND auth_epoch = ? AND status = ?',
+        'UPDATE ev_v5_strong_sessions SET status = ?, updated_at = ? '
+            . 'WHERE sid = ? AND status = ? AND auth_epoch = ?',
+    ];
+
     private static function assertStatementAllowed(string $sql): void
     {
         if ($sql === '' || strlen($sql) > 8000
@@ -224,6 +243,15 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             throw new RuntimeException('v5_bitrix_sql_shape_forbidden');
         }
         if ($sql === 'SELECT UNIX_TIMESTAMP()') {
+            return;
+        }
+        // Only the EXACT statements emitted by V5MySqlStrongSessionStore.
+        // Never add the sessions table to the generic SELECT/UPDATE regex:
+        // refresh digests and grant state are sensitive authentication data.
+        if (str_contains($sql, 'ev_v5_strong_sessions')) {
+            if (!in_array($sql, self::STRONG_SESSION_SQL, true)) {
+                throw new RuntimeException('v5_bitrix_strong_session_sql_forbidden');
+            }
             return;
         }
         if (preg_match('/\ASELECT\s/i', $sql) === 1) {
