@@ -1,3 +1,5 @@
+**ACTUAL CHECKPOINT — 15 октября 2026, 17:49.** Шесть V5 service tables УЖЕ СОЗДАНЫ production `eurasia_new` через подтверждённый additive DDL; InnoDB/EMPTY/constraints PASS; HTTP 503, V4 unchanged, V5 off, AUTH_EPOCH_INITIALIZED=NO. `FINAL_STATUS=PASS`, `FINAL_RC=0`. Schema-only evidence `/root/ev-v5-ddl-backup.20261015T174912Z.2010173`. Не выполнять migration снова, не инициировать per-user epoch rows до принятой atomic native coverage. Дальше: feature code + tests native event prerequisites, без production write/pilot. Текст предыдущего checkpoint ниже — история периода до миграции.
+
 # СамЗаберу V5 — checkpoint: чтение БД остановлено на 1045
 
 15 октября2026. Последний ввод оператора: `Вставленный текст(20261015-171249).txt`, строки490–521. **Не повторять root/socket без пароля: этот способ уже отказал.** Разрешение только metadata read сохраняется; миграция не разрешена.

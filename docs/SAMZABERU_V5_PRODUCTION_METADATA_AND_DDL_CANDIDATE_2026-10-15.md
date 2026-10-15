@@ -1,3 +1,5 @@
+> **ОБНОВЛЕНИЕ: 15.10.2026 — DDL ЗАВЕРШЁН.** Ниже сохранился план, который до 17:49 был кандидатом. По production-логу создано шесть таблиц InnoDB, все пустые, constraint guard PASS; V5 off/HTTP503, V4 unchanged, AUTH_EPOCH_INITIALIZED=NO. BACKUP_DIR=`/root/ev-v5-ddl-backup.20261015T174912Z.2010173` (schema-only evidence). `FINAL_STATUS=PASS`, `FINAL_RC=0`. Не выполнять эту DDL повторно и не запускать автоматический rollback. Настоящая работающая V5 авторизация по-прежнему не установлена.
+
 # СамЗаберу V5 — production metadata result и additive DDL candidate
 
 15 октября 2026. Основание — read-only metadata output с `evrasia` / schema `eurasia_new`.

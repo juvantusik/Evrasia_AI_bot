@@ -1,3 +1,13 @@
+## R20 (ACTUAL 2026-10-15): Production additive DDL completed
+
+**Было:** schema `eurasia_new` проверена read-only, шестёрка V5 tables отсутствовала; DDL-кандидат принят, production CREATE ещё не выполнялся.
+
+**Стало:** оператор выполнил точный Git-blob кандидата (commit `2445b462ade3cfae588a77d291a28726c129b33d`, blob `f98d2fdf2e9f013b69f6cf373afad136cb7c5cde`) с root/V4/OFF guards, схемным backup и проверками после CREATE. Первый пробный запуск от `tech` отказал до DDL; следующий root-скрипт остановился на ложном совпадении `GRANT` внутри имени индекса (также до DDL); итоговый исправленный блок успешно создал ровно шесть таблиц.
+
+**Evidence:** `DDL_TABLES_CREATED=6`, `ALL_NEW_TABLES_INNODB=YES`, `ALL_NEW_TABLES_EMPTY=YES`, `CONSTRAINT_GUARD=PASS`, `MIGRATION_POSTCHECK=PASS`, `FINAL_STATUS=PASS`/`FINAL_RC=0`; V4/root hashes unchanged, HTTPS OFF=503; `AUTH_EPOCH_INITIALIZED=NO`. Evidence directory `/root/ev-v5-ddl-backup.20261015T174912Z.2010173` — **schema-only**, не дамп всех строк. V5 installed runtime остаётся `0caa0248...`, `off`, без site factory. Никаких INSERT/backfill/активаций/SMS.
+
+**Почему/следующий gate:** состояние `ev_samzaberu_auth_state` пока пустое и авторизация правильно отказывает: существующий V5SecurityEventVersions требует per-user строку. Инициализация AUTH_EPOCH обязана идти ПОСЛЕ доказанного atomic native writer/10-path coverage; наличие таблиц не заменяет hook attestation. Не повторять CREATE или автоматически DROP; частичные фазы миграции уже не актуальны.
+
 # V5 — интеграционные решения, 15 октября 2026
 
 Дополнение к STRUCTURE_REGISTRY. Полная предыдущая редакцияR1–R18 сохранена вcommit `df25f34aa894aa92292ba96f2fb6698fcbc02449`. НовыйR19 уточняетфактдоступа, не меняетбизнес-логику илиархитектуру.
