@@ -21,6 +21,18 @@ final readonly class V5HttpReply
 }
 
 /**
+ * Optional STAGING-ONLY strong V5 operations. Never supplied by the
+ * current production /api/v5/router.php, which remains HTTP 503.
+ * Implementations MUST verify tokens, epoch, revocation, and locked
+ * bonus-PIN reader state independently of any client JSON claims.
+ */
+interface V5SessionActionsPort
+{
+    public function rotateRefresh(string $refreshToken): AuthenticatedV5Session;
+    public function readBonusPin(string $accessJwt): ?string;
+}
+
+/**
  * Offline JSON transport adapter for the V5 login workflow.
  * The actual website /api/v5/router.php remains disabled (503), and no
  * Bitrix/password, OTP, SMS, session or token backend is wired here.
@@ -30,7 +42,10 @@ final readonly class V5HttpReply
  */
 final readonly class V5AuthHttpHandler
 {
-    public function __construct(private V5LoginWorkflow $workflow) {}
+    public function __construct(
+        private V5LoginWorkflow $workflow,
+        private ?V5SessionActionsPort $sessionActions = null,
+    ) {}
 
     /**
      * $action MUST come from server-side V5RouteMap dispatch, never a client
@@ -51,8 +66,13 @@ final readonly class V5AuthHttpHandler
                 'signin' => $this->signIn($body),
                 'verifyChallenge' => $this->verify($body),
                 'resendChallenge' => $this->resend($body),
-                // V5 refresh and protected PIN require independent V5 session
-                // verifier/issuer integration and stay unimplemented.
+                // Without explicit verified V5 operations, HTTP remains 503.
+                'refresh' => $this->sessionActions === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->refresh($body),
+                'showBonusPin' => $this->sessionActions === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->showBonusPin($body),
                 default => new V5HttpReply(503, ['error' => 'v5_unavailable']),
             };
         } catch (AuthenticationRejected $e) {
@@ -133,6 +153,39 @@ final readonly class V5AuthHttpHandler
             ),
             'challenge_sent'
         );
+    }
+
+    private function refresh(array $body): V5HttpReply
+    {
+        if (!self::hasOnlyKeys($body, ['refresh_token'])
+            || !self::isString($body, 'refresh_token')) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        if (preg_match('/\Av5r_[a-f0-9]{64}\z/D', $body['refresh_token']) !== 1) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        return self::authenticated(
+            $this->sessionActions->rotateRefresh($body['refresh_token'])
+        );
+    }
+
+    private function showBonusPin(array $body): V5HttpReply
+    {
+        if (!self::hasOnlyKeys($body, ['access_token'])
+            || !self::isString($body, 'access_token')) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        $token = $body['access_token'];
+        if (strlen($token) > 4096 || substr_count($token, '.') !== 2) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        $pin = $this->sessionActions->readBonusPin($token);
+        if ($pin === null || $pin === '') {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        // No additional SMS after an already-verified strong V5 session.
+        // A real entrypoint MUST send Cache-Control:no-store and never log PINs.
+        return new V5HttpReply(200, ['status' => 'revealed', 'pin' => $pin]);
     }
 
     private static function pending(PendingLoginChallenge $ticket, string $status): V5HttpReply
