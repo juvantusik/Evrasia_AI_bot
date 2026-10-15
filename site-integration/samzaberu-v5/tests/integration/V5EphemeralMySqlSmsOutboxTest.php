@@ -23,6 +23,9 @@ if (getenv('GITHUB_ACTIONS')!=='true'
 require_once __DIR__ . '/../../src/V5MySqlSmsOutbox.php';
 require_once __DIR__ . '/../../src/V5MySqlChallengeConsumption.php';
 require_once __DIR__ . '/../../src/V5MySqlConsumedChallengeProof.php';
+require_once __DIR__ . '/../../src/V5MySqlChallengeHttpPort.php';
+require_once __DIR__ . '/../../src/V5MySqlSessionActions.php';
+require_once __DIR__ . '/../../src/V5HttpTransportBoundary.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlSmsOutbox,V5SmsLockedEligibilityPort,V5SmsQueueReservation,
@@ -32,7 +35,11 @@ use Evrasia\Samzaberu\V5\{
     ConsumedLoginChallenge,ChallengeKind,V5MySqlConsumedChallengeProof,
     V5LockedStrongSessionProofPort,V5NativeSecurityHookCoveragePort,
     V5MySqlStrongSessionStore,V5AccessJwtCodec,V5OpaqueRefreshTokens,
-    PasswordVerifiedAccount,AuthenticatedV5Session
+    PasswordVerifiedAccount,AuthenticatedV5Session,
+    V5MySqlChallengeHttpPort,V5MySqlSessionActions,
+    V5PasswordProofPort,V5TrustProofPort,MobileTrustAssessment,
+    V5LockedBonusPinReaderPort,V5LoginWorkflow,
+    V5AuthHttpHandler,V5HttpTransportBoundary,V5StagedHttpRequest
 };
 
 const DEVICE_ID='sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -473,6 +480,99 @@ smsCheck($locked['status']==='cancelled' && (int)$locked['failed_attempts']===5,
 smsCheck(ciConsumer($db)->verifyAndConsume(
     $lockoutId,'123456',DEVICE_ID,'ios')===null,
     'correct code after lockout never reopens cancelled challenge');
+
+
+final class CiHttpPasswordDisabled implements V5PasswordProofPort {
+    public function verifyWithoutLogin(string $login,string $password):?PasswordVerifiedAccount {
+        return null; // No actual first-factor provider has been attested.
+    }
+}
+final class CiHttpTrustDisabled implements V5TrustProofPort {
+    public function evaluate(int $userId,string $deviceId,string $platform,
+        string $token):MobileTrustAssessment {
+        return new MobileTrustAssessment(false,false);
+    }
+}
+final class CiHttpPinReader implements V5LockedBonusPinReaderPort {
+    public int $calls=0;
+    public function readLockedBonusPin(PDO $db,int $userId):?string {
+        if(!$db->inTransaction() || $userId!==41)
+            throw new RuntimeException('synthetic PIN lock required');
+        $this->calls++;return '00037';
+    }
+}
+// A challenge created by a SYNTHETIC password-proven CI fixture, not by
+// an HTTP request. Only verify/consume is connected; begin/resend are denied.
+$httpCid=str_repeat('6',64);
+smsChallenge($db,$httpCid);
+$httpQueued=smsStore($db)->reserveAndQueue(
+    smsRequest($httpCid,smsWindows(112,3600))
+);
+$httpCode=ciSmsCode($db,$httpCid);
+$q=$db->prepare('UPDATE ev_v5_sms_outbox SET status=? WHERE delivery_id=?');
+$q->execute(['sent',$httpQueued->deliveryId]); // Synthetic acknowledgement only.
+$challengeHttp=new V5MySqlChallengeHttpPort(ciConsumer($db));
+$httpPinReader=new CiHttpPinReader();
+$workflow=new V5LoginWorkflow(
+    new CiHttpPasswordDisabled(),new CiHttpTrustDisabled(),
+    $challengeHttp,$sessions
+);
+$boundary=new V5HttpTransportBoundary(
+    new V5AuthHttpHandler($workflow,
+        new V5MySqlSessionActions($sessions,$httpPinReader)
+    )
+);
+$httpReq=static function(string $path,array $body):V5StagedHttpRequest {
+    $json=json_encode($body,JSON_THROW_ON_ERROR);
+    return new V5StagedHttpRequest(
+        'POST',$path,true,'application/json',$json,(string)strlen($json)
+    );
+};
+smsDeny(fn()=>$challengeHttp->begin(41,DEVICE_ID,'ios',ChallengeKind::SMS),
+    'missing native password-bound beginning refuses an SMS challenge');
+smsDeny(fn()=>$challengeHttp->resendSms($httpCid,DEVICE_ID,'ios'),
+    'missing native SMS delivery refuses resend without any provider call');
+$verifyBody=[
+    'challenge_id'=>$httpCid,'code'=>$httpCode,
+    'device_id'=>DEVICE_ID,'platform'=>'ios',
+];
+$confirmed=$boundary->dispatch($httpReq('/api/v5/auth/challenge/verify',$verifyBody));
+$credentials=json_decode($confirmed->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($confirmed->status===200 && isset($credentials['access_token'],
+    $credentials['refresh_token']),
+    'real InnoDB six-digit challenge verification reaches V5 HTTP token response');
+smsCheck(is_array($jwt->verifyAccess($credentials['access_token'],time())),
+    'HTTP-confirmed grant issues a valid V5 access JWT from committed SQL');
+$replay=$boundary->dispatch($httpReq('/api/v5/auth/challenge/verify',$verifyBody));
+smsCheck($replay->status===401
+    && $replay->jsonBody==='{"error":"verification_failed"}',
+    'replaying same code through HTTP cannot issue a second session');
+$pinResponse=$boundary->dispatch($httpReq('/api/v5/loyalty/pin',[
+    'access_token'=>$credentials['access_token']
+]));
+$pinData=json_decode($pinResponse->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($pinResponse->status===200 && ($pinData['pin']??null)==='00037'
+    && $httpPinReader->calls===1,
+    'new code-authenticated JWT reads bonus PIN without a second SMS');
+$refreshReply=$boundary->dispatch($httpReq('/api/v5/auth/refresh',[
+    'refresh_token'=>$credentials['refresh_token']
+]));
+$renewal=json_decode($refreshReply->jsonBody,true,8,JSON_THROW_ON_ERROR);
+smsCheck($refreshReply->status===200 && isset($renewal['refresh_token'])
+    && $renewal['refresh_token']!==$credentials['refresh_token'],
+    'code-confirmed V5 session rotates refresh through real InnoDB');
+smsCheck($boundary->dispatch($httpReq('/api/v5/auth/refresh',[
+    'refresh_token'=>$credentials['refresh_token']
+]))->status===401,
+    'HTTP replay of code-confirmed session refresh rejected');
+smsCheck($sessions->revokeAccess($renewal['access_token']),
+    'code-confirmed access JWT can revoke its own real InnoDB session');
+smsCheck($boundary->dispatch($httpReq('/api/v5/loyalty/pin',[
+    'access_token'=>$renewal['access_token']
+]))->status===401,
+    'revoked code-authenticated HTTP token cannot fetch PIN');
+smsCheck($httpPinReader->calls===1,
+    'revocation is enforced before reading sensitive PIN');
 
 // Exactly one successful grant when two independent real connections
 // race an existing TOTP challenge.
