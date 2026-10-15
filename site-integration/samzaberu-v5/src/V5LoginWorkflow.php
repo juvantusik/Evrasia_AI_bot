@@ -159,6 +159,28 @@ interface V5AtomicChallengePort
 }
 
 /**
+ * Stronger first-factor binding for production-candidate challenge creation.
+ * The issuer MUST re-check the current password against the CURRENT native
+ * Bitrix hash while holding the same b_user/epoch transaction used to insert
+ * the challenge. Otherwise a password reset between first and second reads
+ * could accidentally validate a stale password on the NEW AUTH_EPOCH.
+ *
+ * Legacy challenge adapters can still implement V5AtomicChallengePort, but
+ * V5MySqlChallengeHttpPort never permits its unbound begin(userId) shortcut.
+ */
+interface V5PasswordBoundChallengePort
+{
+    public function beginBound(
+        PasswordVerifiedAccount $account,
+        #[\SensitiveParameter] string $login,
+        #[\SensitiveParameter] string $password,
+        string $deviceId,
+        string $platform,
+        ChallengeKind $kind,
+    ): PendingLoginChallenge;
+}
+
+/**
  * Issue V5-only JWTs and server-verifiable assurance after rechecking the
  * account's current allowed status, auth epoch, and prior proof source.
  * A V4 access/refresh token MUST NEVER be accepted here. On any failure do
@@ -213,7 +235,7 @@ final readonly class V5LoginWorkflow
         // Mandatory TOTP has priority over any existing trusted-device record.
         if ($account->nativeTotpActive) {
             return $this->requireChallenge(
-                $account->userId, $deviceId, $platform, ChallengeKind::TOTP
+                $account, $login, $password, $deviceId, $platform, ChallengeKind::TOTP
             );
         }
 
@@ -239,7 +261,7 @@ final readonly class V5LoginWorkflow
         }
         if ($decision === NextFactor::SMS) {
             return $this->requireChallenge(
-                $account->userId, $deviceId, $platform, ChallengeKind::SMS
+                $account, $login, $password, $deviceId, $platform, ChallengeKind::SMS
             );
         }
         throw new AuthenticationRejected('authentication_failed');
@@ -311,12 +333,24 @@ final readonly class V5LoginWorkflow
     }
 
     private function requireChallenge(
-        int $userId,
+        PasswordVerifiedAccount $account,
+        #[\SensitiveParameter] string $login,
+        #[\SensitiveParameter] string $password,
         string $deviceId,
         string $platform,
         ChallengeKind $kind,
     ): PendingLoginChallenge {
-        $ticket = $this->challenges->begin($userId, $deviceId, $platform, $kind);
+        if ($this->challenges instanceof V5PasswordBoundChallengePort) {
+            $ticket = $this->challenges->beginBound(
+                $account, $login, $password, $deviceId, $platform, $kind
+            );
+        } else {
+            // Legacy test adapters only. The real MySQL challenge bridge
+            // deliberately refuses to begin with an unbound user ID.
+            $ticket = $this->challenges->begin(
+                $account->userId, $deviceId, $platform, $kind
+            );
+        }
         if ($ticket->kind !== $kind) {
             throw new AuthenticationRejected('challenge_unavailable');
         }
