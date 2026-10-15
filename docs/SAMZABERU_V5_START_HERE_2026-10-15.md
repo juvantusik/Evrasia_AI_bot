@@ -1,78 +1,64 @@
 # Evrasia AI Bot / СамЗаберу V5 — START HERE, 15 октября 2026
 
-**Текущая точка: OFF V5 установлен; два origin HTTPS пути и чтение web-конфигурации уже PASS. В feature собрана единая MySQL HTTP composition с ограничением пилотных аккаунтов; обе CI PASS, 406 MariaDB checks.** Не повторять установку, layout,503-проверку или web-config snapshot. Новый чат — продолжение проекта.
+**Текущая точка: V5 установлен OFF; origin HTTPS и web-config уже PASS. Пользователь подтвердил следующий read-only шаг рабочей БД. Подготовлен только socket-only сбор метаданных; его серверный результат ещё НЕ получен.** Не повторять layout, установку, проверку503 или web-config.
 
-Читать этот файл, `SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-15.md`, `SAMZABERU_V5_INTEGRATION_DECISIONS_2026-10-15.md` и новый `SAMZABERU_V5_PILOT_COMPOSITION_2026-10-15.md`. Полная предыдущая редакция сохранена в commit `76796242020915629decd867939bc9fc19009550`; её pending web-config NEXT выполнен.
+Repo `juvantusik/Evrasia_AI_bot`, branch `feature/samzaberu-api-v5-auth-contract`. Читать текущий checkpoint, integration decisions и `SAMZABERU_V5_PILOT_COMPOSITION_2026-10-15.md`. Полная предыдущая редакция всех доказательств сохранена в commit `dcc473b432f66e01175fe101c511e534da7e88ba`; изменения ниже не отменяют её бизнес-правила и ограничения.
 
-## 1. Размещение и фактический сервер
+## 1. Следующий подготовленный блок
 
-**V5 размещается параллельно V4 на существующем Bitrix `evrasia`. Отдельной VM не будет.** Второй MySQL, контейнерная копия сайта и второй набор клиентов не обязательны. Аккаунты/бизнес-данные общие; V5 code/routes/config/keys/tokens/service tables отдельные. Бот `eur-bot-01` не переносится. Issue76 — реальное подключение, не выделение VM. Служебные V5-таблицы можно разместить в существующей БД, но V5 DDL пока НЕ выполнен.
+Пользователь ответил «дальше» на запрос разрешить **только чтение структуры рабочей БД**, без клиентских записей/DDL/мутаций/включения V5. Это допуск к указанному чтению, не к миграции.
 
-| Объект | Фактическое состояние |
+`site-integration/samzaberu-v5/deployment/read-v5-db-metadata-socket.sh`:
+- SHA256 `4158763756d3c9eb2c36e633465e286f67ac43a3f3788c6e9276bbbf1b5bc310`;
+- Git blob `7cb46e944458ea82a2b3277cb1e466d0d456721b`;
+- root/evrasia, фиксированная БД **eurasia_new**, локальный socket `/run/mysqld/mysqld.sock`;
+- используются существующий mysql/mariadb client, пустой HOME и --no-defaults; пароль не передаётся, credential files не читаются, PHP/Bitrix не исполняются;
+- существующий локальный вход root через socket **не подтверждён**: если он недоступен, скрипт останавливается без чтения .settings.php, смены auth, TCP или password fallback;
+- session READ ONLY и START TRANSACTION READ ONLY, ограниченные information_schema SELECT, затем ROLLBACK; таймаут ожидания metadata lock3секунды, общий timeout45секунд;
+- ровно10 имён: b_user, b_sec_user, b_user_phone_auth, ev_trusted_devices, ev_samzaberu_auth_state, ev_v5_auth_attempt_windows, ev_v5_auth_challenges, ev_v5_sms_budget_windows, ev_v5_sms_outbox, ev_v5_strong_sessions;
+- только таблицы/движки/collation, столбцы/типы/nullable/length/unsigned, индексы и типы constraints. Нет данных клиентов, COUNT строк приложения, SHOW CREATE, defaults, cardinality, trigger bodies или текстов выражений;
+- два чтения метаданных сравниваются; это стабильность снимков, не гарантия отсутствия будущего DDL. NOT_VISIBLE не автоматически значит отсутствует: учитывать права;
+- OFF manifest и root/V4 SHA сверяются до/после. Файлы сайта, конфигурация V5, БД и сервисы не изменяются; возможны обычные DB audit logs.
+
+Локально bash-n, compile двух встроенных Python частей, wrong-host denial с DATABASE_CONNECTION_ATTEMPTED=NO, проверка SQL-scope и8/8 synthetic output cases PASS. **Это не реальное подключение к MySQL, не подтверждение root socket login и не новые MariaDB assertions.** Результат оператора ожидается. Не утверждать наличие/отсутствие V5 таблиц до результата.
+
+Первый вариант с разбором .settings.php был отклонён инструментом при публикации и НЕ включён в ветку/блок оператора. Он не повторялся через другую кодировку или канал. Принятый отдельный вариант исключает чтение credential files и весь PHP, не делает такого разбора. Если socket login не работает, не возвращаться автоматически к заблокированному варианту.
+
+Имя БД eurasia_new восстановлено из `docs/ANTI_FRAUD_CONSENT_DATA_MAP.md` и `PROJECT_CHECKPOINT.md` через live GitHub. Не путать с БД бота. Метаданные читаются через отдельный диагностический клиент; **это не меняет требование одного native Bitrix connection для атомарной авторизации**.
+
+## 2. Production: установлено, но выключено
+
+V4/V5 параллельно на существующем `evrasia`. Отдельной VM не будет; второй MySQL или копия сайта не обязательны. Аккаунты и бизнес-данные общие, служебные компоненты V5 отдельные. Бот eur-bot-01 не переносится.
+
+| Объект | Состояние |
 |---|---|
-| Установленный runtime | `0caa0248c783188939398a71543ba740f064bb90`, не новый feature HEAD |
-| Public V5 | `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5` |
-| Private release | `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90` |
+| Installed runtime | `0caa0248c783188939398a71543ba740f064bb90`, mode off |
+| Public | `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5` |
+| Private | `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90` |
 | Backup | `/root/ev-v5-off-backup.f89wzMkA` |
 | Rollback, не запускался | `/root/ev-v5-off-backup.f89wzMkA/rollback.sh` |
-| Manifest | `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/installed.sha256` |
-| Config | Строго `off`; настоящая site-factory.php, pilot key и V5 DDL не установлены |
+| Manifest | `<private parent>/samzaberu-v5/installed.sha256` |
 
-Оператор уже выполнил INSTALL_DISABLED_ONLY PASS: CLI отsite_evrasia дал503, root/V4 rewrite unchanged. Затем origin HTTPS через `--resolve evrasia.rest:443:192.168.103.141`: direct `/api/v5/router.php` и nested `/api/v5/auth/signin` дали CURL_RC0, HTTP503, TLS_VERIFY_RESULT0, exactOFFJSON/no-store/no-cookie/no-redirect/no-CORS/noAge. Итог HTTP_OFF_PATHS_PASS2/LOCAL_ORIGIN_OFF_BOUNDARY=PASS. ПрежнийCURL_RC7 без--resolve — история, не текущая ошибка. Не ремонтировать public hairpin ради self-check.
+Layout и INSTALL_DISABLED_ONLY PASS; CLI отsite_evrasia дал503. Direct router.php и nested auth/signin через --resolve evrasia.rest:443:192.168.103.141 дали exact503JSON/TLSverify0/no-store/no-cookie/no-redirect/no-CORS/noAge; оба PASS, после запросов OFF/V4/hash unchanged. Первый CURL_RC7 без --resolve — история. Не ремонтировать public hairpin.
 
-Новые V5-файлы наproduction действительно есть; правильно: V5_FILES_INSTALLED_ON_PRODUCTION=YES, PRODUCTION_AUTH_ENABLED=NO. Изменениеfeature/docs не обновляет сервер автоматически. PUBLIC_EDGE_TEST=NOT_RUN, V4 functional E2E/native auth не выполнены. Не выдавать503OFF за работающую авторизацию.
+Web-config snapshot PASS: nginx HTTP→http192.168.103.141:8080, SSL→https192.168.103.141:8443, оба Apache vhost→PHP8.3 site socket. Прочитанный php.ini: auto_prepend/append disabled, session.auto_start0. Wildcard includes не раскрывались; generic fastcgi_params не доказывает передачу параметров в Apache chain. PHP_RUNTIME_MAPPING_ATTESTED=NO, PUBLIC_EDGE_TEST=NOT_RUN, V4 functional E2E/native auth не выполнены.
 
-## 2. Новый факт: web-config snapshot получен и PASS
+Site UID/GID1005:1005, CLI8.3.21; private уже в pool open_basedir. Root/V4 SHA закреплены в helper. Private V5 root:1005 с0750/0640, public0755/0644; site-owned ancestors не дают абсолютной изоляции от компрометации site account. Конфиги/права не менять без причины.
 
-Источник — новый операторский лог15октября16:33:50, раздел VHOST/PHP SETTINGS и итог. Четыре vhost, шесть выведенных конфигурационных файлов; CONFIG_CONTENT_STABILITY=PASS, FINAL_STATUS=PASS/FINAL_RC0. SITE_FILE_WRITE/SITE_PHP_EXECUTED/DATABASE_CONNECTION/SERVICE_RELOAD=NO, HTTP_REQUESTS=0.
+## 3. Последний проверенный runtime-код и CI
 
-- `nginx.conf`: proxy_pass `http://192.168.103.141:8080`, expected docroot.
-- `nginx.ssl.conf`: proxy_pass **`https://192.168.103.141:8443`**, expected docroot. Не заменять это прежним предположением, что HTTPS всегда проксируется на HTTP8080.
-- `apache2.conf` и `apache2.ssl.conf`: expected docroot и `SetHandler` на `/run/php/php8.3-fpm-evrasia.spb.ru.sock`.
-- `/etc/php/8.3/fpm/php.ini`: auto_prepend_file/auto_append_file disabled, session.auto_start0, opcache.revalidate_freq0.
-- Наличие `/etc/nginx/fastcgi_params` сHTTPS/REMOTE_ADDR переменными отдельно НЕ доказывает, что файл используется в показанной цепочке nginx→Apache→FPM.
-- Wildcard includes перечислены, но не раскрывались. Снимок текстов конфигурации не доказывает effective runtime, фактические значенияHTTPS/REMOTE_ADDR или весь include precedence: **PHP_RUNTIME_MAPPING_ATTESTED=NO сохраняется**.
+**Code/test `6f8a35211671aaa25f8129eeac90b802944646cd`**: offline38771014889 и ephemeral38771014920 SUCCESS; повторно прочитаны live run statuses перед текущей работой. Прежний полный DB лог:43+117+45+63+61+77=406. Последующие helper/docs не являются новым runtime или его deployment.
 
-Оснований менять nginx/Apache/FPM или доверять клиентскому X-Forwarded-Proto по этому снимку нет. Сохранять строгую HTTP-границу. Подробные SHA конфигов и выводы — текущий checkpoint; повторный обзор этих же файлов не нужен.
+V5MySqlPilotComposition собирает существующие workflow/transport/challenge/session/refresh/PIN компоненты на одном PDO/Bitrix connection с согласованными ключами. V5PilotScopedNativePorts добавляет обязательный список1–32 accountID поверх nativeproof, включая проверку старыхcredentials при новых запросах после исключения аккаунта. Это не permanent DB revocation и не отмена in-flight requests. Положительные providers/Bitrix facade вCI синтетические. Настоящая site-factory и approvedIDs не установлены.
 
-## 3. Новый проверенный код
+Installer/test c37ab9959bb13dae49f9c1a2c4ddda0b06905c69 и его source pins неизменны. CI package step проверяет точный installed0caa0248, DB tests currentfeature. Новый metadata helper не меняет workflows, src/API, SQL schemas или установленный release. Последний main baseline7c2e9f8e4501b92469bcdeea18f8340676ad52c9; main не трогать: push публикуетlatest.
 
-Repo `juvantusik/Evrasia_AI_bot`, branch `feature/samzaberu-api-v5-auth-contract`. **Последний code/test commit с двумя успешными CI: `6f8a35211671aaa25f8129eeac90b802944646cd`.**
+## 4. Бизнес-логика и незавершённое
 
-- Offline Actions **38771014889**, job **116546512805**, completed/success. Прежний26-suite workflow и полныйPHP lint.
-- Real ephemeral MariaDB Actions **38771014920**, job **116546512653**, completed/success. ПолныйDB job log прочитан:43sessions +117SMS +45receipt +63bridge +61password +**77composition =406**; combined SMS/bridge/password/composition363; FINAL_STATUS=PASS/FINAL_RC0.
-- Новый `src/V5MySqlPilotComposition.php`: возвращает существующий V5HttpTransportBoundary с единым workflow, durable consumed proof, challenge consumption/TOTP issuer, strong sessions, refresh иPIN actions. Все соответствующие stores используют одну переданнуюPDO/Bitrix bridge connection и согласованныйbinding key. Сам build не исполняетSQL/DDL, неbootstrap Bitrix, негенерируетcredentials и не активируетroute.
-- `V5PilotScopedNativePorts` в том же файле: обязательный server-only список1–32уникальных положительныхintegerID, безwildcard/пустогосписка. Ограничение после first-factor identity распространяется наtrust/challenge/nativefactor/coverage/PIN. Refresh иPIN проверяют его через existing locked coverage и отказывают в следующей пересобранной request composition даже с ранее выданными токенами исключённого аккаунта. Это не permanent revocationDB и не отмена уже начатого запроса.
-- Native providers остаются обязательными. Allowlist НЕ подменяет пароль/TOTP/trust/coverage. Первый password provider сохраняет собственные attempt/rate/account правила и может выполнять своё разрешениеidentity до cohort-filter; не утверждать, что запрещённыйaccount никогда не читается этимпровайдером.
-- Lifecycle пока только существующий password-bound TOTP issuer. SMS begin/resend сохраняют отказ; SMS consumption требует существующегоSENT/nativeproof. Durable consumed grant всегда перепроверяется `V5MySqlConsumedChallengeProof`, а не произвольнымtrusted-device callback.
-- Новые77checks проходят через существующий HTTP transport/handler и настоящие InnoDB sessions/JWT/refresh/PIN locks. Положительные trust/password/coverage/PIN providers и Bitrix facade СИНТЕТИЧЕСКИЕ; новыеTOTPcallbacks всегдаотказывают, алгоритм/replayне реализовывались. Это провереннаяcomposition, не realBitrix/nativeauthentication.
+Пароль → обязательный nativeTOTP без fallback при ошибке/unknown; иначе сильноеV5trust (не слабоеV4); без обоих password-boundSMS на подтверждённый телефон аккаунта, без номера с клиента. После сильного входа PIN без второйSMS. Сохраняются active/block/expiry/Anti-Fraud/attemptlimits,10quota scopes, HMAC/encryptedoutbox/bindings, tariff/currency/idempotency. Claimed/unknown автоматически не пересылать; SENT только independentreceipt; late receipt не оживляетchallenge/не меняетbudget. PHONE_EVENT_VERSION меняется и при повторном подтверждении того жеE.164, AUTH_EPOCH атомарен с native securitymutations.
 
-Compare7679624..6f8a352: ровно3файла — новый185строк composition, новый184строки integrationtest, existing ephemeralworkflow +16/-5. V4, schema, API entry, crypto, native modules и installer не менялись. Локально оба новыхPHP lintPASS, Gitblob совпал с загруженным; полныйsuite выполненGitHub, локальныйclone недоступениз-заDNS.
+Не завершены nativefactory/TOTP-code/replay/10-path epochhooks/phone-success и reconfirm/strongtrust/SMS begin-resend/provider receipt-tariff/RestIS/transactionpermit/additiveDDL/реальныйпилот. Accountscope иHTTP503 не заменяют эти proofs. PendingTOTPverifier и прежний временныйinstrumentedPHPshim вне принятогоsrc/CI; заблокированные payload не повторять. Закрытые CUser/PhoneAuth/OTPsource audits сохранены, не запускать заново; SHA-driftuser.php не утверждён как baseline.
 
-**CI package regression теперь отдельно checkout закреплённого установленного0caa0248**, чтобы первоначальныеsrc/APIpins installer не ослаблять из-за новогоfeatureкода. DB tests по-прежнему выполняюттекущийHEAD, старые suites одинраз. Новыйpackage regressionPASS не deploymentновойcomposition.
+После metadata output: анализ движков/колонок/индексов → точная additive миграция с отдельным допуском/backup/verify/rollback, не автоматический DDL. До этого ничего в БД не создавать. CI/faultschemas не запускать на production. Серверные действия — один guarded блок, FINAL_STATUS/FINAL_RC, безсекретов, SSH не закрывать.
 
-## 4. Принятая логика и реализованные структуры
-
-После пароля nativeTOTP имеетприоритет безSMSfallback при ошибке/unknown; иначе толькоstrongV5trust, не слабыйV4; безобоих password-boundSMS на подтверждённыйтелефон аккаунта, не телефонсклиента. После сильного входаPIN без второйSMS. Сохраняются active/block/expiry/Anti-Fraud/attemptlimits,10SMS rate/стоимостныхокон,cooldown,HMAC/encryptedoutbox,user/device/phone/epochbindings,тариф/currency/idempotency. Claimed/unknown автоматическинепересылать. SENTтолькоindependentreceipt,late receiptнеоживляетchallenge/не меняетбюджет. PHONE_EVENT_VERSION меняетсядажеприповторе того жеE.164;AUTH_EPOCH атомаренсnative securitymutations.
-
-Переиспользованы `V5LoginWorkflow`, `V5SessionTokens`, `V5MySqlStrongSessionStore`, `V5MySqlSessionActions`, `V5MySqlPasswordBoundTotpIssuer`, `V5MySqlChallengeConsumption`, `V5MySqlConsumedChallengeProof`, `V5MySqlChallengeHttpPort`, `V5SecurityEventVersions`, `V5BitrixPdoCompatibilityBridge` иexistingHTTPclasses. Пятьroutes и принятуюархитектуру не перепроектировать. Privatepilotkey только operational admission, не accountauth. `V5BitrixLockedPasswordTotpProof` готов какBEGINreadadapter, не verifier кода.
-
-**Незавершённое:** фактическаяsite-factoryсnativeproviders и согласованнымпилотнымсписком; nativeTOTP-code/replay,10-path epochhooks,successfulphone/reconfirmation,strongtrust,SMS begin/resendlifecycle,paidSMS/providerreceipt/tariff,RestISPIN,additiveV5DDL,production-appropriate transactionpermit иliveauthenticationacceptance. Новаяcomposition устанавливаетaccountscope, но реальныеIDневыбирались и сервернаяfactoryнеустановлена.
-
-Pending `V5BitrixLockedTotpFactor` и ранееотклонённый временныйinstrumentedPHPshim остаютсянеприменёнными; заблокированныеpayload не повторялись. Новыйcompositiontest — другая задача, безреализацииалгоритмаTOTP/подменыserverentry.
-
-## 5. Следующий реальный шаг и допуск
-
-Web-layout/установка/OFFHTTPS/configsnapshot закрыты. Не выдавать ещё один общийserveraudit. Дляsitecomposition нужны фактическаясовместимость существующейБД иnative providers. ПередподготовкойadditiveDDL следующийсерверныйдопуск — **только чтение метаданных структуры необходимых таблиц/индексов/движков**, безклиентскихстрок,DDL,измененийданных,платныхSMSиливключенияV5. Этотдоступещёне выполнялся в текущей итерации и долженбытьотдельноподтверждёнпользователем; не считатьread-onlyconfigPASS разрешениемproductionSQL.
-
-Далееbackup→проверкаbackup→отдельносогласованнаяadditiveмиграция→nativecomposition/ограниченныеаккаунты→приёмка→pilot. Параллельноsafe featureработу выполнять самостоятельно. ProductionDDL/accountmutations/платныеSMS иустановкуновогоrelease бездопускане выполнять. CI/faultschemas не переноситьнарабочуюБД,guards не снимать.
-
-## 6. История, окружение, ограничения
-
-Siteaccount1005:1005,CLI8.3.21,privateвpoolopen_basedir уже разрешён. Root `.htaccess` SHA256 `81544afa0396c6778f263d9b250105913aae9d3621cbaaf0e3cf1e4f3a297b95`; V4rewrite `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3`; V4router `3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50`; api/.htaccessотсутствует. PrivateV5root:1005 с0750/0640,public0755/0644. Parentdirs принадлежатsiteaccount; не считатьroot-ownedleaf полнойизоляцией.
-
-ЗакрытыеCUser/PhoneAuth/OTP-recoveryисследования не повторять. Архив: `EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md`, checkpoint13октября, `STRUCTURE_REGISTRY.md`, phone-native-writer/MFA-recovery/native-mutation документы. CUserdelete/add не доказаныкакsuccessfulCONFIRMEDwriter; user.phpSHA-driftнеобъяснён, новыйbaselineнеутверждён,coreавтоматическинеисправлять.
-
-Историческиеcodecheckpoints:0caa0248(59pilot/198entry/329DB),c3f92ba(329DB),8c395f0(268),dc2caed(205),4a6ea09(160). Installer c37ab9959bb13dae49f9c1a2c4ddda0b06905c69 сSHA2563fca39d399b8d60d865fc6a886e589ccd8c3052ae702c66227650098e9577e5a не менялся. Mainlive `7c2e9f8e4501b92469bcdeea18f8340676ad52c9` неизменён; pushmainпубликуетlatest,docsтуданесинхронизировать. Более позднийdocHEAD не новоеcode-testing.
-
-CURRENT: FILES_INSTALLED=YES; MODE=off; LOCAL_ORIGIN_OFF_BOUNDARY=PASS; WEB_CONFIG_SNAPSHOT=PASS; MYSQL_PILOT_COMPOSITION_CI=PASS; REAL_EPHEMERAL_MARIADB_PASS=YES(406); PHP_RUNTIME_MAPPING_ATTESTED=NO; PRODUCTION_AUTH_ENABLED=NO; V5_DATABASE_MIGRATED=NO. Серверныйшаг — одинguardedBashblock,syntaxcheck,FINAL_STATUS/FINAL_RC,безсекретов;SSHне закрывать. Приоритетproductionfact>livefeature>tests>docs>oldchat.
+**CURRENT:** INSTALLED_DISABLED / ORIGIN_HTTPS_PASS / WEB_CONFIG_SNAPSHOT_PASS / COMPOSITION_CI_406_PASS / METADATA_READ_APPROVED / METADATA_RESULT_PENDING / NO_NATIVE_AUTH / NO_V5_DB_MIGRATION.
