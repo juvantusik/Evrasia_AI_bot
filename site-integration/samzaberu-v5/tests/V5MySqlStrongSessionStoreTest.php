@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../src/V5MySqlStrongSessionStore.php';
+require_once __DIR__ . '/../src/V5BitrixPdoCompatibilityBridge.php';
 
 use Evrasia\Samzaberu\V5\{
     V5MySqlStrongSessionStore, V5LockedStrongSessionProofPort,
@@ -267,6 +268,19 @@ yes(count(array_filter($db->queries,fn(string $q):bool=>str_contains($q,'FOR UPD
     'DB uses row-level locks');
 yes(count(array_filter($db->queries,fn(string $q):bool=>str_contains($q,'information_schema.TABLES')))>=1,
     'InnoDB table engines checked');
+$bitrixAllowlist = new ReflectionMethod(
+    Evrasia\Samzaberu\V5\V5BitrixPdoCompatibilityBridge::class,
+    'assertStatementAllowed'
+);
+$strongSql=[];
+foreach($db->queries as $template) {
+    if (!str_contains($template,'ev_v5_strong_sessions')) continue;
+    $strongSql[$template]=true;
+    $bitrixAllowlist->invoke(null,$template);
+    yes(true,'real staged session SQL template accepted by exact Bitrix bridge allowlist');
+}
+yes(count($strongSql)===5,'all five live store session SQL templates covered');
+
 yes(count(array_filter($db->queries,fn(string $q):bool=>str_contains($q,'refresh_generation = ?')))>=1,
     'refresh compare-and-swap uses generation');
 foreach($db->queries as $query) {
