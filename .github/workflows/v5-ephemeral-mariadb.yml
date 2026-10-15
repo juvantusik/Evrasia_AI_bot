@@ -6,6 +6,7 @@ on:
       - feature/samzaberu-api-v5-auth-contract
     paths:
       - '.github/workflows/v5-ephemeral-mariadb.yml'
+      - 'site-integration/samzaberu-v5/deployment/install-disabled-v5.sh'
       - 'site-integration/samzaberu-v5/src/**'
       - 'site-integration/samzaberu-v5/schema/PROPOSED_ev_v5_strong_sessions.sql'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStrongSessionsTest.php'
@@ -76,6 +77,20 @@ jobs:
           php8.3 -m | grep -Fxq pdo_mysql
           php8.3 -r 'exit(function_exists("pcntl_fork") && function_exists("proc_open") ? 0 : 1);'
           echo "PASS: PHP, pdo_mysql and independent-process test runtime ready"
+
+      - name: Verify disabled deployment package without site access
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SCRIPT=site-integration/samzaberu-v5/deployment/install-disabled-v5.sh
+          bash -n "$SCRIPT"
+          if bash "$SCRIPT" > /tmp/v5-off-wrong-host.log 2>&1; then
+            echo 'FAIL: installer accepted hosted CI as production'
+            exit 1
+          fi
+          grep -Fxq 'FAIL: Requires root on evrasia' /tmp/v5-off-wrong-host.log
+          grep -Fxq 'FINAL_STATUS=FAIL' /tmp/v5-off-wrong-host.log
+          bash "$SCRIPT" --self-test
 
       - name: Run actual InnoDB session, SMS, bridge and locked-password tests
         shell: bash
