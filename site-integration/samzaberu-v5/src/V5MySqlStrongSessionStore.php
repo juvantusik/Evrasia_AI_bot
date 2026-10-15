@@ -43,6 +43,17 @@ interface V5LockedStrongSessionProofPort
  * WITHOUT lock before beginning so the actual lock order stays b_user first.
  * No raw bearer, password, trust token, OTP or device ID is persisted.
  */
+/**
+ * Site-only, READ-ONLY reader for /loyalty/pin after an already-validated
+ * strong V5 access JWT. It MUST use this exact PDO/Bitrix transaction,
+ * never open a second connection, mutate state or trigger SMS.
+ * No production implementation is installed.
+ */
+interface V5LockedBonusPinReaderPort
+{
+    public function readLockedBonusPin(PDO $db, int $userId): ?string;
+}
+
 final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
 {
     private const TABLES = [
@@ -211,6 +222,50 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                     return null;
                 }
                 return $state;
+            });
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Protected bonus-PIN retrieval. Authorization and the private read MUST
+     * happen under the SAME owned transaction and b_user mutex. Unlike
+     * currentAssuranceSnapshot(), this does not release the session lock
+     * before reading the protected value. There is no additional SMS proof:
+     * access must already come from strong TOTP, SMS or enrolled trust.
+     *
+     * Returns null for ALL denied/unknown states; never log the bearer or PIN.
+     * The site PIN reader is intentionally unimplemented until staging.
+     */
+    public function showBonusPinForAccess(
+        #[\SensitiveParameter] string $accessJwt,
+        V5LockedBonusPinReaderPort $reader
+    ): ?string {
+        try {
+            $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());
+            if ($claims === null) return null;
+            $this->assertReady();
+            $userId = self::positive($claims['sub'] ?? null);
+            if ($userId === null) return null;
+            return $this->transaction(function () use ($claims, $userId, $reader): ?string {
+                $now = $this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch = $this->lockedEpoch($userId);
+                $row = $this->lockedSession($claims['sid']);
+                $state = self::state($row, $userId, $now);
+                if ($state === null || $epoch !== $state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
+                ) return null;
+
+                $pin = $reader->readLockedBonusPin($this->db, $userId);
+                // Never guess a site-specific PIN format or strip leading zeros.
+                // Refuse unexpectedly large values and binary control bytes.
+                return is_string($pin) && $pin !== ''
+                    && strlen($pin) <= 128
+                    && preg_match('/[\x00-\x1f\x7f]/', $pin) !== 1
+                    ? $pin : null;
             });
         } catch (Throwable) {
             return null;
