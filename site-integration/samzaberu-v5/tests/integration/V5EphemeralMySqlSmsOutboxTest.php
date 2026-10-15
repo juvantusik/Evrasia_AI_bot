@@ -40,7 +40,7 @@ use Evrasia\Samzaberu\V5\{
     PasswordVerifiedAccount,AuthenticatedV5Session,
     V5MySqlChallengeHttpPort,V5MySqlSessionActions,
     V5PasswordProofPort,V5TrustProofPort,MobileTrustAssessment,
-    V5LockedBonusPinReaderPort,V5LoginWorkflow,
+    V5LockedBonusPinReaderPort,V5SmsSentReceiptAttestationPort,V5LoginWorkflow,
     V5AuthHttpHandler,V5HttpTransportBoundary,V5StagedHttpRequest,
     V5MySqlPasswordBoundTotpIssuer,V5LockedPasswordTotpChallengeProofPort,
     V5MySqlSmsDispatchClaims,V5LockedSmsDispatchSafetyPort,
@@ -811,6 +811,17 @@ smsCheck($state['status']==='consumed' && (int)$state['failed_attempts']===0,
  * The provider/safety port is mandatory and synthetic only in this CI test.
  * A claimed/unknown delivery is never automatically re-queued or retried.
  */
+final class CiSyntheticSentReceipt implements V5SmsSentReceiptAttestationPort {
+    public bool $confirmed=true;
+    public int $checks=0;
+    public function independentlyConfirmedSent(
+        string $deliveryId,string $providerIdempotencyKey
+    ):bool {
+        $this->checks++;
+        return $this->confirmed && preg_match('/\\A[a-f0-9]{64}\\z/D',$deliveryId)===1
+            && hash_equals($deliveryId,$providerIdempotencyKey);
+    }
+}
 final class CiSmsDispatchSafety implements V5LockedSmsDispatchSafetyPort {
     public bool $allow=true;
     public int $calls=0;
@@ -836,7 +847,8 @@ function ciClaimRace(string $deliveryId):int {
 }
 $db=smsDb();
 $disSafety=new CiSmsDispatchSafety();
-$dispatch=new V5MySqlSmsDispatchClaims($db,$disSafety);
+$syntheticReceipt=new CiSyntheticSentReceipt();
+$dispatch=new V5MySqlSmsDispatchClaims($db,$disSafety,$syntheticReceipt);
 $dispatchId=str_repeat('7',64);
 smsChallenge($db,$dispatchId);
 $queued=smsStore($db)->reserveAndQueue(
@@ -865,10 +877,23 @@ smsCheck(ciConsumer($db)->verifyAndConsume(
 smsCheck($dispatch->recordProviderOutcome($queued->deliveryId,
     str_repeat('0',64),V5SmsProviderTerminalOutcome::Sent)===false,
     'forged provider idempotency key cannot acknowledge delivery');
+$noReceipt=new V5MySqlSmsDispatchClaims($db,$disSafety);
+smsCheck($noReceipt->recordProviderOutcome(
+    $queued->deliveryId,$claimed->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Sent)===false,
+    'missing independently attested provider receipt cannot mark SMS sent');
+$syntheticReceipt->confirmed=false;
+smsCheck($dispatch->recordProviderOutcome(
+    $queued->deliveryId,$claimed->providerIdempotencyKey,
+    V5SmsProviderTerminalOutcome::Sent)===false,
+    'native false provider receipt cannot authorize login');
+$syntheticReceipt->confirmed=true;
 smsCheck($dispatch->recordProviderOutcome(
     $queued->deliveryId,$claimed->providerIdempotencyKey,
     V5SmsProviderTerminalOutcome::Sent)===true,
     'positive synthetic provider receipt changes claimed into sent ONCE');
+smsCheck($syntheticReceipt->checks>=2,
+    'provider receipt verification required before sent transition');
 smsCheck($dispatch->recordProviderOutcome(
     $queued->deliveryId,$claimed->providerIdempotencyKey,
     V5SmsProviderTerminalOutcome::Sent)===false,
