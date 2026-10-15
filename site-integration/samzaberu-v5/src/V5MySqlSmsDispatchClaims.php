@@ -30,6 +30,21 @@ interface V5LockedSmsDispatchSafetyPort
     ): bool;
 }
 
+/**
+ * Mandatory authoritative paid-provider receipt verification for status SENT.
+ * A persisted idempotency key by itself is NOT a delivery acknowledgement.
+ * Implementations must independently attest the provider result (not trust
+ * caller claims), match the exact delivery and charge identity, and deny
+ * unknown/missing evidence. No real provider is installed by default.
+ */
+interface V5SmsSentReceiptAttestationPort
+{
+    public function independentlyConfirmedSent(
+        string $deliveryId,
+        string $providerIdempotencyKey,
+    ): bool;
+}
+
 enum V5SmsProviderTerminalOutcome:string
 {
     case Sent='sent';
@@ -77,6 +92,7 @@ final readonly class V5MySqlSmsDispatchClaims
     public function __construct(
         private PDO $db,
         private V5LockedSmsDispatchSafetyPort $native,
+        private ?V5SmsSentReceiptAttestationPort $sentReceipt = null,
     ) {}
 
     public function claimQueuedOnce(string $deliveryId): ?V5ClaimedSmsForOneAttempt
@@ -168,6 +184,18 @@ final readonly class V5MySqlSmsDispatchClaims
             || !V5LoginWorkflow::validChallengeId($providerIdempotencyKey)
             || !hash_equals($deliveryId,$providerIdempotencyKey))return false;
         $this->assertReady();
+        if ($outcome === V5SmsProviderTerminalOutcome::Sent) {
+            // Fail closed BEFORE persisting a paid-SMS success or allowing
+            // its six-digit code to authenticate an account.
+            if ($this->sentReceipt === null) return false;
+            try {
+                if ($this->sentReceipt->independentlyConfirmedSent(
+                    $deliveryId,$providerIdempotencyKey
+                ) !== true) return false;
+            } catch (Throwable) {
+                return false;
+            }
+        }
         try{
             $q=$this->query('UPDATE ev_v5_sms_outbox SET status = ? '
                 .'WHERE delivery_id = ? AND provider_idempotency_key = ? '
