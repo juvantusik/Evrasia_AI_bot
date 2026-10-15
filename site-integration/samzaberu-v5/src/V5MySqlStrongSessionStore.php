@@ -125,7 +125,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             throw new AuthenticationRejected('authentication_failed');
         }
 
-        return $this->transaction(function () use ($digest, $sid, $userId): AuthenticatedV5Session {
+        $committed = $this->transaction(function () use ($digest, $sid, $userId): array {
             $now = $this->dbTime();
             $this->lockUser($userId);
             $this->requireNativeCoverage($userId);
@@ -151,13 +151,11 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             if ($q->rowCount() !== 1) {
                 throw new AuthenticationRejected('authentication_failed');
             }
-            // Prepare access claims from a row checked under the exclusive
-            // transaction; JWT signing only occurs AFTER successful commit.
-            return new AuthenticatedV5Session(
-                $this->access->issueForCommittedSession($state, $now),
-                $next['token']
-            );
+            // Credential material is NOT signed or returned before COMMIT.
+            // A failed commit invalidates this candidate and never yields JWTs.
+            return ['state'=>$state, 'now'=>$now, 'refreshToken'=>$next['token']];
         });
+        return $this->issueCommittedCredentials($committed);
     }
 
     /**
@@ -288,9 +286,9 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             throw new AuthenticationRejected('authentication_failed');
         }
         $this->assertReady();
-        return $this->transaction(function () use (
+        $committed = $this->transaction(function () use (
             $userId, $deviceId, $platform, $assurance, $grantReference, $proof
-        ): AuthenticatedV5Session {
+        ): array {
             $now = $this->dbTime();
             if ($now > PHP_INT_MAX - $this->sessionTtlSeconds) {
                 throw new RuntimeException('session_clock_unavailable');
@@ -321,11 +319,28 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 'sid'=>$sid,'user_id'=>$userId,'auth_epoch'=>$epoch,
                 'assurance'=>$assurance,'assured_at'=>$now,
                 'expires_at'=>$now+$this->sessionTtlSeconds];
-            return new AuthenticatedV5Session(
-                $this->access->issueForCommittedSession($state, $now),
-                $refresh['token']
-            );
+            // Only the committed session snapshot may authorize a V5 JWT.
+            return ['state'=>$state, 'now'=>$now, 'refreshToken'=>$refresh['token']];
         });
+        return $this->issueCommittedCredentials($committed);
+    }
+
+    /**
+     * This method runs ONLY after the owning transaction reported COMMIT.
+     * The caller must not hand out either bearer on an uncertain commit.
+     * No additional database read is needed; protected actions still recheck
+     * current revocation and AUTH_EPOCH within their own locked transaction.
+     *
+     * @param array{state:array<string,mixed>,now:int,refreshToken:string} $committed
+     */
+    private function issueCommittedCredentials(array $committed): AuthenticatedV5Session
+    {
+        return new AuthenticatedV5Session(
+            $this->access->issueForCommittedSession(
+                $committed['state'], $committed['now']
+            ),
+            $committed['refreshToken']
+        );
     }
 
     private function assertReady(): void
