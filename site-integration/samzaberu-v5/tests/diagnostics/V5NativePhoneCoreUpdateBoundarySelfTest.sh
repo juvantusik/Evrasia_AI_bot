@@ -190,10 +190,41 @@ grep -Fxq 'FAIL: exact analyzed bytes checksum guard' "$TMP/err"
 masked
 PASS_COUNT=$((PASS_COUNT + 1))
 
+# A matching native file does not permit a mismatched core-user buffer.
+native_sha="$(sha256sum -- "$NATIVE")"; native_sha="${native_sha%% *}"
+if php -n "$PARSER" --source-only --native "$NATIVE" --native-sha256 "$native_sha" \
+    --core-user "$CORE" --core-user-sha256 "$(printf '%064d' 0)" \
+    > "$TMP/out" 2> "$TMP/err"; then
+  echo 'FAIL: altered core-user SHA accepted'; exit 1
+fi
+[[ ! -s "$TMP/out" ]]
+grep -Fxq 'FAIL: exact analyzed bytes checksum guard' "$TMP/err"
+masked
+PASS_COUNT=$((PASS_COUNT + 1))
+
+# Immutable newly observed snapshot is a READ_ONLY analysis gate, not an approved release baseline.
+OBSERVED_LAUNCHER="$HERE/v5_native_phone_core_observed_snapshot_readonly.sh"
+bash -n "$OBSERVED_LAUNCHER"
+OBSERVED='bd591263fc4f5c6b634f6f8d802a6d00cca82ba4271d3f08f1f02532d0c6cc99'
+HISTORICAL='542034ca4eee2c30bdc033f45d792945c10392aeaf2e482c01958e2bd585b9d0'
+[[ "$(grep -Fc "$OBSERVED" "$OBSERVED_LAUNCHER")" == 3 ]]
+[[ "$(grep -Fc "$HISTORICAL" "$OBSERVED_LAUNCHER")" == 1 ]]
+grep -Fq "CORE_SOURCE_STATUS=SHA_DRIFT_OBSERVED_NOT_APPROVED" "$OBSERVED_LAUNCHER"
+grep -Fq "CORE_SOURCE_PROVENANCE_VERIFIED=NO" "$OBSERVED_LAUNCHER"
+grep -Fq "PRODUCTION_BASELINE_REPLACED=NO" "$OBSERVED_LAUNCHER"
+grep -Fq -- "--core-user-sha256 '$OBSERVED'" "$OBSERVED_LAUNCHER"
+PASS_COUNT=$((PASS_COUNT + 1))
+
 if [[ "$(hostname -s)" != evrasia ]]; then
   if bash "$LAUNCHER" > "$TMP/out" 2> "$TMP/err"; then
     echo 'FAIL: wrong host accepted'
     exit 1
+  fi
+  grep -Fxq 'PHP_SCANNER_EXECUTED=NO' "$TMP/out"
+  grep -Fxq 'FINAL_STATUS=FAIL' "$TMP/out"
+  PASS_COUNT=$((PASS_COUNT + 1))
+  if bash "$OBSERVED_LAUNCHER" > "$TMP/out" 2> "$TMP/err"; then
+    echo 'FAIL: observed snapshot accepted a nonproduction CI host'; exit 1
   fi
   grep -Fxq 'PHP_SCANNER_EXECUTED=NO' "$TMP/out"
   grep -Fxq 'FINAL_STATUS=FAIL' "$TMP/out"
