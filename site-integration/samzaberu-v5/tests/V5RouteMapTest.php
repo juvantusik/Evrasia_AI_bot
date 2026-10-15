@@ -30,4 +30,7 @@ foreach (array_keys(V5RouteMap::ROUTES) as $spec) {
 }
 
 echo 'PASS: V5 isolated route contract (5 routes)' . PHP_EOL;
-echo 'HANDLERS_IMPLEMENTED=NO' . PHP_EOL;
+echo 'NATIVE_PROVIDERS_NOT_ACTIVATED=YES' . PHP_EOL;
+
+// Keep this regression in the existing approved offline suite, not a new workflow.
+require __DIR__ . '/V5ParallelHttpEntryTest.php';
