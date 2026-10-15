@@ -1,3 +1,5 @@
+> **RESULT 2026-10-15: feature CI PASS.** Small NULL check fix in commit `45782ed0653b74a4eb5b4659551bfb70ad4a0ec1`; first ephemeral run `38782204373` found a real regression, corrected. Offline `38782468148` success/26 suites; ephemeral `38782468454` success/**39 new assertions**, total **445** actual InnoDB assertions across dependent suites. Positive native evidence is synthetic; neither this candidate nor tests provide the missing installed ten-path hooks/production transaction permit. No deployment; production release `0caa0248...` still OFF.
+
 # V5 Pilot AUTH_EPOCH: one-user initializer (GitHub candidate, NOT deployed)
 
 15 October 2026. Production DDL of six V5 tables finished PASS at 17:49. Tables are

@@ -1,3 +1,11 @@
+## R21 (2026-10-15): scoped epoch initialization without native event bypass
+
+**Было:** six new tables created but AUTH_EPOCH empty; generic/automatic backfill forbidden. Native10-path hooks absent, no trusted user evidence.
+
+**Стало:** GitHub-only `V5PilotAuthEpochInitializer` requires the concrete Bitrix PDO compatibility bridge and concrete strict10-path coverage gate, same owned native transaction, explicit 1–32 pilot IDs and current nonblocked native user. Lock order b_user→b_sec_user→b_user_phone_auth→ev_samzaberu_auth_state. Inserts (AUTH_EPOCH=1, PHONE_EVENT_VERSION=0, PHONE_BINDING_HMAC=NULL), no phone text migration, no auto-commit or auto-repair; idempotent existing row returns false. Production has no native evidence implementation/site factory, so cannot call this candidate.
+
+**Evidence:** initial ephemeral CI FAIL (2026-10-15 `38782204373`) caught null-coalescing bug in post-insert verifier. Small fix commit `45782ed0653b74a4eb5b4659551bfb70ad4a0ec1`, re-runs: offline `38782468148` SUCCESS (26 suites), ephemeral `38782468454` SUCCESS (**406 old +39 new =445**). Real MariaDB transactions and b_user locks tested with synthetic Bitrix facade/native evidence. These tests do NOT prove full native hooks, TOTP replay, real transaction permit or production readiness. No site/production files or accounts changed by this code increment.
+
 ## R20 (ACTUAL 2026-10-15): Production additive DDL completed
 
 **Было:** schema `eurasia_new` проверена read-only, шестёрка V5 tables отсутствовала; DDL-кандидат принят, production CREATE ещё не выполнялся.
