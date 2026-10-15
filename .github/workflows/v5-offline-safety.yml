@@ -137,6 +137,7 @@ jobs:
               echo "=== 2O. NATIVE USER PHONE FIELD / CORE USER UPDATE (SYNTHETIC) ==="
               php -n -l "$ROOT/tests/diagnostics/V5NativePhoneCoreUpdateBoundary.php"
               bash -n "$ROOT/tests/diagnostics/v5_native_phone_core_update_boundary_readonly.sh"
+              bash -n "$ROOT/tests/diagnostics/v5_native_phone_core_observed_snapshot_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/V5NativePhoneCoreUpdateBoundarySelfTest.sh"
               bash "$ROOT/tests/diagnostics/V5NativePhoneCoreUpdateBoundarySelfTest.sh" --synthetic-only
               echo "PASS: native phone default and pinned core Update diagnostic synthetic guards"
