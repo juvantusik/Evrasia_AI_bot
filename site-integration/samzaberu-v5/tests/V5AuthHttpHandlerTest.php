@@ -5,7 +5,7 @@ require_once __DIR__ . '/../src/V5AuthHttpHandler.php';
 
 use Evrasia\Samzaberu\V5\{
     V5LoginWorkflow, V5PasswordProofPort, V5TrustProofPort,
-    V5AtomicChallengePort, V5StrongSessionPort, V5AuthHttpHandler,
+    V5AtomicChallengePort, V5StrongSessionPort, V5AuthHttpHandler, V5SessionActionsPort,
     PasswordVerifiedAccount, MobileTrustAssessment, ChallengeKind,
     PendingLoginChallenge, ConsumedLoginChallenge, AuthenticatedV5Session,
 };
@@ -87,6 +87,28 @@ final class SessionPortStub implements V5StrongSessionPort
         return new AuthenticatedV5Session('test-access','test-refresh',['token_version'=>1]);
     }
 }
+final class V5SessionActionsStub implements V5SessionActionsPort
+{
+    public int $refreshCalls=0;
+    public int $pinCalls=0;
+    public bool $denyPin=false;
+    public bool $throwOnBackend=false;
+    public function rotateRefresh(string $refreshToken): AuthenticatedV5Session
+    {
+        $this->refreshCalls++;
+        if($this->throwOnBackend)throw new RuntimeException('private refresh state');
+        if($refreshToken!=='v5r_'.str_repeat('a',64))
+            throw new Evrasia\Samzaberu\V5\AuthenticationRejected('authentication_failed');
+        return new AuthenticatedV5Session('rotated-access','rotated-refresh');
+    }
+    public function readBonusPin(string $accessJwt): ?string
+    {
+        $this->pinCalls++;
+        if($this->throwOnBackend)throw new RuntimeException('private RestIS failure');
+        return (!$this->denyPin && $accessJwt==='a.b.c')?'00042':null;
+    }
+}
+
 $p = new PasswordPortStub();
 $t = new TrustPortStub();
 $c = new ChallengePortStub();
@@ -191,5 +213,49 @@ check(!str_contains(json_encode($r->body),'private provider exception'),'provide
 $r=$handler->handleJson('resendChallenge',j($resend));
 check($r->status===503 && $r->body===['error'=>'temporarily_unavailable'],'resend backend fail closed');
 
+
+$actions=new V5SessionActionsStub();
+$withActions=new V5AuthHttpHandler(new V5LoginWorkflow($p,$t,$c,$s),$actions);
+$validRefresh='v5r_'.str_repeat('a',64);
+$r=$withActions->handleJson('refresh',j(['refresh_token'=>$validRefresh]));
+check($r->status===200 && $r->body['access_token']==='rotated-access',
+    'optional staging refresh returns new V5 tokens');
+check($actions->refreshCalls===1,'exactly one server-backed refresh');
+$r=$withActions->handleJson('showBonusPin',j(['access_token'=>'a.b.c']));
+check($r->status===200 && $r->body['pin']==='00042' &&
+    !isset($r->body['refresh_token']),'protected PIN returned without extra SMS');
+check($actions->pinCalls===1,'exactly one protected PIN retrieval');
+foreach ([
+    ['refresh',['refresh_token'=>$validRefresh,'phone'=>'+79999999999']],
+    ['refresh',['refresh_token'=>42]],
+    ['showBonusPin',['access_token'=>'a.b.c','user_id'=>11]],
+    ['showBonusPin',['access_token'=>42]],
+] as [$action,$badBody]) {
+    check($withActions->handleJson($action,j($badBody))->status===400,
+        'refresh/PIN unexpected fields and types denied');
+}
+check($actions->refreshCalls===1 && $actions->pinCalls===1,
+    'invalid JSON shapes do not invoke sensitive backend');
+check($withActions->handleJson('refresh',j(['refresh_token'=>'v4_refresh']))->status===401,
+    'legacy V4 refresh denied without invoking backend');
+check($actions->refreshCalls===1,'legacy refresh does not reach backend');
+check($withActions->handleJson('showBonusPin',j(['access_token'=>'v4.jwt.invalid.extra']))->status===401,
+    'legacy or malformed access token rejected');
+check($actions->pinCalls===1,'malformed bearer cannot invoke PIN reader');
+$actions->denyPin=true;
+$r=$withActions->handleJson('showBonusPin',j(['access_token'=>'a.b.c']));
+check($r->status===401 && $r->body===['error'=>'authentication_failed'],
+    'missing PIN/unauthorized generic response');
+$actions->denyPin=false;
+$actions->throwOnBackend=true;
+$r=$withActions->handleJson('refresh',j(['refresh_token'=>$validRefresh]));
+check($r->status===503 && $r->body===['error'=>'temporarily_unavailable'],
+    'refresh backend outage fails closed without private details');
+$r=$withActions->handleJson('showBonusPin',j(['access_token'=>'a.b.c']));
+check($r->status===503 && $r->body===['error'=>'temporarily_unavailable'],
+    'PIN backend outage fails closed without private details');
+check(!str_contains(json_encode($r->body),'private RestIS failure'),
+    'private backend errors never reach client');
+
 printf("PASS: V5 auth JSON handler %d assertions\n",$pass);
-echo "API_ROUTER_STILL_DISABLED=YES\nSMS_SENT=NO\nJWT_CRYPTO_IMPLEMENTED=NO\n";
+echo "API_ROUTER_STILL_DISABLED=YES\nSMS_SENT=NO\nV5_HTTP_ROUTER_STILL_DISABLED=YES\n";
