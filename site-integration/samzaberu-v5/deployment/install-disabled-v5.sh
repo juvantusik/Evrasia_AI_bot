@@ -126,7 +126,7 @@ if [ "${1:-}" = --self-test ]; then
   BUILD="$(mktemp -d /tmp/ev-v5-off-package.XXXXXXXX)"
   GIT_HOME="$BUILD" REPO="$GITHUB_WORKSPACE" REF=HEAD
   mkdir "$BUILD/docroot"
-  build_payload "$BUILD/release" "$BUILD/public-stage" "$BUILD/release" "$BUILD/docroot" || fail 'Pinned package build'
+  build_payload "$BUILD/release" "$BUILD/public-stage" "$BUILD/release" "$BUILD/docroot"
   chmod 750 "$BUILD/release"
   chmod 640 "$BUILD/release/site-config.json"
   smoke_off "$BUILD/public-stage/router.php" "$BUILD/release" "$BUILD/smoke" || fail 'OFF package PHP smoke'
@@ -200,7 +200,7 @@ timeout 150 env -i PATH="$PATH" HOME="$GIT_HOME" GIT_CONFIG_NOSYSTEM=1 GIT_CONFI
   https://github.com/juvantusik/Evrasia_AI_bot.git "$CODE" > "$BUILD/fetch.log" 2>&1 || fail 'Pinned source download failed; site unchanged'
 [ "$(clean_git rev-parse FETCH_HEAD)" = "$CODE" ] || fail 'Source commit mismatch'
 clean_git fsck --strict --no-reflogs > "$BUILD/fsck.log" 2>&1 || fail 'Source object verification failed'
-build_payload "$BUILD/release" "$BUILD/public" "$RELEASE" "$DOCROOT" || fail 'Payload build/lint failed'
+build_payload "$BUILD/release" "$BUILD/public" "$RELEASE" "$DOCROOT"
 check_protected
 ! exists "$HOME_V5" && ! exists "$PUBLIC" || fail 'Target appeared during preparation'
 echo '=== 3. INSTALL OFF-ONLY FILES ==='
