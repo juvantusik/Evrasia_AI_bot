@@ -13,6 +13,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsOutboxTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsReconciliationTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsBridgeTest.php'
+      - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php'
   workflow_dispatch:
 
 permissions:
@@ -76,20 +77,21 @@ jobs:
           php8.3 -r 'exit(function_exists("pcntl_fork") && function_exists("proc_open") ? 0 : 1);'
           echo "PASS: PHP, pdo_mysql and independent-process test runtime ready"
 
-      - name: Run actual InnoDB session, SMS, receipt and bridge tests
+      - name: Run actual InnoDB session, SMS, bridge and locked-password tests
         shell: bash
         run: |
           set -Eeuo pipefail
           echo "=== 2. REAL EPHEMERAL MARIADB TEST ==="
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStrongSessionsTest.php
           php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStrongSessionsTest.php
-          echo "=== 2B. SMS OUTBOX, RECEIPT, BRIDGE AND OWNED COMMIT ==="
+          echo "=== 2B. SMS, BRIDGE AND LOCKED PASSWORD/TOTP PROOF ==="
           php8.3 -r 'exit(extension_loaded("sodium") ? 0 : 1);'
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsOutboxTest.php
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsReconciliationTest.php
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsBridgeTest.php
-          # The extension executes both earlier SMS suites once, then its bridge cases.
-          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsBridgeTest.php
+          php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php
+          # The extension executes earlier SMS/bridge suites once, then locked proof cases.
+          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php
           echo "=== 3. RESULT ==="
           echo "FINAL_STATUS=PASS"
           echo "FINAL_RC=0"

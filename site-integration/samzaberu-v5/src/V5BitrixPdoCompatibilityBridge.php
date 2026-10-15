@@ -250,6 +250,18 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             . 'WHERE delivery_id = ? AND challenge_id = ? FOR UPDATE',
     ];
 
+    /** Exact existing first-factor lookups and their locked recheck variants. */
+    private const AUTH_IDENTITY_READ_SQL = [
+        'SELECT ID, LOGIN, EMAIL, PASSWORD, ACTIVE, BLOCKED, PASSWORD_EXPIRED, '
+            . 'LOGIN_ATTEMPTS FROM b_user WHERE EMAIL = ? LIMIT 2',
+        'SELECT ID, LOGIN, EMAIL, PASSWORD, ACTIVE, BLOCKED, PASSWORD_EXPIRED, '
+            . 'LOGIN_ATTEMPTS FROM b_user WHERE LOGIN = ? LIMIT 2',
+        'SELECT ID, LOGIN, EMAIL, PASSWORD, ACTIVE, BLOCKED, PASSWORD_EXPIRED, '
+            . 'LOGIN_ATTEMPTS FROM b_user WHERE EMAIL = ? LIMIT 2 FOR UPDATE',
+        'SELECT ID, LOGIN, EMAIL, PASSWORD, ACTIVE, BLOCKED, PASSWORD_EXPIRED, '
+            . 'LOGIN_ATTEMPTS FROM b_user WHERE LOGIN = ? LIMIT 2 FOR UPDATE',
+    ];
+
     private static function assertStatementAllowed(string $sql): void
     {
         if ($sql === '' || strlen($sql) > 8000
@@ -261,6 +273,10 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             throw new RuntimeException('v5_bitrix_sql_shape_forbidden');
         }
         if ($sql === 'SELECT UNIX_TIMESTAMP()') {
+            return;
+        }
+        // No generic EMAIL/LOGIN predicate allowance or ACTIVE pre-filter.
+        if (in_array($sql, self::AUTH_IDENTITY_READ_SQL, true)) {
             return;
         }
         // Only the EXACT statements emitted by V5MySqlStrongSessionStore.
