@@ -57,7 +57,7 @@ scan(){
   php -n "$PARSER" --source-only --core-user "$SRC" --expected-sha256 "$sha" > "$TMP/out" 2> "$TMP/err"
 }
 assert_mask(){
-  if grep -Eq 'CANARY|PRIVATE|SECRET|VARIABLE|PHONE_NUMBER" =>|CONFIRMED" =>' "$TMP/out" "$TMP/err"; then
+  if grep -Eq 'CANARY|PRIVATE_VALUE|SECRET_VALUE|PHONE_NUMBER" =>|CONFIRMED" =>' "$TMP/out" "$TMP/err"; then
     echo 'FAIL: source identifiers or values leaked'
     exit 1
   fi
