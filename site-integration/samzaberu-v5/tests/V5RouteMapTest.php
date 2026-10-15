@@ -34,3 +34,4 @@ echo 'NATIVE_PROVIDERS_NOT_ACTIVATED=YES' . PHP_EOL;
 
 // Keep this regression in the existing approved offline suite, not a new workflow.
 require __DIR__ . '/V5ParallelHttpEntryTest.php';
+require __DIR__ . '/V5PrivatePilotConfigTest.php';
