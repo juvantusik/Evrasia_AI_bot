@@ -16,6 +16,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsBridgeTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlPilotCompositionTest.php'
+      - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php'
   workflow_dispatch:
 
 permissions:
@@ -117,7 +118,9 @@ jobs:
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlPilotCompositionTest.php
           # Earlier suites execute once, followed by composition and scope tests.
-          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlPilotCompositionTest.php
+          php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php
+          # This final script requires and executes the prior 406-check chain once.
+          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php
           echo "=== 3. RESULT ==="
           echo "FINAL_STATUS=PASS"
           echo "FINAL_RC=0"
