@@ -1,47 +1,41 @@
 # СамЗаберу V5 — checkpoint, 15 октября 2026
 
-Читать вместе с [START HERE](SAMZABERU_V5_START_HERE_2026-10-15.md). Исторические NEXT от 13 октября не актуальны.
+Читать вместе с [START HERE](SAMZABERU_V5_START_HERE_2026-10-15.md). Исторические NEXT от13октября не актуальны. Main не синхронизировать: push→build/publish.
 
-## АКТУАЛЬНО: SMS через Bitrix bridge и ACK только после COMMIT
+## АКТУАЛЬНО: current password + native MFA row recheck под общей блокировкой
 
-Последний code/test commit: **`8c395f0320f82a1c69bd06830dd229a087b358fb`**. Offline Actions **38740380225**, job **116440231373**, SUCCESS (26 approved suites). Real ephemeral MariaDB Actions **38740380099**, job **116440233787**, SUCCESS. Из прочитанного лога: **43 sessions + 117 SMS + 45 reconciliation + 63 bridge = 268 assertions**, combined SMS 225; FINAL_STATUS=PASS, FINAL_RC=0.
+**Code/test commit `c3f92ba3197157e1cd19f9aa21df3d353862279d`.** Offline [38743961486](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38743961486), job116452589733 — SUCCESS (26 approved suites и lint). Ephemeral MariaDB [38743961127](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38743961127), job116452588251 — SUCCESS. Из реально прочитанного лога: **43+117+45+63+61=329 checks**, combined SMS/bridge/locked-password286, FINAL_STATUS=PASS, FINAL_RC=0.
 
-Было два несовместимых стыка: существующий мост запрещал четыре SELECT по delivery_id; receipt UPDATE выполнялся без owned transaction и потому также запрещался мостом. Стало: четыре exact SMS read templates (hint/claim/receipt/consumption), generic query widening НЕ применялся; обычный и поздний provider outcome сохраняются единым private owned BEGIN→CAS UPDATE→COMMIT. Успех возвращается только после COMMIT, lookup квитанции остаётся до транзакции. Ошибочная чужая transaction не принимается и не откатывается.
+Новый файл `site-integration/samzaberu-v5/src/V5BitrixLockedPasswordTotpProof.php` реализует `V5LockedPasswordTotpChallengeProofPort`. Проверяет точную identity переданного PDO относительно configured connection, наличие caller transaction/MySQL/exception mode/InnoDB, берёт b_user lock, сверяет переданный AUTH_EPOCH, требует coverage===true. Внутренний `V5LockedBitrixAuthRows` выполняет unique EMAIL/LOGIN LIMIT2 FOR UPDATE и fresh b_sec_user read с блокировкой. `V5SiteAccountReader` сохраняет существующие active/blocked/expiry/loginAttempts/identity правила; `V5NativeTotpStatus` сохраняет консервативную интерпретацию MFA, fallback port в TOTP-only adapter всегда null. Текущий пароль проверяет существующий comparator port; native конфигурация должна использовать проверенный V5NativeBitrixPasswordComparator, не CI comparator.
 
-`V5EphemeralMySqlSmsBridgeTest.php` включает предыдущие SMS/reconciliation suites ОДИН раз, затем 63 assertions с реальным PDO MySQL под **синтетическим** Bitrix-shaped API facade. Проверены claim→SENT→одноразовое consume, late receipt, точные SQL templates/denials, настоящий rollback, отдельное connection для проверки видимого committed state, потерянный ответ выполненного COMMIT (никакого ложного success), native-foreign-scope/permit denial. `BITRIX_FACADE=SYNTHETIC_ONLY`; это НЕ настоящий Bitrix SqlHelper, native transactionDepth/ORM hook proof или приёмка staging.
+Stamp создаётся существующим `V5SecurityEventVersions::forLockedPasswordProof()` и включает user/current password hash/shared AUTH_EPOCH. До возврата epoch перепроверяется. Adapter не завершает caller transaction, не пишет users/MFA, не создаёт PHP login/cookie, не выдаёт JWT, не отправляет SMS и не проверяет authenticator code. Существующий TOTP issuer создаёт ticket только после своего COMMIT. Это **реализованный read/proof adapter**, НЕ installation/acceptance native hooks или TOTP replay.
 
-Compare `7f4de5a..8c395f0`: только bridge (+24), dispatch (+37/-13), новый test (+276), workflow (+6/-4). DDL/routers/V4/main/deployment не менялись. Локальный PHP lint и baseline blob guards PASS; 0/4→4/4 SMS template compatibility воспроизведена. Последующие HEAD с docs не означают нового code-test run.
+В `V5BitrixPdoCompatibilityBridge` добавлены16строк: четыре exact SELECT (существующие unlocked EMAIL/LOGIN reader и locked variants). Generic predicates/произвольные hash SELECT не добавлены. Новый test `V5EphemeralMySqlLockedPasswordTotpTest.php`215строк включает прежние SMS/bridge suites ОДИН раз; затем61assertion. Новая positive coverage/comparator/normalizer/login-policy и Bitrix facade синтетические. Native tables в CI сокращённые; fixture ALTER/CREATE выполняется только после env/точногоschema guards. Ничего из тестового DDL не предназначено для native Bitrix DB.
 
-**NEXT:** независимый Bitrix staging по готовому provisioning plan, затем существующий native preflight/отдельно разрешённые rollback/concurrency и настоящие providers. Не повторять закрытые production source-only probes. Provider SMS/RestIS/native adapters нельзя считать подключёнными.
+### Проверено новым тестом
 
-## ПРЕДЫДУЩИЙ CHECKPOINT: receipt reconciliation (история)
+Текущий password proof→существующий issuer→committed TOTP ticket с общим epoch; уникальность identity (включая неактивный дубликат); другой user с тем же паролем; active/block/expiry/attempts; configured inactive/HOTP/невалидный secret/deactivate/отсутствие TOTP; unknown/deny policy и hook coverage; неправильный epoch/connection/transaction; отсутствие настоящего native comparator без fallback. После реального SQL reset старый пароль не даёт новый ticket, новый даёт. Пока proof держит user lock, вторая независимая MySQL connection не может завершить password UPDATE (ожидаемый lock timeout1205); после окончания caller scope reset+epoch фиксируются, старый пароль снова отклоняется. SMS outbox count не увеличивается.
 
-- Branch: `feature/samzaberu-api-v5-auth-contract`, repo `juvantusik/Evrasia_AI_bot`.
-- Runtime implementation commit: `04915fab87abf21eec1649f75b053c9bb91619dc`.
-- Тогда последний code/test commit passed by BOTH workflows: **`dc2caed6af465aeb387490d20f1173005a80e3dd`**. Исправление после первого прогона — только сортировка бюджетных ключей fixture; runtime guard сохранён.
-- Offline [38736808948](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38736808948), job `116428073291`: SUCCESS, 26 suites, 78 PHP lint, FINAL_STATUS=PASS, FINAL_RC=0.
-- MariaDB [38736809040](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38736809040), job `116428073802`: SUCCESS. Sessions 43, прежний SMS suite 117, reconciliation 45, combined SMS 162; **всего 205**. TWO_PROCESS_SMS_RECEIPT_RACE=YES, RECEIPT_PROVIDER=SYNTHETIC_ONLY, ACTUAL_SMS_SENT=NO.
-- Первый MariaDB run `38736335930` на `04915fab` FAIL после прежних 160 PASS: Noncanonical SMS window ordering в новой fixture. Исправленный run supersedes её; история FAIL сохранена.
-- Compare `0ff80561db4654eeeeac159e762e21bda479e909..dc2caed`: 3 файла — store (+57/-2), новый integration test (+235), CI workflow (+8/-5). Нет V4, DDL или deployment.
-- Main был и остаётся без наших изменений, baseline `7c2e9f8e4501b92469bcdeea18f8340676ad52c9`; docs только feature из-за main push→build/publish.
+Compare `9c9ca7c..c3f92ba`: **ровно4файла**: proof+169, bridge+16, test+215, workflow+6/-4. Runtime schema proposals/V4/routes/deployment/main не менялись. Локальный PHP lint двух новых файлов PASS и их blob SHA совпали; полный regression/SQL выполнялся только GitHub CI. Doc-only HEAD после этого checkpoint — не новый code-test run.
 
-## Внутренний API и сохранённые ограничения
+## Инфраструктурный NEXT
 
-`V5MySqlSmsDispatchClaims::reconcileUnknownSent(string $deliveryId, string $providerIdempotencyKey): bool`: только UNKNOWN candidate; обязательный независимый receipt proof; финальная conditional UPDATE с точными key/state. Теперь UPDATE исполняется в собственной подтверждённой транзакции, true только после COMMIT. Повтор/конкурентный проигрыш/неподходящий status — false, НИКОГДА не разрешение повторной SMS.
+[Issue #76 — паспорт отдельного Bitrix+MySQL staging](https://github.com/juvantusik/Evrasia_AI_bot/issues/76) создана как явный blocker. Существующий `SAMZABERU_V5_STAGING_PROVISIONING_PLAN_2026-10-15.md` готов; подтверждённого test host/DB/VM identity нет. Production evrasia и eur-bot-01 исключены. Не интерпретировать новую issue как разрешение provisioning/оплаты/DDL/production.
 
-Нет envelope на выходе, новых outbox rows, изменения/возврата бюджета, TTL, auth epoch или phone stamp. Late receipt не оживляет challenge: consumer отдельно перепроверяет его актуальность и native policy. В receipt adapter запрещены send/resend. Отсутствующий/отрицательный/ошибочный attestor не даёт SENT. Чужой scope сохраняется для владельца.
+После Stage A допуска — существующий native depth preflight; Stage C отдельно согласованные synthetic DDL/rollback/concurrency. Затем проверить native comparator/normalizer/policy и новый adapter на настоящем Bitrix, фактические indexes/collation/duplicate handling/lock ordering, native TOTP replay и10securitywriterpaths/phone reconfirm events. SMS lifecycle/provider receipts и RestIS PIN остаются обязательными следующими блоками. Нельзя заменить native proof синтетическими callback=true.
 
-Старый `recordProviderOutcome(..., Sent)` по-прежнему только claimed→sent после независимого receipt. UNKNOWN→SENT возможен лишь через reconciliation. Claim не повторяет claimed/unknown; stale-claim reaper и универсального refund нет.
+## Предыдущие подтверждённые checkpoints — история
 
-## Статусы допуска
-
-| Статус | Значение |
+| Code/test commit | Доказательство |
 |---|---|
-| OFFLINE_TESTED | PASS |
-| REAL_EPHEMERAL_MARIADB_PASS | YES, 268 assertions |
-| REAL_BITRIX_STAGING_TESTED | NO |
-| REAL_SMS_PROVIDER_TESTED | NO |
-| REAL_RESTIS_PIN_TESTED | NO |
-| PRODUCTION_DEPLOYED | NO |
+| `8c395f0320f82a1c69bd06830dd229a087b358fb` | Runs38740380225/38740380099 SUCCESS,268checks: четыре exact outbox reads, обычный/поздний receipt ACK только после owned BEGIN→CAS→COMMIT;63 bridge tests с independent observer/commit faults/foreign scope. |
+| `dc2caed6af465aeb387490d20f1173005a80e3dd` | Runs38736808948/38736809040 SUCCESS,205checks: UNKNOWN→SENT reconciliation без send/resend/budget/TTL изменений;45новыхchecks и two-process CAS. |
+| `4a6ea09154b7bc6e8c34b60d2b37c003d85f0369` | Runs38724339404/38724339420 SUCCESS,160checks: independent SENT receipt gate. |
 
-HTTP SMS begin/resend по-прежнему выключены без native password-bound lifecycle. Public V5 не развёрнут; 503 — исторический baseline. Live HTTP/production SQL/SMS в этой итерации не выполнялись.
+Первый receipt run38736335930 на04915fab был FAIL (неотсортированные fixture budget keys), dc2caed исправил только fixture, не guard. Полные прежние редакции checkpoint сохранены в Git history9c9ca7c/7f4de5a. Исторические source-only handoff/registry документы не удалены, их NEXT не повторять.
+
+## Сохранённые ограничения / статусы
+
+OFFLINE_TESTED=PASS; REAL_EPHEMERAL_MARIADB_PASS=YES(329); REAL_BITRIX_STAGING_TESTED=NO; NATIVE_BITRIX_COMPARATOR_TESTED=NO(в новом integration CI); NATIVE_HOOK_COVERAGE=SYNTHETIC_ONLY; REAL_SMS_PROVIDER_TESTED=NO; REAL_RESTIS_PIN_TESTED=NO; PRODUCTION_DEPLOYED=NO.
+
+HTTP SMS begin/resend выключены без native password-bound lifecycle. Public V5 не активирован, HTTP503 — исторический baseline. Late receipt не оживляет challenge, не разрешает повторную платную SMS и не меняет quota; consumer отдельно перепроверяет native state. Main остаётся7c2e9f8e4501b92469bcdeea18f8340676ad52c9 по последнему live read. Production SQL/site bootstrap/реальные SMS/закрытые source-only audits не выполнялись.
