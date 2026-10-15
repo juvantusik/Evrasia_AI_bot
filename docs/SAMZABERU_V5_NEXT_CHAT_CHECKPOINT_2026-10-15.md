@@ -1,41 +1,38 @@
-# СамЗаберу V5 — checkpoint private pilot bootstrap
+# СамЗаберу V5 — checkpoint перед выключенной установкой
 
-15 октября 2026. Читать вместе с START HERE и integration decisions. Новая VM не требуется: пользователь выбрал V5 рядом с V4 на существующем `evrasia`.
+15 октября2026. **Следующий ожидаемый ввод — результат INSTALL_DISABLED_ONLY блока.** Read-only layout preflight уже получен и PASS. Не повторять его и не просить VM: V5 параллельно V4 на существующем evrasia.
 
-## Последний подтверждённый код
+## Подтверждённый серверный факт
 
-**`0caa0248c783188939398a71543ba740f064bb90`**.
+Оператор выполнил previous layout block: root/evrasia, UID/GID site_evrasia1005:1005, FINAL_STATUS=PASS/FINAL_RC=0. Docroot `/home/site_evrasia/web/evrasia.spb.ru/public_html`; private sibling существует. Private/samzaberu-v5 и public_html/api/v5 на момент проверки отсутствуют. api/.htaccess отсутствует. CLI PHP8.3.21; pool8.3 конфигурационно использует site_evrasia и уже допускает private в open_basedir. Никакой DB/Bitrix/HTTP проверки не было.
 
-| Проверка | Результат |
-|---|---|
-| Offline run38750965561 / job116476933149 | SUCCESS; прочитан лог:86 PHP lint,26 approved suites,198 прежних entry и59 новых private-pilot assertions; FINAL_STATUS=PASS, FINAL_RC=0 |
-| Ephemeral run38750966026 / job116476934579 | SUCCESS, все шаги completed. Неизменённый DB suite329; новые59 — не MariaDB checks. Новый полный DB лог не выгружался, состав329 ранее подтверждён логами и не менялся. |
-| Локально | Четыре новых PHP файла прошли lint; большие blobs сверены с локальным Git SHA. Полный suite локально не запускался: GitHub DNS недоступен. |
+Контрольные SHA256, использованные installer:
+- root.htaccess `81544afa0396c6778f263d9b250105913aae9d3621cbaaf0e3cf1e4f3a297b95`;
+- api/v4/.htaccess `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3`;
+- api/v4/router.php `3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50`.
 
-Compare2bec823b..0caa0248: src/V5PrivatePilotConfig.php (+144), api/v5/site.php (+22), deployment/public-router.php (+31), deployment/site-config.example.json (+6), tests/V5PrivatePilotConfigTest.php (+165), RouteMapTest.php (+1). Рабочие transport/router/providers/V4/schema/workflows не менялись.
+## Подготовленный installer / CI
 
-## Закрытый стык конфигурации
+**Installer/test commit c37ab9959bb13dae49f9c1a2c4ddda0b06905c69**. Script path `site-integration/samzaberu-v5/deployment/install-disabled-v5.sh`, SHA256 `3fca39d399b8d60d865fc6a886e589ccd8c3052ae702c66227650098e9577e5a`. Его содержимое совпало с локально linted blob2a0174eb6497d1468ff1f411fe4e6727bce63a8c.
 
-Private loader читает только site-config.json и фиксированный site-factory.php из release вне docroot. Нет включения файла из HTTP input. Только off/pilot; для pilot нужны SHA256 отдельного случайного ключа, срок до24часов, 1–16 точных peer IP, безопасные права/владелец/отсутствие ссылок. Private PHP factory не исполняется при чтении JSON. Перед её вызовом перепроверяются файлы, permissions и срок.
+Offline run38754541007/job116489359396 completed/success; ephemeral run38754541037/job116489360214 completed/success. Новый отдельный package step и прежний DB regression success. Полные новые job logs не выгружались; шаги проверены. Состав прежних26offline/329DB не менялся; package tests не являются дополнительными DB assertions.
 
-Public shim template → private api/v5/site.php → существующие router/entry/transport. Site entry удаляет старую global factory и pilot header перед native кодом. Off/invalid/denied остаются503 до body I/O/native bootstrap; допущенный запрос ещё проходит все прежние metadata/body/auth проверки. Empty transport в тесте не выпускает токены и остаётся503.
+CI строит пакет из закреплённых src/API blobs, выполняет будущий public shim→private site→router в OFF режиме, проверяет атомарную публикацию на временном filesystem, отказ перезаписи существующей цели и перенос назад при откате. Default installer также проверен на отказ на неверном host. Это НЕ исполнение production install path, ownership/FPM/backup/HTTP/native acceptance на evrasia. Полный положительный пакет локально не запускался (GitHub DNS недоступен); локально bash syntax и host denial.
 
-Pilot key допускает только запрос. Не является логином, TOTP, trust, native coverage или разрешением действий с аккаунтом. Ограничение на согласованные тестовые аккаунты должно быть реализовано native factory отдельно. Ключ не отправлять в URL/логи/репозиторий/публичную app-сборку; production key не генерировался.
+Первый installer71d4a2d исправлен c37ab995 двумя строками: build_payload вызывается без `|| fail`, сохраняя Bash errexit внутри helper. Приложение, V4 и SQL не менялись. Diff984cbc2..c37ab995:257строк installer и15строк существующего workflow.
 
-Новые59tests включают permissions/symlink/hardlink/path/expiry/config-change/peer/TLS/header denials и независимые PHP-процессы с фактическим public shim/site/router. Это CLI, не реальный Apache/Nginx/TLS/Bitrix тест. Локальный отказной тест Bash-блока также не является запуском на evrasia.
+## Точный режим серверного блока
 
-## Следующий шаг, который уже подготовлен
+Runtime payload **0caa0248c783188939398a71543ba740f064bb90**, а НЕ installer commit. Private release `<private>/samzaberu-v5/releases/<payloadSHA>`, public `/api/v5` содержит лишь shim и versioned.htaccess. Установка root:1005; private0750/0640, public0755/0644. Конфигурация строгоoff, нет site-factory.php/pilot key/DB settings. Не устанавливаются тесты/DDL, не вызывается SMS/RestIS, не меняются root/V4 rewrites или сервисы.
 
-В текущем чате дан один read-only installation-layout block для `evrasia`/root. Известны site owner `site_evrasia`, docroot `/home/site_evrasia/web/evrasia.spb.ru/public_html`, private parent из истории `/home/site_evrasia/web/evrasia.spb.ru/private`. Блок проверяет только точные пути, владельцев, entry/rewrite SHA и PHP/FPM параметры размещения. Сайт, БД и native PHP не меняет/не исполняет. **Ожидается вывод этого блока**, не новый пересказ истории и не адрес VM.
+Guards: точные root/host/UID/GID/PHP/path/source pins и current root/V4 SHA; backup с tar compare; Git fixed commit с fsck без checkout/credentials/hooks; lint всех устанавливаемыхPHP; copy compare до публикации; OFF CLI smoke от site_evrasia до/после rename; manifest. Повторный неизменённый запуск ALREADY_APPLIED. При partial/drift остановка, не перезапись. Отдельный rollback.sh в root backup и ограниченный автоматический quarantine нового publicdir при post-check failure. Private package сохраняется для диагностики.
 
-После вывода: точный план установки выключенного release+shim с backup/guards/rollback; V4/root rewrite не заменять. `site-factory.php` с настоящей native composition пока отсутствует. Активировать pilot только после native prerequisites и явного допуска. DDL/платные SMS/account mutations отдельно, без переноса synthetic CI schemas на production.
+**HTTP_TESTED=NO, BITRIX_BOOTSTRAP=NO, DATABASE_CONNECTION=NO.** CLI503 не выдавать за фактический HTTP503 на сайте. Родительские directories/open_basedir/globalPHP/web rewrite ещё не являются полностью аттестованным web boundary.
 
-## История и остающиеся ограничения
+## NEXT после вывода
 
-Предыдущий code029aaff (run38748326281/38748326331) остаётся историческим entry checkpoint:198 offline +329 DB. После него doc-only2bec823b также запустил offline38749036057; это не новый код. Ещё раньше c3f92ba329,8c395f0268,dc2caed205,4a6ea09160. Старый неуспешный receipt fixture run не стирать.
+Разобрать результат; приPASS сохранить фактический BACKUP_DIR/ROLLBACK_SCRIPT и state INSTALLED_DISABLED. Затем только целевая web routing/TLS/SAPI проверка и реальная native composition. ПриFAIL учитывать фазу и quarantine, не запускать блок повторно вслепую при partial install. Не включать пилот с пустым transport/фиктивным native proof.
 
-Native TOTP-code/replay, successful phone verification/same-number event,10-path AUTH_EPOCH hooks,strong trust,SMS lifecycle/provider/receipt и RestIS не закрыты. Старый native-staging permit не отключён; нужен подходящий проверенный shared-site scope. Pending V5BitrixLockedTotpFactor не в src/CI; ранее заблокированный payload не повторялся.
+Native TOTP replay,10-path epoch hooks, phone success/reconfirm, strong trust, SMS lifecycle/provider и RestIS остаются незавершёнными. Размещение на shared host согласовано, отказные CI scripts на production запрещены. Pending TOTP draft не в src/CI. История подробных компонентов — START HERE и предыдущая редакция984cbc2.
 
-Main baseline7c2e9f8e4501b92469bcdeea18f8340676ad52c9 не менялся. Новые doc-only HEAD не приравнивать к code-test commit; API README может запускать offline workflow по paths.
-
-OFFLINE_TESTED=PASS; REAL_EPHEMERAL_MARIADB_PASS=YES(329); PRIVATE_PILOT_BOOTSTRAP_OFFLINE=PASS(59); REAL_SITE_PARALLEL_ACCEPTANCE=NOT_RUN; PRODUCTION_DEPLOYED=NO; ACTUAL_SMS_SENT=NO. HTTP503 — исторический baseline.
+**Текущий фактический статус до ответа оператора:** LAYOUT_PREFLIGHT=PASS; OFF_INSTALLER_CI=PASS; V5_OFF_INSTALLATION=PREPARED_NOT_CONFIRMED; REAL_SITE_PARALLEL_ACCEPTANCE=NOT_RUN; PRODUCTION_DEPLOYED=NO. Main7c2e9f8e4501b92469bcdeea18f8340676ad52c9 неизменён. Следующий doc-only HEAD не новое тестирование приложения.

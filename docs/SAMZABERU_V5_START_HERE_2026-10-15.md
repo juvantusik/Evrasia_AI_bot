@@ -1,70 +1,75 @@
 # Evrasia AI Bot / СамЗаберу V5 — START HERE / 15 октября 2026
 
-**Главная точка продолжения. Новый чат — не новый проект.** Читать этот файл, текущий `SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-15.md` и `SAMZABERU_V5_INTEGRATION_DECISIONS_2026-10-15.md`. Предыдущая полная редакция сохранена в commit `2bec823b26087446601c59160dcb567cb2bb02de`.
+Главная точка продолжения. Читать этот файл, текущие `SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-15.md` и `SAMZABERU_V5_INTEGRATION_DECISIONS_2026-10-15.md`. Полная предыдущая редакция — Git commit `984cbc207a35309a6e70c24a0ce38ffa91d589d8`. Не повторять закрытые исследования.
 
-## 1. Подтверждённое решение о размещении
+## 1. Размещение уже согласовано
 
-**Отдельной VM / нового сервера не будет. V5 работает ПАРАЛЛЕЛЬНО V4 на существующем Bitrix-сервере `evrasia`.** Контейнерная копия сайта, второй MySQL instance и второй набор клиентов не обязательны. Не просить новую VM и не возвращать отменённый инфраструктурный blocker.
+**V5 подключается параллельно V4 на существующем Bitrix-сервере `evrasia`. Отдельной VM не будет.** Второй MySQL instance, контейнерная копия сайта и второй набор клиентов не обязательны. V4 сохраняется; V5 получает отдельные routes/code/config/keys/tokens/service tables. Аккаунты Bitrix и бизнес-данные общие, V5-таблицы могут находиться в существующей БД. Бот `eur-bot-01` не переносится. Issue76 — подключение V5 рядом с V4, не выдача VM.
 
-Цель: `/api/v4/…` сохраняется; `/api/v5/…` подключается рядом. Аккаунты и бизнес-данные общие; ключи, токены, служебные таблицы, конфигурация и выключатель V5 отдельные. Бот на `eur-bot-01` не переносится. Размещение V5-таблиц в существующей БД допустимо, но миграция ещё НЕ выполнена.
+Общая БД не отменяет актуальность security events/epoch/replay. Конкретные production DDL, SMS/платежи и account mutations требуют отдельного допуска. CI-only/fault scripts нельзя запускать на рабочей БД и нельзя снимать их guards ради такого запуска.
 
-Общая БД сохраняет требования к security events: смена пароля, MFA, телефона, блокировка и logout через сайт/V4 должны корректно инвалидировать V5. Решение о размещении не разрешает произвольные production DDL, сбросы аккаунтов, платные SMS или fault injection. Конкретные изменения требуют точной цели, backup, допуска, post-check и rollback. Старые CI-only/fault guards не отключать.
+## 2. НОВЫЙ факт с сервера: layout preflight PASS
 
-## 2. Актуальный код и CI
+Оператор прислал результат уже выданного read-only блока: HOST=evrasia, USER=root, FINAL_STATUS=PASS, FINAL_RC=0, LAYOUT_PREFLIGHT_ONLY=YES. Повторно этот блок не запрашивать. Это проверка размещения, не native Bitrix или HTTP acceptance.
 
-Repo `juvantusik/Evrasia_AI_bot`, branch **`feature/samzaberu-api-v5-auth-contract`**.
+- Unix site account `site_evrasia`: UID=1005, GID=1005.
+- Base `/home/site_evrasia/web/evrasia.spb.ru`: UID/GID1005:1005, mode751.
+- Docroot `<base>/public_html`: UID/GID1005:33, mode751.
+- Private `<base>/private`: UID/GID1005:1005, mode751.
+- `<private>/samzaberu-v5` и `<docroot>/api/v5` **отсутствуют на момент preflight**; `api/.htaccess` также отсутствует.
+- CLI `/usr/bin/php8.3`=8.3.21; также8.4.7 и8.1.32. Для установки выбран8.3.21.
+- `/etc/php/8.3/fpm/pool.d/evrasia.spb.ru.conf`: user/group site_evrasia, socket `/run/php/php8.3-fpm-evrasia.spb.ru.sock`; open_basedir уже содержит private. FPM/global/web-server настройки не изменялись. Это конфигурационное evidence, не attestation живого web SAPI/TLS.
+- Root `.htaccess`: SHA256 `81544afa0396c6778f263d9b250105913aae9d3621cbaaf0e3cf1e4f3a297b95`,2307bytes,1005:1005,644.
+- `api/v4/.htaccess`: SHA256 `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3`,398bytes,1005:1005,644.
+- `api/v4/router.php`: SHA256 `3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50`,8909bytes,1005:1005,644.
 
-**Последний code/test commit с двумя успешными CI: `0caa0248c783188939398a71543ba740f064bb90`.**
+Проверка не выполняла site PHP/Bitrix/SQL/HTTP/SMS. Вывод терминала в начале вставки визуально повреждён, но структурированный результат целевого блока завершён PASS; нет оснований заново повторять весь preflight.
 
-- Offline Actions **38750965561**, job **116476933149**: SUCCESS. Лог прочитан: **86 PHP lint, 26 approved suites, прежние 198 parallel-entry checks и 59 новых private-pilot checks**, FINAL_STATUS=PASS, FINAL_RC=0. Deployment shim дополнительно исполнялся дочерними PHP-процессами; он вне src/tests/api lint manifest.
-- Ephemeral MariaDB Actions **38750966026**, job **116476934579**: SUCCESS, все шаги завершены. Состав DB suite не менялся: **43+117+45+63+61=329 проверок**. Новые 59 относятся к offline, не к DB. В этой итерации проверен статус MariaDB job; счётчики неизменённого набора ранее подтверждены его логом, новый полный MariaDB лог повторно не выгружался.
-- Локально lint четырёх новых PHP-файлов PASS; SHA двух загруженных больших blobs совпали с локально проверенными файлами. Полный локальный suite не запускался: git clone недоступен из-за DNS. Полная регрессия выполнена GitHub Actions.
-- Compare `2bec823b..0caa0248`: пять новых файлов (private loader, site entry, public shim template, off JSON example, test) и одна строка подключения test в RouteMap suite. Ни V4, ни действующий router/transport, ни native providers, ни SQL schemas, ни workflow не менялись.
-- Более поздние HEAD с документацией не являются новым кодовым инкрементом. API README входит в watched paths и может вызвать offline CI даже при doc-only commit; это не новые функциональные изменения.
-- Main по последнему live read: `7c2e9f8e4501b92469bcdeea18f8340676ad52c9`. Не трогать: push main вызывает build/publish latest без paths-фильтра. PR этой feature при проверке отсутствовал.
+## 3. Текущий installer и доказательства
 
-## 3. Новый private pilot bootstrap — готов в feature, НЕ установлен
+Repo `juvantusik/Evrasia_AI_bot`, feature `feature/samzaberu-api-v5-auth-contract`.
 
-Файлы относительно `site-integration/samzaberu-v5/`:
+**Последний installer/test commit: `c37ab9959bb13dae49f9c1a2c4ddda0b06905c69`.**
+- Offline Actions **38754541007**, job116489359396: completed/success.
+- Ephemeral MariaDB + OFF-package Actions **38754541037**, job116489360214: completed/success. Новый шаг `Verify disabled deployment package without site access` и прежний DB regression завершились success. Полные новые job logs не выгружались; статусы всех шагов проверены. Состав прежних26offline/329DB тестов не менялся, новые проверки пакета не добавляются к329.
+- Новый `site-integration/samzaberu-v5/deployment/install-disabled-v5.sh` и15строк existing ephemeral workflow. Приложение `src`, PHP entry, V4, proposed SQL и native providers не менялись.
+- Installer SHA256 **`3fca39d399b8d60d865fc6a886e589ccd8c3052ae702c66227650098e9577e5a`**, blob `2a0174eb6497d1468ff1f411fe4e6727bce63a8c`. Сверен с локально linted файлом. Локальные bash syntax/wrong-host denial PASS; локальный полный пакет не выполнялся, GitHub DNS в контейнере недоступен.
+- Первый installer commit71d4a2d исправлен c37ab995: build_payload вызывается без `|| fail`, чтобы Bash errexit не отключался внутри сборки. Не ослаблялись host/source guards. Оператору даётся только окончательный pinned c37ab995.
 
-- `src/V5PrivatePilotConfig.php`: bounded JSON-конфигурация из фиксированного private release вне docroot. Только mode=pilot, отдельный SHA256 случайного pilot key, время окончания не дальше 24 часов, 1–16 точных peer IP. Mode=off, отсутствие/ошибка данных, небезопасные права, ссылки или истёкший срок дают отказ. Конфигурация не запускает PHP factory.
-- `api/v5/site.php`: проверяет допуск до передачи запроса existing router; не наследует ранее зарегистрированную global factory; удаляет pilot header из PHP $_SERVER до native загрузки. Отклонённый запрос остаётся503 без body read/Bitrix bootstrap.
-- `deployment/public-router.php`: **шаблон**, не установленный public файл. Будущий guarded installer подставляет два фиксированных пути: private release и docroot. Он должен подключать private `api/v5/site.php`, не обходить его прямым подключением package router.
-- `deployment/site-config.example.json`: только выключенный пример, не реальные credentials.
-- `tests/V5PrivatePilotConfigTest.php`: 59 checks через прежний RouteMap suite, включая реальные дочерние PHP executions public shim → site.php → router.php.
+**Устанавливаемый runtime payload остаётся `0caa0248c783188939398a71543ba740f064bb90`.** Не путать его с installer commit. В новых CI проверяются эти же закреплённые src/API blobs. Более поздний doc-only HEAD не новый runtime или deployment.
 
-Pilot header `X-Evrasia-V5-Pilot` — только технический допуск к пилотным запросам. Он **не заменяет** логин/пароль, TOTP/SMS/trust, epoch/coverage или согласование конкретных тестовых аккаунтов. В БД ничего не создаёт. Production key не генерировался. Не включать такой ключ в публичную сборку приложения, URL, GitHub или логи. Behind-proxy allowlisted peer не считается личностью: ключ остаётся обязательным; Forwarded/X-Forwarded-For не используются для допуска, HTTPS не берётся из X-Forwarded-Proto.
+## 4. Что делает подготовленный серверный шаг
 
-Конфигурация и factory заново проверяются перед запуском factory: смена mode/hash/permissions/срока запрещает её вызов. Это не откат уже начавшегося запроса и не защита от враждебного владельца PHP-файлов; нужны trusted immutable releases/атомарное переключение и правильные web aliases/права предков.
+Оператору выдан один Bash-блок: скачивает installer по immutable c37ab995, проверяет SHA256 и bash -n, затем запускает на root/evrasia. **Это уже file WRITE, а не очередной read-only аудит; фактический результат установки пока НЕ получен.**
 
-**`site-factory.php` с настоящей native composition всё ещё НЕ реализован и НЕ установлен.** Он должен возвращать существующий `V5HttpTransportBoundary` с проверенными providers. Тестовый empty transport остаётся503 и не является готовым backend. Настоящий pilot не включался. Apache/Nginx/TLS и live coexistence этими CLI-тестами не проверены. Подробный контракт: `api/v5/README.md`.
+Installer проверяет host/UID/GID/PHP, canonical paths, отсутствие V5 targets, приведённые выше root/V4 SHA, отсутствие shared api rewrite и filesystem для атомарной публикации. Создаёт root-only backup трёх защищённых файлов, сравнивает tar с оригиналами. Получает immutable runtime commit в bare Git без credentials/helpers/hooks и без checkout; проверяет объекты и src/API pins. На сайт переносит только runtime PHP и V5 rewrite, off config и CODE_COMMIT. Тесты, SQL schemas, настоящая factory, pilot key и credentials не устанавливаются.
 
-## 4. Принятая бизнес-логика — без изменений
+Private release: `<private>/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90/`, root:1005, directories0750/files0640. Public `/api/v5` содержит только router.php и .htaccess, root:1005,0755/0644. Существующие родительские права/open_basedir/FPM/nginx/Apache/root/V4 rewrite не меняются. Private/files вначале готовятся и сверяются, public dir публикуется одним rename на том же filesystem. Разные filesystem для /root backup и /home допускаются: private payload предварительно копируется и побайтово сравнивается.
 
-Логин/пароль без CUser::Login и V4-cookie; текущие active/block/expiry/Anti-Fraud и лимиты попыток. Native TOTP имеет приоритет без SMS fallback при ошибке/unknown. Без TOTP допускается только сильный V5 trust, не слабый V4. Без обоих — password-bound SMS на подтверждённый номер аккаунта, без номера с клиента. После сильного входа PIN без повторной SMS.
+До/после публикации новый OFF entry выполняется **через CLI PHP -n от site_evrasia**, проверяя точный503 JSON, отсутствие Bitrix/CUser и посторонних includes. **Не делает HTTP-запроса**, не запускает native code, не подключает БД и не перезагружает сервисы. Эти проверки НЕ доказывают актуальные web rewrite/TLS/global PHP directives.
 
-Сохраняются десять SMS rate/стоимостных окон, cooldown/лимиты ошибок, HMAC и encrypted outbox, binding к identity/device/phone/epoch, тариф/currency/idempotency. Claimed/unknown не отправлять автоматически повторно. SENT требует независимого receipt; late receipt не оживляет challenge и не меняет бюджет. PHONE_EVENT_VERSION меняется и при повторе того же E.164; AUTH_EPOCH атомарен с native security mutations. V4/UI/API-контракты не перепроектировать.
+Сохраняет hash manifest и guarded rollback.sh в root backup. Откат перемещает только созданный public V5 каталог обратно в private, не удаляет БД и не восстанавливает чужие изменения V4. При собственной post-publish ошибке пытается такой же откат только при совпадении inode/hashes и двух ожидаемых файлов; при drift останавливается. Повторный запуск проверяет manifest и возвращает ALREADY_APPLIED без перезаписи; частичную/изменённую установку автоматически не перетирает.
 
-## 5. Ближайший шаг на существующем сервере
+## 5. Ближайшая точка продолжения
 
-Владелец сайта из истории — `site_evrasia`; docroot `/home/site_evrasia/web/evrasia.spb.ru/public_html`. В истории также есть private parent `/home/site_evrasia/web/evrasia.spb.ru/private/`. Использовать этот известный путь как цель проверки размещения, не придумывать новую инфраструктуру. Восстановленная история указывает nginx:80/443 → Apache:8080 и несколько PHP-FPM версий; это исторические факты, не новая аттестация текущего web runtime.
+**Ожидается вывод INSTALL_DISABLED_ONLY блока**, а не повтор layout preflight, новая VM или повторное объяснение требований. До результата: `V5_OFF_INSTALLATION=PREPARED_NOT_CONFIRMED`, `PRODUCTION_DEPLOYED=NO`.
 
-Подготовлен в текущем чате **один** read-only Bash-блок перед установкой: root/host/docroot/V4 guards, метаданные private targets, SHA только entry/rewrite файлов, версии CLI PHP без ini и безопасные поля конкретного FPM pool. Никаких CUser/PhoneAuth probes, подключения БД, загрузки Bitrix, HTTP/SMS или изменения сайта. Локально bash -n и отказ на неправильном host проверены. Результат с evrasia ещё НЕ получен; не выдавать его за live preflight PASS.
+После реального PASS зафиксировать фактический backup/release/manifest, затем точечно проверить актуальную маршрутизацию/web runtime и выключенный HTTP path. Root/V4 rewrite не заменять наугад. Native `site-factory.php` и backend integrations остаются отдельной задачей. Нельзя считать файлыOFF работающей авторизацией и нельзя включать flag вместо законченных native providers.
 
-После результата — подготовить конкретную установку **выключенного** private release + V5 public shim с backup/проверкой/rollback и без изменения V4/root rewrite. Не включать pilot без реальной factory и необходимых native proof. Additive V5 DDL — отдельное согласованное действие с backup в существующей БД, не запуск CI fixtures на production. Не повторять эту подготовку и не заказывать VM.
+## 6. Принятая бизнес-логика и незавершённое
 
-## 6. Реальные незавершённые интеграции
+Логин/пароль проверяются без CUser::Login/V4-cookie. Сохраняются active/block/expiry/Anti-Fraud и ограничения попыток. При native TOTP после пароля обязательный authenticator code, без SMS fallback при ошибке/unknown. Без TOTP — только сильный V5 trust; слабый V4 trust не подходит. Без обоих — password-bound SMS challenge на подтверждённый телефон аккаунта, без номера с клиента. После сильного входа PIN без второй SMS.
 
-Native TOTP-code/replay, полное security-event coverage, successful phone verification/reconfirmation writers, strong trust, SMS password-bound begin/resend, paid provider/receipt/tariff и RestIS PIN ещё не приняты/не полностью подключены. Production-appropriate transaction permit нужен отдельно от старого CLI staging/fault permit; его guards не снимать механически. Ограничение тестовых аккаунтов остаётся отдельным условием native factory.
+Сохраняются десять SMS rate/стоимостных окон, cooldown/attempt limits, HMAC/encrypted outbox, user/device/phone/epoch bindings. Claimed/unknown не отправлять автоматически повторно; SENT требует независимой квитанции. Late receipt не оживляет challenge и не меняет бюджет. PHONE_EVENT_VERSION меняется и при reconfirm того же E.164; AUTH_EPOCH атомарен с native mutations.
 
-`V5BitrixLockedPasswordTotpProof` готов как fresh BEGIN recheck с прежним epoch HMAC. `V5BitrixLockedTotpFactor` из pending-документа — неподтверждённый черновик, не в src/CI. Предыдущий заблокированный тест не повторялся и не включён в текущий инкремент.
+Не закрыты: native TOTP-code/replay, полное10-path security-event coverage, successful phone confirmation/reconfirmation writer, strong trust, SMS begin/resend lifecycle и реальный paid provider/receipt/tariff, RestIS PIN, additive V5 DDL, production-appropriate transaction permit, реальные ограничения пилотных аккаунтов. Shared-host размещение эти гарантии не отменяет. `V5BitrixLockedPasswordTotpProof` — готовый BEGIN read adapter; `V5BitrixLockedTotpFactor` в pending-документе остаётся черновиком вне src/CI. Заблокированный ранее payload не повторялся.
 
-## 7. История и правила продолжения
+Private pilot loader/header — только допуск к запросам, не account auth/allowlist/native coverage. В текущей установке mode=off, factory отсутствует, pilot не активируется. Подробности текущих компонентов см. API README и предыдущий START HERE984cbc2.
 
-Закрытые production исследования не повторять. Исторические handoff/checkpoint/STRUCTURE_REGISTRY, phone-native-writer и MFA-recovery документы сохранены. CUser delete/add не доказаны как successful CONFIRMED writer; SHA-drift user.php не объяснён, baseline не утверждать автоматически. Native recovery/useCode/save/delete/background mutations не объявлять атомарными по одному return true.
+## 7. История и ограничения
 
-Исторические code checkpoints: `029aaff` (198 entry checks,329 DB), `c3f92ba` (329 DB), `8c395f0` (268), `dc2caed` (205), `4a6ea09` (160). Первый receipt run38736335930 FAIL из-за fixture ordering сохранён в истории.
+Закрытые CUser/PhoneAuth/OTP-recovery source-only исследования не повторять. CUser delete/add не доказаны как successful CONFIRMED writer; SHA-drift user.php не объяснён, не утверждать новый baseline и не исправлять core автоматически. Все подробные handoff/STRUCTURE_REGISTRY/native mutation документы сохранены.
 
-**Статусы:** OFFLINE_TESTED=PASS; REAL_EPHEMERAL_MARIADB_PASS=YES(329); PRIVATE_PILOT_BOOTSTRAP_OFFLINE=PASS(59); REAL_SITE_PARALLEL_ACCEPTANCE=NOT_RUN; PRODUCTION_DEPLOYED=NO. HTTP503 — исторический baseline, нового HTTP-теста не было. Production/V4/SQL/SMS этой работой не менялись.
+Runtime история:0caa0248 (59private-pilot/198entry/329DB),029aaff (198entry/329DB),c3f92ba (329DB),8c395f0 (268),dc2caed (205),4a6ea09 (160). Main при live read остаётся `7c2e9f8e4501b92469bcdeea18f8340676ad52c9`; его push вызывает build/publish latest, docs туда не переносить. Feature code/doc commits не deploy автоматически.
 
-Серверные операции: один guarded copy-paste block, syntax check, FINAL_STATUS/FINAL_RC, без secrets/PII, SSH не закрывать. Безопасные feature/CI шаги выполнять самостоятельно. Приоритет: production fact > live feature > реальные испытания > актуальная документация > старые обсуждения.
+Серверные операции: один guarded Bash block, syntax check, FINAL_STATUS/FINAL_RC, без секретов и лишнего PHP/SQL/HTTP. Безопасные feature/CI шаги выполнять самостоятельно; production facts > live code > реальные тесты > актуальные docs > старые обсуждения.

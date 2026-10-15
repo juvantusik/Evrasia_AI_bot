@@ -1,63 +1,43 @@
-# V5 — актуальный реестр интеграционных решений, 15 октября 2026
+# V5 — реестр интеграционных решений, 15 октября 2026
 
-Дополнение к историческому STRUCTURE_REGISTRY. Полная предыдущая редакция R1–R8 сохранена в Git commit `2bec823b26087446601c59160dcb567cb2bb02de`. Новый инкремент — R9. Текущие решения читать через START HERE, а не устаревшие NEXT.
+Актуальное дополнение к STRUCTURE_REGISTRY. Полная предыдущая редакция R1–R9 сохранена в commit `984cbc207a35309a6e70c24a0ce38ffa91d589d8`. Новая запись — R10. Детали предыдущих компонентов доступны в Git history и API README.
 
-## R9. Private pilot configuration и public shim — реализовано, не развёрнуто
+## R10. Layout подтверждён; подготовлена выключенная установка
 
-**Было:** самостоятельный PHP entry уже подключал existing transport через private server-side Closure, но не было готового loader/config формата, private entry и шаблона public shim с техническим допуском пилота.
+**Было:** private pilot bootstrap готов, но точное размещение, Unix owner и PHP на существующем evrasia ожидали одного read-only блока.
 
-**Стало:** V5PrivatePilotConfig читает bounded site-config.json из фиксированного private release вне docroot; mode off/pilot, SHA256 отдельного случайного operational key, срок до24часов и1–16 точных peer IP. Проверяет типы/права/владельца/отсутствие symlink/hardlink, не запускает native PHP при чтении. Site entry проверяет ключ+peer+server HTTPS до передачи запроса router, удаляет ранее зарегистрированную factory и pilot header из PHP server array. Factory — фиксированный site-factory.php, вызывается лениво после existing request checks; её файл/config/expiry проверяются повторно. Public shim имеет только fixed release/docroot literals и default503. Выключенный JSON example не содержит реальных credentials.
+**Стало:** оператор прислал FINAL_STATUS=PASS и FINAL_RC=0: root/evrasia, site_evrasia 1005:1005, известный private sibling уже включён в pool8.3 open_basedir, CLI8.3.21, public/private V5 targets отсутствуют. Root/V4 SHA записаны в START HERE и закреплены в installer. Подготовлен один installer для новых V5 файлов: private runtime release0caa0248 и public shim/rewrite, mode=off, без native factory, ключей, DB settings и тестовых схем.
 
-**Почему:** V5 должен включаться отдельно от V4 и ограниченно, без eager Bitrix load и без доверия клиентским флагам/номерам/IP forwarding. Приватные настройки не должны попадать в document root или принимать include path из HTTP.
+**Почему:** размещение больше не blocker. Следующее действие — реальные файлы V5 рядом с V4, а не ещё один общий аудит или новая VM. Выключенная установка отделяет файловое размещение от недоказанного backend/pilot/native-security допуска.
 
-**Evidence:** code/test `0caa0248c783188939398a71543ba740f064bb90`; offline38750965561/job116476933149 SUCCESS, прочитан лог86 PHP lint/26 suites/198 прежних entry/59 новых checks. Ephemeral38750966026/job116476934579 SUCCESS; состав329 DB checks не менялся. Четыре новых PHP файла linted локально; полный runtime suite в GitHub, не на сайте. Сравнение с2bec823b подтвердило6точечных файлов и отсутствие изменений native providers/V4/schema/transport/workflow.
+**Реализация:** `deployment/install-disabled-v5.sh`. Проверки root/host/UID/PHP/source/path/baseline, tar backup с проверкой, bare Git fixed commit/fsck, закреплённые src/API blobs, подготовка shim, lint, private copy/byte compare, OFF CLI smoke от site_evrasia, атомарный rename publicdir, post-check root/V4/manifest и guarded rollback/quarantine. Нет перезаписи root/V4, reload сервисов, DB/Bitrix/HTTP/SMS. Повторный неизменённый запуск проверяет manifest и возвращает ALREADY_APPLIED; partial/drift отказывается. Разные filesystem для /root и /home допускаются: предварительное копирование в private, а final rename только между private и public на одном filesystem.
 
-**Границы:** это operational admission, НЕ account authentication. Key не даёт пароль/MFA/native coverage и не ограничивает сам по себе аккаунты: список разрешённых тестовых аккаунтов ещё нужен в реальной composition. Нет реального site-factory.php, production key, включённого pilot или доказанного live Apache/Nginx/TLS. Behind-proxy peer не равен клиенту; key обязателен, Forwarded/X-Forwarded-For игнорируются. Hash/permission проверки не sandbox враждебного PHP и не откат начатых запросов; deploy должен гарантировать trusted code, alias/ancestor security и атомарное переключение.
+**Evidence:** installer/test commit `c37ab9959bb13dae49f9c1a2c4ddda0b06905c69`. Offline38754541007/job116489359396 SUCCESS. Ephemeral38754541037/job116489360214 SUCCESS: отдельный package verification step и прежние DB tests завершены успешно. Полные новые logs не запрашивались; статусы шагов прочитаны. Состав прежних26offline/329DB не менялся. Package verification не новый native/DB test. Локально проверены bash -n и wrong-host denial, local/uploaded blob совпадает. Первый installer71d4a2d уточнён c37ab995: вызов builder без `||` сохраняет Bash errexit.
 
-**NEXT:** один уже подготовленный read-only layout preflight на существующем evrasia; далее guarded выключенная установка в известной структуре сайта. Не новая VM. Ничего не устанавливать по неотрендеренному public-router template и не подставлять synthetic native callbacks ради включения.
+**Граница:** CI использует временные пути и не выполняет production install/owner/root-backup ветку. На evrasia получен только layout PASS; вывод нового installer ещё не получен. OFF CLI503 не является live HTTP или готовой авторизацией. Root-owned releases под site-owned ancestor не объявлять абсолютной защитой от компрометации site account. Aliases, ancestors, global PHP и rewrites требуют дальнейшей целевой оценки до включения native factory. При post-publish drift auto rollback не трогает неожиданные данные.
 
-## R7. Отдельная VM отменена как обязательное условие — принято пользователем
+**NEXT:** получить результат именно INSTALL_DISABLED_ONLY блока. После PASS зафиксировать installedOFF и фактический backup, затем web boundary/native providers. Не повторять layout preflight и не возвращать отдельный staging-host.
 
-**Было:** физически отдельный Bitrix+MySQL staging требовался до любого движения; issue76 блокировалась отсутствием VM.
+## Сохраняемые R1–R9: было → стало → почему
 
-**Стало:** пользователь выбрал V4/V5 параллельно на `evrasia`, с общими аккаунтами/бизнес-данными и отдельными V5 code/config/keys/tokens/service tables/routes. Второй MySQL, контейнерная копия сайта и новая машина не обязательны. Issue76 переименована под подключение, старый provisioning plan заменён.
-
-**Почему:** выбранный способ тестирования ошибочно превратился в продуктовый blocker и был отвергнут. Это supersedes R3 в части размещения. Guards CI-only/fault scripts и security event requirements не отменены. Конкретные production DDL/SMS/mutations требуют отдельного допуска и rollback; production-appropriate native permit ещё не принят.
-
-## R8. V5 entry подключён к существующему transport — предыдущий успешный инкремент
-
-**Было:** Bramus-заглушка возвращала503 даже при ready=true.
-
-**Стало:** V5ParallelHttpEntry использует существующий transport через lazy server-only factory; exact paths/TLS/POST/JSON/size/length до native factory, bounded input, generic responses/no-store, подавление случайного вывода/cookies/redirects. Пять routes/V4/.htaccess не изменены.
-
-**Почему:** отдельный entry рядом с V4 без нового login workflow или изменения legacy API. R9 добавляет deployment-конфигурацию, не меняя этот транспорт.
-
-**Evidence:** code029aaff9115d39d6a489457867fbbe532434303d, offline38748326281/job116467747751 (83lint/26suites/198checks), ephemeral38748326331/job116467747777 (329). Проверки native Apache/TLS/providers не заменяются CLI.
-
-## Сохраняемые решения R1–R6
-
-| Решение | Было → стало → причина / evidence |
+| ID | Решение |
 |---|---|
-| R1 late receipt | Нет пути позднего UNKNOWN→SENT → reconcileUnknownSent без send/quota/TTL → неопределённую оплату нельзя лечить второй SMS. Runtime04915fab, fixture fixdc2caed;45 receipt checks. |
-| R2 fixture ordering | Budget keys без sort → canonical sort только fixture → runtime guard не ослаблять. Первый run38736335930 FAIL сохранён. |
-| R3 infra plan | Подготовлен отдельный staging plan → обязательность VM отменена R7 → не возвращать blocker. |
-| R4 feature docs | Main push вызывает publish latest → docs только feature → не публиковать образ ради docs. |
-| R5 SMS bridge | Delivery SELECT/autocommit ACK не проходили bridge → exact reads + owned CAS/COMMIT → успех после commit. Code8c395f0;63 новых tests/268 DB. |
-| R6 locked password BEGIN | Нет готового fresh password/MFA adapter → V5BitrixLockedPasswordTotpProof с locked rows и прежним epoch HMAC → reset не обходится stale snapshot. Codec3f92ba;61 новых tests/329 DB; native positive providers synthetic. |
+| R1 | Не было позднего UNKNOWN→SENT → явная independent receipt reconciliation без send/budget/TTL → неопределённую оплату не исправлять второй платной SMS. |
+| R2 | Неотсортированная quota fixture → canonical sort только fixture → не ослаблять lock-order guard; прежний FAIL сохранён. |
+| R3 | План отдельного staging → обязательная VM отменена R7 → пользователь её не выделяет. |
+| R4 | Main push публикует latest → документация и работа только feature → не запускать побочную публикацию ради документов. |
+| R5 | SMS queries/ACK несовместимы с bridge → точные SQL shapes и owned CAS/COMMIT → только committed acknowledgement. |
+| R6 | Нет готового locked-password BEGIN proof → адаптер текущих native rows с прежним epoch HMAC → stale password snapshot недостаточен. |
+| R7 | VM как обязательный blocker → V4/V5 параллельно на evrasia, общие аккаунты/БД → инфраструктура не подменяет продукт. Security/production permissions не отменены. |
+| R8 | Постоянная503 заглушка → отдельный V5 entry/lazy transport/default off → reuse готового workflow без V4 fallback. |
+| R9 | Нет private config/public shim → bounded off/pilot JSON и guarded entry → отдельный operational допуск не является account auth. Реальной factory пока нет. |
 
 ## Дополнение реестра структур
 
-Пути относительно site-integration/samzaberu-v5.
+- `deployment/install-disabled-v5.sh`: новый guarded OFF installer,257 строк; runtime payload0caa0248. Installer закреплён commit c37ab995 и SHA256 `3fca39d399b8d60d865fc6a886e589ccd8c3052ae702c66227650098e9577e5a`.
+- `.github/workflows/v5-ephemeral-mariadb.yml`: +15 строк, trigger и host-denial/package self-test; прежний DB regression сохранён. Это не deployment workflow, site credentials отсутствуют.
+- `src`, `api/v5/*.php`, `.htaccess`, native providers и PROPOSED SQL: без изменений R10.
+- Root/V4 baseline и folder/PHP metadata: получены из фактического read-only результата оператора, не из предположений.
+- START HERE/checkpoint: layout больше не pending, ожидается installer output; deployment не заявлен.
 
-| Структура | Изменение R9 | Граница |
-|---|---|---|
-| src/V5PrivatePilotConfig.php | Fixed private JSON, peer/key/expiry gate, lazy factory/file guards | Не native proof и не пользовательская авторизация |
-| api/v5/site.php | V5-only private registration, удаление старой factory/header | Нет actual site composition в поставке |
-| deployment/public-router.php | Fixed-path public shim template, off fallback | Пути подставляет проверенный installer, не HTTP |
-| deployment/site-config.example.json | Off-only example | Реальные keys/IP не записаны |
-| tests/V5PrivatePilotConfigTest.php |59 offline checks, real PHP child executions | Только собственный временный каталог; не web server/Bitrix |
-| tests/V5RouteMapTest.php | +1require existing suite | Нет нового workflow;198 старых entry checks сохранены |
-| api/v5/router.php, src/V5ParallelHttpEntry.php, HTTP providers/PROPOSED SQL/V4 | Без изменений R9 | Нельзя заменять proof pilot key или снимать fault guards |
-| Current docs / issue76 | Новый checkpoint и следующий layout preflight | Нет server deployment; main не изменён |
-
-Pending TOTP verification остаётся черновиком вне src/CI. Ранее заблокированный payload не повторялся и не переносился в эту работу.
+Пути deployment/src/api относительно `site-integration/samzaberu-v5`. Main/V4/рабочая БД не менялись этой итерацией. Pending TOTP draft и ранее заблокированный test payload не использовались и не повторялись.
