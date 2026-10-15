@@ -1,0 +1,87 @@
+name: V5 real ephemeral MariaDB integration
+
+on:
+  push:
+    branches:
+      - feature/samzaberu-api-v5-auth-contract
+    paths:
+      - '.github/workflows/v5-ephemeral-mariadb.yml'
+      - 'site-integration/samzaberu-v5/src/**'
+      - 'site-integration/samzaberu-v5/schema/PROPOSED_ev_v5_strong_sessions.sql'
+      - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStrongSessionsTest.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v5-ephemeral-mariadb-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ephemeral-mariadb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: ev_v5_ci_synthetic
+          MARIADB_USER: ev_v5_ci
+          MARIADB_PASSWORD: ci_ephemeral_local_only_2026
+          MARIADB_RANDOM_ROOT_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 24
+    env:
+      V5_CI_ONLY_ACK: GITHUB_EPHEMERAL_MARIADB
+      V5_CI_DB_NAME: ev_v5_ci_synthetic
+      V5_CI_DB_HOST: 127.0.0.1
+      V5_CI_DB_USER: ev_v5_ci
+      V5_CI_DB_PASSWORD: ci_ephemeral_local_only_2026
+    steps:
+      - name: Checkout isolated V5 feature without repository credentials
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Prepare disposable PHP PDO MySQL test runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "=== 1. ENVIRONMENT ==="
+          echo "MODE=GITHUB_EPHEMERAL_MARIADB_ONLY"
+          echo "PRODUCTION_DATABASE_CONNECTION=NO"
+          echo "BITRIX_BOOTSTRAP=NO"
+          echo "EXTERNAL_SMS=NO"
+          test "${GITHUB_ACTIONS:-}" = 'true'
+          test "${V5_CI_ONLY_ACK}" = 'GITHUB_EPHEMERAL_MARIADB'
+          test "${V5_CI_DB_NAME}" = 'ev_v5_ci_synthetic'
+          test "${V5_CI_DB_HOST}" = '127.0.0.1'
+          test "${V5_CI_DB_USER}" = 'ev_v5_ci'
+          test "$(hostname -s)" != 'evrasia'
+          test "$(hostname -s)" != 'eur-bot-01'
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php8.3-cli php8.3-mysql >/dev/null
+          php8.3 -m | grep -Fxq PDO
+          php8.3 -m | grep -Fxq pdo_mysql
+          php8.3 -r 'exit(function_exists("pcntl_fork") ? 0 : 1);'
+          echo "PASS: PHP, pdo_mysql and forked test runtime ready"
+
+      - name: Run actual InnoDB strong-session and refresh-race tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "=== 2. REAL EPHEMERAL MARIADB TEST ==="
+          php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStrongSessionsTest.php
+          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStrongSessionsTest.php
+          echo "=== 3. RESULT ==="
+          echo "FINAL_STATUS=PASS"
+          echo "FINAL_RC=0"
+          echo "REAL_MARIADB_INNODB=YES"
+          echo "REAL_BITRIX_STAGE=NOT_RUN"
+          echo "PRODUCTION_WRITE=NO"
