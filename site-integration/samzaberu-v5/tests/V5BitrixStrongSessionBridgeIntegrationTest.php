@@ -22,6 +22,10 @@ namespace Bitrix\Main\DB {
         public bool $failDml=false;
         public int $now=1800000000;
         public string $epoch='7';
+        public string $phoneEventVersion='0';
+        public ?string $phoneBinding=null;
+        public string $phoneE164='+79120000000';
+        public string $phoneConfirmed='Y';
         public string $engine='InnoDB';
         public bool $accountAllowed=true;
         private int $affected=0;
@@ -29,7 +33,9 @@ namespace Bitrix\Main\DB {
         public function getSqlHelper():BridgeMockSqlHelper{return new BridgeMockSqlHelper();}
         public function startTransaction():mixed {
             if($this->active)throw new \RuntimeException('already in transaction');
-            $this->active=true;$this->backup=$this->sessions;return null;
+            $this->active=true;
+            $this->backup=[$this->sessions,$this->epoch,
+                $this->phoneEventVersion,$this->phoneBinding];return null;
         }
         public function commitTransaction():mixed {
             if(!$this->active||$this->failCommit)throw new \RuntimeException('fake commit failure');
@@ -37,7 +43,9 @@ namespace Bitrix\Main\DB {
         }
         public function rollbackTransaction():mixed {
             if(!$this->active)throw new \RuntimeException('no transaction');
-            $this->sessions=$this->backup;$this->active=false;$this->rollbacks++;return null;
+            [$this->sessions,$this->epoch,$this->phoneEventVersion,$this->phoneBinding]
+                =$this->backup;
+            $this->active=false;$this->rollbacks++;return null;
         }
         public function getAffectedRowsCount():int{return $this->affected;}
         public function query(string $sql):BridgeMockResult {
@@ -52,6 +60,31 @@ namespace Bitrix\Main\DB {
                     ['ID'=>'41','ACTIVE'=>'Y','BLOCKED'=>'N','PASSWORD_EXPIRED'=>'N']
                 ]:[]);
             }
+            if(str_starts_with($sql,'SELECT ID FROM b_user WHERE ID = ')) {
+                return new BridgeMockResult($this->accountAllowed?[['ID'=>'41']]:[]);
+            }
+            if(str_starts_with($sql,'SELECT USER_ID FROM b_sec_user WHERE USER_ID = '))
+                return new BridgeMockResult([]);
+            if(str_starts_with($sql,
+                'SELECT USER_ID, PHONE_NUMBER, CONFIRMED FROM b_user_phone_auth')) {
+                return new BridgeMockResult([[
+                    'USER_ID'=>'41','PHONE_NUMBER'=>$this->phoneE164,
+                    'CONFIRMED'=>$this->phoneConfirmed,
+                ]]);
+            }
+            if(str_starts_with($sql,'SELECT AUTH_EPOCH, PHONE_EVENT_VERSION '
+                .'FROM ev_samzaberu_auth_state'))
+                return new BridgeMockResult([[
+                    'AUTH_EPOCH'=>$this->epoch,
+                    'PHONE_EVENT_VERSION'=>$this->phoneEventVersion,
+                ]]);
+            if(str_starts_with($sql,'SELECT USER_ID, AUTH_EPOCH, PHONE_EVENT_VERSION, '
+                .'PHONE_BINDING_HMAC FROM ev_samzaberu_auth_state'))
+                return new BridgeMockResult([[
+                    'USER_ID'=>'41','AUTH_EPOCH'=>$this->epoch,
+                    'PHONE_EVENT_VERSION'=>$this->phoneEventVersion,
+                    'PHONE_BINDING_HMAC'=>$this->phoneBinding,
+                ]]);
             if(str_starts_with($sql,'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state'))
                 return new BridgeMockResult([['AUTH_EPOCH'=>$this->epoch]]);
             if(str_starts_with($sql,'SELECT sid, user_id FROM ev_v5_strong_sessions')) {
@@ -87,6 +120,24 @@ namespace Bitrix\Main\DB {
             $this->queries[]=$sql;
             if(!$this->active||$this->failDml)throw new \RuntimeException('no owned tx');
             $this->affected=0;
+            if(str_starts_with($sql,'UPDATE ev_samzaberu_auth_state SET ')) {
+                if(preg_match("/\AUPDATE ev_samzaberu_auth_state SET AUTH_EPOCH = ([0-9]+), PHONE_EVENT_VERSION = ([0-9]+), PHONE_BINDING_HMAC = '([a-f0-9]{64})' WHERE USER_ID = ([0-9]+) AND AUTH_EPOCH = ([0-9]+) AND PHONE_EVENT_VERSION = ([0-9]+)\z/D", $sql, $m)) {
+                    if($m[4]!=='41')throw new \RuntimeException('wrong synthetic event user');
+                    if((int)$this->epoch===(int)$m[5]
+                        && (int)$this->phoneEventVersion===(int)$m[6]) {
+                        $this->epoch=$m[1];
+                        $this->phoneEventVersion=$m[2];
+                        $this->phoneBinding=$m[3];
+                        $this->affected=1;
+                    }
+                } elseif(preg_match("/\AUPDATE ev_samzaberu_auth_state SET AUTH_EPOCH = ([0-9]+) WHERE USER_ID = ([0-9]+) AND AUTH_EPOCH = ([0-9]+)\z/D", $sql, $m)) {
+                    if($m[2]!=='41')throw new \RuntimeException('wrong synthetic event user');
+                    if((int)$this->epoch===(int)$m[3]) {
+                        $this->epoch=$m[1];$this->affected=1;
+                    }
+                } else throw new \RuntimeException('unknown synthetic native security event');
+                return null;
+            }
             if(str_starts_with($sql,'INSERT INTO ev_v5_strong_sessions ')) {
                 $a=self::values($sql);
                 if(count($a)!==14)throw new \RuntimeException('invalid fake insert arity');
@@ -151,7 +202,8 @@ namespace {
         V5MySqlStrongSessionStore,V5MySqlSessionActions,
         V5LockedStrongSessionProofPort,V5NativeSecurityHookCoveragePort,
         V5LockedBonusPinReaderPort,V5AccessJwtCodec,V5OpaqueRefreshTokens,
-        PasswordVerifiedAccount
+        V5SecurityEventVersions,V5SecurityEventVersionWriter,
+        V5StrictE164Phone,PasswordVerifiedAccount
     };
 
     final class SyntheticPermit implements V5NativeBitrixExclusiveTransactionPermitPort {
@@ -237,21 +289,73 @@ namespace {
     bridgeDeny(fn()=>$actions->rotateRefresh($result->refreshToken),'replayed refresh rejected');
     bridgeCheck($actions->readBonusPin($rotated->accessToken)==='00037',
         'refreshed JWT can read PIN without a second SMS challenge');
-    $native->epoch='8';
+    // Exercise the ALREADY-IMPLEMENTED event writer on the SAME synthetic
+    // physical native connection. These calls SIMULATE a native hook;
+    // they DO NOT prove that the production Bitrix hooks exist or fire.
+    $versions=new V5SecurityEventVersions(
+        new V5StrictE164Phone(),$coverage,str_repeat('P',64),str_repeat('A',64)
+    );
+    $eventWriter=new V5SecurityEventVersionWriter($versions);
+    $eventDb=new V5BitrixPdoCompatibilityBridge($native,$permit);
+    bridgeDeny(fn()=>$eventWriter->recordSecurityChanged($eventDb,41),
+        'native event writer refuses a missing shared transaction');
+    bridgeCheck($eventDb->beginTransaction(),'verified native transaction begins for phone event');
+    $eventWriter->recordPhoneConfirmed($eventDb,41,'+79120000000');
+    $stampA=$versions->stampFor($eventDb,41,[
+        'USER_ID'=>'41','PHONE_NUMBER'=>'+79120000000','CONFIRMED'=>'Y'
+    ]);
+    bridgeCheck(is_string($stampA) && strlen($stampA)===64,
+        'first synthetic native confirmation produces a verified event stamp');
+    bridgeCheck($eventDb->commit(),'phone event and shared epoch commit together');
+    bridgeCheck($native->epoch==='8' && $native->phoneEventVersion==='1',
+        'synthetic native phone confirmation atomically changes epoch and generation');
+    bridgeCheck($eventDb->beginTransaction(),'same-number confirmation new native transaction');
+    $eventWriter->recordPhoneConfirmed($eventDb,41,'+79120000000');
+    $stampB=$versions->stampFor($eventDb,41,[
+        'USER_ID'=>'41','PHONE_NUMBER'=>'+79120000000','CONFIRMED'=>'Y'
+    ]);
+    bridgeCheck(is_string($stampB) && !hash_equals($stampA,$stampB),
+        'same-E164 synthetic reconfirmation invalidates previous phone stamp');
+    bridgeCheck($eventDb->commit(),'second native confirmation commits');
+    bridgeCheck($native->epoch==='9' && $native->phoneEventVersion==='2',
+        'same E164 reconfirmation bumps both versions, no phone change required');
+
+    $snapshotEpoch=$native->epoch;
+    $snapshotPhone=$native->phoneEventVersion;
+    bridgeCheck($eventDb->beginTransaction(),'native rollback test begins');
+    bridgeDeny(fn()=>$eventWriter->recordPhoneConfirmed($eventDb,41,'+79120000001'),
+        'unverified different phone cannot be confirmed by event writer');
+    bridgeCheck($eventDb->rollBack(),'failed native confirmation rolled back');
+    bridgeCheck($native->epoch===$snapshotEpoch
+        && $native->phoneEventVersion===$snapshotPhone,
+        'failed phone confirmation does not change committed epoch or generation');
+
+    bridgeCheck($eventDb->beginTransaction(),'security event native transaction begins');
+    $eventWriter->recordSecurityChanged($eventDb,41);
+    bridgeCheck($eventDb->commit(),'native password/MFA/security event commits');
+    bridgeCheck($native->epoch==='10' && $native->phoneEventVersion==='2',
+        'security-only event bumps epoch but leaves phone confirmation generation');
     $readCount=$pin->reads;
     bridgeCheck($actions->readBonusPin($rotated->accessToken)===null,
-        'changed Bitrix epoch denies previously issued access');
-    bridgeCheck($pin->reads===$readCount,'epoch mismatch rejects before protected PIN read');
+        'native security events deny previously issued V5 JWT access');
+    bridgeCheck($pin->reads===$readCount,
+        'native security epoch mismatch blocks protected PIN reader');
     bridgeDeny(fn()=>$actions->rotateRefresh($rotated->refreshToken),
-        'epoch mismatch forbids native refresh rotation');
-    $native->epoch='7';
-    bridgeCheck($store->revokeAccess($rotated->accessToken),
-        'native Bitrix transaction revokes V5 session');
-    bridgeCheck($native->sessions[$record['sid']]['status']==='revoked',
-        'revocation persists through native mysqli adapter');
-    bridgeCheck($actions->readBonusPin($rotated->accessToken)===null,
+        'native security events prohibit old refresh token rotation');
+
+    $fresh=$store->afterTrustedDevice(
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+    );
+    $freshClaims=$codec->verifyAccess($fresh->accessToken,$native->now);
+    bridgeCheck(is_array($freshClaims) && $freshClaims['auth_epoch']===10,
+        'new strong session sees the newly committed native event epoch');
+    bridgeCheck($store->revokeAccess($fresh->accessToken),
+        'native Bitrix transaction revokes the fresh V5 session');
+    bridgeCheck($native->sessions[$freshClaims['sid']]['status']==='revoked',
+        'revocation persists through the native adapter');
+    bridgeCheck($actions->readBonusPin($fresh->accessToken)===null,
         'revoked native V5 session cannot disclose bonus PIN');
-    bridgeDeny(fn()=>$actions->rotateRefresh($rotated->refreshToken),
+    bridgeDeny(fn()=>$actions->rotateRefresh($fresh->refreshToken),
         'revoked native session cannot refresh');
     bridgeCheck($permit->calls>=5,'exclusive-scope permit checked before each native begin');
     foreach($native->queries as $sql)
