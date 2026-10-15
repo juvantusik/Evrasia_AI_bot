@@ -1,79 +1,76 @@
-# Evrasia AI Bot / СамЗаберу V5 — START HERE / 15 октября 2026
+# Evrasia AI Bot / СамЗаберу V5 — START HERE, 15 октября 2026
 
-**Текущая точка: V5 установлен на существующем сервере в режиме OFF. Первая HTTPS-проверка остановилась на CURL_RC=7, до HTTP-ответа. Исправлен только адрес соединения проверочного скрипта.** Установку и layout preflight не повторять. Следующий ввод — результат того же HTTP helper с закреплённым origin `192.168.103.141`.
+**Текущая точка: V5 установлен в режиме OFF; оба origin HTTPS пути проверены и PASS.** Не повторять установку, layout preflight или уже пройденную проверку503. Новый чат — продолжение того же проекта. Историческая полная редакция до получения HTTP PASS сохранена в commit `0a5a60e0bc52f96644e8c858b5760e015a6ef20e`; её ORIGIN_HTTPS_PENDING больше не актуален.
 
-Читать этот файл, текущие `SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-15.md` и `SAMZABERU_V5_INTEGRATION_DECISIONS_2026-10-15.md`. Предыдущая полная редакция сохранена в commit `cd744a125db921ec79921d727ced2ba2592f8e4e`. Закрытые исследования и принятая архитектура не меняются.
+Читать вместе с `SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-15.md` и `SAMZABERU_V5_INTEGRATION_DECISIONS_2026-10-15.md`. Последние решения и фактические результаты важнее старых NEXT.
 
-## 1. Подтверждённые факты с сервера
+## 1. Новый подтверждённый результат с сервера
 
-Оператор выполнил INSTALL_DISABLED_ONLY: root/evrasia, runtime `0caa0248c783188939398a71543ba740f064bb90`, baseline/recovery archive PASS, OFF entry503 через CLI от site_evrasia, V4/shared rewrite unchanged, V5_INSTALLED_DISABLED=YES, V5_MODE=off, FINAL_STATUS=PASS, FINAL_RC=0.
+Оператор прислал файл с результатом исправленного origin helper. Проверки OFF package, V4 baseline, backup, локального192.168.103.141 и443 listener PASS. Затем:
 
-| Объект | Подтверждённое значение |
+| Путь | Результат |
 |---|---|
+| `/api/v5/router.php` | CURL_RC=0, CONNECTED_ORIGIN_IP=192.168.103.141, HTTP_STATUS=503, TLS_VERIFY_RESULT=0, EXPECTED_OFF_JSON=YES |
+| `/api/v5/auth/signin` | CURL_RC=0, CONNECTED_ORIGIN_IP=192.168.103.141, HTTP_STATUS=503, TLS_VERIFY_RESULT=0, EXPECTED_OFF_JSON=YES |
+
+На обоих путях JSON_CONTENT_TYPE=YES, CACHE_NO_STORE=YES, SET_COOKIE_PRESENT=NO, REDIRECT_PRESENT=NO, CORS_HEADER_PRESENT=NO, CACHED_AGE_PRESENT=NO. После запросов package/OFF/V4/shared rewrite unchanged. Итог **FINAL_STATUS=PASS, FINAL_RC=0, HTTP_REQUESTS=2, HTTP_OFF_PATHS_PASS=2, LOCAL_ORIGIN_OFF_BOUNDARY=PASS**.
+
+Это настоящий HTTPS к origin с каноническим SNI, не CLI и не синтетический тест. **Это НЕ работающая авторизация, не внешний DNS/NAT/CDN путь и не аттестация переменных HTTPS/REMOTE_ADDR внутри PHP.** В присланном результате PUBLIC_EDGE_TEST=NOT_RUN, PHP_HTTPS_AND_PEER_MAPPING=NOT_ATTESTED, V4_HTTP_FUNCTIONAL_TEST=NOT_RUN, REAL_NATIVE_AUTHENTICATION_TEST=NOT_RUN. Нельзя расширять вывод за эту границу.
+
+Первый helper без --resolve ранее получил CURL_RC=7, HTTP_OFF_PATHS_PASS=0. Этот FAIL сохраняется в истории; исправленный self-call теперь подтверждён. Точную причину первого сетевого отказа отдельно не доказывали. Не настраивать public hairpin ради локальной проверки.
+
+## 2. Фактическое размещение и восстановление
+
+**V5 параллельно V4 на существующем Bitrix `evrasia`. Отдельной VM не будет.** Второй MySQL instance, контейнерная копия сайта и второй набор клиентов не обязательны. Аккаунты/бизнес-данные общие; V5 routes/code/config/keys/tokens/service tables отдельные. Бот `eur-bot-01` не переносится. Issue76 — подключение, а не выдача VM.
+
+| Объект | Зафиксированное значение |
+|---|---|
+| Установленный runtime | `0caa0248c783188939398a71543ba740f064bb90` |
 | Public V5 | `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5` |
 | Private release | `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90` |
-| Резервная копия | `/root/ev-v5-off-backup.f89wzMkA` |
-| Guarded rollback, не запускался | `/root/ev-v5-off-backup.f89wzMkA/rollback.sh` |
-| Манифест installer | `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/installed.sha256` |
-| Фактический режим | `off`, без site-factory.php, pilot key, DB settings и тестовых SQL-схем |
+| Backup | `/root/ev-v5-off-backup.f89wzMkA` |
+| Rollback, не запускался | `/root/ev-v5-off-backup.f89wzMkA/rollback.sh` |
+| Manifest | `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/installed.sha256` |
+| Режим | Строго `off`; настоящая `site-factory.php`, pilot key и V5 DDL не установлены |
 
-Installer не подключал БД/Bitrix/SMS/HTTP и не перезагружал сервисы. Новые V5-файлы действительно появились на production; нельзя писать без уточнения «production не изменялся». Рабочая авторизация V5 не включена.
+Установка файлов уже выполнена оператором: INSTALL_DISABLED_ONLY PASS, CLI отsite_evrasia дал503, V4/root rewrite сохранены. Правильные статусы: V5_FILES_INSTALLED_ON_PRODUCTION=YES и PRODUCTION_AUTH_ENABLED=NO. Нельзя снова писать «production вообще не менялся» или считать новый feature HEAD обновлением серверного release.
 
-**Новый результат HTTP helper:** проверка OFF package, V4 baseline и saved rollback PASS; первый путь `/api/v5/router.php`, CURL_RC=7, FINAL_STATUS=FAIL, FINAL_RC=2, HTTP_REQUESTS=1, HTTP_OFF_PATHS_PASS=0. Вложенный маршрут не проверялся. Это отказ соединения, не HTTP500/503 от приложения и не доказательство поломки V4/V5 или недоступности сайта для внешних клиентов. Файлы/настройки helper не менял. Конкретная сетевая причина отказа в этом запуске не исследовалась.
+Site user `site_evrasia` UID/GID1005:1005; CLI PHP8.3.21, pool `/etc/php/8.3/fpm/pool.d/evrasia.spb.ru.conf`, socket `/run/php/php8.3-fpm-evrasia.spb.ru.sock`. В прочитанной pool-конфигурации private уже разрешён в open_basedir; auto_prepend_file в том выводе не задан. Это не полный аудит эффективной web-конфигурации. Private V5 directories0750/files0640 root:1005, public0755/0644 root:1005. Родительские каталоги сайта принадлежат site account; не утверждать абсолютную защиту root-owned release при компрометации его предка.
 
-Installer закреплён commit `c37ab9959bb13dae49f9c1a2c4ddda0b06905c69`, SHA256 `3fca39d399b8d60d865fc6a886e589ccd8c3052ae702c66227650098e9577e5a`. Установленный runtime остаётся `0caa0248c783188939398a71543ba740f064bb90`. Изменение helper/docs не обновляет release на сервере.
-
-## 2. Размещение уже согласовано
-
-**V5 размещается параллельно V4 на существующем Bitrix evrasia. Отдельной VM не будет.** Второй MySQL, контейнерная копия сайта и второй набор клиентов не обязательны. V4 сохраняется, V5 имеет отдельные routes/code/config/keys/tokens/service tables. Аккаунты и бизнес-данные общие; V5-таблицы могут быть в существующей БД, но DDL ещё не выполнялся. Бот eur-bot-01 не переносится. Issue76 — подключение, не выделение VM.
-
-Общая БД сохраняет требования к security events/epoch/replay. Production DDL, платные SMS и account mutations требуют отдельного конкретного допуска, backup и проверки результата. Отказные/конкурентные CI fixture scripts на рабочей БД запрещены; их guards не снимать.
-
-## 3. Исправленный HTTP self-check: только канонический локальный origin
-
-**Этот адрес уже был изучен — не запускать новое исследование сети.** `docs/BITRIX_ANTI_FRAUD_PRODUCTION_MAP.md`, раздел1 (проверено13сентября2026), фиксирует nginx на `192.168.103.141:80/443`, ненадёжный hairpin через публичный DNS и запрет использовать loopback. Проверенный шаблон: `curl --resolve evrasia.rest:443:192.168.103.141 https://evrasia.rest/...`. Новая проверка ошибочно не применила этот существующий контракт. История3октября также содержит такой же успешный self-call; текущий обязательный источник — production map.
-
-Исправлен СУЩЕСТВУЮЩИЙ `site-integration/samzaberu-v5/deployment/check-disabled-v5-http.sh`, без нового диагностического набора. SHA256 **`f35297310e6a50787630f1f6dc8973088098cadc8e55c7aef37db9662ed7697b`**, Git blob `c50695bccd346d835dea18dc5ec4a9959c928501`.
-
-Helper сохраняет off/manifest/backup/root/V4 guards. Перед HTTP убеждается через `ip` и `ss`, что этот IPv4 назначен текущему host и порт443 слушается на нём либо wildcard. Затем максимум два анонимных GET: direct `/api/v5/router.php`, после егоPASS nested `/api/v5/auth/signin`. Добавлены `--ipv4 --resolve evrasia.rest:443:192.168.103.141`; URL/Host/SNI остаются evrasia.rest, сертификат проверяется штатно. `remote_ip` обязан быть192.168.103.141. Нет proxy/curlrc/redirect/retry, переключения на HTTP, `-k` или изменения DNS/hosts/nginx. Никаких credentials/POST/SQL/SMS/V4 HTTP вызовов.
-
-Требуются503, exactOFFJSON, JSON type, no-store, отсутствие cookies/Location/CORS/положительногоAge; после запросов сверяются state/hash. Ошибка останавливает дальнейшие запросы без rollback/rewrite. Установка не повторяется. Существующий public rollback не запускать только из-за ошибки соединения.
-
-**Локальные проверки исправления:** bash-n PASS, фактический wrong-host denial сHTTP_REQUESTS=0;8 address/listener fixtures и отдельный отказ inventory command при правдоподобномstdout;9 неизменённых header-parser fixtures PASS. Локальный файл совпадает с uploaded Git blob. Это тесты helper, НЕ реальные origin HTTPS и НЕ новые MariaDB assertions. Новый результат с evrasia пока PENDING.
-
-При успехе: HTTP_OFF_BOUNDARY=PASS, LOCAL_ORIGIN_OFF_BOUNDARY=PASS, HTTP_OFF_PATHS_PASS=2, PUBLIC_EDGE_TEST=NOT_RUN. **Проверка локального origin не доказывает путь через внешний DNS/NAT/CDN или доступ клиента извне.** Она также не доказывает PHP HTTPS/peer mapping, live FPM version, V4 functional E2E/native auth. Web access logs могут записываться; внутренние эффекты ошибочного rewrite не инструментированы.
-
-## 4. Окружение и защищённые SHA
-
-Base `/home/site_evrasia/web/evrasia.spb.ru`; docroot `<base>/public_html`; private `<base>/private`. Site account site_evrasia1005:1005. До установки base/private751 owned1005:1005, docroot751 owned1005:33. Private V5 directories0750/files0640 root:1005, public0755/0644 root:1005. Родительские права не менялись. Root-owned release под site-owned ancestor не считать абсолютной защитой от компрометации Unix site account.
-
-CLI PHP8.3.21; также8.4.7 и8.1.32. Pool `/etc/php/8.3/fpm/pool.d/evrasia.spb.ru.conf`: user/group site_evrasia, socket `/run/php/php8.3-fpm-evrasia.spb.ru.sock`, private уже в open_basedir. Это прочитанные настройки, не доказательство web SAPI/TLS.
-
+Защищённые SHA256:
 - Root `.htaccess`: `81544afa0396c6778f263d9b250105913aae9d3621cbaaf0e3cf1e4f3a297b95`.
 - `api/v4/.htaccess`: `61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3`.
 - `api/v4/router.php`: `3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50`.
-- `api/.htaccess` отсутствует. V5 public dir существует; absent baseline теперь только история до установки.
+- `api/.htaccess` отсутствует. PublicV5 теперь существует; прежнее отсутствие — история до установки.
 
-## 5. Git/CI: отдельно от установки и HTTP
+## 3. Следующий точечный шаг — конфигурация передачи HTTPS в PHP
 
-Repo juvantusik/Evrasia_AI_bot, feature/samzaberu-api-v5-auth-contract. Перед исправлением проверен live HEADcd744a125db921ec79921d727ced2ba2592f8e4e и его offline Actions38763004874 SUCCESS; это прежний helper, чья сетевой цель оказалась неверной для self-call. CI не доказывает HTTP на evrasia.
+Подготовлен `site-integration/samzaberu-v5/deployment/read-v5-web-config.sh`, SHA256 **`26cc5a2b3b04143764c58032d5a5759f88a54fbd16ca738bcffaa4dedbbbfd81`**, blob `f658d5b3bae9c47320e530ac5813b67ed87e8d51`.
 
-Последний installer/test c37ab995: offline38754541007/job116489359396 и ephemeral38754541037/job116489360214 SUCCESS, включая package verification и прежние26offline/329DB. Runtime0caa0248: offline38750965561 SUCCESS,86PHP lint,26suites включая198entry+59private-pilot; ephemeral38750966026 SUCCESS,329DB. Исправление helper не меняет runtime/src/API, installer, SQL или workflow; его локальные проверки не считать новым полным native/DB прогоном.
+Это **чтение текстов конфигурации**, не временная замена V5-входа. Root/evrasia, OFF config, manifest и root/V4 hashes проверяются до/после. Скрипт рассматривает ограниченный список vhost-кандидатов дляevrasia.rest/evrasia.spb.ru в стандартных каталогах nginx/Apache и site conf, известную pool8.3/globalPHP конфигурацию и .user.ini по путиV5. Пути кандидатов не объявлены найденными заранее. Не обходит произвольные include, не читает .settings.php/DB credentials/сертификаты/private keys, не выводит Authorization и другие произвольные заголовки. Показывает только имена файлов/контрольные суммы/номера строк и ограниченные TLS/FPM/forwarded значения; нестандартные и потенциально секретные значения скрывает.
 
-Main baseline7c2e9f8e4501b92469bcdeea18f8340676ad52c9 не изменять: pushmain публикуетlatest. Документация/feature commit не являются автоматическим deployment.
+**SITE_FILE_WRITE=NO, SITE_PHP_EXECUTED=NO, DATABASE_CONNECTION=NO, HTTP_REQUESTS=0, SERVICE_RELOAD=NO.** Никакой установки пакетов или изменения nginx/FPM/пилота. При отсутствии python3 или ожидаемых vhost-файлов — остановка с понятным FAIL, без угадывания рабочего пути. Положительный результат означает полученный конфигурационный снимок, а не proven web runtime. Условные blocks/include precedence и эффективный PHP runtime этим полностью не моделируются.
 
-## 6. Бизнес-логика и незавершённые интеграции
+Локально: bash-n, компиляция встроенного Python, wrong-host отказ с0HTTP;10 синтетических проверок парсера (включая скрытие credential-canary, отказ неизвестного vhost и symlink за пределами разрешённых деревьев) PASS. Blob совпал с локальным файлом. Это не server config read и не новые MariaDB assertions. **Результат этого read-only блока с evrasia ещё ожидается.**
 
-Логин/пароль без CUser::Login/V4-cookie; active/block/expiry/Anti-Fraud и лимиты попыток. Native TOTP имеет приоритет, без SMS fallback при ошибке/unknown. Без TOTP достаточен только strongV5trust, не слабыйV4. Иначе password-bound SMS на подтверждённый телефон аккаунта, без номера с клиента. После сильного входа PIN без второйSMS.
+Планировался временный инструментированный PHP shim для runtime-проверки, но GitHub tool отклонил его публикацию по безопасности. Этот payload не повторялся другим способом и не был включён в ветку/серверный шаг. Новый разрешённый вариант не выполняет такую же подмену: он только читает конфигурационные файлы и не выдаётся за runtime measurement. Не считать обещание раннего commentary выполненной модификацией V5.
 
-Сохраняются10 SMS rate/стоимостных окон, cooldown/attempt limits, HMAC/encryptedoutbox и user/device/phone/epoch bindings. Claimed/unknown не отправлять автоматически повторно; SENT требует независимой квитанции. Late receipt не оживляет challenge/не меняет бюджет. PHONE_EVENT_VERSION изменяется и при reconfirm того жеE.164; AUTH_EPOCH атомарен с native mutations.
+После чтения конкретных TLS/FPM правил продолжить существующую native composition, сохраняя strict HTTPS и отсутствие доверия к произвольным proxy headers. Не возвращаться к общим CUser/PhoneAuth-аудитам. Не подменять отсутствующие native proofs permissive callbacks ради зелёного ответа.
 
-Не закрыты: настоящая site-factory.php и test-account allowlist; nativeTOTP/replay,10-path securityhooks, phone-success/reconfirmation, strongtrust,SMS begin/resend и paidprovider/receipt/tariff,RestIS,additiveDDL,production-appropriate transaction permit иliveV4/V5acceptance. Shared-host выбор не разрешает фиктивныеtrue. Pilot key только допуск запроса.
+## 4. Реализация и бизнес-правила остаются прежними
 
-V5BitrixLockedPasswordTotpProof готов какBEGIN read adapter. PendingV5BitrixLockedTotpFactor внеsrc/CI; ранее заблокированныйpayload не повторялся. ЗакрытыеCUser/PhoneAuth/OTP-recoverysource-onlyисследования не повторять. CUserdelete/add не доказаны какsuccessfulCONFIRMEDwriter; user.phpSHA-drift не объяснён, core/baseline автоматически не исправлять. Исторические handoff/STRUCTURE_REGISTRY/native mutation документы сохранены.
+Уже реализованы TOTP > strongV5trust > password-boundSMS workflow; отдельныеJWT/opaque refresh; InnoDB sessions/CAS/revocation/JWT послеCOMMIT; password-bound TOTP begin с текущими locked rows; one-use consumption/grant; encryptedSMSoutbox/10scope budgets/one paid claim/independent SENT receipt/late reconciliation; HTTPboundary; PIN session guard; Bitrix bridge; parallelentry/privatepilotloader/publicshim. Основные файлы и прежние тестовые доказательства — `site-integration/samzaberu-v5/README.md`, API README и исторические START HERE/checkpoints. Текущим helper эти компоненты не меняются.
 
-## 7. Текущие статусы и следующий ввод
+После пароля при nativeTOTP обязателен authenticator; ошибки/unknown не переключают наSMS. БезTOTP подходит только сильноеV5trust, не слабоеV4. Иначе SMS на подтверждённый номер аккаунта, без номера с клиента. После сильного входа PIN без второйSMS. Сохраняются active/block/expiry/Anti-Fraud, password-attempt limits, encrypted/HMAC/bindings, тариф/currency/idempotency. Claimed/unknown автоматически не пересылать. SENT только с independent receipt; late receipt не оживляет challenge/не меняетбюджет. PHONE_EVENT_VERSION меняется и при reconfirm того жеE.164, AUTH_EPOCH атомарен с native security mutations.
 
-LAYOUT_PREFLIGHT=PASS; V5_FILES_INSTALLED_ON_PRODUCTION=YES; V5_MODE=off; CLI_OFF_SMOKE_AS_SITE_USER=PASS; FIRST_PUBLIC_DNS_SELF_CHECK=CONNECT_FAILED_RC7; LOCAL_ORIGIN_OFF_CHECK=PENDING; PRODUCTION_AUTH_ENABLED=NO; NATIVE_FACTORY_INSTALLED=NO; V5_DATABASE_MIGRATED=NO; REAL_SITE_PARALLEL_ACCEPTANCE=NOT_RUN.
+**Не завершены:** настоящая site-factory/test-account allowlist; nativeTOTP-code/replay;10-path epochhooks; successfulphone/reconfirmation writers; strongtrust; первоначальный SMS begin/resend lifecycle; paidSMS/provider receipt/tariff; RestIS PIN; additiveV5DDL; production-appropriate transaction permit; liveauthentication/pilot acceptance. HTTP503PASS не закрывает их. `V5BitrixLockedPasswordTotpProof` — готовый BEGIN read adapter, не verifier кода. Pending `V5BitrixLockedTotpFactor` остаётся внеsrc/CI; его прежний заблокированныйpayload не повторяется.
 
-Ожидается вывод исправленного origin HTTPS helper. Не переустанавливать V5, не просить уже присланные выводы и не настраивать публичный NAT ради self-check. После реального originPASS — native composition и проверенные web metadata/ограниченный пилот; не объявлять готовой авторизацию по ответу503. Один guarded Bash block, syntaxcheck, FINAL_STATUS/FINAL_RC, безсекретов; SSH не закрывать. Приоритетproduction fact > livecode > реальные тесты > docs > обсуждения.
+## 5. Git/CI и границы допуска
+
+Repo `juvantusik/Evrasia_AI_bot`, branch `feature/samzaberu-api-v5-auth-contract`. Перед этой итерацией liveHEAD `0a5a60e0bc52f96644e8c858b5760e015a6ef20e`; его offline Actions **38764635635 SUCCESS** проверен через liveGitHub. Установленныйruntime остаётся0caa0248, installer/testc37ab9959bb13dae49f9c1a2c4ddda0b06905c69. InstallerCI38754541007/38754541037 и runtimeCI38750965561/38750966026 — ранее подтверждённыеSUCCESS,26offline/329DB; новые config-parser проверки не прибавляются к329.
+
+Main baseline `7c2e9f8e4501b92469bcdeea18f8340676ad52c9`; main не изменять: push публикуетlatest. Новые docs/helper commits не установка и не новые native providers. Production DDL, account/security mutations и платныеSMS требуют отдельного конкретного допуска, backup/post-check/rollback. CI/faultschemas не переносить в рабочуюБД и не отключать guards.
+
+ЗакрытыеCUser/PhoneAuth/OTP-recovery исследования сохранены в историческихhandoff/STRUCTURE_REGISTRY/native-mutation документах. CUserdelete/add не доказаны какsuccessfulCONFIRMEDwriter; SHA-driftuser.php не объяснён и не приняткакbaseline. Не исправлятьcoreавтоматически и не повторять прежниеsource-onlyprobes.
+
+**CURRENT:** V5_FILES_INSTALLED_ON_PRODUCTION=YES; V5_MODE=off; LOCAL_ORIGIN_OFF_BOUNDARY=PASS(2paths); PHP_RUNTIME_MAPPING_ATTESTED=NO; PRODUCTION_AUTH_ENABLED=NO; V5_DATABASE_MIGRATED=NO; PUBLIC_EDGE_TEST=NOT_RUN. Следующий ожидаемый ввод — read-only web-config output, не повторHTTP/установки/истории. Один guarded Bash block, syntaxcheck, FINAL_STATUS/FINAL_RC, безсекретов; терминалне закрывать.

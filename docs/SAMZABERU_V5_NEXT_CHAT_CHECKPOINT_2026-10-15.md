@@ -1,37 +1,37 @@
-# СамЗаберу V5 — checkpoint: OFF установлен, исправлен HTTPS self-call
+# СамЗаберу V5 — checkpoint: origin HTTPS PASS
 
-15 октября2026. INSTALL_DISABLED_ONLY уже PASS. Первый HTTP helper получил CURL_RC=7; **следующий ввод — origin-проверка с --resolve**, не повтор установки/layout/истории. VM не требуется, V5 рядом сV4 наevrasia.
+15 октября2026. **Оба origin HTTPS пути уже PASS.** Не повторять layout, установку или503-проверку. РазмещениеV5/V4 параллельно наevrasia; новаяVM не требуется.
 
-## Что фактически выполнено оператором
+## Последний результат оператора
 
-Установка runtime0caa0248c783188939398a71543ba740f064bb90: V5_INSTALLED_DISABLED=YES, V5_MODE=off, FINAL_STATUS=PASS, FINAL_RC=0. CLI отsite_evrasia подтвердил503, V4/shared rewrite unchanged; DB/Bitrix/SMS/HTTP/reload не выполнялись installer.
+В загруженном логе после --resolve evrasia.rest:443:192.168.103.141:
+- direct `/api/v5/router.php` и nested `/api/v5/auth/signin`: CURL_RC=0, HTTP_STATUS=503, TLS_VERIFY_RESULT=0, точноеOFFJSON.
+- обаответа JSON/no-store, безSet-Cookie/Location/CORS/положительногоAge;
+- повторнаяпроверка package/OFF/V4/sharedrewrite PASS;
+- FINAL_STATUS=PASS, FINAL_RC=0, HTTP_REQUESTS=2, HTTP_OFF_PATHS_PASS=2, LOCAL_ORIGIN_OFF_BOUNDARY=PASS.
 
-- Public `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5`.
-- Private `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90`.
-- Backup `/root/ev-v5-off-backup.f89wzMkA`.
-- Rollback `/root/ev-v5-off-backup.f89wzMkA/rollback.sh`, не запускался.
-- Manifest `private/samzaberu-v5/installed.sha256`; configoff, нетfactory/pilotkey/DDL.
+Граница: толькоlocalorigin cканоническимSNI. PUBLIC_EDGE_TEST=NOT_RUN, PHP_HTTPS_AND_PEER_MAPPING=NOT_ATTESTED, V4_HTTP_FUNCTIONAL_TEST=NOT_RUN, REAL_NATIVE_AUTHENTICATION_TEST=NOT_RUN. ПредыдущийCURL_RC7 без--resolve сохраняется какистория, некакновыйотказ.
 
-**Следующая попытка HTTP:** OFFpackage/V4baseline/rollback guardsPASS. ПервыйGET `/api/v5/router.php` не получилHTTPответ: CURL_RC=7, FINAL_RC=2, HTTP_REQUESTS=1, HTTP_OFF_PATHS_PASS=0. Вложенный путь не выполнялся. Нет основания считать это ошибкой приложения, повреждением установки или отказом сайта для всех клиентов. Реальная причина сетевого connect-failure в новом запуске не доказана.
+## Неизменённое состояние сервера
 
-## Исправление без новых аудитов
+Runtime `0caa0248c783188939398a71543ba740f064bb90`; public `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5`; private `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90`; backup `/root/ev-v5-off-backup.f89wzMkA`; rollback тамже `rollback.sh`, не запускался. Manifestвprivate/samzaberu-v5/installed.sha256. Modeoff, nativefactory/pilotkey/V5DDL отсутствуют. Файлынаproductionесть; авторизацияне включена.
 
-Production map `docs/BITRIX_ANTI_FRAUD_PRODUCTION_MAP.md`§1 уже фиксирует localorigin192.168.103.141, nginx:443 наэтомIP, не наloopback, и ненадёжныйpublichairpin. Старый helper ошибочно не использовал известный self-call.
+## NEXT
 
-Существующий `deployment/check-disabled-v5-http.sh` теперь использует `--ipv4 --resolve evrasia.rest:443:192.168.103.141`, сохраняяURL/Host/SNI, полноценнуюпроверкусертификата, запретproxy/redirect/retry/insecure. ДоHTTP проверяет, чтоIP локальный и443 слушается. Послеconnect проверяетremote_ip. Старыеoff/manifest/backup/root/V4guards иexact503JSON/headerchecks сохранены. ДваGET максимум, второй послепервогоPASS.
+Подготовлен **только read-only** `deployment/read-v5-web-config.sh`, SHA256 `26cc5a2b3b04143764c58032d5a5759f88a54fbd16ca738bcffaa4dedbbbfd81`, blobf658d5b3bae9c47320e530ac5813b67ed87e8d51.
 
-**Новый SHA256 `f35297310e6a50787630f1f6dc8973088098cadc8e55c7aef37db9662ed7697b`**, blobc50695bccd346d835dea18dc5ec4a9959c928501. Старыйdeb2ad8e изcd744a1 больше не выдавать для self-check. Установленныйruntime не обновляется, DNS/hosts/nginx/V4/SQL не меняются.
+Проверяетroot/evrasia/OFFmanifest/V4 до/после; читает ограниченныеvhost-кандидаты nginx/Apache иPHP8.3/.user.ini, выводиттолько безопасныеTLS/FPM/forwardedнастройки. Не выполняетPHP/HTTP/SQL, не меняетrouter.php/конфигурацию/пилот, не перезапускаетсервисы. Не обходитпроизвольныеinclude. Отсутствующийпуть невыдаётся засуществующий; при отсутствииvhostилиpython3 FAILбезустановкизависимостей.
 
-LOCALTESTS: bash-n, wrong-hostdenial HTTP_REQUESTS=0,8address/listenerfixtures +1failed-inventoryfixture,9headerfixturesPASS. Uploadedblob совпал слокальным. Это неoriginHTTPPASS и неновыйDBsuite. НовыйвыводссервераPENDING.
+Локально bash-n/Pythoncompile/wronghost(0HTTP) и10 синтетическихparser/redaction/scopechecks PASS; это неживойwebконтекст и неDBsuite. **Ожидаетсявыводсервера именноэтогоблока.** После него разбиратьфактическиеTLS/FPMправила и продолжатьnativecomposition, не новыйобщийаудит.
 
-ПриPASS ожидаемLOCAL_ORIGIN_OFF_BOUNDARY=PASS/HTTP_OFF_PATHS_PASS=2/FINAL_STATUS=PASS. **PUBLIC_EDGE_TEST=NOT_RUN**: --resolve проверяетместныйorigin, не внешнийNAT/CDNпуть. PHPHTTPS/peer mapping иnativeauth также неаттестованы. ПослеPASS продолжитьnativecomposition; приошибке анализироватьконкретныйновыйрезультат, безпереустановки и общихPHPаудитов.
+Временный инструментированныйPHPshim рассматривался, но егоGitHubпубликация былазаблокирована. Payloadнеповторялсяи некоммитился/неприменялсянасервере. Read-onlyальтернатива не выполняетподменувхода. Не обещать runtimeаттестацию по статическомуconfigснимку.
 
-## Версии, CI и защищённое окружение
+## Версии/CI
 
-Передизменениямиlivefeaturecd744a125db921ec79921d727ced2ba2592f8e4e; егоoffline38763004874SUCCESS. Последнийinstaller/testc37ab9959bb13dae49f9c1a2c4ddda0b06905c69, CI38754541007/38754541037SUCCESS, прежние26offline/329DB+packagestep. Runtime0caa0248CI38750965561/38750966026SUCCESS. Новыйhelper неменяетsrc/API/workflows/DDL; новыйcommit неустановленныйruntime.
+Livefeatureдоизменений0a5a60e0bc52f96644e8c858b5760e015a6ef20e; offline38764635635SUCCESS подтверждён. Installer/testc37ab995 CI38754541007/38754541037SUCCESS; runtime0caa0248 CI38750965561/38750966026SUCCESS, прежние26offline/329DB. Новыйhelper не меняетsrc/API/DDL/workflows/установленныйrelease. Его локальные10checks неувеличивают329DB и неявляются новымnativeproof.
 
-SiteUID/GID1005:1005,CLI8.3.21,pool8.3/privateopen_basedir ранее подтверждены. RootSHA81544afa0396c6778f263d9b250105913aae9d3621cbaaf0e3cf1e4f3a297b95;V4rewriteSHA61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3;V4routerSHA3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50. Sharedapi/.htaccessотсутствует. Mainbaseline7c2e9f8e4501b92469bcdeea18f8340676ad52c9 не менять.
+Mainbaseline7c2e9f8e4501b92469bcdeea18f8340676ad52c9 не менять. Root/V4SHA иUnix/PHPmetadata сохраненывSTART HERE. Полные предыдущиедоказательства — история0a5a60e.
 
-Nativefactory/allowlist,TOTP/replay/10-pathepochhooks,phonesuccess/reconfirm,strongtrust,SMSlifecycle/provider/receipt/tariff,RestIS,permitиadditiveDDL ещё не приняты. PendingTOTPdraft внеsrc/CI; заблокированныйpayload не повторять. CI/faultschemas не переноситьнаproduction.
+Nativefactory/allowlist,TOTP/replay/10-pathepochhooks,phonesuccess/reconfirm,strongtrust,SMSlifecycle/provider/receipt/tariff,RestIS,permitиadditiveDDL всёещёнеприняты. PendingTOTPdraftвнеsrc/CI. Productionмутации/DDL/SMS отдельно согласовывать; CI/faultschemas нарабочейБД запрещены.
 
-CURRENT: V5_FILES_INSTALLED_ON_PRODUCTION=YES / V5_MODE=off / FIRST_DNS_SELF_CHECK=CONNECT_FAILED_RC7 / ORIGIN_HTTPS_PENDING / PRODUCTION_AUTH_ENABLED=NO / NO_V5_DB_MIGRATION. Полнаяпредыдущаяредакция сохранена вcd744a125db921ec79921d727ced2ba2592f8e4e; еёHTTP_PENDINGтеперь уточнён фактическимconnect-failure, а не скрыт.
+CURRENT: INSTALLED_DISABLED / ORIGIN_HTTPS_PASS / PHP_RUNTIME_NOT_ATTESTED / NO_NATIVE_AUTH / NO_V5_DB_MIGRATION.

@@ -1,46 +1,43 @@
 # V5 — реестр интеграционных решений, 15 октября 2026
 
-Дополнение к историческому STRUCTURE_REGISTRY. Полная предыдущая редакция сохранена вcommitcd744a125db921ec79921d727ced2ba2592f8e4e. НовыйR12 исправляет проверочныйself-call, а не архитектуру или авторизацию.
+Дополнение к STRUCTURE_REGISTRY. Полная прежняя редакция R1–R12 сохранена вcommit `0a5a60e0bc52f96644e8c858b5760e015a6ef20e`; новый факт R13. Принятые бизнес-правила не меняются.
 
-## R12. HTTPS self-check использует уже известный локальный origin
+## R13. OFF origin HTTPS принят по реальному результату
 
-**Было:** check-disabled-v5-http.sh обращался кevrasia.rest без --resolve. Оператор получил PASS проверокOFFpackage/V4/backup, затемCURL_RC=7 наdirectentry; HTTP_REQUESTS=1, HTTP_OFF_PATHS_PASS=0, FINAL_STATUS=FAIL/FINAL_RC=2. HTTPответ не получен, nestedroute не запускался.
+**Было:** runtime0caa0248 установленOFF, CLI503PASS, public-DNSself-call получилCURL_RC7; correctedoriginhelper ещёожидалоператора.
 
-**Стало:** тот жеhelper добавляет --ipv4 --resolve evrasia.rest:443:192.168.103.141, проверяет назначениеIP текущемуhost иlistener443 передHTTP, затемremote_ip. URL/Host/SNI остаютсяevrasia.rest, проверкасертификата не отключена. Сохраняютсяmanifest/off/V4/backup/JSON/headersguards, не более2анонимныхGET и остановкаприошибке. Нетproxy,redirect,retry,publicIP/loopbackfallback,правкиhosts/DNS/nginx/рабочихфайловилиБД.
+**Стало:** оператор прислалфайл с успешнымиGET `/api/v5/router.php` и `/api/v5/auth/signin` через192.168.103.141 сSNIevrasia.rest. НаобоихCURL_RC0/HTTP503/TLS_VERIFY_RESULT0/exactOFFJSON/no-store/no-cookie/no-redirect/no-CORS/noAge. ПослеHTTP manifest/OFF/V4/sharedrewrite неизменны. FINAL_STATUS=PASS/FINAL_RC0/HTTP_OFF_PATHS_PASS2/LOCAL_ORIGIN_OFF_BOUNDARY=PASS.
 
-**Почему:** docs/BITRIX_ANTI_FRAUD_PRODUCTION_MAP.md§1 уже устанавливает этот self-call и ненадёжностьpublichairpin; previoushelper пропустил известное ограничение. Это ошибка инструментальной проверки, не доказательство неисправностиV5. Новый отказRC7 сам по себе не различает конкретные причиныNAT/firewall/listener; точная текущая причина не заявляется. Прежде чем повторно исследовать сеть, нужно применить уже подтверждённыйадрес.
+**Почему:** фактическийсерверныйвывод заменяетPENDING. Файловуюустановку, layout иoffHTTP не повторять. Исправлениеself-callприменено; точнуюпричинупервогоRC7 этимнеобъявляемдоказанной.
 
-**Evidence:** присланныйвыводоператораRC7; livefeaturecd744a1 и productionmap7c2e9f8 прочитаны. ИсходныйhelperSHAdeb2ad8e... заменён наSHA256 **f35297310e6a50787630f1f6dc8973088098cadc8e55c7aef37db9662ed7697b**, blobc50695bccd346d835dea18dc5ec4a9959c928501. Локальноbash-n/wronghost(0HTTP),8address/listenerfixtures+1failed-inventoryfixture,9unchangedheaderfixturesPASS. Uploadedblob совпадает. Это LOCAL_ONLY, реальнаяoriginпроверкапокаPENDING. Предыдущийoffline38763004874SUCCESS не доказал self-call и не выдается заегоуспех.
+**Граница:** неexternalDNS/NAT/CDN, неPHPHTTPS/peer metadata, неV4functionalE2E и неnativeauthentication. Backendнеподключён, modeoff. Runtime/backup/installerнеизменны; новыеfeature/docs неавтоматическийdeploy.
 
-**Граница:** LOCAL_ORIGIN_OFF_BOUNDARY не PUBLIC_EDGE_TEST. --resolve не проверяетмаршрутвнешнегоклиентачерезDNS/NAT/CDN и не доказываетPHPHTTPS/peer mapping/nativeauth/V4functionalE2E. Возможныwebaccesslogs. Runtime0caa0248,режимoff,backupf89wzMkA иinstallerc37ab995 неизменны; переустановка/откат не требуются поодномуconnect-failure.
+## R14. Следующая проверка — чтение конфигурации, без временной подмены entry
 
-## R11. V5 установлен OFF — подтверждённый серверный факт
+**Было:** хотелось получитьфактическийPHPконтекст через временныйinstrumentedV5shim. Публикацияэтогоскрипта былаотклоненаинструментомбезопасности; завершённымкодом/установкой это неявляется.
 
-**Было:** layoutPASS,installer/testc37ab995CIpassed, результатустановкиожидался.
+**Стало:** блокированныйpayload не повторяется черездругойendpoint/encoding/delivery. Вветку включён другой, read-only `deployment/read-v5-web-config.sh`, не выполняющийподменуилиPHP. Ончитает ограниченныекандидаты nginx/Apachevhost/PHP8.3/.user.ini, печатаетразрешённыеTLS/FPM/forwardedнастройки; неизвестныезначенияскрывает. OFFmanifest/root/V4проверяетдо/после; HTTP/SQL/PHP/reload/write не делает. Includeпроизвольнонеобходит.
 
-**Стало:** runtime0caa0248c783188939398a71543ba740f064bb90 установленвpublic `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5` иprivate `/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90`. Modeoff;backup `/root/ev-v5-off-backup.f89wzMkA`,rollbackтамжеrollback.sh. CLIотsite_evrasia дал503,root/V4unchanged,FINAL_STATUS=PASS/FINAL_RC=0. InstallerневызывалDB/Bitrix/SMS/HTTP/reload.
+**Почему:** выяснитьпередачуTLS/peer длясуществующегоV5transport беззатрагиванияустановленноговхода. Статическийснимокнеподменяетruntimeприёмку и неразрешаетдоверятьподдельнымproxyheaders.
 
-**Почему:** productionfact заменяетpendingdocs. КорректныестатусыV5_FILES_INSTALLED_ON_PRODUCTION=YES иPRODUCTION_AUTH_ENABLED=NO. Не просить layout/installoutput повторно. СтарыйHTTPhelper подготовленR11 и теперь исправленR12 после первогофактическогоconnectfailure.
+**Evidence:** bashsyntax/Pythoncompile/wronghost0HTTP и10localparserfixtures PASS; credentials-canaryнепечатается, out-of-scopesymlink иотсутствиеvhostотклоняются. SHA256`26cc5a2b3b04143764c58032d5a5759f88a54fbd16ca738bcffaa4dedbbbfd81`, blob`f658d5b3bae9c47320e530ac5813b67ed87e8d51`. РезультатсевrasiaещёPENDING; noextraMariaDBcoverage. Предыдущийfeature0a5a60e offline38764635635SUCCESS прочитанlive.
 
-## Сохраняемые решения: было → стало → почему
+## Сохранённые решения
 
-| ID | Решение |
+| ID | Было → стало → почему |
 |---|---|
-| R1 | Нет lateUNKNOWN→SENT → independentreceipt reconciliation безsend/budget/TTL → неопределённуюоплату не исправлять второйSMS. |
-| R2 | Quota fixtureбезsort → canonicalsortтолькоfixture → runtimeguardсохраняется,историяFAILсохранена. |
-| R3 | Планотдельногоstaging → обязательнаяVMотмененаR7 → пользовательеёневыделяет. |
-| R4 | Mainpushпубликуетlatest → docs/codeтолькоfeature → безпобочнойпубликации. |
-| R5 | SMSqueries/autocommitACKнесовместимысbridge → exactSQL/ownedCAS/COMMIT → толькоcommittedack. |
-| R6 | НетlockedpasswordBEGINadapter → freshlockedrows/прежнийepochHMAC → staleпарольнедостаточен. |
-| R7 | VMкакblocker → V4/V5параллельнонаevrasia,общиеаккаунты/БД → инфраструктуранеподменяетпродукт;securitypermissionsсохраняются. |
-| R8 | Постоянная503заглушка → отдельныйentry/lazytransport/off → reuseworkflowбезV4fallback. |
-| R9 | Нетprivateconfig/shim → guardedoff/pilotJSON → operationalkeyнеaccountauth;nativefactoryнет. |
-| R10 | Неизвестенlayout → operatorPASS/pinnedOFFinstaller → размещениеподтверждено. c37ab995сохраняетbuilder-errexit; CI38754541007/38754541037PASS,26offline/329DBсохранены. |
+| R1 | НетlateUNKNOWN→SENT → independentreceipt reconciliation безsend/quota/TTL → неопределённостьнеисправлятьвторойSMS. |
+| R2 | Несортированнаяquota fixture → canonicalsortтолькоfixture → runtimeguardнеослаблять; FAILисториясохранена. |
+| R3/R7 | ОтдельнаяVMкакblocker → V4/V5насуществующемevrasia,общиеаккаунты/БД → прямое решениепользователя; securitypermissionsсохраняются. |
+| R4 | Mainpushпубликуетlatest → feature-onlyкод/docs → безпобочнойпубликации. |
+| R5 | SMSqueries/autocommitACKнесовместимы → exactSQL/ownedCAS/COMMIT → committedack. |
+| R6 | НетlockedpasswordBEGINadapter → currentlockedrows/общийepochHMAC → staleпарольнедостаточен. |
+| R8/R9 | Постоянная503заглушка → parallelentry/lazytransport/privateoff-pilotconfig → operationalkeyнеaccountauth. |
+| R10/R11 | Layout/installerожидались → actuallayoutиOFFinstallPASS → новыеV5файлыесть, nativeauthещёнет. Backupf89wzMkAсохранён. |
+| R12 | НеверныйpublicDNSself-call → documentedorigin--resolve → localoriginбезDNS/nginxправок; теперьPASSпоR13. |
 
-## Дополнение реестра структур
+## Структуры / неизменность
 
-- В существующем deployment/check-disabled-v5-http.sh толькоorigin routing/guards/peeroutput/scopeflags. Нового аналогичногоdiagnosticфайла не создано;installerне меняетсяине запускается.
-- НовыйфактHTTPCONNECT_FAILED_RC7 иhistoricalorigincontract перенесенывSTART HERE/checkpoint. ТребованиеpublicDNSself-callзаменено;externaledgeпроверка не считаетсяпройденной.
-- Runtime src/API/config/keys/nativeproviders/PROPOSEDSQL ирабочийserverrelease безизмененийR12. Main/V4/рабочаяБД не изменяются.
+Новый только `deployment/read-v5-web-config.sh` плюсSTART HERE/checkpoint/этотреестр. Runtime`src`/`api`, installedconfig/shim/release, nativeproviders, SQLиworkflows не менялись. Ранееотклонённыйtemporaryshimнеприменялся. Root/V4насервере сохранены пооператорскомулогу. Старыйcheck-disabled-v5-http.shбольше ненужно запускатьрадитогожеPASS.
 
-Путиdeployment/src/api относительноsite-integration/samzaberu-v5. ЗакрытыеCUser/PhoneAuth/OTPаудиты не повторять. PendingTOTPdraft и заблокированныйpayload не использовались. Nativefactory/TOTP/replay/phone/events/trust/SMS/RestIS/DDL остаются отдельными интеграционными задачами.
+Nativefactory/test-accountallowlist,TOTP/replay/epochhooks,phoneverification,strongtrust,SMSlifecycle/provider/RestISиDDL остаютсяследующимиинтеграционнымиблоками. Не возвращатьVM и не повторятьзакрытыеCUser/PhoneAuthsource-onlyаудиты.
