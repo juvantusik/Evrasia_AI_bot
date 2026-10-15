@@ -410,6 +410,25 @@ yes($reader->calls===0,'epoch mismatch denies before PIN read');
 
 yes(!$store->revokeAccess($issued->accessToken),
     'changed native auth epoch forbids using stale JWT to revoke');
+try {
+    $store->rotateRefresh($issued->refreshToken);
+    yes(false, 'stale epoch must be rejected as a generic credential failure');
+} catch (AuthenticationRejected $error) {
+    yes($error->getMessage()==='authentication_failed',
+        'epoch mismatch yields safe generic authentication denial');
+}
+
+[$backendStore,$backendDb]=environment();
+$backendIssued=trusted($backendStore);
+$backendDb->failSql='SELECT sid, user_id, auth_epoch';
+try {
+    $backendStore->rotateRefresh($backendIssued->refreshToken);
+    yes(false, 'backend failure must not be reported as invalid credentials');
+} catch (RuntimeException $error) {
+    yes(!($error instanceof AuthenticationRejected)
+        && $error->getMessage()==='session_unavailable',
+        'unavailable backend reports generic outage, not credential refusal');
+}
 
 denies(fn()=>new V5MySqlStrongSessionStore(
     new SessionFakePdo(),new V5AccessJwtCodec(['k'=>str_repeat('K',64)],'k'),
