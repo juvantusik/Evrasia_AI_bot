@@ -15,13 +15,18 @@ use Throwable;
  * Verified SITE dispatch proof, mandatory and NEVER provided by default.
  * Recheck active/unblocked account, native TOTP-off policy, unchanged
  * AUTH_EPOCH and current b_user_phone_auth CONFIRMED/E164/version stamp
- * with the SAME locked DB transaction. Must recheck before each paid send.
+ * with the SAME locked DB transaction. MUST also verify the latest genuine
+ * provider tariff is within authorizedMaxPriceMinor and currency matches,
+ * to avoid charging more after the original reservation. The future sender
+ * MUST make a final provider-quote/phone check immediately before send.
+ * Must recheck before each paid send.
  * Any unknown state is false. Do not log phone, code or decrypted SMS text.
  */
 interface V5LockedSmsDispatchSafetyPort
 {
     public function stillSafeWithChallengeLocks(
-        PDO $db,int $userId,string $challengeEpoch,string $verificationStamp
+        PDO $db,int $userId,string $challengeEpoch,string $verificationStamp,
+        int $authorizedMaxPriceMinor,string $currency
     ): bool;
 }
 
@@ -118,7 +123,8 @@ final readonly class V5MySqlSmsDispatchClaims
             }
             $safe=$this->native->stillSafeWithChallengeLocks(
                 $this->db,$userId,
-                $challenge['auth_epoch'],$challenge['verification_stamp']
+                $challenge['auth_epoch'],$challenge['verification_stamp'],
+                self::positive($row['max_price_minor']),$row['currency']
             );
             if($safe!==true){
                 $this->db->rollBack();$started=false;
@@ -201,7 +207,8 @@ final readonly class V5MySqlSmsDispatchClaims
             || $row['encrypted_envelope']===''
             || strlen($row['encrypted_envelope'])>8192
             || preg_match('/\A[A-Z]{3}\z/D',$row['currency']??'')!==1
-            || self::positive($row['max_price_minor']??null)===null)return false;
+            || self::positive($row['max_price_minor']??null)===null
+            || self::positive($row['max_price_minor'])>1000000000)return false;
 
         $issued=self::positive($challenge['issued_at']??null);
         $expires=self::positive($challenge['expires_at']??null);
