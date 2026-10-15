@@ -25,6 +25,9 @@
 **В этом потоке следующий шаг — обработать stdout последнего script из нового чата.** Остальная история ниже относится к другим/более старым задачам.
 
 
+> **BITRIX / САМЗАБЕРУ V3C — новое дополнение 2026-10-11:** [Bitrix/START_HERE.md](Bitrix/START_HERE.md) → [технический checkpoint](Bitrix/V3C_SECURE_AUTH_CHECKPOINT_2026-10-11.md) → [25-case E2E acceptance](Bitrix/V3C_TEST_ACCEPTANCE_2026-10-11.md). Последнее подтверждение: **real verifier + real PDO + sandbox MariaDB, 25/25 PASS, synthetic TOTP candidate; V3C NOT DEPLOYED**. Production Bitrix не изменён.
+> **Не путать две 2FA-ветки:** ранние разделы ниже о веб-TOTP как «PLANNED» являются историческими; [веб-2FA checkpoint, раздел 20](TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md) подтверждает production-пилот/отключение 2026-09-24. Мобильная V3C на 2026-10-11 отдельно **не внедрена**. Этот баннер не меняет ранее зафиксированную production-ревизию Anti-Fraud бота.
+
 > **ОБЯЗАТЕЛЬНО ПЕРЕД ДИАГНОСТИКОЙ BITRIX / AUTH / V5 (2026-10-11):** прочитать [docs/STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md). Там уже закреплены реальные таблицы `b_user` (8/8), `b_sec_user`, V4, JWT, TOTP V3C, Trusted Device, источники SHA, степень доказанности и запрет повторных широких аудитов. Не начинать новый чат с повторного поиска структур; выяснить только ещё не закрытый интеграционный вопрос. Актуальная работа V5 идёт в `feature/samzaberu-api-v5-auth-contract`, не deployed. Старые описания TOTP ниже читать в свете более нового документа.
 
 
