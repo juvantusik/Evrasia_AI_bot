@@ -35,7 +35,8 @@ interface V5LockedSmsDispatchSafetyPort
  * A persisted idempotency key by itself is NOT a delivery acknowledgement.
  * Implementations must independently attest the provider result (not trust
  * caller claims), match the exact delivery and charge identity, and deny
- * unknown/missing evidence. No real provider is installed by default.
+ * unknown/missing evidence. Receipt checks must NEVER send/resend an SMS
+ * or initiate a paid delivery. No real provider is installed by default.
  */
 interface V5SmsSentReceiptAttestationPort
 {
@@ -75,7 +76,9 @@ final readonly class V5ClaimedSmsForOneAttempt
 
 /**
  * DB-ONLY transition protocol: queued -> claimed -> sent/failed/unknown.
- * This class NEVER decrypts, contacts an SMS provider, or retries a paid send.
+ * This class NEVER decrypts or calls a paid-send API. Receipt verification
+ * is delegated to the mandatory independent attestor; UNKNOWN -> SENT has
+ * a separate explicit reconciliation method and NEVER retries a paid send.
  *
  * Lock order for worker claim: challenge row FIRST, matching outbox row,
  * THEN site-specific native safety locks. Do not hold a transaction while
@@ -205,6 +208,58 @@ final readonly class V5MySqlSmsDispatchClaims
             return $q->rowCount()===1;
         }catch(Throwable){
             throw new RuntimeException('v5_sms_provider_ack_unavailable');
+        }
+    }
+
+    /**
+     * Explicit reconciliation of an ALREADY attempted, UNKNOWN delivery.
+     * The receipt provider must perform only an independent status lookup
+     * or verify an authoritative receipt; NEVER send/resend or create a charge.
+     * No envelope/claim is returned, no budget is released or consumed again.
+     * A late SENT receipt does not revive an expired/cancelled challenge,
+     * extend its TTL, change its phone/epoch, or itself authorize a session.
+     * Concurrent/repeated reconciliation changes UNKNOWN -> SENT at most once.
+     * False also means no eligible UNKNOWN row; it is NEVER a resend permit.
+     */
+    public function reconcileUnknownSent(
+        string $deliveryId,
+        string $providerIdempotencyKey,
+    ):bool {
+        if(!V5LoginWorkflow::validChallengeId($deliveryId)
+            || !V5LoginWorkflow::validChallengeId($providerIdempotencyKey)
+            || !hash_equals($deliveryId,$providerIdempotencyKey))return false;
+        $this->assertReady();
+        if($this->sentReceipt===null)return false;
+        try{
+            // Avoid even a receipt lookup for missing/non-UNKNOWN deliveries.
+            // This is only a hint: the final UPDATE repeats the state/key CAS.
+            $status=$this->query('SELECT status FROM ev_v5_sms_outbox '
+                .'WHERE delivery_id = ? AND provider_idempotency_key = ? '
+                .'LIMIT 1',[$deliveryId,$providerIdempotencyKey])->fetchColumn();
+            if($status!=='unknown')return false;
+        }catch(Throwable){
+            throw new RuntimeException('v5_sms_reconciliation_unavailable');
+        }
+        try{
+            if($this->sentReceipt->independentlyConfirmedSent(
+                $deliveryId,$providerIdempotencyKey
+            )!==true)return false;
+        }catch(Throwable){
+            return false;
+        }
+        // Never report an uncommitted acknowledgement or roll back a scope
+        // unexpectedly opened by a provider. Its owner must resolve that scope.
+        if($this->db->inTransaction())
+            throw new RuntimeException('v5_sms_reconciliation_foreign_transaction');
+        try{
+            $q=$this->query('UPDATE ev_v5_sms_outbox SET status = ? '
+                .'WHERE delivery_id = ? AND provider_idempotency_key = ? '
+                .'AND status = ?',[
+                'sent',$deliveryId,$providerIdempotencyKey,'unknown',
+            ]);
+            return $q->rowCount()===1;
+        }catch(Throwable){
+            throw new RuntimeException('v5_sms_reconciliation_unavailable');
         }
     }
 
