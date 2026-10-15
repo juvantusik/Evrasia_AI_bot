@@ -1,49 +1,47 @@
-# СамЗаберу V5 — checkpoint после receipt reconciliation, 15 октября 2026
+# СамЗаберу V5 — checkpoint, 15 октября 2026
 
-Текущая точка продолжения. Читать вместе с [START HERE](SAMZABERU_V5_START_HERE_2026-10-15.md). Исторический `SAMZABERU_V5_NEXT_CHAT_CHECKPOINT_2026-10-13.md` сохранён; его NEXT не переопределяет этот checkpoint.
+Читать вместе с [START HERE](SAMZABERU_V5_START_HERE_2026-10-15.md). Исторические NEXT от 13 октября не актуальны.
 
-## Подтверждённый результат
+## АКТУАЛЬНО: SMS через Bitrix bridge и ACK только после COMMIT
+
+Последний code/test commit: **`8c395f0320f82a1c69bd06830dd229a087b358fb`**. Offline Actions **38740380225**, job **116440231373**, SUCCESS (26 approved suites). Real ephemeral MariaDB Actions **38740380099**, job **116440233787**, SUCCESS. Из прочитанного лога: **43 sessions + 117 SMS + 45 reconciliation + 63 bridge = 268 assertions**, combined SMS 225; FINAL_STATUS=PASS, FINAL_RC=0.
+
+Было два несовместимых стыка: существующий мост запрещал четыре SELECT по delivery_id; receipt UPDATE выполнялся без owned transaction и потому также запрещался мостом. Стало: четыре exact SMS read templates (hint/claim/receipt/consumption), generic query widening НЕ применялся; обычный и поздний provider outcome сохраняются единым private owned BEGIN→CAS UPDATE→COMMIT. Успех возвращается только после COMMIT, lookup квитанции остаётся до транзакции. Ошибочная чужая transaction не принимается и не откатывается.
+
+`V5EphemeralMySqlSmsBridgeTest.php` включает предыдущие SMS/reconciliation suites ОДИН раз, затем 63 assertions с реальным PDO MySQL под **синтетическим** Bitrix-shaped API facade. Проверены claim→SENT→одноразовое consume, late receipt, точные SQL templates/denials, настоящий rollback, отдельное connection для проверки видимого committed state, потерянный ответ выполненного COMMIT (никакого ложного success), native-foreign-scope/permit denial. `BITRIX_FACADE=SYNTHETIC_ONLY`; это НЕ настоящий Bitrix SqlHelper, native transactionDepth/ORM hook proof или приёмка staging.
+
+Compare `7f4de5a..8c395f0`: только bridge (+24), dispatch (+37/-13), новый test (+276), workflow (+6/-4). DDL/routers/V4/main/deployment не менялись. Локальный PHP lint и baseline blob guards PASS; 0/4→4/4 SMS template compatibility воспроизведена. Последующие HEAD с docs не означают нового code-test run.
+
+**NEXT:** независимый Bitrix staging по готовому provisioning plan, затем существующий native preflight/отдельно разрешённые rollback/concurrency и настоящие providers. Не повторять закрытые production source-only probes. Provider SMS/RestIS/native adapters нельзя считать подключёнными.
+
+## ПРЕДЫДУЩИЙ CHECKPOINT: receipt reconciliation (история)
 
 - Branch: `feature/samzaberu-api-v5-auth-contract`, repo `juvantusik/Evrasia_AI_bot`.
 - Runtime implementation commit: `04915fab87abf21eec1649f75b053c9bb91619dc`.
-- Latest code/test commit passed by BOTH workflows: **`dc2caed6af465aeb387490d20f1173005a80e3dd`**. Исправление после первого прогона — только сортировка бюджетных ключей fixture; runtime guard сохранён.
+- Тогда последний code/test commit passed by BOTH workflows: **`dc2caed6af465aeb387490d20f1173005a80e3dd`**. Исправление после первого прогона — только сортировка бюджетных ключей fixture; runtime guard сохранён.
 - Offline [38736808948](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38736808948), job `116428073291`: SUCCESS, 26 suites, 78 PHP lint, FINAL_STATUS=PASS, FINAL_RC=0.
-- MariaDB [38736809040](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38736809040), job `116428073802`: SUCCESS. Из реально прочитанного лога: sessions 43, прежний SMS suite 117, reconciliation 45, combined SMS 162; **всего 205**. TWO_PROCESS_SMS_RECEIPT_RACE=YES, RECEIPT_PROVIDER=SYNTHETIC_ONLY, ACTUAL_SMS_SENT=NO.
-- Первый MariaDB run `38736335930` на `04915fab` FAIL после прежних 160 PASS: Noncanonical SMS window ordering в новой fixture. Не стирать историю неуспеха; исправленный run supersedes её.
-- Compare `0ff80561db4654eeeeac159e762e21bda479e909..dc2caed` подтвердил ровно 3 изменённых файла: store (+57/-2), новый integration test (+235), CI workflow (+8/-5). Нет изменений V4, DDL или deployment.
-- Main остаётся `7c2e9f8e4501b92469bcdeea18f8340676ad52c9`; docs этой итерации — только feature. После этого checkpoint возможен doc-only HEAD: проверить live ref и compare, не требовать совпадения HEAD с code/test commit.
+- MariaDB [38736809040](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/38736809040), job `116428073802`: SUCCESS. Sessions 43, прежний SMS suite 117, reconciliation 45, combined SMS 162; **всего 205**. TWO_PROCESS_SMS_RECEIPT_RACE=YES, RECEIPT_PROVIDER=SYNTHETIC_ONLY, ACTUAL_SMS_SENT=NO.
+- Первый MariaDB run `38736335930` на `04915fab` FAIL после прежних 160 PASS: Noncanonical SMS window ordering в новой fixture. Исправленный run supersedes её; история FAIL сохранена.
+- Compare `0ff80561db4654eeeeac159e762e21bda479e909..dc2caed`: 3 файла — store (+57/-2), новый integration test (+235), CI workflow (+8/-5). Нет V4, DDL или deployment.
+- Main был и остаётся без наших изменений, baseline `7c2e9f8e4501b92469bcdeea18f8340676ad52c9`; docs только feature из-за main push→build/publish.
 
-## Новый внутренний API
+## Внутренний API и сохранённые ограничения
 
-`site-integration/samzaberu-v5/src/V5MySqlSmsDispatchClaims.php`:
+`V5MySqlSmsDispatchClaims::reconcileUnknownSent(string $deliveryId, string $providerIdempotencyKey): bool`: только UNKNOWN candidate; обязательный независимый receipt proof; финальная conditional UPDATE с точными key/state. Теперь UPDATE исполняется в собственной подтверждённой транзакции, true только после COMMIT. Повтор/конкурентный проигрыш/неподходящий status — false, НИКОГДА не разрешение повторной SMS.
 
-`reconcileUnknownSent(string $deliveryId, string $providerIdempotencyKey): bool`
+Нет envelope на выходе, новых outbox rows, изменения/возврата бюджета, TTL, auth epoch или phone stamp. Late receipt не оживляет challenge: consumer отдельно перепроверяет его актуальность и native policy. В receipt adapter запрещены send/resend. Отсутствующий/отрицательный/ошибочный attestor не даёт SENT. Чужой scope сохраняется для владельца.
 
-Проверяет идентификаторы и готовность InnoDB connection; читает только UNKNOWN candidate; вызывает обязательный `V5SmsSentReceiptAttestationPort::independentlyConfirmedSent()` без своей открытой транзакции; затем выполняет conditional UPDATE с прежним статусом UNKNOWN и точными delivery/key. Возвращает true только при одном изменённом ряду. Конкурентный проигравший, повтор, несуществующая запись, queued/claimed/sent/failed/cancelled — false; это **никогда не разрешение отправить SMS снова**.
-
-Без receipt provider, при отказе/ошибке проверки статус не меняется. Если provider неожиданно открыл чужую DB transaction, store отказывает, не откатывая чужую транзакцию. Никаких plaintext SMS/envelope на выходе, новых outbox rows, изменений бюджета, TTL, auth epoch или phone verification stamp. Late receipt — учёт подтверждённого результата, а не доказательство текущего права входа: стандартный consumer повторно проверяет challenge/native policy. Запрещён send/resend внутри receipt adapter.
-
-Существующий `recordProviderOutcome(..., Sent)` НЕ изменён по смыслу: только claimed→sent после independent receipt. UNKNOWN нельзя превратить в SENT через старый метод. `claimQueuedOnce()` не делает retry для claimed/unknown. Нет stale-claim reaper и нет универсального автоматического refund.
-
-Тест `V5EphemeralMySqlSmsReconciliationTest.php` запускает прежние 117 tests ОДИН раз, затем 45 новых. Гонка реализована двумя отдельными PHP OS processes с новыми PDO connections и barrier внутри receipt lookup, после обоих SELECT UNKNOWN. Это доказанная InnoDB CAS, но не настоящий provider/API/Bitrix.
+Старый `recordProviderOutcome(..., Sent)` по-прежнему только claimed→sent после независимого receipt. UNKNOWN→SENT возможен лишь через reconciliation. Claim не повторяет claimed/unknown; stale-claim reaper и универсального refund нет.
 
 ## Статусы допуска
 
 | Статус | Значение |
 |---|---|
 | OFFLINE_TESTED | PASS |
-| REAL_EPHEMERAL_MARIADB_PASS | YES, 205 assertions |
+| REAL_EPHEMERAL_MARIADB_PASS | YES, 268 assertions |
 | REAL_BITRIX_STAGING_TESTED | NO |
 | REAL_SMS_PROVIDER_TESTED | NO |
 | REAL_RESTIS_PIN_TESTED | NO |
 | PRODUCTION_DEPLOYED | NO |
 
-SMS begin/resend через HTTP по-прежнему выключены без проверенного native password-bound lifecycle. Public V5 не развёрнут; 503 — исторический baseline, live HTTP в этой итерации не тестировался.
-
-## Точная точка продолжения
-
-[Staging provisioning plan](SAMZABERU_V5_STAGING_PROVISIONING_PLAN_2026-10-15.md) готов. Не подтверждены независимые VM/DB, гипервизор или доступный test host; существование стенда остаётся UNATTESTED, а не ABSENT. Нужен инфраструктурный допуск/выделение или подтверждение существующей отдельной VM. Не просить старые production логи и не повторять аудит CUser/PhoneAuth.
-
-После подтверждения изоляции — существующий native depth preflight; после отдельного разрешения — probe-table rollback/ORM/connection tests; затем native password/TOTP/phone/security events и 10-path atomicity. Настоящие SMS receipt/тарифы/idempotency/late lookup и RestIS подключать только по действующему проверенному контракту. Реальные SMS и платные вызовы отдельно согласовываются.
-
-Реестр текущих структур и Было→Стало→Почему: [integration decisions](SAMZABERU_V5_INTEGRATION_DECISIONS_2026-10-15.md). Старые registry/checkpoint/README сохраняют исторический контекст; последнее состояние и NEXT брать из START HERE и этого checkpoint.
+HTTP SMS begin/resend по-прежнему выключены без native password-bound lifecycle. Public V5 не развёрнут; 503 — исторический baseline. Live HTTP/production SQL/SMS в этой итерации не выполнялись.
