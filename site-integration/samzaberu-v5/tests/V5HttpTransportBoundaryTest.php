@@ -2,10 +2,12 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../src/V5HttpTransportBoundary.php';
+require_once __DIR__ . '/../src/V5PhpHttpRequestFactory.php';
 
 use Evrasia\Samzaberu\V5\{
     V5HttpTransportBoundary,V5StagedHttpRequest,V5StagedHttpResponse,
-    V5LoginWorkflow,V5AuthHttpHandler,V5PasswordProofPort,V5TrustProofPort,
+    V5LoginWorkflow,V5AuthHttpHandler,V5PhpHttpRequestFactory,
+    V5PasswordProofPort,V5TrustProofPort,
     V5AtomicChallengePort,V5StrongSessionPort,V5SessionActionsPort,
     PasswordVerifiedAccount,MobileTrustAssessment,ChallengeKind,
     PendingLoginChallenge,ConsumedLoginChallenge,AuthenticatedV5Session
@@ -106,7 +108,8 @@ function wireCheck(V5StagedHttpResponse $r,int $status,string $description):arra
         'nosniff on any response');
     transportCheck(($r->headers['Referrer-Policy']??null)==='no-referrer',
         'no token leakage through referrer');
-    transportCheck(!isset($r->headers['Set-Cookie'],$r->headers['Access-Control-Allow-Origin']),
+    transportCheck(!array_key_exists('Set-Cookie',$r->headers)
+        && !array_key_exists('Access-Control-Allow-Origin',$r->headers),
         'no cookies or wildcard CORS');
     return $json;
 }
@@ -220,6 +223,91 @@ $disabledWire=$unavailable->dispatch(request('/api/v5/loyalty/pin',[
 ]));
 transportCheck($disabledWire->status===503,'disabled default ignores otherwise valid PIN request');
 transportCheck($actions->called===2,'disabled request does not invoke PIN adapter');
+
+
+// PHP adapter accepts only independently trusted CGI HTTPS facts.
+// Untrusted request-provided proxy headers MUST NOT establish TLS status.
+$phpEnvironment=[
+    'REQUEST_METHOD'=>'POST',
+    'REQUEST_URI'=>'/api/v5/auth/signin',
+    'HTTPS'=>'on',
+    'CONTENT_TYPE'=>'application/json; charset=utf-8',
+    'CONTENT_LENGTH'=>(string)strlen($valid),
+    'HTTP_HOST'=>'localhost.invalid',
+];
+$phpRequest=V5PhpHttpRequestFactory::fromServer($phpEnvironment,$valid);
+transportCheck($phpRequest->trustedHttps===true
+    && $phpRequest->requestUri==='/api/v5/auth/signin'
+    && $phpRequest->contentLength===(string)strlen($valid),
+    'only CGI HTTPS metadata establishes secure V5 transport');
+$phpr=wireCheck($boundary->dispatch($phpRequest),200,
+    'PHP server adapter reaches JSON auth handler after trusted HTTPS');
+transportCheck(($phpr['status']??null)==='authenticated',
+    'trusted CGI server adapter dispatches strong login');
+$phpEnvironment['HTTPS']='off';
+$phpEnvironment['HTTP_X_FORWARDED_PROTO']='https';
+$phpEnvironment['HTTP_FORWARDED']='for=192.0.2.1;proto=https';
+$phpEnvironment['REQUEST_SCHEME']='https';
+$beforeInsecure=$passwords->called;
+$rawProxy=V5PhpHttpRequestFactory::fromServer($phpEnvironment,$valid);
+transportCheck(!$rawProxy->trustedHttps,
+    'untrusted Forwarded/REQUEST_SCHEME cannot assert HTTPS');
+transportCheck($boundary->dispatch($rawProxy)->status===403,
+    'spoofed reverse proxy scheme is denied before password proof');
+transportCheck($passwords->called===$beforeInsecure,
+    'spoofed TLS headers never touch credentials provider');
+unset($phpEnvironment['HTTPS']);
+$phpEnvironment['HTTP_HTTPS']='on';
+transportCheck(!V5PhpHttpRequestFactory::fromServer($phpEnvironment,$valid)->trustedHttps,
+    'HTTP_HTTPS attacker header cannot replace trusted CGI HTTPS');
+$phpEnvironment['HTTPS']='ON';
+transportCheck(V5PhpHttpRequestFactory::fromServer($phpEnvironment,$valid)->trustedHttps,
+    'trusted webserver uppercase HTTPS=ON accepted');
+$phpEnvironment['HTTPS']=true;
+transportCheck(!V5PhpHttpRequestFactory::fromServer($phpEnvironment,$valid)->trustedHttps,
+    'non-string synthetic HTTPS metadata rejected');
+$phpEnvironment['HTTPS']='1';
+transportCheck(V5PhpHttpRequestFactory::fromServer($phpEnvironment,$valid)->trustedHttps,
+    'trusted webserver HTTPS=1 accepted');
+
+$phpEnvironment['HTTPS']='on';
+foreach([null,[],123,true,'','abc',str_repeat('8',31),'12'."\n"] as $badLength){
+    $env=$phpEnvironment;
+    $env['CONTENT_LENGTH']=$badLength;
+    $request=V5PhpHttpRequestFactory::fromServer($env,$valid);
+    transportCheck($request->contentLength==='INVALID_CONTENT_LENGTH'
+        || $request->contentLength===$badLength,
+        'invalid or unusual CGI Content-Length is never silently ignored');
+    transportCheck($boundary->dispatch($request)->status===400,
+        'invalid/mismatched CGI length denied before password proof');
+}
+foreach([
+    ['REQUEST_URI', '/api/v5/auth/signin'."\r".'/debug'],
+    ['REQUEST_URI', str_repeat('p',257)],
+    ['REQUEST_METHOD', str_repeat('P',33)],
+    ['CONTENT_TYPE', str_repeat('x',129)],
+    ['REQUEST_METHOD', ['POST']],
+] as [$field,$bad]){
+    $env=$phpEnvironment;
+    $env[$field]=$bad;
+    $request=V5PhpHttpRequestFactory::fromServer($env,$valid);
+    $out=$boundary->dispatch($request);
+    transportCheck(in_array($out->status,[404,405,415],true),
+        'non-scalar, oversized or control-character metadata denied');
+}
+$env=$phpEnvironment;
+unset($env['CONTENT_TYPE']);
+$env['HTTP_CONTENT_TYPE']='application/json';
+transportCheck($boundary->dispatch(
+    V5PhpHttpRequestFactory::fromServer($env,$valid)
+)->status===415,'client spoof of HTTP_CONTENT_TYPE cannot bypass server content-type');
+$env=$phpEnvironment;
+unset($env['CONTENT_LENGTH']);
+$wire=V5PhpHttpRequestFactory::fromServer($env,'{}');
+transportCheck($wire->contentLength===null,
+    'absent Content-Length allowed only with explicit body bound by transport');
+transportCheck($boundary->dispatch($wire)->status===400,
+    'no Content-Length never bypasses JSON object validation');
 
 echo "PASS: V5 staging transport boundary ($assertions assertions)\n";
 echo "MODE=OFFLINE_ONLY\nBITRIX_BOOTSTRAP=NO\nPRODUCTION_WRITE=NO\n";
