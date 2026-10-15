@@ -357,9 +357,14 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             if (!$this->db->commit()) throw new RuntimeException('session_commit_unavailable');
             $started=false;
             return $result;
-        } catch (Throwable) {
+        } catch (Throwable $error) {
             if ($started && $this->db->inTransaction()) {
                 try { $this->db->rollBack(); } catch (Throwable) { /* deny */ }
+            }
+            // Distinguish rejected credentials from an unavailable native DB,
+            // without exposing account status, token generation, or SQL.
+            if ($error instanceof AuthenticationRejected) {
+                throw new AuthenticationRejected('authentication_failed');
             }
             throw new RuntimeException('session_unavailable');
         }
