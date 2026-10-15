@@ -1,80 +1,53 @@
-# V5 — дополнение реестра структур и решений, 15 октября 2026
+# V5 — актуальный реестр интеграционных решений, 15 октября 2026
 
-Актуальное дополнение к `STRUCTURE_REGISTRY.md` для инкрементов после feature `0ff80561db4654eeeeac159e762e21bda479e909`. Общий исторический реестр не переписывается; контекст других частей Evrasia сохраняется. Читать через `SAMZABERU_V5_START_HERE_2026-10-15.md`. Самое новое решение — R6; инфраструктурный blocker теперь issue76.
+Дополнение к историческому STRUCTURE_REGISTRY. Полная редакция R1–R6 сохранена в Git commit `91b7f9d5ce73aa672344d81c95b6427053735df8`; ниже их смысл сохранён и добавлены R7/R8. Текущие решения читать через START HERE, не через устаревший NEXT исторических документов.
 
-## R1. Поздняя SMS-квитанция без второй оплаты — реализовано и CI-tested
+## R7. Отдельная VM отменена как обязательное условие — принято пользователем
 
-**Было:** единственный claim, independent SENT receipt для claimed→sent, UNKNOWN запрещён к повторной отправке; явного пути учесть позднее доказанный SENT для UNKNOWN не было.
+**Было:** физически отдельный Bitrix+MySQL staging требовался до любого движения к site integration; существующие hosts исключались из всех вариантов размещения, issue76 блокировалась отсутствием VM.
 
-**Стало:** внутренний метод `V5MySqlSmsDispatchClaims::reconcileUnknownSent()` переводит только UNKNOWN→SENT через независимый receipt proof и conditional UPDATE. Нет вызова send/resend, возврата envelope, изменения challenge/TTL/epoch/phone, освобождения/повторного расходования quota. Старые методы и публичный route map не меняются.
+**Стало:** пользователь прямо заявил, что отдельной VM нет и не будет, и выбрал параллельную работу V4/V5 на существующем сервере. Целевой host Bitrix `evrasia`; `/api/v4/…` сохраняется, `/api/v5/…` добавляется рядом. Аккаунты/бизнес-данные общие; V5 code/config/keys/tokens/service tables/versioned routes отдельные. Таблицы могут находиться в существующей Bitrix DB. Второй MySQL instance, контейнерная копия сайта и новый сервер не являются обязательными. Issue76 переименована и переписана под параллельное подключение; старый provisioning plan помечен как заменённый.
 
-**Почему:** неопределённость платной отправки должна разрешаться проверкой уже произошедшей операции, а не вторым платным запросом. Поздний SENT не оживляет expired/cancelled challenge и не заменяет свежую проверку native состояния.
+**Почему:** независимость версий API не требует дополнительной машины. Выбранный ранее способ испытаний ошибочно превратился в продуктовый инфраструктурный blocker. Пользователь его отклонил. Это новое подтверждённое решение supersedes R3 в части размещения.
 
-**Evidence:** code `04915fab87abf21eec1649f75b053c9bb91619dc`; исправленная fixture и обе успешные CI на `dc2caed6af465aeb387490d20f1173005a80e3dd`, runs `38736808948` / `38736809040`. 45 новых MariaDB assertions; независимый provider в тесте СИНТЕТИЧЕСКИЙ. Реальная provider integration НЕ закрыта.
+**Что НЕ отменено:** не нарушать V4, не проводить отказные эксперименты на клиентах, не выдавать synthetic CI за native proof. У общей БД есть общие locks/security events, поэтому AUTH_EPOCH/phone versions/replay нужны по-прежнему. Конкретная production установка/DDL/SMS/mutations требует отдельного допуска, backup и rollback. Legacy CI-only/fault guards не удалять ради запуска на рабочем host. Production-appropriate native transaction permit ещё не подготовлен/не принят.
 
-## R2. Обнаруженная ошибка новой fixture — исправлено без ослабления guard
+## R8. V5 PHP entry подключён к существующему HTTP transport — реализовано и CI-tested
 
-**Было:** новая fixture строила 10 SHA256 budget keys в порядке генерации. Первая CI корректно остановилась на Noncanonical SMS window ordering.
+**Было:** api/v5/router.php содержал самостоятельную Bramus-заглушку и возвращал503 даже при ready=true. Готовые transport/handler/workflow не были подключены к entry.
 
-**Стало:** fixture сортирует окна по bucketKey до создания reservation. `V5SmsDispatchBudget` и canonical lock-order check не менялись. Прежние 160 tests сохранены; итог того успешного прогона 205.
+**Стало:** новый V5ParallelHttpEntry вызывает существующий transport через ленивую server-only Closure factory; router читает строго boolean ready и серверный factory global. Нет HTTP-driven config, динамических путей include или V4 fallback. По умолчанию503 до body read/bootstrap. Проверка exact V5 paths/TLS/POST/JSON/type/size/length до native factory, bounded php://input, generic errors/no-store. Emitter не выдаёт V4 cookies/redirects и подавляет обычный неожиданный вывод factory. Пять contract routes, auth policies, V4 и .htaccess не изменены. Private site config/factory/pilot scope ещё не установлены — один флаг не делает backend готовым.
 
-**Почему:** test inputs обязаны соблюдать существующий контракт; production-кандидат нельзя ослаблять ради зелёного теста.
+**Почему:** V5 должен получить собственный entry рядом с V4, переиспользуя уже написанный транспорт, а не заменять legacy router или дублировать бизнес-логику. Выключение V5 не должно зависеть от загрузки Bitrix и не должно переключать V4.
 
-## R3. Переход к native integration — план подготовлен, инфраструктура UNATTESTED
+**Evidence:** code/test `029aaff9115d39d6a489457867fbbe532434303d`. Offline run38748326281/job116467747751 SUCCESS:83 PHP lint,26 suites,198 новых entry assertions в existing RouteMap suite. Ephemeral run38748326331/job116467747777 SUCCESS:329 existing assertions. Оба лога прочитаны. Все четыре изменённых PHP файла linted локально до commit; локальные полные regression tests не заявлялись.
 
-**Было:** документы фиксировали blocker отдельного Bitrix staging; вместо него нельзя использовать production или ephemeral synthetic CI.
+198checks проверяют default-off/no I/O/no bootstrap, exact path и metadata/body guards, existing handler401 для отвергнутых credentials и три дочерних PHP процесса с настоящим router. Положительной native authentication в новом test нет. Реальные Apache/Nginx rules, native Bitrix, pilot endpoints и provider API этим НЕ приняты.
 
-**Стало:** составлен `SAMZABERU_V5_STAGING_PROVISIONING_PLAN_2026-10-15.md` с конкретными фазами, проектными именами, evidence для изоляции, остановкой перед bootstrap/DDL, rollback и точными существующими acceptance entrypoints. Факт отдельной VM и независимой БД всё ещё не подтверждён; VM не создана этой работой.
+## Сохраняемые решения R1–R6
 
-**Почему:** ближайший реальный integration block — инфраструктурный допуск, а не ещё один лексический PHP-аудит. Нет оснований утверждать ни наличие готового staging, ни его полное отсутствие во внешней инфраструктуре.
-
-**Дополнение после c3f92ba:** создана [issue76](https://github.com/juvantusik/Evrasia_AI_bot/issues/76) для паспорта Stage A и подтверждения/согласования выделения независимой VM. Имеющийся provisioning plan переиспользуется. Ни issue, ни зелёная CI не разрешают создание платной инфраструктуры, siteDDL/production/SMS; owner/host/identity/ACL требуют реального подтверждения.
-
-## R4. Документация только feature — применено
-
-**Было:** прежний START HERE предлагал синхронизировать общие docs main↔feature без кодовых изменений main.
-
-**Стало:** автоматическая синхронизация main отложена. Текущие START HERE/checkpoint/decision/provisioning docs записаны только в feature. Main не меняется.
-
-**Почему:** проверенный `.github/workflows/build-server-image.yml` на main `7c2e9f8e4501b92469bcdeea18f8340676ad52c9` имеет push main без paths-фильтра и публикацию latest для default branch. Даже doc-only push может обновить опубликованный образ. Это не утверждение, что production автоматически перезапускается; побочный эффект публикации уже достаточен, чтобы не трогать main без отдельного безопасного решения.
-
-## R5. SMS dispatch/receipt совместимы с owned Bitrix bridge — исправлено и CI-tested
-
-**Было:** четыре точных SELECT outbox по delivery_id, используемых claim/receipt/consumer/grant, отвергались generic bridge guard. Прямой outcome/reconciliation UPDATE не открывал свою транзакцию и нарушал bridge запрет write without scope. Direct PDO MariaDB tests этого стыка не покрывали; фактическая совместимость не была доказана.
-
-**Стало:** `V5BitrixPdoCompatibilityBridge::SMS_OUTBOX_READ_SQL` разрешает ровно четыре существующих indexed templates. Произвольный SELECT из outbox запрещён; generic WHERE regex не расширен. `V5MySqlSmsDispatchClaims::commitProviderOutcome()` используется обоими ACK paths: повторный readiness guard после provider lookup, owned BEGIN, CAS UPDATE с delivery/key/previous status, проверка affected=0/1, COMMIT и лишь затем bool. Provider lookup остаётся вне owned DB transaction. Чужие native/bridge scopes не присваиваются/не откатываются. Paid send, budget, TTL и схема не меняются.
-
-**Почему:** интеграция должна работать по одному существующему native connection, не обходить мост вторым PDO и не объявлять незакоммиченную запись подтверждённым результатом. Недоступность/неопределённый COMMIT — ошибка без ACK success, не причина повторно платить за SMS.
-
-**Evidence:** code/test `8c395f0320f82a1c69bd06830dd229a087b358fb`; offline Actions `38740380225` SUCCESS, real ephemeral MariaDB `38740380099` SUCCESS: 43+117+45+63=268. Новые63assertions проверяют мост над настоящим MySQL/PDO с синтетическим Bitrix facade, независимый connection для committed-state наблюдения, rollback/потерянный COMMIT reply, write/affected-count faults, foreign native scope и exact SQL denials. Настоящий Bitrix SQL helper/ORM/native callbacks этим НЕ аттестованы.
-
-## R6. Готовый locked password/TOTP begin proof — реализован, native acceptance впереди
-
-**Было:** `V5MySqlPasswordBoundTotpIssuer` требовал свежий password/MFA callback под user lock, но готового адаптера этого порта к существующим account/MFA/epoch компонентам не было. Наличие обязательного fail-closed порта НЕ было разрешением использовать stale first-factor snapshot. Existing PDO identity SELECT по EMAIL/LOGIN не проходили generic bridge guard.
-
-**Стало:** `V5BitrixLockedPasswordTotpProof` реализует тот же обязательный порт. Связывается с конкретным PDO/bridge, проверяет InnoDB/transaction, сам берёт b_user lock и проверяет переданный epoch. `V5LockedBitrixAuthRows` читает unique identity и b_sec_user под блокировками; `V5SiteAccountReader`, `V5NativeTotpStatus`, существующий comparator/normalizer/login policy и `V5SecurityEventVersions` переиспользованы. Штамп остаётся тем же user/password-hash/AUTH_EPOCH HMAC. Мост получил четыре exact identity templates; generic EMAIL/LOGIN predicates не разрешены. Нет transaction completion, cookies, JWT, SMS или user/MFA writes в самом proof.
-
-**Почему:** правильный пароль первого HTTP шага не заменяет проверку текущего пароля после возможного reset; native state нельзя выдавать из кешированного snapshot. Reuse общего epoch предотвращает несовместимые stamp formats. Неактивные дубликаты не должны исчезать из unique lookup. Неизвестные native policy/coverage/comparator/MFA отказывают, а не включают SMS.
-
-**Evidence:** code/test `c3f92ba3197157e1cd19f9aa21df3d353862279d`; offline38743961486/job116452589733 SUCCESS; ephemeral38743961127/job116452588251 SUCCESS, прочитанный лог43+117+45+63+61=329. Новый test проводит existing issuer→реальный locked-row adapter→общий epoch→committed TOTP ticket, отрицательные account/identity/MFA/policy/epoch проверки и SQL password-reset lock exclusion вторым соединением. Local PHP lint двух новых файлов PASS; blob SHA совпали. Все прежние suites запускаются по одному разу.
-
-**Не доказано:** реальный Bitrix comparator/PhoneConfirm normalizer/логин policy/SqlHelper/ORM и10path native writer coverage, TOTP-code replay protection, real staging. Положительные внешние policy/comparator/coverage и Bitrix facade в CI синтетические; native comparator absence отдельно проверена как отказ без fallback. Новый adapter не реализует native mutations/phone verification и не разрешает production. В native staging нужны отдельно доказанные indexes/collation/duplicate behavior и общий lock order всех writers.
+| Решение | Было → стало → причина / evidence |
+|---|---|
+| R1 late receipt | Не было пути для позднего доказанного UNKNOWN→SENT → explicit reconcileUnknownSent без нового paid send/quota/TTL → неопределённую оплату нельзя лечить повторной SMS. Runtime04915fab, исправленный testdc2caed;45 receipt checks. |
+| R2 fixture ordering | Новые quota keys без canonical sort → сортировка fixture без ослабления runtime guard → безопасные входы обязаны соблюдать контракт. Первый run38736335930 FAIL сохранён в истории. |
+| R3 infra plan | Подготовлен отдельный staging plan, но VM не подтверждалась → **обязательность отдельной VM отменена R7**, план исторический → не возвращать этот blocker. |
+| R4 feature docs | Main push вызывает build/publish latest → docs только feature → не обновлять опубликованный образ ради документации. Main7c2e9f8 неизменён. |
+| R5 SMS bridge | Четыре delivery SELECT и autocommit ACK не проходили bridge → exact reads + owned BEGIN/CAS/COMMIT → успех только после commit. Code8c395f0;63 bridge tests;268 DB тогда. |
+| R6 locked password BEGIN | Обязательный fresh password/MFA port без готового adapter → V5BitrixLockedPasswordTotpProof с текущими locked rows и прежним epoch HMAC → reset между first factor и challenge не обходится старым snapshot. Codec3f92ba;61 new tests;329 DB. Native hooks/comparator в positive CI synthetic, не acceptance. |
 
 ## Дополнение реестра структур
 
-Пути src/tests относительно `site-integration/samzaberu-v5/`.
+Пути относительно `site-integration/samzaberu-v5/`, если не указан docs.
 
-| Путь/структура | Что добавлено | Что НЕ изменено |
+| Структура | Текущее изменение | Граница |
 |---|---|---|
-| `src/V5MySqlSmsDispatchClaims.php` | R1 reconciliation; R5 общий owned commitProviderOutcome | В R6 не менялся; one-attempt/no-resend/receipt/budget/TTL сохранены |
-| `src/V5BitrixPdoCompatibilityBridge.php` | R5 четыре exact SMS reads; R6 четыре exact identity reads | Transaction permit, write/lock outside scope denial; generic predicates не расширены |
-| `src/V5BitrixLockedPasswordTotpProof.php` | R6 proof + внутренний locked identity/MFA row source | Existing policy/MFA/comparator/epoch semantics, issuer interface и HTTP API |
-| `src/V5SecurityEventVersions.php` | Переиспользуется R6 forLockedPasswordProof | HMAC domain, AUTH_EPOCH/PHONE_EVENT_VERSION authority и runtime файл не менялись |
-| `tests/integration/V5EphemeralMySqlSmsReconciliationTest.php` | R1 45checks и two-process CAS | Runtime/native provider proof не заменяет |
-| `tests/integration/V5EphemeralMySqlSmsBridgeTest.php` | R5 63checks, real SQL под synthetic Bitrix facade | Native Bitrix acceptance не заменяет |
-| `tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php` | R6 61checks, guarded расширение CI fixtures и real SQL lock exclusion | НЕ native DB migration; native APIs/coverage положительныхfixtures synthetic |
-| `.github/workflows/v5-ephemeral-mariadb.yml` | Новый wrapper включает старые SMS suites ОДИН раз и затем locked proof | Hosted disposable DB; прежние43sessionchecks; production access отсутствует |
-| PROPOSED SQL / production DB | Без изменений R6 | ALTER/CREATE есть исключительно внутри guarded synthetic CI fixture |
-| Current docs / issue76 | 329-check checkpoint + явный Stage A blocker | Main не синхронизирован; старые исходные handoff/registry сохранены |
+| `src/V5ParallelHttpEntry.php` | Отдельная входная проверка V5 и lazy transport composition | Нет DB/Bitrix bootstrap по умолчанию; нет native factory в поставке |
+| `api/v5/router.php` | Wire существующего transport, bounded input и response emitter | V4 не вызывается, default-off; site deploy не выполнен |
+| `tests/V5ParallelHttpEntryTest.php` | 198 offline checks, реальные child PHP executions router | Не Apache/TLS/native test, credentials всегда reject |
+| `tests/V5RouteMapTest.php` | Включает новый test в прежний26-suite runner | Контракт5routes не менялся; новых workflow не создано |
+| `api/v5/.htaccess` | Без изменения directives | Real web-server precedence ещё требует целевой проверки |
+| `api/v5/README.md` | Контракт V5-only private config/public shim | Proposed placement, не установленный config |
+| Auth/SMS/session/epoch providers и PROPOSED SQL | Без кодовых изменений R8 | Нельзя снимать security checks из-за shared host |
+| Issue76 / current docs | Параллельное подключение вместо VM blocker | Архитектура согласована, deployment/DDL approvals отдельные |
 
-Не считать doc-only commit новым code-test run, synthetic facade настоящим Bitrix, receipt stub доказательством доставки, а рост CI coverage закрытием инфраструктурного допуска.
+В pending TOTP verification документе сохранён только черновик, не проверенный verifier. Предыдущая заблокированная загрузка теста не повторялась и не обходилась. Новые entry tests не включают тот draft.
