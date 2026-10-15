@@ -1,43 +1,54 @@
 # V5 — реестр интеграционных решений, 15 октября 2026
 
-Дополнение к STRUCTURE_REGISTRY. Полная прежняя редакция R1–R12 сохранена вcommit `0a5a60e0bc52f96644e8c858b5760e015a6ef20e`; новый факт R13. Принятые бизнес-правила не меняются.
+Дополнение к STRUCTURE_REGISTRY. Полная предыдущая редакцияR1–R14 сохранена вcommit76796242020915629decd867939bc9fc19009550. НовыеR15–R17 ниже; бизнес-логика не переутверждается.
 
-## R13. OFF origin HTTPS принят по реальному результату
+## R15. Получен web-config snapshot — новых server changes не требуется по этому выводу
 
-**Было:** runtime0caa0248 установленOFF, CLI503PASS, public-DNSself-call получилCURL_RC7; correctedoriginhelper ещёожидалоператора.
+**Было:** originOFFHTTPS принят, ожидалось чтение конкретныхTLS/FPMправил.
 
-**Стало:** оператор прислалфайл с успешнымиGET `/api/v5/router.php` и `/api/v5/auth/signin` через192.168.103.141 сSNIevrasia.rest. НаобоихCURL_RC0/HTTP503/TLS_VERIFY_RESULT0/exactOFFJSON/no-store/no-cookie/no-redirect/no-CORS/noAge. ПослеHTTP manifest/OFF/V4/sharedrewrite неизменны. FINAL_STATUS=PASS/FINAL_RC0/HTTP_OFF_PATHS_PASS2/LOCAL_ORIGIN_OFF_BOUNDARY=PASS.
+**Стало:** операторскийвыводFINAL_STATUS=PASS; nginxSSLproxyиспользуетhttps192.168.103.141:8443, HTTPproxyhttp8080; обаApachevhostуказываютнаsitePHP8.3socket. Впрочитанномphp.ini autoprepend/appenddisabled,session.autostart0,opcache.revalidatefreq0. Hashesstable,4vhost/6reportedfiles, app/PHP/SQL/HTTP/reloadне выполнялись. SHAзаписанывcheckpoint.
 
-**Почему:** фактическийсерверныйвывод заменяетPENDING. Файловуюустановку, layout иoffHTTP не повторять. Исправлениеself-callприменено; точнуюпричинупервогоRC7 этимнеобъявляемдоказанной.
+**Почему:** фактическийconfigзаменяетпредположение, чтоSSLпроксируетсяна8080. Не повторятьconfigaudit, не вводитьtrustedForwardedHeadersилименятьnginxбезнеобходимости. Genericfastcgi_paramsне доказанвиспользованиидляApacheцепочки. Wildcardincludesнераскрывались; effectivePHPmetadataпо-прежнемунеаттестованы.
 
-**Граница:** неexternalDNS/NAT/CDN, неPHPHTTPS/peer metadata, неV4functionalE2E и неnativeauthentication. Backendнеподключён, modeoff. Runtime/backup/installerнеизменны; новыеfeature/docs неавтоматическийdeploy.
+## R16. Existing V5 HTTP composition и account-scoped pilot — реализовано и CI-tested
 
-## R14. Следующая проверка — чтение конфигурации, без временной подмены entry
+**Было:** готовыеHTTP/workflow/challenge/sessionкомпоненты подключалисьвтестахвручную; privatepilotkeyограничивалзапрос, но неaccount. Готовойобщейсборкиcohortgatesдлявхода,challenge,refreshиPINнебыло.
 
-**Было:** хотелось получитьфактическийPHPконтекст через временныйinstrumentedV5shim. Публикацияэтогоскрипта былаотклоненаинструментомбезопасности; завершённымкодом/установкой это неявляется.
+**Стало:** `V5MySqlPilotComposition::build`конструируетexistingtransportиодиннаборstore/actions, используяоднуPDOconnection/общийbindingkey и обязательныеnativeports. `V5PilotScopedNativePorts`требует1–32явныхуникальныхположительныхintegerIDотоператора. CohortANDnativeproof,неOR. Scope проверяетсяпослеfirst-factoridentityи доtrust/factor/coverage/PINproviders; refresh/PINучитываютновыйсписокдажедлястарыхcredentials. Scope негенерируетJWT, неактивируетroute и не вызываетSQLприbuild. Durableconsumedproof всегдаexistingMySqlimplementation; arbitrarytrusted-devicecallbackнепринимаетconsumedgrant.
 
-**Стало:** блокированныйpayload не повторяется черездругойendpoint/encoding/delivery. Вветку включён другой, read-only `deployment/read-v5-web-config.sh`, не выполняющийподменуилиPHP. Ончитает ограниченныекандидаты nginx/Apachevhost/PHP8.3/.user.ini, печатаетразрешённыеTLS/FPM/forwardedнастройки; неизвестныезначенияскрывает. OFFmanifest/root/V4проверяетдо/после; HTTP/SQL/PHP/reload/write не делает. Includeпроизвольнонеобходит.
+**Почему:** разрешениепилотногозапросане должно открыватьдоступвсемаккаунтам. Reuseоднихstoresне позволяет случайноразойтисьsession/refresh/PINпроверкам. TOTPbeginпереиспользуетexistingboundissuer; SMSbegin/resendостаётсянедоступным, нефиктивнымуспехом.
 
-**Почему:** выяснитьпередачуTLS/peer длясуществующегоV5transport беззатрагиванияустановленноговхода. Статическийснимокнеподменяетruntimeприёмку и неразрешаетдоверятьподдельнымproxyheaders.
+**Evidence:** code/test6f8a35211671aaa25f8129eeac90b802944646cd. Offline38771014889/job116546512805SUCCESS; ephemeral38771014920/job116546512653SUCCESS; прочитанDBлог43+117+45+63+61+77=406. Новые77checksнастоящегоSQL/JWT/refreshиindependentobserver,отказыcohort/nativecoverage/foreignscope. Positivepolicy/trust/PIN/BitrixfacadeСИНТЕТИЧЕСКИЕ. TOTPcallbacksновоготестаотказывают; draftverifierне реализовани не включён. Локальныйlint/blobmatchPASS; полныйsuiteвCI.
 
-**Evidence:** bashsyntax/Pythoncompile/wronghost0HTTP и10localparserfixtures PASS; credentials-canaryнепечатается, out-of-scopesymlink иотсутствиеvhostотклоняются. SHA256`26cc5a2b3b04143764c58032d5a5759f88a54fbd16ca738bcffaa4dedbbbfd81`, blob`f658d5b3bae9c47320e530ac5813b67ed87e8d51`. РезультатсевrasiaещёPENDING; noextraMariaDBcoverage. Предыдущийfeature0a5a60e offline38764635635SUCCESS прочитанlive.
+**Границы:** actualsite-factory/nativeproviders/approvedIDsне установлены. First-factorproviderможетразрешатьidentityи выполнятьсвоиattempt/rateправиладоcohortfilter; не обещатьнулевыхread/writesэтогопровайдера. НовыйscopeтолькосужаетV5доступ. Исключениене пишетpermanentrevocationвБД,непрерываетin-flightrequests; снова включённыйaccountподчиняетсяexistingepoch/revocation/TTL. Непровереннаяnativecoverageвсёещёотказ. Черезexistingmappingrefreshcoveragefailureвозвращает503,PINdenial401; контрактstoreнепереписан.
 
-## Сохранённые решения
+## R17. Immutable package regression отделён от evolving feature
 
-| ID | Было → стало → почему |
+**Было:** installer self-test читалHEAD, но требуетexactsrc/APIpinsустановленного0caa0248. Любоеаддитивноеsrcизменениеfeatureпопадалобыподэтотзапрет, хотяproductionpackageнеобновляется.
+
+**Стало:** existingephemeralworkflowделаетвторойcheckoutточного0caa0248 вv5-installed-payload,толькопакетныйself-testполучаетэтотworkspace. ActualDBtestsпродолжаютисполнятьcurrentfeatureHEAD; старыеsuitesвключаютсяодинразновымcompositiontest. Installer/pinsне менялись,не ослаблялись. Обеcheckoutбезstoredcredentials. Package stepPASS втомжепрогоне38771014920.
+
+**Почему:** нельзярасширятьproductioninstallerbaselineрадитестированияновогокода. Проверятьновуюcompositionи ужеустановленныйOFFпакетнужнораздельно. ЭтоизменениеCI,неdeploymentинструкцияинеапгрейдсервера.
+
+## Сохранённые решения R1–R14
+
+| ID | Смысл и состояние |
 |---|---|
-| R1 | НетlateUNKNOWN→SENT → independentreceipt reconciliation безsend/quota/TTL → неопределённостьнеисправлятьвторойSMS. |
-| R2 | Несортированнаяquota fixture → canonicalsortтолькоfixture → runtimeguardнеослаблять; FAILисториясохранена. |
-| R3/R7 | ОтдельнаяVMкакblocker → V4/V5насуществующемevrasia,общиеаккаунты/БД → прямое решениепользователя; securitypermissionsсохраняются. |
-| R4 | Mainpushпубликуетlatest → feature-onlyкод/docs → безпобочнойпубликации. |
-| R5 | SMSqueries/autocommitACKнесовместимы → exactSQL/ownedCAS/COMMIT → committedack. |
-| R6 | НетlockedpasswordBEGINadapter → currentlockedrows/общийepochHMAC → staleпарольнедостаточен. |
-| R8/R9 | Постоянная503заглушка → parallelentry/lazytransport/privateoff-pilotconfig → operationalkeyнеaccountauth. |
-| R10/R11 | Layout/installerожидались → actuallayoutиOFFinstallPASS → новыеV5файлыесть, nativeauthещёнет. Backupf89wzMkAсохранён. |
-| R12 | НеверныйpublicDNSself-call → documentedorigin--resolve → localoriginбезDNS/nginxправок; теперьPASSпоR13. |
+| R1/R2 | LateUNKNOWN→SENTтолькоindependentreceipt,безsend/quota/TTL;canonicalsortfixtureнеослабляетruntimeguard;первыйFAILсохранён. |
+| R3/R7 | ОбязательнаяотдельнаяVMотмененапользователем;V5рядомсV4наevrasia,общиеаккаунты/БД. Security/productionдопускисохранены. |
+| R4 | Mainpushпубликуетlatest;safeработа/docsтолькоfeature. |
+| R5 | SMSbridgeexactqueriesиownedCAS/COMMIT;успехтолькопослеcommit. |
+| R6 | FreshlockedpasswordBEGINadapterпереиспользуетобщийepochHMAC;этонеTOTPcodeverifier. |
+| R8/R9 | Parallelentry/lazytransport/privateoff-pilotconfig;operationalkeyнеaccountauth. |
+| R10/R11 | Layout/installerCIзатемproductionOFFinstallPASS;backupf89wzMkAизвестен,непереустанавливать. |
+| R12/R13 | PublicDNSself-callRC7→известныйorigin--resolve→обаHTTPSOFFпутиPASS;внешнийedgeиnativeauthнепроверены. |
+| R14 | ВременныйinstrumentedPHPshimнеопубликованпослеtoolblock;вместонегочтениеconfigбезподмены/PHP. ТеперьconfigPASSпоR15;runtimeаттестациюнеподменятьснимком. |
 
 ## Структуры / неизменность
 
-Новый только `deployment/read-v5-web-config.sh` плюсSTART HERE/checkpoint/этотреестр. Runtime`src`/`api`, installedconfig/shim/release, nativeproviders, SQLиworkflows не менялись. Ранееотклонённыйtemporaryshimнеприменялся. Root/V4насервере сохранены пооператорскомулогу. Старыйcheck-disabled-v5-http.shбольше ненужно запускатьрадитогожеPASS.
+- Новые `src/V5MySqlPilotComposition.php`185строк и `tests/integration/V5EphemeralMySqlPilotCompositionTest.php`184строки; existingworkflow+16/-5. Остальныеruntime/crypto/native/API/V4/DDLфайлынеменялись.
+- Самinstalledruntime0caa0248/serverconfig/shim/backupне обновлялись. НовыеGitHubтестынеproductionDBдоступ.
+- START HERE/checkpointфиксируютconfigPASS/compositionPASS406,сохраняютграницыnativeнепринятого.
+- Следующийсерверныйдопуск: read-onlyметаданныеexistingDBпередadditiveDDL,безклиентскихстрок; выполнениепослеотдельногоодобрения. ПроизвольныхSQL/mutations/SMSне разрешено.
 
-Nativefactory/test-accountallowlist,TOTP/replay/epochhooks,phoneverification,strongtrust,SMSlifecycle/provider/RestISиDDL остаютсяследующимиинтеграционнымиблоками. Не возвращатьVM и не повторятьзакрытыеCUser/PhoneAuthsource-onlyаудиты.
+Детальныйcompositionконтракт: `SAMZABERU_V5_PILOT_COMPOSITION_2026-10-15.md`. PendingTOTPdraftиblockedtemporaryshimне использовались. ЗакрытыеCUser/PhoneAuthsource-onlyаудитынеповторять.
