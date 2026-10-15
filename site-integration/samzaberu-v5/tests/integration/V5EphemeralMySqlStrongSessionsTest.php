@@ -22,12 +22,19 @@ if (getenv('GITHUB_ACTIONS') !== 'true'
     exit(2);
 }
 require_once __DIR__ . '/../../src/V5MySqlStrongSessionStore.php';
+require_once __DIR__ . '/../../src/V5HttpTransportBoundary.php';
+require_once __DIR__ . '/../../src/V5PhpHttpRequestFactory.php';
+require_once __DIR__ . '/../../src/V5MySqlSessionActions.php';
 
 use Evrasia\Samzaberu\V5\{
     V5AccessJwtCodec,V5OpaqueRefreshTokens,V5MySqlStrongSessionStore,
     V5LockedStrongSessionProofPort,V5NativeSecurityHookCoveragePort,
     V5LockedBonusPinReaderPort,PasswordVerifiedAccount,ConsumedLoginChallenge,
-    ChallengeKind,AuthenticationRejected
+    ChallengeKind,AuthenticationRejected,
+    V5PasswordProofPort,V5TrustProofPort,V5AtomicChallengePort,
+    MobileTrustAssessment,PendingLoginChallenge,V5AuthHttpHandler,
+    V5LoginWorkflow,V5HttpTransportBoundary,V5PhpHttpRequestFactory,
+    V5MySqlSessionActions
 };
 
 const TEST_USER = 41;
@@ -76,6 +83,49 @@ final class CiSyntheticPin implements V5LockedBonusPinReaderPort
         }
         $this->called++;
         return '00037';
+    }
+}
+
+/**
+ * Strictly synthetic V5 password/trust/challenge providers. The real
+ * Bitrix password proof, native phone event and SMS send are NOT exercised.
+ */
+final class CiHttpPassword implements V5PasswordProofPort
+{
+    public int $checks=0;
+    public function verifyWithoutLogin(string $login,string $password):?PasswordVerifiedAccount
+    {
+        $this->checks++;
+        return $login==='synthetic-login' && $password==='synthetic-password'
+            ?new PasswordVerifiedAccount(TEST_USER,true,false):null;
+    }
+}
+final class CiHttpTrust implements V5TrustProofPort
+{
+    public int $checks=0;
+    public function evaluate(int $userId,string $deviceId,string $platform,string $trustToken):MobileTrustAssessment
+    {
+        $this->checks++;
+        $valid=$userId===TEST_USER && $deviceId===TEST_DEVICE
+            && $platform==='ios' && $trustToken===TEST_TRUST;
+        return new MobileTrustAssessment($valid,$valid);
+    }
+}
+final class CiHttpChallenges implements V5AtomicChallengePort
+{
+    public int $begins=0;
+    public function begin(int $userId,string $deviceId,string $platform,ChallengeKind $kind):PendingLoginChallenge
+    {
+        $this->begins++;
+        throw new RuntimeException('synthetic HTTP challenge unavailable');
+    }
+    public function verifyAndConsume(string $challengeId,string $code,string $deviceId,string $platform):?ConsumedLoginChallenge
+    {
+        throw new RuntimeException('synthetic HTTP verify unavailable');
+    }
+    public function resendSms(string $challengeId,string $deviceId,string $platform):PendingLoginChallenge
+    {
+        throw new RuntimeException('synthetic HTTP resend unavailable');
     }
 }
 
@@ -293,6 +343,108 @@ ciCheck(ciCount($db)===$beforeGrant+1,
     'concurrency did not create or lose any server session row');
 $afterReplay=ciRefreshAttempt($raceBearer);
 ciCheck($afterReplay===1,'original raced token remains permanently consumed');
+
+
+// ACTUAL MariaDB + staged HTTP transport. The proof and PIN providers remain
+// SYNTHETIC and cannot touch live Bitrix, RestIS, or any real SMS service.
+$httpStore=ciStore($db);
+$httpPin=new CiSyntheticPin();
+$httpPassword=new CiHttpPassword();
+$httpTrust=new CiHttpTrust();
+$httpChallenge=new CiHttpChallenges();
+$httpWorkflow=new V5LoginWorkflow(
+    $httpPassword,$httpTrust,$httpChallenge,$httpStore
+);
+$httpBoundary=new V5HttpTransportBoundary(
+    new V5AuthHttpHandler($httpWorkflow,
+        new V5MySqlSessionActions($httpStore,$httpPin))
+);
+$envelope=static function(string $uri,array $payload,bool $https=true):\Evrasia\Samzaberu\V5\V5StagedHttpRequest {
+    $json=json_encode($payload,JSON_THROW_ON_ERROR);
+    return V5PhpHttpRequestFactory::fromServer([
+        'HTTPS'=>$https?'on':'off',
+        'REQUEST_METHOD'=>'POST',
+        'REQUEST_URI'=>$uri,
+        'CONTENT_TYPE'=>'application/json',
+        'CONTENT_LENGTH'=>(string)strlen($json),
+    ],$json);
+};
+$loginBody=[
+    'login'=>'synthetic-login','password'=>'synthetic-password',
+    'device_id'=>TEST_DEVICE,'platform'=>'ios','trust_token'=>TEST_TRUST
+];
+$noHttps=$httpBoundary->dispatch($envelope('/api/v5/auth/signin',$loginBody,false));
+ciCheck($noHttps->status===403 && $httpPassword->checks===0,
+    'real DB HTTP boundary rejects plaintext before password verifier');
+$notReady=new V5HttpTransportBoundary();
+ciCheck($notReady->dispatch($envelope('/api/v5/auth/signin',$loginBody))->status===503,
+    'real DB context does not activate absent V5 HTTP handler');
+$loggedIn=$httpBoundary->dispatch($envelope('/api/v5/auth/signin',$loginBody));
+$httpSession=json_decode($loggedIn->jsonBody,true,8,JSON_THROW_ON_ERROR);
+ciCheck($loggedIn->status===200 && isset($httpSession['access_token'],$httpSession['refresh_token'])
+    && $httpPassword->checks===1 && $httpTrust->checks===1
+    && $httpChallenge->begins===0,
+    'real InnoDB HTTP sign-in commits signed strong trust session without SMS');
+ciCheck(is_array($tokens->verifyAccess($httpSession['access_token'],time())),
+    'real database HTTP login issues a valid independent V5 JWT');
+$pinReply=$httpBoundary->dispatch($envelope('/api/v5/loyalty/pin',[
+    'access_token'=>$httpSession['access_token']
+]));
+$pinBody=json_decode($pinReply->jsonBody,true,8,JSON_THROW_ON_ERROR);
+ciCheck($pinReply->status===200 && ($pinBody['pin']??null)==='00037'
+    && $httpPin->called===1 && $httpChallenge->begins===0,
+    'real InnoDB HTTP PIN read requires no second SMS');
+ciCheck(str_contains($pinReply->headers['Cache-Control'],'no-store')
+    && !array_key_exists('Set-Cookie',$pinReply->headers),
+    'real database HTTP PIN response prohibits caching and cookies');
+$newWire=$httpBoundary->dispatch($envelope('/api/v5/auth/refresh',[
+    'refresh_token'=>$httpSession['refresh_token']
+]));
+$wireClaims=json_decode($newWire->jsonBody,true,8,JSON_THROW_ON_ERROR);
+ciCheck($newWire->status===200 && isset($wireClaims['refresh_token'])
+    && $wireClaims['refresh_token']!==$httpSession['refresh_token'],
+    'real MariaDB CAS rotates refresh from HTTP request');
+$reused=$httpBoundary->dispatch($envelope('/api/v5/auth/refresh',[
+    'refresh_token'=>$httpSession['refresh_token']
+]));
+ciCheck($reused->status===401
+    && $reused->jsonBody==='{"error":"authentication_failed"}',
+    'real MariaDB HTTP rejects reused bearer with generic 401');
+$forbidden=$httpBoundary->dispatch($envelope('/api/v5/loyalty/pin?token=unsafe',[
+    'access_token'=>$wireClaims['access_token']
+]));
+ciCheck($forbidden->status===404,
+    'real DB HTTPS envelope rejects token leakage through URL query');
+$pinCalls=$httpPin->called;
+$db->beginTransaction();
+$db->query('SELECT ID FROM b_user WHERE ID=41 FOR UPDATE')->fetch();
+$db->exec('UPDATE ev_samzaberu_auth_state SET AUTH_EPOCH=9 WHERE USER_ID=41');
+$db->commit();
+$stalePin=$httpBoundary->dispatch($envelope('/api/v5/loyalty/pin',[
+    'access_token'=>$wireClaims['access_token']
+]));
+ciCheck($stalePin->status===401 && $httpPin->called===$pinCalls,
+    'real InnoDB security epoch update blocks stale HTTP PIN before reader');
+$staleRefresh=$httpBoundary->dispatch($envelope('/api/v5/auth/refresh',[
+    'refresh_token'=>$wireClaims['refresh_token']
+]));
+ciCheck($staleRefresh->status===401,
+    'real InnoDB security epoch update blocks stale HTTP refresh');
+
+$freshWeb=$httpBoundary->dispatch($envelope('/api/v5/auth/signin',$loginBody));
+$freshBody=json_decode($freshWeb->jsonBody,true,8,JSON_THROW_ON_ERROR);
+ciCheck($freshWeb->status===200 && isset($freshBody['access_token']),
+    'new strong HTTP login succeeds under new epoch');
+ciCheck($httpStore->revokeAccess($freshBody['access_token']),
+    'HTTP-issued JWT can revoke real MariaDB V5 session');
+ciCheck($httpBoundary->dispatch($envelope('/api/v5/loyalty/pin',[
+    'access_token'=>$freshBody['access_token']
+]))->status===401,'revoked real InnoDB session denies HTTP PIN');
+ciCheck($httpBoundary->dispatch($envelope('/api/v5/auth/refresh',[
+    'refresh_token'=>$freshBody['refresh_token']
+]))->status===401,'revoked real InnoDB session denies HTTP refresh');
+ciCheck($httpChallenge->begins===0,
+    'real MariaDB HTTP test emitted no synthetic SMS challenge');
 
 echo "PASS: real ephemeral MariaDB V5 sessions ($checks assertions)\n";
 echo "MODE=EPHEMERAL_GITHUB_CI_ONLY\nREAL_MARIADB_INNODB=YES\n";
