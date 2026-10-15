@@ -9,7 +9,7 @@ use Evrasia\Samzaberu\V5\{
     V5NativeSecurityHookCoveragePort, V5AccessJwtCodec,
     V5OpaqueRefreshTokens, V5SessionAssurancePolicy,
     PasswordVerifiedAccount, ConsumedLoginChallenge, ChallengeKind,
-    AuthenticationRejected, AuthenticatedV5Session
+    AuthenticationRejected, AuthenticatedV5Session, V5LockedBonusPinReaderPort
 };
 
 final class SessionFakePdo extends PDO
@@ -185,6 +185,22 @@ final class SessionFakeCoverage implements V5NativeSecurityHookCoveragePort
     }
 }
 
+final class SessionFakePinReader implements V5LockedBonusPinReaderPort
+{
+    public int $calls=0;
+    public bool $deny=false;
+    public bool $throws=false;
+    public ?string $answer='0042';
+
+    public function readLockedBonusPin(PDO $db, int $userId): ?string
+    {
+        $this->calls++;
+        if (!$db->inTransaction() || $this->throws || $userId!==41)
+            throw new RuntimeException('synthetic PIN read denied');
+        return $this->deny ? null : $this->answer;
+    }
+}
+
 const ID = 'sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 $checkCount=0;
 function yes(bool $value,string $why):void {
@@ -253,6 +269,28 @@ denies(fn()=>$store->rotateRefresh($s1->refreshToken),'old bearer replay rejecte
 yes($db->commits===2,'replay cannot commit another rotation');
 $claims=$codec->verifyAccess($rotation->accessToken,$db->now);
 yes(is_array($claims),'new access JWT validates');
+$pinReader=new SessionFakePinReader();
+yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)==='0042',
+    'protected PIN read authorized within locked V5 strong session');
+yes($pinReader->calls===1,'reader invoked only once on authorized session');
+$pinReader->answer='00123';
+yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)==='00123',
+    'leading zeros in opaque protected PIN preserved');
+$pinReader->deny=true;
+yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)===null,
+    'missing site PIN returns generic denial');
+$pinReader->deny=false;$pinReader->throws=true;
+yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)===null,
+    'reader failure cannot leak protected PIN');
+$pinReader->throws=false;$pinReader->answer="has\nnewline";
+yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)===null,
+    'binary/control output from site reader refused');
+$pinReader->answer='0042';
+$priorCalls=$pinReader->calls;
+yes($store->showBonusPinForAccess('v4.invalid.jwt',$pinReader)===null,
+    'V4 JWT cannot reach site bonus-PIN reader');
+yes($pinReader->calls===$priorCalls,'no PIN read after invalid bearer');
+
 $snapshot=$store->currentAssuranceSnapshot($rotation->accessToken);
 yes(is_array($snapshot) && $snapshot['revocation_verified']===true,
     'revocation-verified server snapshot read');
@@ -260,6 +298,11 @@ yes($store->revokeAccess($rotation->accessToken),'JWT owner can revoke active se
 yes($db->sessions[$row['sid']]['status']==='revoked','revocation persisted');
 yes($store->currentAssuranceSnapshot($rotation->accessToken)===null,
     'revoked session denied to assurance reader');
+$priorCalls=$pinReader->calls;
+yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)===null,
+    'revoked session cannot expose PIN');
+yes($pinReader->calls===$priorCalls,'revoked session does not invoke PIN adapter');
+
 denies(fn()=>$store->rotateRefresh($rotation->refreshToken),'revoked refresh cannot rotate');
 yes(!$store->revokeAccess($rotation->accessToken),'repeated revoke does not succeed');
 yes(!$store->revokeAccess('v4.old.jwt'),'V4 JWT cannot revoke V5');
@@ -359,6 +402,11 @@ yes($db->sessions===$before,'malformed requests made no writes');
 $db->state['AUTH_EPOCH']='8';
 yes($store->currentAssuranceSnapshot($issued->accessToken)===null,
     'changed native auth epoch invalidates old access snapshot');
+$reader=new SessionFakePinReader();
+yes($store->showBonusPinForAccess($issued->accessToken,$reader)===null,
+    'changed native auth epoch denies protected PIN');
+yes($reader->calls===0,'epoch mismatch denies before PIN read');
+
 yes(!$store->revokeAccess($issued->accessToken),
     'changed native auth epoch forbids using stale JWT to revoke');
 
