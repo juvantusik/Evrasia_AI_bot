@@ -1,3 +1,5 @@
+> **SAVEPOINT REVISION + CI PASS, 2026-10-16:** Code `1987ddc114352470a476f3f3e5e8eda057458f8b` detects native `COMMIT+BEGIN` (not visible through connection ID/depth alone) using a randomly named SQL SAVEPOINT. Lost marker → uncertain/poisoned, no automatic rollback or retry. Disposable MariaDB `38896370806` SUCCESS 530 (43+487), +7 new staged-scope checks; offline `38896370467` SUCCESS 26. CI synthetic native Bitrix, no production proof. See `docs/SAMZABERU_V5_SAVEPOINT_NATIVE_BOUNDARY_2026-10-16.md`.
+
 > **VERIFIED 2026-10-16:** feature `2a3751e0c560381be401e5bd3d550d03756bd50a` CI passed: offline `38889891833` 26 suites, disposable MariaDB `38889891967` **523 checks (43+480), 33 new scope assertions**, all PASS. CI positive Bitrix native transaction/evidence are synthetic; source-pinned Bitrix actual writer coverage remains unproven. No production code/DB writes in this increment.
 
 # СамЗаберу V5 — ограниченный native mutation scope перед интеграцией hooks

@@ -1,3 +1,11 @@
+## R24 (2026-10-16): Hidden native COMMIT+BEGIN invalidates V5 mutation scope
+
+**Было:** staged scope verified connection ID, native depth and @@session.in_transaction, but native code could COMMIT then BEGIN on the same connection and return apparently matching snapshots. Thus even in isolated E2E the scope could wrongly assert a common transaction.
+
+**Стало:** generate unpredictable SQL SAVEPOINT immediately before trusted native callback, RELEASE it after callback even on returned failure/throw; its loss marks permanently poisoned UNKNOWN, prevents auto-rollback of a possibly new transaction, never retries and never claims a successful common commit. Verified CI disposable InnoDB native UPDATE followed by COMMIT+BEGIN: early native write already independently visible but epoch unchanged; V5 denies and never calls this 'rolled back'. Existing V4 accounts with absent epoch must not be globally affected. Source/test `1987ddc114352470a476f3f3e5e8eda057458f8b`. Offline `38896370467` SUCCESS 26 suites; MariaDB `38896370806` SUCCESS **530 total (43+487), +7**.
+
+**Critical limitation:** positive native facade/release coverage still SYNTHETIC. SAVEPOINT is additional boundary detection, not ten-path Bitrix proof, and cannot reverse a native write already COMMITTED. Need independent acceptance of exact Bitrix SqlHelper/driver SAVEPOINT error and installed source-pinned native writer paths before staging pilot; V5 production OFF, AUTH_EPOCH empty.
+
 ## R23 (2026-10-16): Native mutation entrypoints must start with b_user mutex and verified transaction continuity
 
 **Было:** existing writer atomicity exercised with synthetic native SQL and actual InnoDB, but a separate higher-level scope owning native BEGIN, source gate and full mutation-to-COMMIT handling was missing.
