@@ -19,6 +19,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlNativeEventVersionWriterTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStagingNativeMutationScopeTest.php'
+      - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlBitrixOtpNativeAdapterGateTest.php'
   workflow_dispatch:
 
 permissions:
@@ -126,7 +127,9 @@ jobs:
           # Final CI test imports the 445-check chain once, never the site.
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStagingNativeMutationScopeTest.php
           # Final test imports prior chained suites exactly once (no site Bitrix).
-          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlStagingNativeMutationScopeTest.php
+          php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlBitrixOtpNativeAdapterGateTest.php
+          # Final CI-only source-pin gate imports 530-check chain exactly once.
+          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlBitrixOtpNativeAdapterGateTest.php
           echo "=== 3. RESULT ==="
           echo "FINAL_STATUS=PASS"
           echo "FINAL_RC=0"

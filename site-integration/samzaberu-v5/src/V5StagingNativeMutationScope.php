@@ -81,11 +81,25 @@ final class V5StagingNativeMutationScope
             || $this->db->inTransaction()
             || !in_array($path, [
                 V5NativeMutationPath::PasswordChangeOrReset,
+                V5NativeMutationPath::OtpSaveAndEnrollment,
+                V5NativeMutationPath::OtpDeleteAndDisable,
                 V5NativeMutationPath::PhoneConfirmationAndReconfirmation,
                 V5NativeMutationPath::PhoneRevocationAndReplacement,
             ], true)
             || !is_a($this->native, 'Bitrix\\Main\\DB\\MysqliConnection')) {
             throw new RuntimeException('v5_staged_native_mutation_denied');
+        }
+        if (in_array($path, [
+            V5NativeMutationPath::OtpSaveAndEnrollment,
+            V5NativeMutationPath::OtpDeleteAndDisable,
+        ], true)) {
+            // Arbitrary reviewed-operation callbacks may not claim the MFA
+            // category. Only an EXACT source-pinned Bitrix Otp adapter can.
+            require_once __DIR__ . '/V5BitrixOtpNativeMutationPort.php';
+            if (!$operation instanceof V5BitrixOtpNativeMutationPort
+                || $operation->path() !== $path) {
+                throw new RuntimeException('v5_staged_native_mfa_adapter_not_attested');
+            }
         }
 
         $commitAttempted=false;
@@ -153,7 +167,11 @@ final class V5StagingNativeMutationScope
                 throw new RuntimeException('v5_staged_native_operation_not_attested');
             }
 
-            if ($path===V5NativeMutationPath::PasswordChangeOrReset) {
+            if (in_array($path, [
+                V5NativeMutationPath::PasswordChangeOrReset,
+                V5NativeMutationPath::OtpSaveAndEnrollment,
+                V5NativeMutationPath::OtpDeleteAndDisable,
+            ], true)) {
                 $this->writer->recordSecurityChanged($this->db,$userId);
             } elseif ($path===V5NativeMutationPath::PhoneConfirmationAndReconfirmation) {
                 $phone=V5BitrixSmsPhoneRows::read($this->db,$userId,true);
