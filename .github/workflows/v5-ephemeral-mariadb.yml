@@ -17,6 +17,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlPilotCompositionTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php'
+      - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlNativeEventVersionWriterTest.php'
   workflow_dispatch:
 
 permissions:
@@ -120,7 +121,9 @@ jobs:
           # Earlier suites execute once, followed by composition and scope tests.
           php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php
           # This final script requires and executes the prior 406-check chain once.
-          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php
+          php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlNativeEventVersionWriterTest.php
+          # Final CI test imports the 445-check chain once, never the site.
+          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlNativeEventVersionWriterTest.php
           echo "=== 3. RESULT ==="
           echo "FINAL_STATUS=PASS"
           echo "FINAL_RC=0"

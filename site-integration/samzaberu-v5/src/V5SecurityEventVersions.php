@@ -21,9 +21,10 @@ interface V5NativeSecurityHookCoveragePort
 }
 
 /**
- * STAGING CANDIDATE ONLY. The ev_samzaberu_auth_state table was proposed
- * for V3C and is NOT deployed. This extends that SAME proposed authority,
- * rather than inventing a parallel auth-epoch system.
+ * STAGING CANDIDATE ONLY. The shared ev_samzaberu_auth_state table
+ * was created EMPTY on production on 2026-10-15. No per-user AUTH_EPOCH
+ * initialization, native writer hooks or V5 activation has been deployed.
+ * This uses the SAME V3C/V5 auth-epoch authority, not a second epoch table.
  *
  * All native Bitrix password/MFA/block/logout/phone-confirmation writers
  * MUST synchronize on b_user FOR UPDATE and record the security event in
