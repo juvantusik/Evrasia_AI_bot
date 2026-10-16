@@ -233,7 +233,7 @@ smsCheck(nativeEventSnapshot($independent,$userId)===$beforeFalse,
 
 $added=$checks-$beforeEvents;
 echo "PASS: ephemeral native event writer atomicity ($added additional assertions)\n";
-echo "PASS: combined previous 445 + native event tests ($checks assertions)\n";
+echo "PASS: combined SMS/bridge/password/composition/epoch/native suites ($checks assertions, separate 43-session suite excluded)\n";
 echo "REAL_MARIADB_INNODB=YES\nNATIVE_BITRIX_FACADE=SYNTHETIC_ONLY\n";
 echo "TEN_NATIVE_WRITER_PATHS_PROVEN=NO\nPRODUCTION_HOOKS_INSTALLED=NO\n";
 echo "PRODUCTION_EPOCH_ROWS_INITIALIZED=NO\nPRODUCTION_WRITE=NO\nSMS_SENT=NO\n";
