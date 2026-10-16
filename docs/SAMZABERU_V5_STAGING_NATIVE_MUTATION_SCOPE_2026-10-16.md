@@ -1,3 +1,5 @@
+> **VERIFIED 2026-10-16:** feature `2a3751e0c560381be401e5bd3d550d03756bd50a` CI passed: offline `38889891833` 26 suites, disposable MariaDB `38889891967` **523 checks (43+480), 33 new scope assertions**, all PASS. CI positive Bitrix native transaction/evidence are synthetic; source-pinned Bitrix actual writer coverage remains unproven. No production code/DB writes in this increment.
+
 # СамЗаберу V5 — ограниченный native mutation scope перед интеграцией hooks
 
 16 октября 2026, GitHub feature ONLY; никакого deployment. Это отдельная попытка уменьшить риск подключения native Bitrix security writers, но НЕ утверждение, что нативные десять потоков уже атомарны.

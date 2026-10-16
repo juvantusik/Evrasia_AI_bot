@@ -1,3 +1,11 @@
+## R23 (2026-10-16): Native mutation entrypoints must start with b_user mutex and verified transaction continuity
+
+**Было:** existing writer atomicity exercised with synthetic native SQL and actual InnoDB, but a separate higher-level scope owning native BEGIN, source gate and full mutation-to-COMMIT handling was missing.
+
+**Стало:** GitHub feature-only `V5StagingNativeMutationScope.php` (commit `2a3751e0c560381be401e5bd3d550d03756bd50a`) requires CLI isolated nonprod, explicit 1–32 approved cohort, concrete V5 native bridge with independently vetted exclusive BEGIN permit, strict installed ten-path coverage, and reviewed mutation port. Only password/reset, confirmed/reconfirmed phone and phone revoke are admitted candidates; all OTP/recovery/logout paths remain deny. BEGIN → depth+MySQL connection continuity → b_user lock BEFORE native write → full coverage gate → reviewed operation → epoch writer CAS → continuity → one COMMIT. Negative outcome or CAS uncertainty before COMMIT rolls back same scope while it is still provably owned. Unknown COMMIT is never reported as success or blindly retried. Explicit warning: identical connection ID/depth do not rule out hidden COMMIT+BEGIN; only pinned native source and genuine staging rollback/concurrency tests could do so.
+
+**CI evidence:** offline run 38889891833 SUCCESS 26 suites; real disposable MariaDB run 38889891967 SUCCESS 523 checks=43 sessions+480 dependent, including 33 new staged-scope assertions. Synthetic MysqliConnection/native evidence/operation only. This is **NOT** a production native hook implementation, trusted coverage attestation or approval to activate. No production DB/site/core changes, actual installed V5 remains OFF/503 by last operator check; the six tables are created already and must not be migrated again. Next gate: targeted actual native pre-write entrypoint and rollback acceptance for all ten categories before any site factory, AUTH_EPOCH per-user rows or pilot.
+
 ## R22 (2026-10-16): Validate *existing* event writer in physical InnoDB, not post-update hooks
 
 **Было:** `V5SecurityEventVersionWriter` checked via fake PDO; `V5PilotAuthEpochInitializer` had real InnoDB test but no joint native-style password/phone mutation-to-epoch acceptance.
