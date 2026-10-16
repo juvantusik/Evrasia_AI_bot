@@ -1,3 +1,11 @@
+## R25 (2026-10-16): MFA native Otp::save/delete require pre-call transaction and verified database postconditions
+
+**Было:** native MFA/recovery source had shown `Otp::save()` clears recovery rows before ORM add/update, and `Otp::delete()` returns the Otp object ignoring ORM deletion result. Scoped transaction wrapper intentionally denied ALL OTP variants; relying on ORM OnAfter callbacks cannot cover already-run recovery writes.
+
+**Стало:** feature-only `V5BitrixOtpNativeMutationPort` pins the actual observed core `Otp.php` SHA, accepts only prepared TOTP save/enrollment and existing MFA deletion, requires same bridge-owned native connection; checks unique locked `b_sec_user` row and absence of recovery records before reporting success to the existing epoch-CAS. `V5StagingNativeMutationScope` whitelists these two paths ONLY with the exact typed adapter/matching path; arbitrary callback cannot impersonate OTP. Existing savepoint continuity and full ten-source-evidence gate preserved. This wraps only *future V5-controlled* calls; it DOES NOT intercept admin CSecurityUser, background OtpEvents, global MFA, recovery useCode, phone or logout. Never modify V4 core silently or initialize V5 user state based only on this.
+
+**Evidence:** code commit `884916fa132285cb9007c7981c33d6ec93b43699`, GitHub offline CI `38898193783` 26 suites SUCCESS, ephemeral MariaDB `38898193583` SUCCESS **543 checks =43 sessions +500 dependent, of which 13 new are NEGATIVE source pin/callback-denial tests**. Installed Bitrix OTP positive runtime and atomic rollback remain `NOT_TESTED`. Production V5 remains off, no new writes or activation.
+
 ## R24 (2026-10-16): Hidden native COMMIT+BEGIN invalidates V5 mutation scope
 
 **Было:** staged scope verified connection ID, native depth and @@session.in_transaction, but native code could COMMIT then BEGIN on the same connection and return apparently matching snapshots. Thus even in isolated E2E the scope could wrongly assert a common transaction.

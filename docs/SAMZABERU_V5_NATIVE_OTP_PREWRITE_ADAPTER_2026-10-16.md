@@ -1,3 +1,5 @@
+> **CI RESULT 2026-10-16: PASS (negative release guards only).** Code commit `884916fa132285cb9007c7981c33d6ec93b43699`; GitHub Actions offline `38898193783` SUCCESS/26 suites, ephemeral MariaDB `38898193583` SUCCESS/**543 total =43 sessions +500 dependent, including 13 new**. Source pin rejected test `Bitrix\\Security\\Mfa\\Otp` lookalike and arbitrary callback; no real core Otp.save/delete operation was performed. `NATIVE_OTP_SOURCE_MATCHED=NO`, `REAL_BITRIX_OTP_RUNTIME_TESTED=NO`. No production changes.
+
 # СамЗаберу V5 — native Bitrix OTP pre-write adapter candidate
 
 2026-10-16, GitHub-only. Production V5 OFF/HTTPS503; six new V5 InnoDB
