@@ -35,8 +35,12 @@ interface V5ReviewedNativeMutationPort
  * a hidden COMMIT+BEGIN on the same connection can reproduce them. The
  * independently source-pinned installed ten-path coverage is indispensable.
  */
-final readonly class V5StagingNativeMutationScope
+final class V5StagingNativeMutationScope
 {
+    // Once native transaction ownership is uncertain, this object is dead.
+    // Reusing the same Bitrix connection can commit another owner's writes.
+    private bool $poisoned=false;
+
     /** @var list<int> */
     private array $cohort;
 
@@ -72,7 +76,7 @@ final readonly class V5StagingNativeMutationScope
         V5NativeMutationPath $path,
         V5ReviewedNativeMutationPort $operation,
     ): void {
-        if (!self::isolatedEnvironment()
+        if ($this->poisoned || !self::isolatedEnvironment()
             || !in_array($userId, $this->cohort, true)
             || $this->db->inTransaction()
             || !in_array($path, [
@@ -85,6 +89,7 @@ final readonly class V5StagingNativeMutationScope
         }
 
         $commitAttempted=false;
+        $nativeBoundaryUncertain=false;
         $opened=false;
         $initialId=null;
 
@@ -115,10 +120,38 @@ final readonly class V5StagingNativeMutationScope
             }
             $this->continuity($initialId);
 
-            if ($operation->performOnNativeConnection($this->native,$userId)!==true) {
-                throw new RuntimeException('v5_staged_native_operation_not_attested');
+            // Unlike connection ID/depth, a transaction savepoint is DESTROYED
+            // by COMMIT, even if native code immediately starts another BEGIN
+            // on this exact connection. A random identifier prevents accidental
+            // collision with real native savepoint names; this is not a
+            // substitute for source-pinned trust in the called operation.
+            $savepoint='v5_scope_'.bin2hex(random_bytes(16));
+            if ($this->native->queryExecute('SAVEPOINT '.$savepoint)===false) {
+                throw new RuntimeException('v5_staged_native_savepoint_unavailable');
+            }
+            $operationSucceeded=false;
+            try {
+                $operationSucceeded=
+                    $operation->performOnNativeConnection($this->native,$userId)===true;
+            } catch (Throwable) {
+                // Do not leak native exception details or assume that no
+                // writes happened. The savepoint still needs verification.
+            }
+            try {
+                if ($this->native->queryExecute('RELEASE SAVEPOINT '.$savepoint)===false) {
+                    throw new RuntimeException('v5_staged_native_savepoint_lost');
+                }
+            } catch (Throwable) {
+                // COMMIT+BEGIN can preserve depth and connection ID. Never
+                // roll back a possibly NEW transaction begun by native code;
+                // caller must discard the entire native connection/scope.
+                $nativeBoundaryUncertain=true;
+                throw new RuntimeException('v5_staged_native_boundary_uncertain');
             }
             $this->continuity($initialId);
+            if (!$operationSucceeded) {
+                throw new RuntimeException('v5_staged_native_operation_not_attested');
+            }
 
             if ($path===V5NativeMutationPath::PasswordChangeOrReset) {
                 $this->writer->recordSecurityChanged($this->db,$userId);
@@ -150,7 +183,15 @@ final readonly class V5StagingNativeMutationScope
                 throw new RuntimeException('v5_staged_native_commit_not_confirmed');
             }
         } catch (Throwable) {
+            if ($nativeBoundaryUncertain) {
+                $this->poisoned=true;
+                // The native callback may already have committed its own
+                // change and opened another transaction. There is no safe
+                // compensation and no automatic retry.
+                throw new RuntimeException('v5_staged_native_scope_uncertain');
+            }
             if ($commitAttempted) {
+                $this->poisoned=true;
                 // COMMIT may have succeeded but the reply was lost. Cannot
                 // make a second mutation or claim a safe rollback/retry.
                 throw new RuntimeException('v5_staged_native_commit_uncertain');
@@ -161,6 +202,7 @@ final readonly class V5StagingNativeMutationScope
                     $this->continuity($initialId);
                     $this->db->rollBack();
                 } catch (Throwable) {
+                    $this->poisoned=true;
                     throw new RuntimeException('v5_staged_native_scope_uncertain');
                 }
             }

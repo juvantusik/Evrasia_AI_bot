@@ -75,6 +75,8 @@ final class CiReviewedNativeAction implements V5ReviewedNativeMutationPort
         private ?string $sql,
         private ?bool $result=true,
         private bool $unexpectedCommit=false,
+        private bool $unexpectedRestart=false,
+        private bool $writeFaultInCallback=false,
     ) {}
     public function performOnNativeConnection(object $native,int $userId): ?bool
     {
@@ -82,8 +84,16 @@ final class CiReviewedNativeAction implements V5ReviewedNativeMutationPort
         if (!$native instanceof MysqliConnection || $userId<1) {
             throw new RuntimeException('CI native owner mismatch');
         }
-        if ($this->sql!==null) $native->queryExecute($this->sql);
+        // Flip SQL fault only INSIDE the native operation, not before the
+        // transaction savepoint can be established by the trusted scope.
+        if ($this->writeFaultInCallback) $native->writeFault=true;
+        try {
+            if ($this->sql!==null) $native->queryExecute($this->sql);
+        } finally {
+            if ($this->writeFaultInCallback) $native->writeFault=false;
+        }
         if ($this->unexpectedCommit) $native->commitTransaction();
+        if ($this->unexpectedRestart) $native->startTransaction();
         return $this->result;
     }
 }
@@ -155,14 +165,15 @@ smsCheck($op->calls===1 && nativeEventSnapshot($observer,17001)===$current,
 smsCheck(!$bridge->inTransaction(), 'failed native callback closes owned bridge scope');
 
 // A native SQL write that fails must not advance or commit any epoch.
-$native->writeFault=true;
 $op=new CiReviewedNativeAction(
-    "UPDATE b_user SET PASSWORD='".$denied."' WHERE ID=17001");
+    "UPDATE b_user SET PASSWORD='".$denied."' WHERE ID=17001",
+    true,false,false,true);
 smsDeny(fn()=>$scope->run(17001,V5NativeMutationPath::PasswordChangeOrReset,$op),
-    'native write fault rejects event scope');
+    'native SQL write fault inside callback rejects scoped operation');
+smsCheck($op->calls===1 && !$native->writeFault,
+    'CI fault occurred inside reviewed native callback, not savepoint precheck');
 smsCheck(nativeEventSnapshot($observer,17001)===$current,
     'SQL error did not change password or epoch');
-$native->writeFault=false;
 
 // Epoch affected-row uncertainty occurs AFTER native password write:
 // caller-owned scope MUST rollback both durable states.
@@ -247,6 +258,47 @@ smsCheck($op->calls===1 && nativeEventSnapshot($observer,17001)===$beforeFalse,
     'hidden COMMIT fixture did no native write and cannot falsify epoch');
 smsCheck(!$db->inTransaction(),'hidden-commit test leaves no open DB transaction');
 
+// Hidden COMMIT+BEGIN leaves SAME physical connection, depth=1, tx=ON.
+// The savepoint must be gone and the scope MUST refuse success, even when
+// the native change ALREADY committed. We cannot automatically compensate.
+// This is disposable CI, not a native production safety acceptance.
+$restartNative=new MysqliConnection($db);
+Application::$current=$restartNative;
+$restartBridge=new V5BitrixPdoCompatibilityBridge(
+    $restartNative,new CiSmsBridgePermit());
+$restartEvidence=new CiScopeCoverage($restartBridge);
+$restartGate=new V5StrictNativeSecurityHookCoverage($restartEvidence);
+$restartWriter=new V5SecurityEventVersionWriter(
+    new V5SecurityEventVersions($phones,$restartGate,
+        str_repeat('F',32),str_repeat('G',32)));
+$restartScope=new V5StagingNativeMutationScope(
+    $restartBridge,$restartNative,$restartGate,
+    $restartWriter,$phones,new CiScopeDepth(),[17001]);
+$preRestart=nativeEventSnapshot($observer,17001);
+$committedTooEarly=hash('sha256','ci-native-commit-begin-17001');
+$restartOp=new CiReviewedNativeAction(
+    "UPDATE b_user SET PASSWORD='".$committedTooEarly."' WHERE ID=17001",
+    true,true,true);
+smsDeny(fn()=>$restartScope->run(
+    17001,V5NativeMutationPath::PasswordChangeOrReset,$restartOp),
+    'hidden COMMIT+BEGIN must fail savepoint boundary despite unchanged connection/depth');
+$postRestart=nativeEventSnapshot($observer,17001);
+smsCheck($restartOp->calls===1 && $postRestart['hash']===$committedTooEarly
+    && $postRestart['state']===$preRestart['state'],
+    'already-committed native mutation is exposed and never falsely called rollback');
+smsCheck($db->inTransaction() && $restartBridge->inTransaction(),
+    'unknown restarted native transaction is not silently rolled back by V5');
+$db->rollBack(); // explicit CI fixture cleanup of the unknown native scope
+$restartOpCalls=$restartOp->calls;
+smsDeny(fn()=>$restartScope->run(
+    17001,V5NativeMutationPath::PasswordChangeOrReset,$restartOp),
+    'poisoned native scope cannot be reused even after fixture cleanup');
+smsCheck($restartOp->calls===$restartOpCalls && !$db->inTransaction(),
+    'poisoned scope makes no further native call or transaction');
+$restore=$db->prepare('UPDATE b_user SET PASSWORD=? WHERE ID=?');
+smsCheck($restore->execute([$preRestart['hash'],17001])
+    && nativeEventSnapshot($observer,17001)===$preRestart,
+    'disposable synthetic native password restored after intentional early COMMIT');
 $added=$checks-$beforeScope;
 echo "PASS: reviewed native mutation staging scope ($added additional assertions)\n";
 echo "PASS: full dependent chain ($checks assertions; separate 43-session suite excluded)\n";
