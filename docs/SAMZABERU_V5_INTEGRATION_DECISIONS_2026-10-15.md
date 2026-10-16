@@ -1,3 +1,11 @@
+## R22 (2026-10-16): Validate *existing* event writer in physical InnoDB, not post-update hooks
+
+**Было:** `V5SecurityEventVersionWriter` checked via fake PDO; `V5PilotAuthEpochInitializer` had real InnoDB test but no joint native-style password/phone mutation-to-epoch acceptance.
+
+**Стало:** New GitHub-only `V5EphemeralMySqlNativeEventVersionWriterTest.php` imports prior suites once, exercises existing `V5SecurityEventVersionWriter` and the SAME underlying PDO through synthetic Bitrix mysqli/bridge against a disposable MariaDB. Explicit b_user FOR UPDATE precedes synthetic native password/phone write. Password hash + AUTH_EPOCH CAS become visible together after commit; simulated CAS affected-count failure requires caller rollback and undoes BOTH; absent per-user state also causes rollback in this synthetic V5-only scope. Two successful native phone reconfirms of the **same E.164** increment PHONE_EVENT_VERSION and invalidate prior stamp; revoke clears HMAC; later re-confirm creates new stamp. Negative false revocation fails. A same-number business event cannot be proven merely by matching SQL UPDATE; real trusted event callback is still missing.
+
+**Evidence:** source+test `087f6c1a0b407e24f3c88a89496a0c704e3cd9fa`. Offline Action `38873622210` SUCCESS 26 suites; disposable MariaDB `38873622382` SUCCESS 490 assertions (**43 session checks separately +447 dependent checks**, +45 new). All native Bitrix calls/ten-path evidence are CI FAKES, so `NATIVE_HOOKS_PROVEN_ATOMIC=NO`, `REAL_BITRIX_STAGE_E2E=NO`; V5 remains disabled on site. MAIN unchanged; no production write/DDL/reload/SMS. **No assumption** that OnAfterUserUpdate is atomic; OTP::save recovery-code cleanup precedes ORM add event, so a transaction begun in OnBeforeAdd is too late for full multi-step mutation. No core changes authorized.
+
 ## R21 (2026-10-15): scoped epoch initialization without native event bypass
 
 **Было:** six new tables created but AUTH_EPOCH empty; generic/automatic backfill forbidden. Native10-path hooks absent, no trusted user evidence.

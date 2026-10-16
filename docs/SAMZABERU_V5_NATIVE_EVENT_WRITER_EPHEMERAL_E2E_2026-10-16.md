@@ -1,3 +1,5 @@
+> **CI RESULT 16.10.2026:** PASS, commit `087f6c1a0b407e24f3c88a89496a0c704e3cd9fa`. Offline workflow `38873622210`: 26 suites SUCCESS. Ephemeral MariaDB workflow `38873622382`: 43 session +447 dependent = **490 assertions PASS**, including **45 new** native event writer assertions. The first code run `a2091606...` was also PASS, but its summary wording mistakenly treated 43 independent session checks as part of `$checks`; final commit corrected the label without changing the test logic and both CI reran PASS. No actual native Bitrix source/transaction hooks were executed.
+
 # СамЗаберу V5 — реальная InnoDB-атомарность event writer (с синтетическим native API)
 
 16 октября 2026. **GitHub-only integration test; production Bitrix НЕ затрагивается.** В рабочей `eurasia_new` шесть V5 InnoDB tables уже созданы пустыми 15.10 (PASS, schema evidence `/root/ev-v5-ddl-backup.20261015T174912Z.2010173`), V5 всё ещё `off`/HTTPS503 и `AUTH_EPOCH_INITIALIZED=NO`.
