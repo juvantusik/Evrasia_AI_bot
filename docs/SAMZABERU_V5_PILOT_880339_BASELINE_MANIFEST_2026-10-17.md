@@ -1,5 +1,18 @@
 # V5 — Pilot USER_ID 880339: verified read-only baseline snapshot (2026-10-17)
 
+## 2026-10-17 evening: website TOTP/PIN browser acceptance (newer than zero-OTP snapshot)
+
+**Current confirmed website behavior (operator's real browser and temporary guarded PHP probe):**
+- On pilot `880339`, native Bitrix TOTP was re-enrolled via the existing website flow after a separately approved one-condition fix in `local/components/eurasia/totp.enrollment/class.php`. This is **V4/website functionality**, **NOT** a V5 native writer/epoch acceptance test.
+- A first PIN-request observation in a previously existing/cookie-restored browser session reported `OTP_INITIALIZED=YES`, `OTP_ACTIVATED=YES`, `CONTEXT_USER_MATCHES_PILOT=YES`, but `CONTEXT_OTP_USED=NO` and `DIRECT_PIN_ELIGIBLE=NO`. This is consistent with the existing security rule: merely having TOTP enabled does not grant direct PIN.
+- After **full logout → fresh login/password → actual native TOTP code → PIN click**, the guarded live PIN-endpoint probe reported `REQUEST_POST=YES`, `CANONICAL_HOST=YES`, `RESOLVED_USER=YES`, `OTP_INITIALIZED=YES`, `OTP_ACTIVATED=YES`, `CONTEXT_USER_MATCHES=YES`, `CONTEXT_OTP_USED=YES`, `DIRECT_PIN_ELIGIBLE=YES`, `EXCEPTION_FREE=YES`. Probe observed boolean flags only; no PIN/OTP/credentials logged and no diagnostic SMS sent.
+- Temporary production `local/php_interface/pincode.php` instrumentation was **automatically reverted**: `ORIGINAL_RESTORED=YES`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, verified original SHA-256 `c7fa868712ab10bef5e85384158bb1c8b21548379b278de5fb808a0e3505afff`.
+- Operator then confirmed an **actual on-screen bonus PIN with no SMS** using the original restored endpoint. **Website acceptance: PASS**.
+- Crucial chronological correction: `OTP_ROW_COUNT=0` in the morning's verified metadata manifest describes the **earlier snapshot only**. The pilot was **subsequently re-enrolled** in the website; that old manifest is not proof of current empty MFA, not a full backup, and must not be used as a current-state guard. A new exact current DB row count was not collected in the fresh browser acceptance; real `Otp::isInitialized()/isActivated()` were YES in the PHP request.
+- This proves the browser's V4/native TOTP→PIN eligibility and display path, **not** V5 `AUTH_EPOCH`, native `Otp::save/delete` adapter atomicity, ten-path native security hook coverage, or V5 readiness. No V5 activation, migration, epoch initialization, or V4 core changes were made as part of these diagnostic probes.
+
+**Next V5 gate:** honor the decision to run V5 beside V4 on the existing Bitrix installation without requiring a new VM. Finish **independently verified real native Bitrix transaction/hook acceptance** for the staged V5 adapter and all required security-event paths before writing `AUTH_EPOCH` or activating V5. Do not repeat the closed V4/browser TOTP enrollment/PIN tests as a substitute for V5 evidence, and do not attempt further production MFA mutation without separate, precisely scoped approval.
+
 ## Actual operator output — PASS
 
 On production host `evrasia`, the operator executed a guarded CLI snapshot of
