@@ -31,3 +31,9 @@ CI текущих feature commits: подтверждённого нового �
 - `bbae287c3afb5231e647d1d42cdf20988acca932`: test fixture расширена на *обычный rollback* и *неопределённое состояние без ложного rollback*, с исправленным PHP namespace syntax. Все проверки пока синтетические.
 - Историческая 30/30 успешная проверка **не покрывала** coordinator. Не утверждать успешный 31/31 без фактического GitHub Actions результата.
 - Внедрение CUser-native adapter, явное доказательство side-effects isolation и positive real-Bitrix E2E остаются заблокированными. Никакой production deploy.
+
+## Synthetic success-path regression extension
+
+Code/test commit `6e1309fa2a7bb20e90a4ba7e602aea673fc9f832`: broadened coordinator synthetic coverage to normal commit, rejection of repeated registration after success, and both `false` and exception during post-commit readback. Both readback failures must report uncertain/no-retry; rollback after successful commit is forbidden. This remains **synthetic fake Bitrix**, not proof that native `CUser::Add` is atomic.
+
+This ChatGPT connector currently returns no workflow runs for latest commits (its commit-run lookup is PR-triggered only). Therefore CI for these edits is **UNVERIFIED**, not PASS, until a matching Actions run ID/job result is inspected. Staging native writer/positive real-E2E not implemented or executed. Production OFF/503 unchanged.
