@@ -119,6 +119,14 @@ The operator executed the guarded PHP 8.3 + mysqli read-only diagnostic on produ
 
 Для существующего авторизованного пользователя будущие актуализации согласий должны быть с V5 JWT и current-user серверной привязкой, а не anonymous accept. Это отдельный защищённый маршрут, не часть публичного GET.
 
+## 3A. Native signup consent ID plan and receipt proof (feature-only, 2026-10-18)
+
+Operator pinned installed Bitrix `Consent.php` and website signup sources, then ran masked PHP tokenizer with `FINAL_STATUS=PASS/RC=0`, no Bitrix bootstrap/DB. Actual method is `addByContext($agreementId,$originatorId=null,$originId=null,array $params=array())`; direct return expressions are `null` and `$userConsentId`. `$params` accesses included `USER_ID`, `IP`, `URL` and one not yet identified key. The three site signup calls all supply dynamic agreement IDs, literal originator, `(string)$userID`, `$consentParams`. **Source evidence does not prove transaction atomicity or the native method's indirect side effects.**
+
+New feature `src/V5SignupNativeConsentPlan.php` dynamically binds accepted current revision `code` values to trusted *current* native `AGREEMENT_ID` values; both compulsory revisions are mandatory, marketing is optional, and caller-supplied IDs, originator/USER_ID or stale codes are rejected. The pure `V5SignupNativeConsentEvidence` stage requires each non-null, unique `addByContext` return ID to match the native `b_consent_user_consent` readback on expected `USER_ID`, `AGREEMENT_ID`, `ORIGIN_ID`, `ORIGINATOR_ID`. This is **not** the real write, DB query, transaction, or a proof that the registration commit succeeded. It is a guarded helper for the subsequent native implementation.
+
+[Offline CI 39113734531](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39113734531) **SUCCESS**: 29 approved suites, new 56 synthetic tests. [Ephemeral MariaDB regression 39113718963](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39113718963) SUCCESS; neither exercised real Bitrix consent writes. **Pending** targeted masked inspection of `$consentParams` construction and `addByContext` internal method calls/transaction owner; then a source-pinned V5-only signup+consent writer in isolated staging, with before/after data and rollback proof. No real signup, site deployment, production DB mutation or V5 activation.
+
 ## 4. Защита и тесты
 
 Feature files:
