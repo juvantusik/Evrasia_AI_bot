@@ -161,3 +161,13 @@ Discovered a **real breaking defect** introduced by earlier transaction-guard ed
 ## 2026-10-18 — canonical V5 strong session transaction integrity
 
 Feature commit `d94bef05abce0ebc26a4774e5eb521055cfc0c03` hardens the shared `V5MySqlStrongSessionStore::transaction` wrapper: after the work callback (including native trust/grant and protected bonus-PIN read) returns, the store explicitly rejects a lost transaction before commit, withholding access/refresh credentials and PIN. Existing transactional session flows still require evidence that native code cannot secretly COMMIT and reopen a new transaction, so this check is necessary but not sufficient. Regression scenarios added to existing `V5MySqlStrongSessionStoreTest.php` in `4047e86c2faf0915fbc1e8474fdc2aadebd90f42`, covering native proof transaction loss and protected PIN reader loss. The suite is already enumerated in the feature CI; actual green CI has NOT been confirmed. V4 and production unchanged, V5 OFF/503.
+
+## 2026-10-18 — savepoint continuity guards against implicit native COMMIT+BEGIN
+
+GitHub workflow/status lookup on commit `a00ccb7f2020d28d7bc5a1fcd6a768420a7d52d3` returned no PR-triggered workflow runs and no commit status checks; **CI green is unverified**.
+
+Applied SQL SAVEPOINT / RELEASE around native callback boundaries in canonical V5 implementations:
+- `V5MySqlStrongSessionStore::transaction` (`6d1835ba09169f1d9bec93385d4cfa3b982e58fa`), with synthetic native `COMMIT+BEGIN` regression (`c0218eeea899888882e4a55426cb08455f89182f`), prevents authorizing tokens/protected PIN after an implicit native commit that preserves `inTransaction()==true`.
+- `V5MySqlSmsOutbox::reserveAndQueue` (`44d7c6f367c2ff899aa42342212db82d819f65bb`), with synthetic eligibility `COMMIT+BEGIN` regression (`2e388ba7b91ca9759d609fa14ff7bad6fb7e1d76`), prevents SMS quota and outbox creation in the restarted transaction.
+
+On actual MySQL, implicit COMMIT destroys savepoints so subsequent RELEASE fails closed. Tests rely on synthetic PDOs modeling this behavior, and **have not been executed here**. This does not prove Bitrix same-connection integrity or native TOTP replay correctness. Challenge consumption native-factor callback still needs the same savepoint-based attestation before any release of V5, plus real MySQL integration, SMS provider and authoritative Bitrix proofs. No production/V4 changes; V5 OFF/503.
