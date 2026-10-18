@@ -76,6 +76,18 @@ final class V5StagedSignupCoordinator
                 throw new RuntimeException('v5_signup_native_consents_unverified');
             }
         } catch (Throwable $cause) {
+            // A hidden COMMIT+BEGIN or lost native connection makes the entire
+            // user/consent outcome unknowable. A rollback on that connection
+            // cannot prove reversal: never retry or claim atomicity.
+            if ($cause instanceof RuntimeException && in_array($cause->getMessage(), [
+                'v5_signup_consent_transaction_uncertain',
+                'v5_signup_native_transaction_lost',
+                'v5_signup_native_connection_changed',
+                'v5_bitrix_commit_uncertain',
+                'v5_bitrix_rollback_uncertain',
+            ], true)) {
+                throw new RuntimeException('v5_signup_transaction_uncertain_no_retry', 0, $cause);
+            }
             try {
                 $this->transaction->rollBack();
             } catch (Throwable) {
@@ -93,7 +105,12 @@ final class V5StagedSignupCoordinator
         }
 
         // A failed post-commit check is an incident, never a reason to retry.
-        if (!$this->native->verifyCommitted($id, $events)) {
+        try {
+            $verified = $this->native->verifyCommitted($id, $events);
+        } catch (Throwable $cause) {
+            throw new RuntimeException('v5_signup_postcommit_unverified_no_retry', 0, $cause);
+        }
+        if (!$verified) {
             throw new RuntimeException('v5_signup_postcommit_unverified_no_retry');
         }
     }
