@@ -76,7 +76,10 @@ final readonly class V5SignupNativeConsentPlan
         $nativeByCode = [];
         $seenId = [];
         foreach ($nativeRows as $row) {
+            $rowKeys = is_array($row) ? array_keys($row) : [];
+            sort($rowKeys, SORT_STRING);
             if (!is_array($row) || array_is_list($row)
+                || $rowKeys !== ['ACTIVE','CODE','ID']
                 || !array_key_exists('ID', $row)
                 || !is_string($row['CODE'] ?? null)
                 || ($row['ACTIVE'] ?? null) !== 'Y'
