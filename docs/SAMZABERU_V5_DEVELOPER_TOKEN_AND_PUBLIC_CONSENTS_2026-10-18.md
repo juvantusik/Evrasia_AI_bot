@@ -127,6 +127,16 @@ New feature `src/V5SignupNativeConsentPlan.php` dynamically binds accepted curre
 
 [Offline CI 39113734531](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39113734531) **SUCCESS**: 29 approved suites, new 56 synthetic tests. [Ephemeral MariaDB regression 39113718963](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39113718963) SUCCESS; neither exercised real Bitrix consent writes. **Pending** targeted masked inspection of `$consentParams` construction and `addByContext` internal method calls/transaction owner; then a source-pinned V5-only signup+consent writer in isolated staging, with before/after data and rollback proof. No real signup, site deployment, production DB mutation or V5 activation.
 
+## 3B. Stage-only native Bitrix consent writer (2026-10-18)
+
+Installed production source-only inspection (`FINAL_STATUS=PASS, FINAL_RC=0`, no bootstrap/DB) completed the exact site/native shape: website `$consentParams` initializer contains `USER_ID,URL`; native `Consent::addByContext()` accepts/accesses `USER_ID,IP,URL,ITEMS`; observed native calls include `isExist`, `isActive`, `add`, `isSuccess`, `getId` and `addItems`. `NATIVE_DIRECT_TRANSACTION_CALLS` was empty, which does not prove implicit ORM/CUser transaction semantics.
+
+New V5-only `src/V5BitrixStagedSignupConsentWriter.php` implements a **candidate staged consent write step AFTER verified CUser creation** within a **caller-owned** single native Bitrix connection transaction. It checks independent bridge/depth proof, a strict pinned Consent.php source SHA, locked b_user and live agreement revisions, calls native `addByContext` with internally computed numeric IDs and `evrasia_signup`, and requires locked readbacks for each returned event. A unique SAVEPOINT detects native hidden COMMIT+BEGIN. It deliberately **does not** call `CUser::Add`, `COMMIT` or `ROLLBACK`; it cannot authorize signup or install an HTTP route.
+
+[GitHub offline safety run 39114444560](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39114444560) **SUCCESS 30 approved suites**, including **13 additional staging-writer negative assertions**: no staging acknowledgment, no owned transaction, invalid native transaction depth, synthetic wrong Consent.php source fingerprint, no native consent writes/commit, and one-time use. This is **negative safety evidence only**, not a positive execution of actual installed `Consent::addByContext`. The stage-only writer intentionally denies execution on the `evrasia` production host, including same-host staging, until isolation controls are separately reviewed and approved. Do NOT remove this guard merely to get a green test.
+
+**Remaining release blockers:** review exact `CUser::Add` source and external side effects; isolate native writer+account creation in a test schema on the existing host or approved equivalent, verify complete rollback with 2 required / optional marketing native agreement events; supply positive attested native transaction owner and approved deployment. V5 stays OFF/503, V4 and DB unchanged. Developer must not treat `POST /api/v5/signup` as live or promise accepted consent writes yet.
+
 ## 4. Защита и тесты
 
 Feature files:
