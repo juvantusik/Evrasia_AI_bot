@@ -56,12 +56,12 @@ $port2->approved = true;
 $port2->failure = 'synthetic_regular_error';
 try {
     (new V5StagedSignupCoordinator($bridge2, $port2))->register();
-    throw new \\RuntimeException('FAIL: regular failure permitted');
-} catch (\\RuntimeException $e) {
+    throw new \RuntimeException('FAIL: regular failure permitted');
+} catch (\RuntimeException $e) {
     if ($e->getMessage() !== 'v5_signup_rolled_back') throw $e;
 }
 if ($fake2->rollbackCalls !== 1 || $fake2->commitCalls !== 0) {
-    throw new \\RuntimeException('FAIL: regular failure did not roll back');
+    throw new \RuntimeException('FAIL: regular failure did not roll back');
 }
 
 $fake3 = new MysqliConnection();
@@ -72,14 +72,14 @@ $port3->approved = true;
 $port3->failure = 'v5_signup_consent_transaction_uncertain';
 try {
     (new V5StagedSignupCoordinator($bridge3, $port3))->register();
-    throw new \\RuntimeException('FAIL: uncertain failure permitted');
-} catch (\\RuntimeException $e) {
+    throw new \RuntimeException('FAIL: uncertain failure permitted');
+} catch (\RuntimeException $e) {
     if ($e->getMessage() !== 'v5_signup_transaction_uncertain_no_retry') throw $e;
 }
 if ($fake3->rollbackCalls !== 0 || $fake3->commitCalls !== 0) {
-    throw new \\RuntimeException('FAIL: uncertain state incorrectly rolled back');
+    throw new \RuntimeException('FAIL: uncertain state incorrectly rolled back');
 }
 putenv('V5_STAGE_WRITE_ACK');
-echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry (4 assertions)\\n";
+echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry (4 assertions)\n";
 echo "REAL_BITRIX_NATIVE_CALLS=NO\n";
 echo "PRODUCTION_DEPLOYED=NO\n";
