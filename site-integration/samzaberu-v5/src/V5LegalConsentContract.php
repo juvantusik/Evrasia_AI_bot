@@ -114,7 +114,7 @@ final class V5LegalConsentContract
         return ($parts['scheme'] ?? null) === 'https'
             && in_array($parts['host'] ?? null, ['evrasia.spb.ru','evrasia.rest'], true)
             && (!isset($parts['port']) || $parts['port'] === 443)
-            && !isset($parts['user'], $parts['pass'])
+            && !isset($parts['user']) && !isset($parts['pass'])
             && !isset($parts['query']) && !isset($parts['fragment'])
             && str_starts_with($parts['path'] ?? '', '/legal/');
     }
