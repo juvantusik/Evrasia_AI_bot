@@ -221,7 +221,7 @@ final readonly class V5AuthHttpHandler
                 $body['device_id'],
                 $body['platform'],
             ),
-            'challenge_sent'
+            'challenge_pending'
         );
     }
 
