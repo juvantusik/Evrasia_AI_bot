@@ -43,3 +43,9 @@ This ChatGPT connector currently returns no workflow runs for latest commits (it
 Commits `bad576159bcdf667eb9207bfb6b2709d5d17f11d` and `9a2cd1c4751ad8f2b00b9fec6ff4d620db56017e`: coordinator adds explicit production hostname deny and requires `V5StagedSignupNativePort::transactionContinuityBeforeCommit()` **after** native user and consent evidence, immediately **before** COMMIT. Failed continuity is an uncertain state and must **not** be reported as successfully rolled back; no retry. Synthetic test includes denial of uncertain continuity and checks zero fake COMMIT/ROLLBACK. This is a staging-port contract, not proof of actual Bitrix native transaction continuity. No production adapter, HTTP exposure, real E2E or deploy.
 
 The test is included in the configured 31-suite workflow; latest CI status is not asserted until a matching run and job result are actually observed.
+
+## 18 Oct — first native CUser staging identity gate
+
+Commits `24de07dba8550dcc4f219937d7c8250b3971f394`, `7dd5f21b71106c8d2648717ca7183fbcd9d82507`, `a7c933fb75bae062e5b97a532aacf386aff91cde`: new `src/V5StagedCUserSourceGate.php` verifies actual loaded non-static `CUser::Add` reflection filename, source SHA256 of operator-observed Bitrix version, isolated staging document root, CLI and non-production host. New negative offline test denies absent Bitrix bootstrap regardless of env ack. Offline workflow expanded to **32** planned suites.
+
+IMPORTANT: source identity alone does **not** imply CUser::Add transactional safety. No implementation of `V5StagedSignupNativePort` creates users; no native positive E2E executed; no release permission. Last matching GitHub CI run still needs to be verified.
