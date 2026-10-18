@@ -126,7 +126,7 @@ namespace {
         ['POST','/api/v5/auth/token/validate'],
         ['POST','/api/v5/loyalty/pin'],
     ] as [$method,$path]) {
-        $raw='{}';
+        $raw='{"unrelated":true}';
         $r=$boundary->dispatch(new V5StagedHttpRequest(
             $method,$path,true,'application/json',$raw
         ));
