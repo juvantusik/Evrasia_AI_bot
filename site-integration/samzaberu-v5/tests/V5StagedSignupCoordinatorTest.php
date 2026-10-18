@@ -149,7 +149,25 @@ try {
 if ($continuityFake->commitCalls !== 0 || $continuityFake->rollbackCalls !== 0) {
     throw new \RuntimeException('FAIL: broken continuity caused commit or false rollback');
 }
+$rollbackFake = new MysqliConnection();
+Application::$connection = $rollbackFake;
+$rollbackBridge = new V5BitrixPdoCompatibilityBridge(
+    $rollbackFake, new SyntheticNativeSignupPermit()
+);
+$rollbackPort = new DeniedStagedSignupNative();
+$rollbackPort->approved = true;
+$rollbackPort->failure = 'synthetic_regular_error';
+$rollbackPort->rollbackContinuity = false;
+try {
+    (new V5StagedSignupCoordinator($rollbackBridge, $rollbackPort))->register();
+    throw new \RuntimeException('FAIL: lost native scope reported safe rollback');
+} catch (\RuntimeException $e) {
+    if ($e->getMessage() !== 'v5_signup_transaction_uncertain_no_retry') throw $e;
+}
+if ($rollbackFake->rollbackCalls !== 0 || $rollbackFake->commitCalls !== 0) {
+    throw new \RuntimeException('FAIL: unverified native scope was rolled back');
+}
 putenv('V5_STAGE_WRITE_ACK');
-echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry, synthetic commit/readback (8 scenarios)\n";
+echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry, synthetic commit/readback (9 scenarios)\n";
 echo "REAL_BITRIX_NATIVE_CALLS=NO\n";
 echo "PRODUCTION_DEPLOYED=NO\n";
