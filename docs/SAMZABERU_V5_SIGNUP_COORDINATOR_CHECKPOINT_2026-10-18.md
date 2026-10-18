@@ -18,3 +18,9 @@
 4. Текущий `POST /api/v5/signup` не работает; разработчику не выдавать как deployed. `POST /api/v5/auth/token/validate` и публичный `GET /api/v5/legal/consents` — feature-contract candidates, V5 production OFF/503.
 
 Production, V4 и production DB не изменялись. Запрещено менять их без отдельного разрешения.
+
+## Исправление fail-closed после checkpoint
+
+Коммит `b3d2e1430451b6f134b41a131e64438b9999455f`: coordinator больше не делает вид, что обычный rollback гарантирован, когда native consent writer сообщает о потерянной транзакции, смене соединения или hidden COMMIT. Такие ошибки выделены в `v5_signup_transaction_uncertain_no_retry`, без rollback-claim и без retry. Исключения post-commit readback теперь переводятся в `v5_signup_postcommit_unverified_no_retry`. Это минимальный defensive change и **не** positive native acceptance.
+
+CI текущих feature commits: подтверждённого нового успешного workflow run пока нет; исторические 30/30 относятся к прежнему коду. Требуется запуск и проверка нового теста и отдельный native E2E до любого deployment.
