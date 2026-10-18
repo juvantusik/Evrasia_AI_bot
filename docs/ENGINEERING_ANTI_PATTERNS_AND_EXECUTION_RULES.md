@@ -74,3 +74,9 @@
 - Пользователь неоднократно требовал очищать предыдущий вывод терминала. Каждый внешний copy-paste блок начинается **до создания временного файла и других команд** с `printf '\\033[3J\\033[2J\\033[H'` (в готовом Bash используется запись `printf '\033[3J\033[2J\033[H'`). Дублировать очистку внутри wrapper можно, но это не заменяет первого действия.
 - После очистки печатать только компактный, релевантный диагностический вывод. Не выводить сотни строк старых команд и логов. Очищение терминала не является удалением логов на сервере.
 - Подтверждённая новая точка: V5 установлен на production; GET `/api/v5/health` вернул HTTP 200, `/api/v5/legal/consents` HTTP 503; `AUTH_READY=NO`, SMS отключены, V4 не изменён. Следующая работа — интеграция реальных Bitrix providers, а не повторная установка health.
+
+## 9. Production milestone — 2026-10-18
+
+Подтверждено оператором на production: V5 установлен; `GET /api/v5/health` → HTTP 200; `GET /api/v5/legal/consents` → HTTP 200 с тремя актуальными native Bitrix соглашениями (offer/PD обязательны, marketing опционален); `POST /api/v5/auth/signin` → HTTP 503, авторизация отключена, SMS не отправлялись, V4 не изменён. Фактический server rollback backup для последнего изменения: `/var/backups/evrasia-v5-legal-install.iWx6XhcG`. `FINAL_STATUS=PASS`, `FINAL_RC=0`. Не переустанавливать health/legal без причины.
+
+Дальнейшая критическая работа: реальное V5 password proof + native Bitrix account lookup/anti-fraud/attempt gate, password-bound challenge lifecycle, TOTP/SMS/trusted device + strong session and bonus PIN. В основном `V5MySqlChallengeHttpPort` без `V5PasswordBoundChallengeLifecyclePort` начало challenge намеренно недоступно. Нельзя объявлять авторизацию готовой, пока порт не реализован и не проверен на Bitrix. Перед следующим production скриптом чистить терминал первым действием.
