@@ -368,7 +368,11 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 throw new RuntimeException('session_begin_unavailable');
             }
             $started=true;
+            // A savepoint is destroyed by an implicit COMMIT, including when
+            // native code immediately starts another transaction afterwards.
+            $this->query('SAVEPOINT v5_strong_session_guard', []);
             $result=$operation();
+            $this->query('RELEASE SAVEPOINT v5_strong_session_guard', []);
             // A native proof/read callback may not close our transaction.
             // Never sign JWTs or expose a PIN after that boundary is lost.
             if (!$this->db->inTransaction()) {
