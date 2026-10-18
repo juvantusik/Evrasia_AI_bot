@@ -18,6 +18,7 @@ final class SessionFakePdo extends PDO
     public string $driver='mysql';
     public int $errorMode=PDO::ERRMODE_EXCEPTION;
     public bool $started=false;
+    public bool $savepoint=false;
     public bool $failBegin=false;
     public bool $failCommit=false;
     public bool $failPrepare=false;
@@ -47,16 +48,16 @@ final class SessionFakePdo extends PDO
     public function beginTransaction():bool {
         if($this->failBegin)return false;
         if($this->started)throw new RuntimeException('nested');
-        $this->snapshot=$this->sessions;$this->started=true;return true;
+        $this->snapshot=$this->sessions;$this->started=true;$this->savepoint=false;return true;
     }
     public function commit():bool {
         if($this->failCommit)return false;
         if(!$this->started)throw new RuntimeException('no transaction');
-        $this->started=false;$this->snapshot=[];$this->commits++;return true;
+        $this->started=false;$this->savepoint=false;$this->snapshot=[];$this->commits++;return true;
     }
     public function rollBack():bool {
         if(!$this->started)return false;
-        $this->sessions=$this->snapshot;$this->started=false;$this->rollbacks++;return true;
+        $this->sessions=$this->snapshot;$this->started=false;$this->savepoint=false;$this->rollbacks++;return true;
     }
     public function prepare(string $query,array $options=[]):PDOStatement|false {
         $this->queries[]=$query;
@@ -75,6 +76,14 @@ final class SessionFakeStatement extends PDOStatement
         $this->params=$params??[];$this->rows=[];$this->cursor=0;$this->affected=0;
         $db=$this->db;
         if($db->failSql!=='' && str_starts_with($this->sql,$db->failSql))return false;
+        if($this->sql==='SAVEPOINT v5_strong_session_guard') {
+            if(!$db->inTransaction())return false;
+            $db->savepoint=true;return true;
+        }
+        if($this->sql==='RELEASE SAVEPOINT v5_strong_session_guard') {
+            if(!$db->inTransaction() || !$db->savepoint)return false;
+            $db->savepoint=false;return true;
+        }
         if(str_starts_with($this->sql,'SELECT ENGINE FROM')) {
             $this->rows=[['ENGINE'=>$db->engine]];return true;
         }
@@ -161,12 +170,16 @@ final class SessionFakeProof implements V5LockedStrongSessionProofPort
     public bool $allow=true;
     public bool $throws=false;
     public bool $loseTransaction=false;
+    public bool $restartTransaction=false;
     public int $calls=0;
     public function verifiedTrustWithUserLock(PDO $db,PasswordVerifiedAccount $account,
         string $deviceId,string $platform,string $token):bool {
         $this->calls++;
         if(!$db->inTransaction() || $this->throws)throw new RuntimeException('synthetic proof failure');
         if ($this->loseTransaction && $db instanceof SessionFakePdo) $db->started=false;
+        if ($this->restartTransaction && $db instanceof SessionFakePdo) {
+            $db->started=false;$db->savepoint=false;$db->started=true;
+        }
         return $this->allow && $account->userId===41 && $platform==='ios'
             && $token==='synthetic-strong-trust-token';
     }
@@ -345,6 +358,11 @@ yes(is_string($grantRow['grant_digest']) && strlen($grantRow['grant_digest'])===
 $committed=$db->sessions;
 denies(fn()=>consumed($store),'replayed grant uniqueness rejects second session');
 yes($db->sessions===$committed,'replayed grant cannot persist another session');
+
+[$store,$db,$proof]=environment();
+$proof->restartTransaction=true;
+denies(fn()=>trusted($store),'COMMIT and BEGIN inside native proof must destroy savepoint and deny JWT');
+yes($db->commits===0 && $db->sessions===[],'restarted native transaction cannot commit session');
 
 [$store,$db,$proof]=environment();
 $proof->loseTransaction=true;
