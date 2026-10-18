@@ -24,3 +24,10 @@ Production, V4 и production DB не изменялись. Запрещено м
 Коммит `b3d2e1430451b6f134b41a131e64438b9999455f`: coordinator больше не делает вид, что обычный rollback гарантирован, когда native consent writer сообщает о потерянной транзакции, смене соединения или hidden COMMIT. Такие ошибки выделены в `v5_signup_transaction_uncertain_no_retry`, без rollback-claim и без retry. Исключения post-commit readback теперь переводятся в `v5_signup_postcommit_unverified_no_retry`. Это минимальный defensive change и **не** positive native acceptance.
 
 CI текущих feature commits: подтверждённого нового успешного workflow run пока нет; исторические 30/30 относятся к прежнему коду. Требуется запуск и проверка нового теста и отдельный native E2E до любого deployment.
+
+## Продолжение feature и offline workflow
+
+- `8f2e0205b40a6fff00cb96ffb51ed4520d5c5ea7`: реальный workflow `.github/workflows/v5-offline-safety.yml` обновлён с 30 до **31 planned suites**, включая `V5StagedSignupCoordinatorTest.php`. Это ожидание, а не свидетельство CI PASS.
+- `bbae287c3afb5231e647d1d42cdf20988acca932`: test fixture расширена на *обычный rollback* и *неопределённое состояние без ложного rollback*, с исправленным PHP namespace syntax. Все проверки пока синтетические.
+- Историческая 30/30 успешная проверка **не покрывала** coordinator. Не утверждать успешный 31/31 без фактического GitHub Actions результата.
+- Внедрение CUser-native adapter, явное доказательство side-effects isolation и positive real-Bitrix E2E остаются заблокированными. Никакой production deploy.
