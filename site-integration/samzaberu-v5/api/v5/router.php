@@ -24,6 +24,33 @@ if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/health'
     exit;
 }
 
+// Public current legal agreements: read-only native Bitrix catalog.
+// Independent of private auth factory; all authentication routes stay closed.
+if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/legal/consents'
+    && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+    && in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on', '1'], true)
+) {
+    require_once dirname(__DIR__, 2) . '/src/V5BitrixPublicLegalCatalog.php';
+    $site = dirname(__DIR__, 5);
+    $documents = \Evrasia\Samzaberu\V5\V5BitrixPublicLegalCatalog::read(
+        $site . '/bitrix/.settings.php'
+    );
+    header_remove('Set-Cookie');
+    header_remove('Location');
+    header_remove('Access-Control-Allow-Origin');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, max-age=0');
+    header('X-Content-Type-Options: nosniff');
+    if ($documents === null) {
+        http_response_code(503);
+        echo '{"error":"temporarily_unavailable"}';
+    } else {
+        http_response_code(200);
+        echo json_encode(['documents' => $documents], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    }
+    exit;
+}
+
 require_once dirname(__DIR__, 2) . '/src/V5ParallelHttpEntry.php';
 
 use Evrasia\Samzaberu\V5\V5ParallelHttpEntry;
