@@ -35,11 +35,34 @@ final readonly class V5ParallelHttpEntry
         }
         $head = V5PhpHttpRequestFactory::fromServer($server, '');
         $path = substr($head->requestUri, strlen(V5RouteMap::BASE_PATH));
-        if (!str_starts_with($head->requestUri, V5RouteMap::BASE_PATH . '/')
-            || !isset(V5RouteMap::ROUTES['POST ' . $path])) {
+        if (!str_starts_with($head->requestUri, V5RouteMap::BASE_PATH . '/')) {
+            return self::deny(404, 'not_found');
+        }
+        $action = V5RouteMap::ROUTES[$head->method . ' ' . $path] ?? null;
+        if ($action === null) {
+            foreach (array_keys(V5RouteMap::ROUTES) as $route) {
+                if (substr($route, strpos($route, ' ') + 1) === $path) {
+                    return self::deny(405, 'method_not_allowed');
+                }
+            }
             return self::deny(404, 'not_found');
         }
         if (!$head->trustedHttps) return self::deny(403, 'secure_transport_required');
+        if ($head->method === 'GET') {
+            // Exactly one public read route. Never read request body or load
+            // Bitrix until method/TLS/path/body-length guards have passed.
+            if ($action !== 'publicLegalConsents'
+                || ($head->contentLength !== null && $head->contentLength !== '0')) {
+                return self::deny(400, 'invalid_request');
+            }
+            try {
+                $transport = ($this->transportFactory)();
+                if (!$transport instanceof V5HttpTransportBoundary) return self::unavailable();
+                return $transport->dispatch($head);
+            } catch (Throwable) {
+                return self::unavailable();
+            }
+        }
         if ($head->method !== 'POST') return self::deny(405, 'method_not_allowed');
         if (preg_match('/\Aapplication\/json(?:[ \t]*;[ \t]*charset=utf-8)?\z/iD',
             $head->contentType) !== 1) return self::deny(415, 'unsupported_media_type');
