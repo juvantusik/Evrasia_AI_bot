@@ -37,3 +37,9 @@ CI текущих feature commits: подтверждённого нового �
 Code/test commit `6e1309fa2a7bb20e90a4ba7e602aea673fc9f832`: broadened coordinator synthetic coverage to normal commit, rejection of repeated registration after success, and both `false` and exception during post-commit readback. Both readback failures must report uncertain/no-retry; rollback after successful commit is forbidden. This remains **synthetic fake Bitrix**, not proof that native `CUser::Add` is atomic.
 
 This ChatGPT connector currently returns no workflow runs for latest commits (its commit-run lookup is PR-triggered only). Therefore CI for these edits is **UNVERIFIED**, not PASS, until a matching Actions run ID/job result is inspected. Staging native writer/positive real-E2E not implemented or executed. Production OFF/503 unchanged.
+
+## 18 Oct — native continuity pre-commit gate
+
+Commits `bad576159bcdf667eb9207bfb6b2709d5d17f11d` and `9a2cd1c4751ad8f2b00b9fec6ff4d620db56017e`: coordinator adds explicit production hostname deny and requires `V5StagedSignupNativePort::transactionContinuityBeforeCommit()` **after** native user and consent evidence, immediately **before** COMMIT. Failed continuity is an uncertain state and must **not** be reported as successfully rolled back; no retry. Synthetic test includes denial of uncertain continuity and checks zero fake COMMIT/ROLLBACK. This is a staging-port contract, not proof of actual Bitrix native transaction continuity. No production adapter, HTTP exposure, real E2E or deploy.
+
+The test is included in the configured 31-suite workflow; latest CI status is not asserted until a matching run and job result are actually observed.
