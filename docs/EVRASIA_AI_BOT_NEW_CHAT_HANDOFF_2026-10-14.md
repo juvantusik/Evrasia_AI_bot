@@ -1,3 +1,5 @@
+> **ARCHIVED HANDOFF — superseded by 18.10.2026:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-18_V5_LEGAL_SIGNUP.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-18_V5_LEGAL_SIGNUP.md). Latest workflow is V5-only developer token validation / public legal catalog / staged native signup consents, with offline CI 30 suites PASS; V5 OFF. Do not follow earlier 14 Oct 'next step' instead of current file.
+
 # Evrasia AI Bot — передача проекта в новый чат (14 октября 2026)
 
 **АКТУАЛЬНАЯ ТОЧКА ПРОДОЛЖЕНИЯ (15.10.2026):** [START HERE — СамЗаберу V5](SAMZABERU_V5_START_HERE_2026-10-15.md). Этот консолидированный файл — основной короткий handoff с live GitHub/CI proof, статусом кода, blockers и готовой инструкцией для нового чата. Ниже сохранена история предыдущих исследований; старые NEXT не считать актуальными.
