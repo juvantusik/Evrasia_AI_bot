@@ -75,10 +75,6 @@ final readonly class V5HttpTransportBoundary
         if (!$request->trustedHttps) {
             return self::fail(403, 'secure_transport_required');
         }
-        if ($request->method !== 'POST') {
-            return self::fail(405, 'method_not_allowed');
-        }
-
         // Strict EXACT-match path binding. No percent-decoding, query strings,
         // fragments, trailing slashes, matrix params or user-selected actions.
         if ($request->requestUri === ''
@@ -88,10 +84,27 @@ final readonly class V5HttpTransportBoundary
             return self::fail(404, 'not_found');
         }
         $path = substr($request->requestUri, strlen(V5RouteMap::BASE_PATH));
-        $action = V5RouteMap::ROUTES['POST ' . $path] ?? null;
+        $action = V5RouteMap::ROUTES[$request->method . ' ' . $path] ?? null;
         if (!is_string($action)) {
+            foreach (array_keys(V5RouteMap::ROUTES) as $route) {
+                if (substr($route, strpos($route, ' ') + 1) === $path) {
+                    return self::fail(405, 'method_not_allowed');
+                }
+            }
             return self::fail(404, 'not_found');
         }
+
+        // The only anonymous V5 action: current public legal documents.
+        // No caller-supplied body, token, query string, cookie or consent write.
+        if ($request->method === 'GET') {
+            if ($action !== 'publicLegalConsents'
+                || $request->rawBody !== ''
+                || ($request->contentLength !== null && $request->contentLength !== '0')) {
+                return self::fail(400, 'invalid_request');
+            }
+            return self::serialize($this->handler->handlePublicLegalConsents(), 131072);
+        }
+        if ($request->method !== 'POST') return self::fail(405, 'method_not_allowed');
 
         if (preg_match('/\Aapplication\/json(?:[ \t]*;[ \t]*charset=utf-8)?\z/iD',
                 $request->contentType) !== 1
@@ -125,7 +138,7 @@ final readonly class V5HttpTransportBoundary
         return self::serialize(new V5HttpReply($status, ['error' => $code]));
     }
 
-    private static function serialize(V5HttpReply $reply): V5StagedHttpResponse
+    private static function serialize(V5HttpReply $reply, int $maxBytes = 16384): V5StagedHttpResponse
     {
         try {
             $json = json_encode($reply->body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
@@ -134,7 +147,7 @@ final readonly class V5HttpTransportBoundary
                 503, self::HEADERS, '{"error":"temporarily_unavailable"}'
             );
         }
-        if (!is_string($json) || strlen($json) > 16384) {
+        if (!is_string($json) || strlen($json) > $maxBytes) {
             return new V5StagedHttpResponse(
                 503, self::HEADERS, '{"error":"temporarily_unavailable"}'
             );
