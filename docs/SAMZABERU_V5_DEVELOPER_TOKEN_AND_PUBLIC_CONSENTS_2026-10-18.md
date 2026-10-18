@@ -86,6 +86,18 @@ It supports `USE_URL=Y` links (only known canonical legal pages) and `USE_URL=N`
 
 **Real adapter verification still pending:** confirm in a strictly read-only site check that installed `b_consent_agreement` rows match these exact named columns, active/current naming semantics, `USE_URL` flag and URL shape. The feature source is **NOT deployed**, V5 HTTP stays OFF. If actual native rows differ, adapt the feature code rather than changing native agreements or widening trust without review.
 
+## 2B. Operator production READ_ONLY catalog shape acceptance (2026-10-18)
+
+The operator executed the guarded PHP 8.3 + mysqli read-only diagnostic on production `evrasia` for existing native `eurasia_new.b_consent_agreement`, with `START TRANSACTION READ ONLY` and verified `ROLLBACK`:
+- `REQUIRED_COLUMNS=COMPLETE`; `ACTIVE_AGREEMENT_ROWS=3`, exact current `EVRASIA_MARKETING_20260911`, `EVRASIA_OFFER_20260911`, `EVRASIA_PD_20260911` (database sorted by CODE; adapter reorders to offer/PD/marketing).
+- All three `ACTIVE=Y`, `USE_URL=Y`, `IS_AGREEMENT_TEXT_HTML=N`, `CONTENT_BYTES=0`, `TITLE_PRESENT=YES`, canonical URL **YES**. For `USE_URL=Y`, empty agreement text is expected: use the validated public legal page URL.
+- `ACTIVE_FAMILIES_UNIQUE=YES`; `FEATURE_CATALOG_MAPPING_COMPATIBLE=YES`; `READ_ONLY_ROLLBACK=PASS`; `FINAL_STATUS=PASS`, `FINAL_RC=0`.
+- Existing website `local/components/eurasia/signup/class.php` SHA-256 `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84`; exactly three source occurrences of `Consent::addByContext`. No site code, DB or V4/V5 modifications.
+- `NATIVE_SOURCE_PRESENT=NO` for **the one assumed path** `bitrix/modules/main/lib/userconsent/consent.php`; it does NOT demonstrate the class is missing, only the assumed path. Before any writer, locate the actual native class source, verify the real `addByContext` signature, transactional ownership and existing signup usage. No guessed function arguments.
+- This is production table-shape/data **compatibility acceptance**, **not** live execution of the feature catalog adapter nor a deployed V5 endpoint. V5 remains OFF/503. Do not touch native agreements to accommodate a client.
+
+**Next action:** targeted READ_ONLY source-location/signature and approved site signup call-shape audit (no credentials or consent text output), then implement native V5 signup consent writer with safe transaction/rollback semantics. Avoid repeating the already-passed table/catalog audit.
+
 ## 3. Согласия на регистрации — не отдельная анонимная запись
 
 **НЕ создавать** анонимный `POST /legal/consents/accept` с клиентским `USER_ID`. Существующая согласованная бизнес-логика:
