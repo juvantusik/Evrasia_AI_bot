@@ -18,8 +18,8 @@ final class V5SmsReservedDispatcher
     public function dispatch(int $userId, string $attemptId, string $code, int $now): bool
     {
         if ($userId < 1 || $userId > 2147483647
-            || !preg_match('/\\A[a-f0-9]{32}\\z/D', $attemptId)
-            || !preg_match('/\\A[0-9]{6}\\z/D', $code)
+            || !preg_match('/\A[a-f0-9]{32}\z/D', $attemptId)
+            || !preg_match('/\A[0-9]{6}\z/D', $code)
             || $now < 1) return false;
 
         try {
