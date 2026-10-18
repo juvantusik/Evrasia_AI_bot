@@ -76,6 +76,16 @@
 
 На отсутствующем backend/недействительных документах — **503**, без раскрытия внутренних данных. Никаких API-ключей, cookies, SMS, JWT и записи БД для чтения не требуется. В feature проверяются форма ответа, разрешённые типы документов и ссылки, но **реальный production Bitrix-каталог ещё не подключён**.
 
+## 2A. Native Bitrix live-catalog read-only adapter — CODE + CI PASS 2026-10-18
+
+GitHub feature-only `src/V5BitrixCurrentLegalCatalog.php` now implements `V5PublicLegalConsentsPort` with the existing native `Bitrix\\Main\\Application::getConnection()` / `Bitrix\\Main\\DB\\MysqliConnection` (no bootstrap created, same connection object required). It reads ONLY native `b_consent_agreement` via a bounded fixed SELECT, never user acceptances or PII. It derives current `EVRASIA_(OFFER|PD|MARKETING)_YYYYMMDD` codes dynamically from the site's *active* rows; the concrete revision string is not baked into the app. More than one active revision per family, missing mandatory document, disallowed URL, unexpected row or document mismatch DENIES; never guesses newest agreement ID or treats `UF_*` as native consent.
+
+It supports `USE_URL=Y` links (only known canonical legal pages) and `USE_URL=N` server-owned text/HTML. A public GET can be wired to this source with `new V5AuthHttpHandler(null, null, null, $catalog)` while protected auth operations remain 503, independent of MFA readiness. No cookies/JWT issued or persisted.
+
+[Offline GitHub Actions 39111380378](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39111380378) **SUCCESS 28/28 suites**, including **43 synthetic source/denial tests** for this adapter. Prior [39111150804](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39111150804) real disposable MariaDB regression SUCCESS; neither proves actual live Bitrix agreement row semantics.
+
+**Real adapter verification still pending:** confirm in a strictly read-only site check that installed `b_consent_agreement` rows match these exact named columns, active/current naming semantics, `USE_URL` flag and URL shape. The feature source is **NOT deployed**, V5 HTTP stays OFF. If actual native rows differ, adapt the feature code rather than changing native agreements or widening trust without review.
+
 ## 3. Согласия на регистрации — не отдельная анонимная запись
 
 **НЕ создавать** анонимный `POST /legal/consents/accept` с клиентским `USER_ID`. Существующая согласованная бизнес-логика:
