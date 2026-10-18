@@ -98,6 +98,7 @@ final readonly class V5MySqlChallengeConsumption
                 return null;
             }
             $kind=ChallengeKind::from($record['kind']);
+            $this->execute('SAVEPOINT v5_native_factor_guard', []);
             if($this->native->currentFactorEligibleWithLocks(
                 $this->db,$record['user_id'],$kind,
                 $record['auth_epoch'],$record['verification_stamp']
@@ -150,6 +151,10 @@ final readonly class V5MySqlChallengeConsumption
                     ) === true;
             }
 
+            // The native TOTP provider might have implicitly committed and
+            // restarted a transaction. RELEASE fails if the original savepoint
+            // was destroyed, even if PDO still reports inTransaction().
+            $this->execute('RELEASE SAVEPOINT v5_native_factor_guard', []);
             if (!$this->db->inTransaction()) {
                 throw new RuntimeException('v5_challenge_transaction_lost');
             }
