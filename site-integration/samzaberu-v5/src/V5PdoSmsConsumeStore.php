@@ -21,7 +21,11 @@ final class V5PdoSmsConsumeStore implements V5AtomicSmsChallengeStore
         string $attemptId, int $accountId, string $code,
         string $serverSecret, int $now,
     ): bool {
-        if ($this->db->inTransaction()) return false;
+        if ($this->db->inTransaction()
+            || preg_match('/\A[a-f0-9]{32}\z/D', $attemptId) !== 1
+            || $accountId < 1 || $accountId > 2147483647
+            || preg_match('/\A[0-9]{6}\z/D', $code) !== 1
+            || strlen($serverSecret) < 32 || $now < 1) return false;
         $owned = false;
         try {
             if (!$this->db->beginTransaction()) return false;
@@ -33,12 +37,15 @@ final class V5PdoSmsConsumeStore implements V5AtomicSmsChallengeStore
             if (!$read || !$read->execute([$attemptId])) return false;
             $row = $read->fetch(PDO::FETCH_ASSOC);
             if (!is_array($row) || $read->fetch(PDO::FETCH_ASSOC) !== false) return false;
-            if ((string)($row['user_id'] ?? '') !== (string)$accountId
-                || !is_numeric($row['expires_at'] ?? null)
-                || !is_numeric($row['failed_attempts'] ?? null)
-                || (int)$row['expires_at'] <= $now
-                || (int)$row['failed_attempts'] >= 5
-                || (int)($row['consumed'] ?? -1) !== 0) return false;
+            $uid = (string)($row['user_id'] ?? '');
+            $exp = (string)($row['expires_at'] ?? '');
+            $fail = (string)($row['failed_attempts'] ?? '');
+            if ($uid !== (string)$accountId
+                || preg_match('/\A[1-9][0-9]{0,17}\z/D', $exp) !== 1
+                || preg_match('/\A(?:0|[1-9][0-9]{0,2})\z/D', $fail) !== 1
+                || (float)$exp <= $now
+                || (int)$fail >= 5
+                || !in_array($row['consumed'] ?? null, [0, '0'], true)) return false;
             $correct = V5SmsLoginChallenge::matchesMac(
                 (string)$row['code_mac'], $attemptId, $accountId, $code, $serverSecret
             );
