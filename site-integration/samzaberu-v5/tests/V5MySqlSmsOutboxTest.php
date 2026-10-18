@@ -12,7 +12,7 @@ use Evrasia\Samzaberu\V5\{
 
 final class SimPdo extends PDO {
  public string $driver='mysql';public int $errorMode=PDO::ERRMODE_EXCEPTION;
- public bool $started=false;public bool $beginFails=false;public bool $commitFails=false;
+ public bool $started=false;public bool $savepoint=false;public bool $beginFails=false;public bool $commitFails=false;
  public bool $badEngine=false;public string $failOperation='';
  public int $now=1800000000;public ?array $challenge=null;
  public array $budget=[];public array $outbox=[];public int $rollbackCount=0;
@@ -25,17 +25,17 @@ final class SimPdo extends PDO {
  public function beginTransaction():bool {
   if($this->beginFails)return false;
   if($this->started)throw new RuntimeException('nested');
-  $this->backup=[$this->challenge,$this->budget,$this->outbox];$this->started=true;return true;
+  $this->backup=[$this->challenge,$this->budget,$this->outbox];$this->started=true;$this->savepoint=false;return true;
  }
  public function commit():bool {
   if($this->commitFails)return false;
   if(!$this->started)throw new RuntimeException('not in txn');
-  $this->started=false;$this->backup=[];$this->commits++;return true;
+  $this->started=false;$this->savepoint=false;$this->backup=[];$this->commits++;return true;
  }
  public function rollBack():bool {
   if(!$this->started)return false;
   [$this->challenge,$this->budget,$this->outbox]=$this->backup;
-  $this->started=false;$this->rollbackCount++;return true;
+  $this->started=false;$this->savepoint=false;$this->rollbackCount++;return true;
  }
  public function prepare(string $query,array $options=[]):PDOStatement|false {
   if($this->failOperation==='prepare' && str_starts_with($query,'INSERT INTO ev_v5_sms_outbox'))return false;
@@ -49,6 +49,8 @@ final class SimStatement extends PDOStatement {
  private function operation():string {
   $s=$this->sql;
   if(str_starts_with($s,'SELECT ENGINE'))return 'engine';
+  if($s==='SAVEPOINT v5_sms_native_guard')return 'savepoint';
+  if($s==='RELEASE SAVEPOINT v5_sms_native_guard')return 'release_savepoint';
   if(str_starts_with($s,'SELECT UNIX_TIMESTAMP'))return 'time';
   if(str_starts_with($s,'SELECT user_id'))return 'challenge_read';
   if(str_starts_with($s,'INSERT INTO ev_v5_sms_budget_windows'))return 'budget_insert';
@@ -63,6 +65,12 @@ final class SimStatement extends PDOStatement {
   $op=$this->operation();
   if($this->db->failOperation===$op)return false;
   switch($op){
+   case 'savepoint':
+    if(!$this->db->inTransaction())return false;
+    $this->db->savepoint=true;break;
+   case 'release_savepoint':
+    if(!$this->db->inTransaction() || !$this->db->savepoint)return false;
+    $this->db->savepoint=false;break;
    case 'budget_insert':
     [$key,$exp]=$this->params;
     if(!isset($this->db->budget[$key]))$this->db->budget[$key]=['used_units'=>0,'expires_at'=>$exp];
@@ -112,11 +120,15 @@ final class SimStatement extends PDOStatement {
 final class SimSitePolicy implements V5SmsLockedEligibilityPort {
  public int $calls=0;public bool $allowed=true;public bool $throws=false;
  public bool $loseTransaction=false;
+ public bool $restartTransaction=false;
  public function stillEligibleWithLocks(PDO $db,V5SmsQueueReservation $request,string $challengeAuthEpoch):bool {
   $this->calls++;
   if(!$db->inTransaction())throw new RuntimeException('policy not under transaction');
   if($this->throws)throw new RuntimeException('private policy outage');
   if($this->loseTransaction && $db instanceof SimPdo)$db->started=false;
+  if($this->restartTransaction && $db instanceof SimPdo){
+    $db->started=false;$db->savepoint=false;$db->started=true;
+  }
   return $this->allowed && $request->destination->userId===$request->userId
    && $challengeAuthEpoch===str_repeat('e',64);
  }
@@ -233,6 +245,11 @@ foreach(['disabled','outage'] as $behavior){
  expectFail(fn()=>$store->reserveAndQueue(reservation()),'site account/MFA/phone restriction denies: '.$behavior);
  ok($db->budget===[] && $db->outbox===[],'site denial no quota/outbox');
 }
+[$store,$db,$site,$factory]=fixture();$site->restartTransaction=true;
+expectFail(fn()=>$store->reserveAndQueue(reservation()),
+  'native eligibility COMMIT+BEGIN destroys SMS savepoint');
+ok($db->budget===[] && $db->outbox===[],
+  'native transaction restart cannot bypass quota/outbox guard');
 [$store,$db,$site,$factory]=fixture();$site->loseTransaction=true;
 expectFail(fn()=>$store->reserveAndQueue(reservation()),
   'native eligibility callback loses the owned transaction');
