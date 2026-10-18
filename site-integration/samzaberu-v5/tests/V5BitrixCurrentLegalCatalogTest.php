@@ -169,7 +169,7 @@ namespace {
         [$offer, array_replace($pd,['NAME'=>str_repeat('X',241)])],
         [$offer, array_replace($pd,['NAME'=>''])],
         [$offer, array_replace($pd,['IS_AGREEMENT_TEXT_HTML'=>'UNKNOWN'])],
-        [$offer, array_replace($pd,['AGREEMENT_TEXT'=>'secret','USE_URL'=>'N','URL'=>'',
+        [$offer, array_replace($pd,['AGREEMENT_TEXT'=>'','USE_URL'=>'N','URL'=>'',
             'IS_AGREEMENT_TEXT_HTML'=>'Y'])],
         [$offer, array_replace($pd,['AGREEMENT_TEXT'=>str_repeat('x',65537),
             'USE_URL'=>'N','URL'=>'','IS_AGREEMENT_TEXT_HTML'=>'N'])],
