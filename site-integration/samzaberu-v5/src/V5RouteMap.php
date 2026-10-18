@@ -16,6 +16,8 @@ final class V5RouteMap
         'POST /auth/challenge/verify' => 'verifyChallenge',
         'POST /auth/challenge/resend' => 'resendChallenge',
         'POST /auth/refresh' => 'refresh',
+        'POST /auth/token/validate' => 'validateToken',
         'POST /loyalty/pin' => 'showBonusPin',
+        'GET /legal/consents' => 'publicLegalConsents',
     ];
 }
