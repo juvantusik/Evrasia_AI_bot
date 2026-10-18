@@ -173,3 +173,7 @@ Applied SQL SAVEPOINT / RELEASE around native callback boundaries in canonical V
 On actual MySQL, implicit COMMIT destroys savepoints so subsequent RELEASE fails closed. Tests rely on synthetic PDOs modeling this behavior, and **have not been executed here**. This does not prove Bitrix same-connection integrity or native TOTP replay correctness. Challenge consumption native-factor callback still needs the same savepoint-based attestation before any release of V5, plus real MySQL integration, SMS provider and authoritative Bitrix proofs. No production/V4 changes; V5 OFF/503.
 
 Additional canonical `V5MySqlChallengeConsumption` fix `3cefd831c70825d0f77d9c6202f614f3ad21e927` uses a savepoint spanning native SMS/TOTP factor callbacks, released before mutating challenge state. It is designed to detect native COMMIT+BEGIN that `inTransaction()` cannot detect. **No executed native consumption regression test and no real MySQL proof yet**. This gap remains an explicit release blocker; do not claim end-to-end verified.
+
+## Обязательные правила для любого нового чата
+
+Перед дальнейшими действиями читать [`docs/ENGINEERING_ANTI_PATTERNS_AND_EXECUTION_RULES.md`](ENGINEERING_ANTI_PATTERNS_AND_EXECUTION_RULES.md). Это обязательный проектный регламент: не повторять ложные PASS, синтетические проверки вместо Bitrix, сломанные копируемые скрипты, дублирование V5 и бесконечную подготовку вместо рабочего API.
