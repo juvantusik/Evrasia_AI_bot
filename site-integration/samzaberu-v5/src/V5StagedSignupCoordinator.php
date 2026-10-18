@@ -25,6 +25,8 @@ interface V5StagedSignupNativePort
     public function createUserInsideOwnedTransaction(): int;
     /** Fresh locked legal catalog and native ID resolution on that connection. */
     public function persistNativeConsentsFor(int $newUserId): array;
+    /** Independently attest ORIGINAL owned native transaction before rollback. */
+    public function transactionContinuityBeforeRollback(): bool;
     /** Assert same native connection, transaction depth and savepoint before COMMIT. */
     public function transactionContinuityBeforeCommit(): bool;
     /** Independently verify the new user and every returned consent event. */
@@ -93,6 +95,15 @@ final class V5StagedSignupCoordinator
                 'v5_bitrix_rollback_uncertain',
             ], true)) {
                 throw new RuntimeException('v5_signup_transaction_uncertain_no_retry', 0, $cause);
+            }
+            // A bridge-owned boolean cannot detect hidden COMMIT+BEGIN inside
+            // native user hooks. Refuse to call rollback on an unverified scope.
+            try {
+                if (!$this->native->transactionContinuityBeforeRollback()) {
+                    throw new RuntimeException('v5_signup_native_transaction_lost');
+                }
+            } catch (Throwable $continuityFailure) {
+                throw new RuntimeException('v5_signup_transaction_uncertain_no_retry', 0, $continuityFailure);
             }
             try {
                 $this->transaction->rollBack();
