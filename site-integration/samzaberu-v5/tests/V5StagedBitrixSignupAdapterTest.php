@@ -25,9 +25,10 @@ foreach (['createUserInsideOwnedTransaction', 'persistNativeConsentsFor'] as $me
     }
 }
 if ($adapter->verifyUncommitted(123, [11,12])
+    || $adapter->transactionContinuityBeforeRollback()
     || $adapter->transactionContinuityBeforeCommit()
     || $adapter->verifyCommitted(123, [11,12])) {
     throw new RuntimeException('FAIL: unverified native evidence accepted');
 }
-echo "PASS: V5 native signup adapter remains disabled (6 negative guards)\n";
+echo "PASS: V5 native signup adapter remains disabled (7 negative guards)\n";
 echo "BITRIX_BOOTSTRAP=NO\nDATABASE_CONNECTION=NO\nPRODUCTION_WRITE=NO\n";
