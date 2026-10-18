@@ -58,13 +58,13 @@ interface V5PublicLegalConsentsPort
  * The actual website /api/v5/router.php remains disabled (503), and no
  * Bitrix/password, OTP, SMS, session or token backend is wired here.
  *
- * A future HTTP entrypoint must enforce HTTPS, method POST, content type,
+ * A future HTTP entrypoint must enforce HTTPS, POST for auth, GET for public legal, content type,
  * request size limits, Cache-Control:no-store and no credential logging.
  */
 final readonly class V5AuthHttpHandler
 {
     public function __construct(
-        private V5LoginWorkflow $workflow,
+        private ?V5LoginWorkflow $workflow = null,
         private ?V5SessionActionsPort $sessionActions = null,
         private ?V5TokenValidationPort $tokenValidator = null,
         private ?V5PublicLegalConsentsPort $publicLegalConsents = null,
@@ -86,9 +86,15 @@ final readonly class V5AuthHttpHandler
             }
 
             return match ($action) {
-                'signin' => $this->signIn($body),
-                'verifyChallenge' => $this->verify($body),
-                'resendChallenge' => $this->resend($body),
+                'signin' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->signIn($body),
+                'verifyChallenge' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->verify($body),
+                'resendChallenge' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->resend($body),
                 // Without explicit verified V5 operations, HTTP remains 503.
                 'refresh' => $this->sessionActions === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
