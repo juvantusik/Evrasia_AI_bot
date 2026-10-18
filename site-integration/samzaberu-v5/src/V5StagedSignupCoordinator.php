@@ -25,6 +25,8 @@ interface V5StagedSignupNativePort
     public function createUserInsideOwnedTransaction(): int;
     /** Fresh locked legal catalog and native ID resolution on that connection. */
     public function persistNativeConsentsFor(int $newUserId): array;
+    /** Assert same native connection, transaction depth and savepoint before COMMIT. */
+    public function transactionContinuityBeforeCommit(): bool;
     /** Independently verify the new user and every returned consent event. */
     public function verifyUncommitted(int $newUserId, array $consentIds): bool;
     /** Post-commit readback on a fresh authoritative native connection. */
@@ -50,7 +52,11 @@ final class V5StagedSignupCoordinator
             throw new RuntimeException('v5_signup_coordinator_already_used');
         }
         $this->used = true;
+        $host = gethostname();
+        $first = is_string($host) ? strtolower(explode('.', $host)[0]) : '';
         if (PHP_SAPI !== 'cli'
+            || $first === ''
+            || in_array($first, ['evrasia', 'eur-bot-01', 'prod', 'production'], true)
             || getenv('V5_STAGE_WRITE_ACK') !== 'ISOLATED_STAGING_ONLY'
             || !$this->native->safeToCreateWithoutExternalEffects()
             || $this->transaction->inTransaction()) {
@@ -94,6 +100,16 @@ final class V5StagedSignupCoordinator
                 throw new RuntimeException('v5_signup_rollback_uncertain');
             }
             throw new RuntimeException('v5_signup_rolled_back', 0, $cause);
+        }
+
+        // A bridge ownership boolean is not enough: the native port must
+        // demonstrate the original native transaction is still intact.
+        try {
+            if (!$this->native->transactionContinuityBeforeCommit()) {
+                throw new RuntimeException('v5_signup_transaction_uncertain_no_retry');
+            }
+        } catch (Throwable $cause) {
+            throw new RuntimeException('v5_signup_transaction_uncertain_no_retry', 0, $cause);
         }
 
         // All native writes must still be uncommitted here. Commit exceptions
