@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5LoginWorkflow.php';
+require_once __DIR__ . '/V5LegalConsentContract.php';
 
 use JsonException;
 use Throwable;
@@ -33,6 +34,26 @@ interface V5SessionActionsPort
 }
 
 /**
+ * Token verification is strictly server-backed: cryptographic validation,
+ * committed strong session, current user state, revocation and AUTH_EPOCH.
+ * Missing native proof MUST NOT be interpreted as a valid JWT.
+ */
+interface V5TokenValidationPort
+{
+    public function isValidAccessToken(string $accessJwt): bool;
+}
+
+/**
+ * Trusted, public legal-document catalog from current server-side revisions.
+ * It has no user identity or accepted flags, and it never stores consent.
+ */
+interface V5PublicLegalConsentsPort
+{
+    /** @return list<array<string,mixed>> */
+    public function currentPublicDocuments(): array;
+}
+
+/**
  * Offline JSON transport adapter for the V5 login workflow.
  * The actual website /api/v5/router.php remains disabled (503), and no
  * Bitrix/password, OTP, SMS, session or token backend is wired here.
@@ -45,6 +66,8 @@ final readonly class V5AuthHttpHandler
     public function __construct(
         private V5LoginWorkflow $workflow,
         private ?V5SessionActionsPort $sessionActions = null,
+        private ?V5TokenValidationPort $tokenValidator = null,
+        private ?V5PublicLegalConsentsPort $publicLegalConsents = null,
     ) {}
 
     /**
@@ -73,6 +96,9 @@ final readonly class V5AuthHttpHandler
                 'showBonusPin' => $this->sessionActions === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->showBonusPin($body),
+                'validateToken' => $this->tokenValidator === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->validateToken($body),
                 default => new V5HttpReply(503, ['error' => 'v5_unavailable']),
             };
         } catch (AuthenticationRejected $e) {
@@ -84,6 +110,44 @@ final readonly class V5AuthHttpHandler
         } catch (Throwable $e) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
+    }
+
+    /**
+     * GET-only public document catalog. Never returns user-specific acceptance
+     * and never writes to b_consent_user_consent. No JWT or cookie is required.
+     */
+    public function handlePublicLegalConsents(): V5HttpReply
+    {
+        if ($this->publicLegalConsents === null) {
+            return new V5HttpReply(503, ['error' => 'v5_unavailable']);
+        }
+        try {
+            $documents = V5LegalConsentContract::publicDocuments(
+                $this->publicLegalConsents->currentPublicDocuments()
+            );
+            if ($documents === null) {
+                return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+            }
+            return new V5HttpReply(200, ['documents' => $documents]);
+        } catch (Throwable) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+    }
+
+    private function validateToken(array $body): V5HttpReply
+    {
+        if (!self::hasOnlyKeys($body, ['access_token'])
+            || !self::isString($body, 'access_token')) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        $token = $body['access_token'];
+        if (strlen($token) < 110 || strlen($token) > 4096
+            || substr_count($token, '.') !== 2) {
+            return new V5HttpReply(401, ['valid' => false]);
+        }
+        return $this->tokenValidator->isValidAccessToken($token)
+            ? new V5HttpReply(200, ['valid' => true])
+            : new V5HttpReply(401, ['valid' => false]);
     }
 
     private function signIn(array $body): V5HttpReply
