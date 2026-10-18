@@ -255,7 +255,7 @@ jobs:
                 lint_count=$((lint_count + 1))
               done < /tmp/v5-php-file-manifest
               printf "PASS: linted %s PHP files\n" "$lint_count"
-              echo "=== 3. SYNTHETIC REGRESSION (PINNED 38 SUITES) ==="
+              echo "=== 3. SYNTHETIC REGRESSION (PINNED 39 SUITES) ==="
               suite_count=0
               for suite in \
                 AuthDecisionTest.php \
@@ -289,6 +289,7 @@ jobs:
                 V5SignupNativeReceiptReaderTest.php \
                 V5SamzaberuSecondFactorPolicyTest.php \
                 V5SmsLoginChallengeTest.php \
+                V5SmsDispatchPolicyTest.php \
                 V5SmsDispatchBudgetTest.php \
                 V5NativeCUserAddCandidateTest.php \
                 V5StagedBitrixSignupAdapterTest.php \
@@ -300,7 +301,7 @@ jobs:
                 php "$ROOT/tests/$suite"
                 suite_count=$((suite_count + 1))
               done
-              test "$suite_count" -eq 38
+              test "$suite_count" -eq 39
               printf "PASS: %s approved offline suites completed\n" "$suite_count"
               echo "=== 4. NEGATIVE PRE-BOOTSTRAP GUARDS ==="
               if php "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" > /tmp/v5-preflight-denial.log 2>&1; then
