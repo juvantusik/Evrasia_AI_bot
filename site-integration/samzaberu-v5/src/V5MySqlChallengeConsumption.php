@@ -154,7 +154,7 @@ final readonly class V5MySqlChallengeConsumption
                 throw new RuntimeException('v5_challenge_transaction_lost');
             }
             if($valid) {
-                $u=$this->execute('UPDATE ev_v5_auth_challenges'
+                $u=$this->execute('UPDATE ev_v5_auth_challenges '
                     .'SET status = ?, sms_code_hmac = NULL '
                     .'WHERE challenge_id = ? AND status = ? AND failed_attempts = ?',[
                     'consumed',$challengeId,'pending',$record['failed_attempts'],
