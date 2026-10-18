@@ -49,3 +49,9 @@ The test is included in the configured 31-suite workflow; latest CI status is no
 Commits `24de07dba8550dcc4f219937d7c8250b3971f394`, `7dd5f21b71106c8d2648717ca7183fbcd9d82507`, `a7c933fb75bae062e5b97a532aacf386aff91cde`: new `src/V5StagedCUserSourceGate.php` verifies actual loaded non-static `CUser::Add` reflection filename, source SHA256 of operator-observed Bitrix version, isolated staging document root, CLI and non-production host. New negative offline test denies absent Bitrix bootstrap regardless of env ack. Offline workflow expanded to **32** planned suites.
 
 IMPORTANT: source identity alone does **not** imply CUser::Add transactional safety. No implementation of `V5StagedSignupNativePort` creates users; no native positive E2E executed; no release permission. Last matching GitHub CI run still needs to be verified.
+
+## Native signup adapter status (next feature commit)
+
+Introduced `src/V5StagedBitrixSignupAdapter.php` implementing the coordinator native port, with a **hard-deny CUser::Add call**. This is a non-deployable integration scaffold, *not* functional registration. Source pinning is checked independently but neither a source hash nor staging env may permit user creation while core Bitrix side effects are unproven. Added `tests/V5StagedBitrixSignupAdapterTest.php`, whose 6 checks verify rejection even when a method is directly invoked. Offline workflow plans **33** suites, pending matching CI run. Commits: `7fc597147080ad40893c8903ba567acfa1dfd50d`, `b3a6fdd62ab634de55ab5c26a7c2c23474b45075`, `6eb9e6287f3b9e27bdbe5a87c862c03c6baa3ae0`.
+
+A release-ready native adapter **cannot** be claimed until actual isolated Bitrix acceptance proves full pre-existing/native-hook side effect constraints, transaction continuity, rollback and post-commit verification. Production V5 OFF/503; no HTTP write route.
