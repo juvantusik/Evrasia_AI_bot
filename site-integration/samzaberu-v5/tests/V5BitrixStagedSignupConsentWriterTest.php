@@ -171,7 +171,7 @@ namespace {
     $writer=new V5BitrixStagedSignupConsentWriter($db,$native,$depth);
     $denied(static fn()=> $writer->persistForNewUser(5678,$plan),
         'synthetic or tampered Consent.php source cannot pass pin');
-    $pass($native->reads===2 && $native->writes===0
+    $pass($native->reads===1 && $native->writes===0
         && Consent::$calls===0,'source check denies BEFORE any user/consent SQL');
     $pass($native->commitCalls===0,'writer never commits underlying transaction');
     $pass($db->rollBack(),'caller still owns rollback after failed native proof');
