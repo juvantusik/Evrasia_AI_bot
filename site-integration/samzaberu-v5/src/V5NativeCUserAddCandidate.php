@@ -7,6 +7,14 @@ require_once __DIR__ . '/V5StagedCUserSourceGate.php';
 require_once __DIR__ . '/V5SignupNativeConsentPlan.php';
 
 use RuntimeException;
+use Throwable;
+
+/** A separate, reviewed isolated-staging side-effect attestation. */
+interface V5CUserNativeWriteAttestation
+{
+    public function permitsNativeUserAdd(): bool;
+}
+
 
 /**
  * Implementation candidate for the Bitrix CUser::Add half of V5 signup.
@@ -21,7 +29,10 @@ final class V5NativeCUserAddCandidate
 {
     private bool $used = false;
 
-    public function __construct(private string $stagingRoot) {}
+    public function __construct(
+        private string $stagingRoot,
+        private ?V5CUserNativeWriteAttestation $attestation = null,
+    ) {}
 
     /**
      * @param array<string,mixed> $fields Validated server-created Bitrix fields.
@@ -56,9 +67,25 @@ final class V5NativeCUserAddCandidate
 
         V5StagedCUserSourceGate::assertReviewed($this->stagingRoot);
 
-        // A native transaction permit alone is insufficient. This candidate
-        // deliberately remains NON-EXECUTABLE until isolated side-effect
-        // acceptance: no CUser object is constructed and no user is written.
-        throw new RuntimeException('v5_signup_cuser_side_effects_not_attested');
+        // This approval must come from a distinct, positively audited native
+        // side-effect policy. No such production/staging policy is supplied.
+        if ($this->attestation === null
+            || $this->attestation->permitsNativeUserAdd() !== true) {
+            throw new RuntimeException('v5_signup_cuser_side_effects_not_attested');
+        }
+
+        // The caller must already own the same native Bitrix transaction.
+        // Never log or return LAST_ERROR, password or arbitrary CUser fields.
+        try {
+            $user = new \CUser();
+            $id = $user->Add($fields);
+        } catch (Throwable) {
+            throw new RuntimeException('v5_signup_native_user_add_failed');
+        }
+        $trustedId = V5SignupNativeConsentPlan::positiveInt($id);
+        if ($trustedId === null) {
+            throw new RuntimeException('v5_signup_native_user_add_failed');
+        }
+        return $trustedId;
     }
 }
