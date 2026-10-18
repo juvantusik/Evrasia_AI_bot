@@ -6,6 +6,7 @@ namespace Evrasia\Samzaberu\V5;
 require_once __DIR__ . '/V5StagedSignupCoordinator.php';
 require_once __DIR__ . '/V5StagedCUserSourceGate.php';
 require_once __DIR__ . '/V5BitrixStagedSignupConsentWriter.php';
+require_once __DIR__ . '/V5NativeCUserAddCandidate.php';
 
 use RuntimeException;
 
@@ -23,7 +24,13 @@ final class V5StagedBitrixSignupAdapter implements V5StagedSignupNativePort
         private string $stagingRoot,
         private V5BitrixStagedSignupConsentWriter $consents,
         private V5SignupNativeConsentPlan $plan,
+        private ?V5NativeCUserAddCandidate $userCreator = null,
+        private array $serverFields = [],
     ) {}
+
+    private bool $userCreated = false;
+    private ?int $createdUserId = null;
+    private bool $consentAttempted = false;
 
     public function safeToCreateWithoutExternalEffects(): bool
     {
@@ -39,14 +46,28 @@ final class V5StagedBitrixSignupAdapter implements V5StagedSignupNativePort
 
     public function createUserInsideOwnedTransaction(): int
     {
-        throw new RuntimeException('v5_signup_cuser_side_effects_not_attested');
+        // The coordinator will refuse this call while native side effects
+        // remain unattested. Direct callers must also be denied.
+        if (!$this->safeToCreateWithoutExternalEffects()
+            || $this->userCreator === null || $this->userCreated) {
+            throw new RuntimeException('v5_signup_cuser_side_effects_not_attested');
+        }
+        $this->userCreated = true;
+        $this->createdUserId = $this->userCreator->add($this->serverFields);
+        return $this->createdUserId;
     }
 
     public function persistNativeConsentsFor(int $newUserId): array
     {
-        // Never invoke the consent writer without the original native user
-        // being created and independently proven on the owned connection.
-        throw new RuntimeException('v5_signup_cuser_side_effects_not_attested');
+        // This writer is bound to the exact source-attested native connection;
+        // never accept an arbitrary incoming USER_ID.
+        if (!$this->safeToCreateWithoutExternalEffects()
+            || !$this->userCreated || $this->consentAttempted
+            || $this->createdUserId !== $newUserId) {
+            throw new RuntimeException('v5_signup_cuser_side_effects_not_attested');
+        }
+        $this->consentAttempted = true;
+        return $this->consents->persistForNewUser($newUserId, $this->plan);
     }
 
     public function verifyUncommitted(int $newUserId, array $consentIds): bool
