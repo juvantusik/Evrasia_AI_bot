@@ -11,6 +11,7 @@ final class DeniedStagedSignupNative implements \Evrasia\Samzaberu\V5\V5StagedSi
     public int $creates = 0;
     public bool $approved = false;
     public string $failure = '';
+    public bool $continuity = true;
     public bool $postcheckFails = false;
     public bool $postcheckThrows = false;
     public function safeToCreateWithoutExternalEffects(): bool { return $this->approved; }
@@ -21,6 +22,7 @@ final class DeniedStagedSignupNative implements \Evrasia\Samzaberu\V5\V5StagedSi
     }
     public function persistNativeConsentsFor(int $newUserId): array { return [11, 12]; }
     public function verifyUncommitted(int $newUserId, array $consentIds): bool { return true; }
+    public function transactionContinuityBeforeCommit(): bool { return $this->continuity; }
     public function verifyCommitted(int $newUserId, array $consentIds): bool {
         if ($this->postcheckThrows) throw new \RuntimeException('synthetic_readback_failure');
         return !$this->postcheckFails;
@@ -127,7 +129,25 @@ foreach ([false, true] as $throws) {
         throw new \RuntimeException('FAIL: postcommit failure retried or rolled back');
     }
 }
+
+$continuityFake = new MysqliConnection();
+Application::$connection = $continuityFake;
+$continuityBridge = new V5BitrixPdoCompatibilityBridge(
+    $continuityFake, new SyntheticNativeSignupPermit()
+);
+$continuityPort = new DeniedStagedSignupNative();
+$continuityPort->approved = true;
+$continuityPort->continuity = false;
+try {
+    (new V5StagedSignupCoordinator($continuityBridge, $continuityPort))->register();
+    throw new \RuntimeException('FAIL: broken transaction continuity accepted');
+} catch (\RuntimeException $e) {
+    if ($e->getMessage() !== 'v5_signup_transaction_uncertain_no_retry') throw $e;
+}
+if ($continuityFake->commitCalls !== 0 || $continuityFake->rollbackCalls !== 0) {
+    throw new \RuntimeException('FAIL: broken continuity caused commit or false rollback');
+}
 putenv('V5_STAGE_WRITE_ACK');
-echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry, synthetic commit/readback (7 scenarios)\n";
+echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry, synthetic commit/readback (8 scenarios)\n";
 echo "REAL_BITRIX_NATIVE_CALLS=NO\n";
 echo "PRODUCTION_DEPLOYED=NO\n";
