@@ -111,10 +111,12 @@ final class SimStatement extends PDOStatement {
 }
 final class SimSitePolicy implements V5SmsLockedEligibilityPort {
  public int $calls=0;public bool $allowed=true;public bool $throws=false;
+ public bool $loseTransaction=false;
  public function stillEligibleWithLocks(PDO $db,V5SmsQueueReservation $request,string $challengeAuthEpoch):bool {
   $this->calls++;
   if(!$db->inTransaction())throw new RuntimeException('policy not under transaction');
   if($this->throws)throw new RuntimeException('private policy outage');
+  if($this->loseTransaction && $db instanceof SimPdo)$db->started=false;
   return $this->allowed && $request->destination->userId===$request->userId
    && $challengeAuthEpoch===str_repeat('e',64);
  }
@@ -231,6 +233,11 @@ foreach(['disabled','outage'] as $behavior){
  expectFail(fn()=>$store->reserveAndQueue(reservation()),'site account/MFA/phone restriction denies: '.$behavior);
  ok($db->budget===[] && $db->outbox===[],'site denial no quota/outbox');
 }
+[$store,$db,$site,$factory]=fixture();$site->loseTransaction=true;
+expectFail(fn()=>$store->reserveAndQueue(reservation()),
+  'native eligibility callback loses the owned transaction');
+ok($db->budget===[] && $db->outbox===[],
+  'lost native transaction cannot enqueue or charge SMS');
 [$store,$db,$site,$factory]=fixture();$factory->throws=true;
 expectFail(fn()=>$store->reserveAndQueue(reservation()),'encryption failure denies');
 ok($db->budget===[] && $db->outbox===[],'encryption failure rollback all quotas');
