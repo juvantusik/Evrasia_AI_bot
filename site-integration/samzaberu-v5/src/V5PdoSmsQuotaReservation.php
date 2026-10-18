@@ -20,7 +20,7 @@ final class V5PdoSmsQuotaReservation implements V5SmsQuotaReservationPort
     public function reserveForAttempt(int $userId, string $attemptId, int $now): bool
     {
         if ($this->db->inTransaction() || $userId < 1 || $userId > 2147483647
-            || preg_match('/\\A[a-f0-9]{32}\\z/D', $attemptId) !== 1 || $now < 1) {
+            || preg_match('/\A[a-f0-9]{32}\z/D', $attemptId) !== 1 || $now < 1) {
             return false;
         }
         $owned = false;
