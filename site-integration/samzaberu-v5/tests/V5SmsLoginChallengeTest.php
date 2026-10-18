@@ -14,6 +14,10 @@ $assert = static function (bool $b, string $s): void {
 $challenge = C::issue($attempt, 123, '037492', $secret, $now);
 $assert(!str_contains($challenge->codeMac, '037492'), 'code leaked');
 $assert($challenge->expiresAt === $now + 300, 'TTL');
+$assert(C::matchesMac($challenge->codeMac, $attempt, 123, '037492', $secret), 'matching MAC');
+$assert(!C::matchesMac($challenge->codeMac, $other, 123, '037492', $secret), 'foreign attempt MAC');
+$assert(!C::matchesMac($challenge->codeMac, $attempt, 124, '037492', $secret), 'foreign user MAC');
+$assert(!C::matchesMac('invalid', $attempt, 123, '037492', $secret), 'malformed MAC');
 $wrong = $challenge->verify($attempt, 123, '111111', $secret, $now + 1);
 $assert(!$wrong['accepted'] && $wrong['challenge']->failedAttempts === 1, 'wrong code');
 $assert(!$challenge->verify($other, 123, '037492', $secret, $now + 1)['accepted'], 'attempt mismatch');
@@ -33,5 +37,5 @@ try {
 } catch (RuntimeException $e) {
     $assert($e->getMessage()==='v5_sms_challenge_invalid_server_input','format rejection');
 }
-echo "PASS: 12 SMS challenge state-machine assertions\n";
+echo "PASS: 16 SMS challenge state-machine assertions\n";
 echo "SMS_SENT=NO\nPHONE_INPUT=NO\nDATABASE_WRITE=NO\n";
