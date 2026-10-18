@@ -106,6 +106,10 @@ final readonly class V5MySqlChallengeConsumption
                 return null;
             }
 
+            if (!$this->db->inTransaction()) {
+                throw new RuntimeException('v5_challenge_transaction_lost');
+            }
+
             $valid=false;
             if($kind===ChallengeKind::SMS) {
                 $sent=$record['sms_sent_count'];
@@ -146,8 +150,11 @@ final readonly class V5MySqlChallengeConsumption
                     ) === true;
             }
 
+            if (!$this->db->inTransaction()) {
+                throw new RuntimeException('v5_challenge_transaction_lost');
+            }
             if($valid) {
-                $u=$this->execute('UPDATE ev_v5_auth_challenges '
+                $u=$this->execute('UPDATE ev_v5_auth_challenges'
                     .'SET status = ?, sms_code_hmac = NULL '
                     .'WHERE challenge_id = ? AND status = ? AND failed_attempts = ?',[
                     'consumed',$challengeId,'pending',$record['failed_attempts'],
@@ -164,6 +171,9 @@ final readonly class V5MySqlChallengeConsumption
             }
             if($u->rowCount()!==1)
                 throw new RuntimeException('v5_challenge_cas_failed');
+            if (!$this->db->inTransaction()) {
+                throw new RuntimeException('v5_challenge_transaction_lost');
+            }
             if(!$this->db->commit())
                 throw new RuntimeException('v5_challenge_commit_failed');
             $started=false;
