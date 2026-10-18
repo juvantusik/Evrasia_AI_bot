@@ -12,6 +12,7 @@ final class DeniedStagedSignupNative implements \Evrasia\Samzaberu\V5\V5StagedSi
     public bool $approved = false;
     public string $failure = '';
     public bool $continuity = true;
+    public bool $rollbackContinuity = true;
     public bool $postcheckFails = false;
     public bool $postcheckThrows = false;
     public function safeToCreateWithoutExternalEffects(): bool { return $this->approved; }
@@ -23,6 +24,7 @@ final class DeniedStagedSignupNative implements \Evrasia\Samzaberu\V5\V5StagedSi
     public function persistNativeConsentsFor(int $newUserId): array { return [11, 12]; }
     public function verifyUncommitted(int $newUserId, array $consentIds): bool { return true; }
     public function transactionContinuityBeforeCommit(): bool { return $this->continuity; }
+    public function transactionContinuityBeforeRollback(): bool { return $this->rollbackContinuity; }
     public function verifyCommitted(int $newUserId, array $consentIds): bool {
         if ($this->postcheckThrows) throw new \RuntimeException('synthetic_readback_failure');
         return !$this->postcheckFails;
