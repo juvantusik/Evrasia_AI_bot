@@ -10,26 +10,31 @@ $expected = [
     'POST /auth/challenge/verify' => 'verifyChallenge',
     'POST /auth/challenge/resend' => 'resendChallenge',
     'POST /auth/refresh' => 'refresh',
+    'POST /auth/token/validate' => 'validateToken',
     'POST /loyalty/pin' => 'showBonusPin',
+    'GET /legal/consents' => 'publicLegalConsents',
 ];
 
 if (V5RouteMap::BASE_PATH !== '/api/v5'
     || V5RouteMap::ROUTES !== $expected
-    || count(array_unique(array_values(V5RouteMap::ROUTES))) !== 5
+    || count(array_unique(array_values(V5RouteMap::ROUTES))) !== 7
 ) {
     throw new RuntimeException('V5 route contract mismatch');
 }
 
 foreach (array_keys(V5RouteMap::ROUTES) as $spec) {
-    if (!str_starts_with($spec, 'POST /')
-        || str_contains($spec, '/api/v4')
-        || preg_match('/\s/', substr($spec, 5))
+    [$method,$path] = explode(' ', $spec, 2);
+    if (!in_array($method, ['POST','GET'], true)
+        || !str_starts_with($path, '/')
+        || ($method === 'GET' && $path !== '/legal/consents')
+        || str_contains($path, '/api/v4')
+        || preg_match('/\s/', $path)
     ) {
         throw new RuntimeException('Invalid V5 route declaration');
     }
 }
 
-echo 'PASS: V5 isolated route contract (5 routes)' . PHP_EOL;
+echo 'PASS: V5 isolated route contract (7 routes, public GET legal only)' . PHP_EOL;
 echo 'NATIVE_PROVIDERS_NOT_ACTIVATED=YES' . PHP_EOL;
 
 // Keep this regression in the existing approved offline suite, not a new workflow.
