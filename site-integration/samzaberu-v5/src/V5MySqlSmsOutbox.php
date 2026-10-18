@@ -213,6 +213,11 @@ final readonly class V5MySqlSmsOutbox implements V5AtomicSmsOutboxPort
             )) {
                 throw new AuthenticationRejected('challenge_unavailable');
             }
+            // Site callbacks MUST NOT implicitly commit or replace the
+            // transaction before quota and encrypted outbox writes.
+            if (!$this->db->inTransaction()) {
+                throw new RuntimeException('sms_outbox_transaction_lost');
+            }
 
             $upsert = $this->prepare('INSERT INTO ev_v5_sms_budget_windows '
                 . '(bucket_key, used_units, expires_at) VALUES (?, 0, ?) '
@@ -276,6 +281,9 @@ final readonly class V5MySqlSmsOutbox implements V5AtomicSmsOutboxPort
             ]);
             if ($insert->rowCount() !== 1) {
                 throw new RuntimeException('sms_outbox_insert_failed');
+            }
+            if (!$this->db->inTransaction()) {
+                throw new RuntimeException('sms_outbox_transaction_lost');
             }
             if (!$this->db->commit()) {
                 throw new RuntimeException('sms_outbox_commit_failed');
