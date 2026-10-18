@@ -8,6 +8,22 @@ declare(strict_types=1);
  * Neither request JSON, headers, query parameters nor V4 cookies enable V5.
  * This repository ships NO native factory and NO production activation.
  */
+// Readiness endpoint is deliberately independent of Bitrix and SMS providers.
+// Only a strict HTTPS GET to the exact path is accepted; no cache or credentials.
+if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/health'
+    && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+    && in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on', '1'], true)
+) {
+    header_remove('Set-Cookie');
+    header_remove('Location');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, max-age=0');
+    header('X-Content-Type-Options: nosniff');
+    http_response_code(200);
+    echo '{"status":"online","service":"samzaberu-v5","auth_ready":false}';
+    exit;
+}
+
 require_once dirname(__DIR__, 2) . '/src/V5ParallelHttpEntry.php';
 
 use Evrasia\Samzaberu\V5\V5ParallelHttpEntry;
