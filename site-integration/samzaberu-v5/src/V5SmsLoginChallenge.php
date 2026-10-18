@@ -90,6 +90,15 @@ final readonly class V5SmsLoginChallenge
         }
     }
 
+    /** Verify a stored SMS MAC without reimplementing HMAC outside this class. */
+    public static function matchesMac(
+        string $storedMac, string $attemptId, int $userId,
+        string $code, string $serverSecret,
+    ): bool {
+        return preg_match('/\A[a-f0-9]{64}\z/D', $storedMac) === 1
+            && hash_equals($storedMac, self::mac($attemptId, $userId, $code, $serverSecret));
+    }
+
     private static function mac(
         string $attemptId, int $userId, string $code, string $secret,
     ): string {
