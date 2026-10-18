@@ -7,6 +7,7 @@ require_once __DIR__ . '/V5StagedSignupCoordinator.php';
 require_once __DIR__ . '/V5StagedCUserSourceGate.php';
 require_once __DIR__ . '/V5BitrixStagedSignupConsentWriter.php';
 require_once __DIR__ . '/V5NativeCUserAddCandidate.php';
+require_once __DIR__ . '/V5SignupNativeReceiptReader.php';
 
 use RuntimeException;
 
@@ -26,11 +27,14 @@ final class V5StagedBitrixSignupAdapter implements V5StagedSignupNativePort
         private V5SignupNativeConsentPlan $plan,
         private ?V5NativeCUserAddCandidate $userCreator = null,
         private array $serverFields = [],
+        private ?V5SignupNativeReceiptReader $uncommittedReceipts = null,
+        private ?V5SignupNativeReceiptReader $committedReceipts = null,
     ) {}
 
     private bool $userCreated = false;
     private ?int $createdUserId = null;
     private bool $consentAttempted = false;
+    private bool $uncommittedVerified = false;
 
     public function safeToCreateWithoutExternalEffects(): bool
     {
@@ -72,7 +76,15 @@ final class V5StagedBitrixSignupAdapter implements V5StagedSignupNativePort
 
     public function verifyUncommitted(int $newUserId, array $consentIds): bool
     {
-        return false;
+        if (!$this->safeToCreateWithoutExternalEffects()
+            || !$this->consentAttempted || $this->createdUserId !== $newUserId
+            || $this->uncommittedReceipts === null) {
+            return false;
+        }
+        $this->uncommittedVerified = $this->uncommittedReceipts->matches(
+            $newUserId, $this->plan, $consentIds
+        );
+        return $this->uncommittedVerified;
     }
 
     public function transactionContinuityBeforeRollback(): bool
@@ -87,6 +99,14 @@ final class V5StagedBitrixSignupAdapter implements V5StagedSignupNativePort
 
     public function verifyCommitted(int $newUserId, array $consentIds): bool
     {
+        // The post-commit receipt reader must independently be bound to
+        // an authoritative NEW native connection by a future audited factory.
+        // No factory/attestation exists yet, so deny until added.
+        if (!$this->safeToCreateWithoutExternalEffects()
+            || !$this->uncommittedVerified || $this->createdUserId !== $newUserId
+            || $this->committedReceipts === null) {
+            return false;
+        }
         return false;
     }
 }
