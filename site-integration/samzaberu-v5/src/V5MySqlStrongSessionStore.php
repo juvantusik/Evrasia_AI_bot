@@ -369,6 +369,11 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             }
             $started=true;
             $result=$operation();
+            // A native proof/read callback may not close our transaction.
+            // Never sign JWTs or expose a PIN after that boundary is lost.
+            if (!$this->db->inTransaction()) {
+                throw new RuntimeException('session_transaction_lost');
+            }
             if (!$this->db->commit()) throw new RuntimeException('session_commit_unavailable');
             $started=false;
             return $result;
