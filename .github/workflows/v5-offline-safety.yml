@@ -310,7 +310,14 @@ jobs:
               fi
               grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-rollback-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-rollback-denial.log
-              echo "PASS: both staging entrypoints rejected before bootstrap"
+              if php "$ROOT/tests/integration/V5StagedSignupCUserPreflight.php" > /tmp/v5-signup-preflight-denial.log 2>&1; then
+                echo "FAIL: native CUser preflight accepted CI sandbox"
+                exit 1
+              fi
+              grep -Fxq "STAGING_BITRIX_BOOTSTRAP=NO" /tmp/v5-signup-preflight-denial.log
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-signup-preflight-denial.log
+              echo "PASS: native CUser staging preflight denied without bootstrap"
+              echo "PASS: all staging entrypoints rejected before bootstrap"
               echo "=== 5. RESULT ==="
               echo "FINAL_STATUS=PASS"
               echo "FINAL_RC=0"
