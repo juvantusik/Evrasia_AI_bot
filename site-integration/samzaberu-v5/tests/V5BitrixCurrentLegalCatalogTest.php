@@ -63,10 +63,10 @@ namespace {
         try {
             $operation();
         } catch (\RuntimeException $e) {
-            $check($what, true);
+            $check(true, $what);
             return;
         }
-        $check($what, false);
+        $check(false, $what);
     };
 
     $make = static function (
