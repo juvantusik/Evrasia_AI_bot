@@ -160,11 +160,13 @@ final class SessionFakeProof implements V5LockedStrongSessionProofPort
 {
     public bool $allow=true;
     public bool $throws=false;
+    public bool $loseTransaction=false;
     public int $calls=0;
     public function verifiedTrustWithUserLock(PDO $db,PasswordVerifiedAccount $account,
         string $deviceId,string $platform,string $token):bool {
         $this->calls++;
         if(!$db->inTransaction() || $this->throws)throw new RuntimeException('synthetic proof failure');
+        if ($this->loseTransaction && $db instanceof SessionFakePdo) $db->started=false;
         return $this->allow && $account->userId===41 && $platform==='ios'
             && $token==='synthetic-strong-trust-token';
     }
@@ -343,6 +345,25 @@ yes(is_string($grantRow['grant_digest']) && strlen($grantRow['grant_digest'])===
 $committed=$db->sessions;
 denies(fn()=>consumed($store),'replayed grant uniqueness rejects second session');
 yes($db->sessions===$committed,'replayed grant cannot persist another session');
+
+[$store,$db,$proof]=environment();
+$proof->loseTransaction=true;
+denies(fn()=>trusted($store),'lost native proof transaction denies JWT issuance');
+yes($db->commits===0,'lost proof cannot commit session');
+[$store,$db,$proof]=environment();
+$issued=trusted($store);
+$reader=new SessionFakePinReader();
+$reader->answer='0042';
+$before=$db->commits;
+$readerLost=new class implements V5LockedBonusPinReaderPort {
+    public function readLockedBonusPin(PDO $db,int $userId):?string {
+        if ($db instanceof SessionFakePdo) $db->started=false;
+        return '0042';
+    }
+};
+yes($store->showBonusPinForAccess($issued->accessToken,$readerLost)===null,
+    'lost native PIN-read transaction must not expose PIN');
+yes($db->commits===$before,'lost PIN read never commits');
 
 foreach(['coverage_false','coverage_unknown','proof_denied','proof_throws','blocked',
     'inactive','password_expired','epoch_missing','epoch_corrupt','sql_insert',
