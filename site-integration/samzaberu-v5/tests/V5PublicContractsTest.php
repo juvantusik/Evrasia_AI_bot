@@ -93,7 +93,7 @@ v5publicCheck(V5LegalConsentContract::publicDocuments($docs) === $docs,
     'trusted current synthetic public legal docs accepted');
 v5publicCheck(V5LegalConsentContract::acceptedForSignup($current,$docs) === $current,
     'fresh required signup codes accepted without JWT');
-v5publicCheck(V5LegalConsentContract::acceptedForSignup($current+['TEST_MARKETING_20261018'],$docs) === $current,
+v5publicCheck(V5LegalConsentContract::acceptedForSignup($current+['unexpected'=>'TEST_MARKETING_20261018'],$docs) === null,
     'non-list submitted values cannot silently attach marketing');
 v5publicCheck(V5LegalConsentContract::acceptedForSignup([...$current,'TEST_MARKETING_20261018'],$docs)
     === [...$current,'TEST_MARKETING_20261018'],
