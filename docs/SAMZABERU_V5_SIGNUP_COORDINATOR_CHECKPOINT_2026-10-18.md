@@ -63,3 +63,9 @@ Commits `c6ca759a634fba331109602fe4c81fe53efc6d49` through `3a570ce0ceaa1b7a8047
 ## Следующий шаг: staging CUser preflight (без записи пользователей)
 
 Коммит `6bae5e6d11c60c201f5ee51d118002e7ec7afba7`: файл `tests/integration/V5StagedSignupCUserPreflight.php` проверяет перед любыми тестовыми DML жёсткую изоляцию host/docroot/schema, source-pinned native `CUser::Add`, depth=0, native MySQL application connection и staging exclusive permit. Он не вызывает `CUser::Add`, Consent writer или управление транзакциями. Bitrix bootstrap на isolated staging может иметь побочные эффекты — НЕ запускать на production. Коммит `62d4d2142bf0384b8748e8e473fa687e2f4312f3`: отрицательная CI-проверка отказа нового preflight до bootstrap. Число объявленных offline suites остаётся 33. Успешное выполнение реального preflight, 33/33 offline CI и positive native signup rollback **не подтверждены**. Никакого production deploy.
+
+## Feature branch CUser::Add candidate implementation
+
+Commit `0308713a1108d91b4b50fe4c6c914a6852d204a0`: `V5NativeCUserAddCandidate::add` now contains the real `new \\CUser(); $user->Add($fields)` call and checks canonical positive returned user ID. Source identity + isolated CLI/root guard run before the call, followed by a separately injected `V5CUserNativeWriteAttestation` positive decision. **No implementation of this attestation is supplied** and the production-oriented `V5StagedBitrixSignupAdapter` remains hard-deny, so these writes are not reachable in current deployment. Native CUser errors are intentionally generic, without leaking passwords, user details or LAST_ERROR.
+
+No standalone Bitrix staging environment exists (user confirmed); do **not** repeatedly require one for continued feature coding. Real native side-effect/transaction acceptance remains unavailable and is not claimed to have passed. Production/V4 never changed; V5 OFF/503.
