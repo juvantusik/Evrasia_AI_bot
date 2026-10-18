@@ -20,9 +20,9 @@ final class V5PdoSmsChallengeIssueStore implements V5SmsChallengeIssueStore
     public function issueOnce(V5SmsLoginChallenge $challenge): bool
     {
         if ($this->db->inTransaction()
-            || preg_match('/\\A[a-f0-9]{32}\\z/D', $challenge->attemptId) !== 1
+            || preg_match('/\A[a-f0-9]{32}\z/D', $challenge->attemptId) !== 1
             || $challenge->userId < 1 || $challenge->userId > 2147483647
-            || preg_match('/\\A[a-f0-9]{64}\\z/D', $challenge->codeMac) !== 1
+            || preg_match('/\A[a-f0-9]{64}\z/D', $challenge->codeMac) !== 1
             || $challenge->expiresAt < 1 || $challenge->failedAttempts !== 0
             || $challenge->consumed) return false;
 
