@@ -161,7 +161,7 @@ $r=$handler->handleJson('verifyChallenge',j($verify));
 check($r->status===401 && !isset($r->body['access_token']),'replay denied');
 check($s->issued===2,'replay no issuance');
 $r=$handler->handleJson('resendChallenge',j($resend));
-check($r->status===202 && $r->body['status']==='challenge_sent','resend accepted');
+check($r->status===202 && $r->body['status']==='challenge_pending','resend accepted without delivery claim');
 check(!isset($r->body['access_token']) && !isset($r->body['refresh_token']),'resend no JWT');
 
 foreach (['', 'garbage', 'null', '[]', '"text"', '12', 'true', '{broken', j([]), str_repeat(' ',8193)] as $raw) {
