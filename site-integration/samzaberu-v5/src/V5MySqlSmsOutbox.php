@@ -208,11 +208,13 @@ final readonly class V5MySqlSmsOutbox implements V5AtomicSmsOutboxPort
             }
             // This callback must lock actual b_user/MFA/verified-phone rows
             // on THE SAME PDO connection and reject changed/stale versions.
+            $this->execute($this->prepare('SAVEPOINT v5_sms_native_guard'), []);
             if (!$this->site->stillEligibleWithLocks(
                 $this->db, $reservation, $challenge['auth_epoch']
             )) {
                 throw new AuthenticationRejected('challenge_unavailable');
             }
+            $this->execute($this->prepare('RELEASE SAVEPOINT v5_sms_native_guard'), []);
             // Site callbacks MUST NOT implicitly commit or replace the
             // transaction before quota and encrypted outbox writes.
             if (!$this->db->inTransaction()) {
