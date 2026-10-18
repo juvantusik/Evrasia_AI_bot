@@ -54,6 +54,11 @@ final class V5StagedBitrixSignupAdapter implements V5StagedSignupNativePort
         return false;
     }
 
+    public function transactionContinuityBeforeRollback(): bool
+    {
+        return false;
+    }
+
     public function transactionContinuityBeforeCommit(): bool
     {
         return false;
