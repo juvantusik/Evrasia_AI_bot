@@ -11,6 +11,8 @@ final class DeniedStagedSignupNative implements \Evrasia\Samzaberu\V5\V5StagedSi
     public int $creates = 0;
     public bool $approved = false;
     public string $failure = '';
+    public bool $postcheckFails = false;
+    public bool $postcheckThrows = false;
     public function safeToCreateWithoutExternalEffects(): bool { return $this->approved; }
     public function createUserInsideOwnedTransaction(): int {
         $this->creates++;
@@ -19,7 +21,10 @@ final class DeniedStagedSignupNative implements \Evrasia\Samzaberu\V5\V5StagedSi
     }
     public function persistNativeConsentsFor(int $newUserId): array { return [11, 12]; }
     public function verifyUncommitted(int $newUserId, array $consentIds): bool { return true; }
-    public function verifyCommitted(int $newUserId, array $consentIds): bool { return true; }
+    public function verifyCommitted(int $newUserId, array $consentIds): bool {
+        if ($this->postcheckThrows) throw new \RuntimeException('synthetic_readback_failure');
+        return !$this->postcheckFails;
+    }
 }
 
 use Bitrix\Main\Application;
@@ -79,7 +84,50 @@ try {
 if ($fake3->rollbackCalls !== 0 || $fake3->commitCalls !== 0) {
     throw new \RuntimeException('FAIL: uncertain state incorrectly rolled back');
 }
+
+$fake4 = new MysqliConnection();
+Application::$connection = $fake4;
+$bridge4 = new V5BitrixPdoCompatibilityBridge($fake4, new SyntheticNativeSignupPermit());
+$port4 = new DeniedStagedSignupNative();
+$port4->approved = true;
+$okCoordinator = new V5StagedSignupCoordinator($bridge4, $port4);
+$okCoordinator->register();
+if ($fake4->beginCalls !== 1 || $fake4->commitCalls !== 1
+    || $fake4->rollbackCalls !== 0 || $port4->creates !== 1) {
+    throw new \RuntimeException('FAIL: synthetic success ordering');
+}
+try {
+    $okCoordinator->register();
+    throw new \RuntimeException('FAIL: reuse unexpectedly allowed');
+} catch (\RuntimeException $e) {
+    if ($e->getMessage() !== 'v5_signup_coordinator_already_used') throw $e;
+}
+if ($port4->creates !== 1 || $fake4->commitCalls !== 1) {
+    throw new \RuntimeException('FAIL: coordinator retried after success');
+}
+
+foreach ([false, true] as $throws) {
+    $postFake = new MysqliConnection();
+    Application::$connection = $postFake;
+    $postBridge = new V5BitrixPdoCompatibilityBridge(
+        $postFake, new SyntheticNativeSignupPermit()
+    );
+    $postPort = new DeniedStagedSignupNative();
+    $postPort->approved = true;
+    $postPort->postcheckFails = !$throws;
+    $postPort->postcheckThrows = $throws;
+    try {
+        (new V5StagedSignupCoordinator($postBridge, $postPort))->register();
+        throw new \RuntimeException('FAIL: unverified commit reported success');
+    } catch (\RuntimeException $e) {
+        if ($e->getMessage() !== 'v5_signup_postcommit_unverified_no_retry') throw $e;
+    }
+    if ($postFake->commitCalls !== 1 || $postFake->rollbackCalls !== 0
+        || $postPort->creates !== 1) {
+        throw new \RuntimeException('FAIL: postcommit failure retried or rolled back');
+    }
+}
 putenv('V5_STAGE_WRITE_ACK');
-echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry (4 assertions)\n";
+echo "PASS: V5 coordinator default deny, ordinary rollback, uncertain no-retry, synthetic commit/readback (7 scenarios)\n";
 echo "REAL_BITRIX_NATIVE_CALLS=NO\n";
 echo "PRODUCTION_DEPLOYED=NO\n";
