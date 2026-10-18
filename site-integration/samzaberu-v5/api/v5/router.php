@@ -31,7 +31,7 @@ if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/legal/consents'
     && in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on', '1'], true)
 ) {
     require_once dirname(__DIR__, 2) . '/src/V5BitrixPublicLegalCatalog.php';
-    $site = dirname(__DIR__, 5);
+    $site = dirname(__DIR__, 4);
     $documents = \Evrasia\Samzaberu\V5\V5BitrixPublicLegalCatalog::read(
         $site . '/bitrix/.settings.php'
     );
