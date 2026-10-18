@@ -113,11 +113,21 @@ parallelCheck($parallelFactories === 0, 'invalid input never loads native factor
 parallelWire($parallelEntry->dispatch($parallelServer, $parallelRead), 401);
 parallelCheck($parallelProviders->passwordCalls === 1 && $parallelFactories === 1,
     'existing workflow reached once, without synthetic authentication success');
+parallelWire($parallelEntry->dispatch(array_replace($parallelServer, [
+    'REQUEST_URI' => '/api/v5/legal/consents',
+]), $parallelRead), 405);
+parallelWire($parallelEntry->dispatch(array_replace($parallelServer, [
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/api/v5/legal/consents?token=test',
+]), $parallelRead), 404);
 foreach (array_keys(V5RouteMap::ROUTES) as $route) {
     $before = $parallelFactories;
-    $server = array_replace($parallelServer, ['REQUEST_URI' => '/api/v5' . substr($route, 5)]);
+    [$verb,$relative] = explode(' ', $route, 2);
+    $server = array_replace($parallelServer, [
+        'REQUEST_METHOD' => $verb,
+        'REQUEST_URI' => '/api/v5' . $relative,
+    ]);
     $reply = $parallelEntry->dispatch($server, static fn(int $limit): string => '{"unexpected":true}');
-    parallelCheck($parallelFactories === $before + 1, 'each of the five canonical routes dispatches');
+    parallelCheck($parallelFactories === $before + 1, 'each of the seven canonical routes dispatches');
     parallelCheck(in_array($reply->status, [400, 503], true), 'unconfigured native operation never succeeds');
 }
 foreach ([static fn() => null, static fn() => new stdClass(), static function () {
