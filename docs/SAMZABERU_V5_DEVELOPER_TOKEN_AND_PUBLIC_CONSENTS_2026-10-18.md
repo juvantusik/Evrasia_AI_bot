@@ -98,6 +98,12 @@ The operator executed the guarded PHP 8.3 + mysqli read-only diagnostic on produ
 
 **Next action:** targeted READ_ONLY source-location/signature and approved site signup call-shape audit (no credentials or consent text output), then implement native V5 signup consent writer with safe transaction/rollback semantics. Avoid repeating the already-passed table/catalog audit.
 
+### Native writer source resolved: 2026-10-18 production READ_ONLY
+
+**Latest verified operator source-only result (2026-10-18):** The earlier `NATIVE_SOURCE_PRESENT=NO` was only caused by the assumed all-lowercase path. The exact native method is present at `bitrix/modules/main/lib/UserConsent/Consent.php`, source SHA-256 `cd29a7d79bf3babb75a6fe5ed03b59ba6d4d01f5c3fc33f579b95e2d37f64e2b`. `function addByContext` was found with four argument names, in order: `$agreementId, $originatorId, $originId, $params`. Existing website signup `local/components/eurasia/signup/class.php` SHA `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84` contains three `Consent::addByContext` calls. Source inspection `FINAL_STATUS=PASS`, `FINAL_RC=0`; `BITRIX_BOOTSTRAP=NO`, `DATABASE_CONNECTION=NO`, `V4_V5_WRITE=NO`.
+
+**Do not assume argument/return semantics from parameter names.** Next: a targeted **READ_ONLY** masked token inventory of those three call argument expressions and the native method's actual return/`$params` use, including transaction behavior. Only afterward implement/accept the native V5 signup writer. No registration, consent, or DB writes have been authorized.
+
 ## 3. Согласия на регистрации — не отдельная анонимная запись
 
 **НЕ создавать** анонимный `POST /legal/consents/accept` с клиентским `USER_ID`. Существующая согласованная бизнес-логика:
