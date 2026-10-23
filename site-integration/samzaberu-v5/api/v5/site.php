@@ -11,7 +11,8 @@ unset($GLOBALS['EVRASIA_SAMZABERU_V5_HTTP_FACTORY']);
 $root = defined('EVRASIA_SAMZABERU_V5_DOCUMENT_ROOT')
     && is_string(EVRASIA_SAMZABERU_V5_DOCUMENT_ROOT)
     ? EVRASIA_SAMZABERU_V5_DOCUMENT_ROOT : '';
-$config = V5PrivatePilotConfig::load(dirname(__DIR__, 2), $root);
+// Match the verified OFF-only production bootstrap: private config lives outside public_html.
+$config = V5PrivatePilotConfig::load(dirname($root) . '/private/samzaberu-v5', $root);
 $admitted = $config !== null && $config->permitsRequest($_SERVER);
 // Do not pass the operational pilot credential to native services/debug logs.
 unset($_SERVER['HTTP_X_EVRASIA_V5_PILOT']);
