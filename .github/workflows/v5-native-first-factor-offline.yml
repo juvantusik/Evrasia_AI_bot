@@ -49,6 +49,7 @@ jobs:
           echo '=== 2. PHP SYNTAX ==='
           for file in \
             site-integration/samzaberu-v5/src/V5BitrixNativeFirstFactorComposition.php \
+            site-integration/samzaberu-v5/src/V5PinnedBitrixPasswordComparator.php \
             site-integration/samzaberu-v5/src/V5PublicTrafficPreflight.php \
             site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php \
