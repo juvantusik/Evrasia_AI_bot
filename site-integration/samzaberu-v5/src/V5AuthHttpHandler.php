@@ -169,6 +169,20 @@ final readonly class V5AuthHttpHandler
     }
 
     /**
+     * V5 registration document list reuses the SAME current native Bitrix
+     * agreement catalog as GET /legal/consents. It returns a list of required
+     * and optional current documents; it does not acknowledge or save consent,
+     * create an account, use V4 HTTP/JWT, or write b_consent_user_consent.
+     *
+     * The format intentionally matches V5 legal/consents, not an assumed V4
+     * legacy registration-documents DTO.
+     */
+    public function handlePublicRegistrationDocuments(): V5HttpReply
+    {
+        return $this->handlePublicLegalConsents();
+    }
+
+    /**
      * Protected GET /cart: the real V5 JWT MUST pass locked user, epoch,
      * assurance and session checks BEFORE calling the native cart service.
      */

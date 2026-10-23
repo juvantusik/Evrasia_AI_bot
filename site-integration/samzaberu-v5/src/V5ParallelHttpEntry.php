@@ -49,10 +49,11 @@ final readonly class V5ParallelHttpEntry
         }
         if (!$head->trustedHttps) return self::deny(403, 'secure_transport_required');
         if ($head->method === 'GET') {
-            // Only current legal GET is anonymous; V5 cart GET is strongly
-            // authenticated and must reject wrong/missing Authorization BEFORE
-            // constructing a Bitrix/native transport or reading a request body.
-            if (!in_array($action, ['publicLegalConsents', 'readCart'], true)
+            // Current legal and registration-document GETs are anonymous;
+            // cart GET still requires V5 JWT BEFORE any site bootstrap.
+            if (!in_array($action, [
+                'publicLegalConsents', 'publicRegistrationDocuments', 'readCart'
+            ], true)
                 || ($head->contentLength !== null && $head->contentLength !== '0')) {
                 return self::deny(400, 'invalid_request');
             }

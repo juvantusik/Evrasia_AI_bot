@@ -138,6 +138,19 @@ v5publicCheck($reply->status === 200 && $body === ['documents'=>$docs],
 v5publicCheck($catalogPort->calls === 1 && $tokenPort->calls === 0,
     'public GET never validates access JWT');
 
+// V4's separate registration-documents business route is now implemented
+// as a REAL V5 read of the SAME current native Bitrix agreement catalog.
+// It never issues a token, creates an account or records consent.
+$registration = new V5StagedHttpRequest(
+    'GET', '/api/v5/legal/registration-documents', true, '', ''
+);
+$r = $transport->dispatch($registration);
+v5publicCheck($r->status === 200
+    && v5publicBody($r) === ['documents'=>$docs],
+    'registration-documents reuses current Bitrix catalog without rewriting legal rules');
+v5publicCheck($catalogPort->calls === 2 && $tokenPort->calls === 0,
+    'registration-document GET is anonymous and does not invoke V5 JWT or old V4 auth');
+
 // Real POST /legal/consents/validate contract: anonymous, authoritative
 // catalog, no registration, no account or consent data mutation.
 $validateRequest = static fn (array $json): V5StagedHttpRequest =>
@@ -148,7 +161,7 @@ $r=$transport->dispatch($validateRequest(['agreements'=>$current]));
 v5publicCheck($r->status===200 && v5publicBody($r)===
     ['valid'=>true,'agreements'=>$current],
     'anonymous legal code precheck uses current catalog, no account data');
-v5publicCheck($catalogPort->calls===2 && $tokenPort->calls===$initialAuthCalls,
+v5publicCheck($catalogPort->calls===3 && $tokenPort->calls===$initialAuthCalls,
     'public legal validation reads real catalog provider, not JWT or auth');
 $r=$transport->dispatch($validateRequest(['agreements'=>[
     'TEST_MARKETING_20261018','TEST_PD_20261018','TEST_OFFER_20261018'
@@ -233,16 +246,25 @@ v5publicCheck($r->status===503,'invalid public catalog never leaks personal data
 $catalogPort->documents=$docs;
 
 $disabled = new V5HttpTransportBoundary();
+v5publicCheck($disabled->dispatch($registration)->status===503,
+    'registration document GET never activates without a handler');
 v5publicCheck($disabled->dispatch($public)->status===503,
     'handler-less public GET remains disabled');
 $withoutPorts = new V5HttpTransportBoundary(new V5AuthHttpHandler($workflow));
 v5publicCheck($withoutPorts->dispatch($public)->status===503
+    && $withoutPorts->dispatch($registration)->status===503
     && $withoutPorts->dispatch($tokenRequest($syntheticToken))->status===503,
     'missing native/legal adapters fail closed even with workflow');
 
 foreach ([
     ['POST','/api/v5/legal/consents','','application/json',405],
     ['HEAD','/api/v5/legal/consents','','',405],
+    ['HEAD','/api/v5/legal/registration-documents','','',405],
+    ['POST','/api/v5/legal/registration-documents','','application/json',405],
+    ['GET','/api/v5/legal/registration-documents?user_id=999','','',404],
+    ['GET','/api/v5/legal/registration-documents/','','',404],
+    ['GET','/api/v5/legal/registration-documents','{"user_id":999}','',400],
+    ['GET','/api/v5/legal/registration-documents','','',200],
     ['GET','/api/v5/legal/consents?x=1','','',404],
     ['GET','/api/v5/legal/consents','{}','',400],
     ['GET','/api/v5/legal/consents','','',200],
@@ -273,9 +295,19 @@ $r=$entry->dispatch($server,static function (int $max) use (&$reads): string {
 v5publicCheck($r->status===200 && v5publicBody($r)===['documents'=>$docs],
     'GET through real lazy V5 HTTP entry without request body or Bitrix auth');
 v5publicCheck($reads===0 && $factoryCalls===1,'public GET never reads caller body');
+$r=$entry->dispatch(array_replace($server,[
+    'REQUEST_URI'=>'/api/v5/legal/registration-documents'
+]),static function (int $max) use (&$reads): never {
+    $reads++;
+    throw new RuntimeException('Registration GET must not read body');
+});
+v5publicCheck($r->status===200 && v5publicBody($r)===['documents'=>$docs],
+    'registration-documents preboot HTTP path shares current Bitrix legal provider');
+v5publicCheck($factoryCalls===2 && $reads===0,
+    'two public document GETs do not read body or issue bearer');
 $r=$entry->dispatch(array_replace($server,['CONTENT_LENGTH'=>'100']),
     static function (int $max) use (&$reads): string { $reads++; return 'bad'; });
-v5publicCheck($r->status===400 && $factoryCalls===1 && $reads===0,
+v5publicCheck($r->status===400 && $factoryCalls===2 && $reads===0,
     'invalid GET length denied before lazy native bootstrap');
 
 echo "PASS: V5 public legal and JWT introspection contracts ($testCount checks)\n";

@@ -91,9 +91,15 @@ if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/legal/consents/validate'
     exit;
 }
 
-// Public current legal agreements: read-only native Bitrix catalog.
-// Independent of private auth factory; all authentication routes stay closed.
-if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/legal/consents'
+// Public current legal agreements AND registration documents use the SAME
+// read-only native Bitrix catalog. No registration user, JWT, consent receipt,
+// SMS or Bitrix source code changes. V5 AUTH still remains OFF. The V5
+// registration-documents DTO deliberately uses V5's validated documents shape,
+// not an unverified assertion of V4 response parity.
+if (in_array($_SERVER['REQUEST_URI'] ?? null, [
+        '/api/v5/legal/consents',
+        '/api/v5/legal/registration-documents',
+    ], true)
     && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
     && in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on', '1'], true)
 ) {

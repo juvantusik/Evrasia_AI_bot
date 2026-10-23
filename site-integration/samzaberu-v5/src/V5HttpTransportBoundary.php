@@ -97,8 +97,9 @@ final readonly class V5HttpTransportBoundary
             return self::fail(404, 'not_found');
         }
 
-        // GET is either anonymous legal documents or strongly protected cart.
-        // Neither route accepts body, query parameters, cookies or FUSER_ID.
+        // GET returns current Bitrix legal documents anonymously (including
+        // registration-documents), or strongly protected V5 cart by JWT.
+        // None accepts body, query parameters, cookies or FUSER_ID.
         if ($request->method === 'GET') {
             if ($request->rawBody !== ''
                 || ($request->contentLength !== null && $request->contentLength !== '0')) {
@@ -106,6 +107,9 @@ final readonly class V5HttpTransportBoundary
             }
             if ($action === 'publicLegalConsents') {
                 return self::serialize($this->handler->handlePublicLegalConsents(), 131072);
+            }
+            if ($action === 'publicRegistrationDocuments') {
+                return self::serialize($this->handler->handlePublicRegistrationDocuments(), 131072);
             }
             if ($action === 'readCart') {
                 $header = $request->authorizationHeader;

@@ -399,3 +399,14 @@ In feature branch code commit \`960792ede369cc40c796dfe2805d2829a2f6faa9\`, \`GE
 **NEXT_STEP=V5_REAL_BUSINESS_AND_NATIVE_AUTH_PARITY_THEN_CLIENT_MIGRATION**. Do not convert partial source inventory or CI fake tests into V4-deprecation approval. Keep the previously accepted safety gates but avoid rewriting V4 services.
 
 **Code/CI verification for sole-API migration governance:** commit `ec0fb8071b7df3efe1bcbadc185842dce0f2b532`, [GitHub Actions offline safety #39986838493](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39986838493) — **SUCCESS**. The source registrar check reports `V4_MUST_REMAIN_ACTIVE`: full 62 registrations/consumer inventory and native V5 production approval are incomplete. This is NOT a V4 retirement or native Bitrix release approval.
+
+## 33. 2026-10-23 — real V5 native registration-documents read endpoint implementation
+
+**User priority:** deliver REAL API V5 business endpoints by reusing verified Bitrix business services, not endlessly extending V4 sunset governance. Target `https://evrasia.rest/api/v5`, V4 temporary compatibility until consumer migration, production V5 AUTH OFF.
+
+**Feature code prepared:** registered `GET /legal/registration-documents` in `V5RouteMap`; added `V5AuthHttpHandler::handlePublicRegistrationDocuments()` which directly reuses existing current `V5PublicLegalConsentsPort` + `V5LegalConsentContract::publicDocuments()` (no new SQL/Bitrix table or invented legal versions), strict bodyless HTTPS GET transport and lazy prebootstrap, and actual OFF-only site `api/v5/router.php` independent anonymous branch using existing `V5BitrixPublicLegalCatalog::read()` even when private V5 AUTH factory is unavailable. Response contract intentionally V5 `{"documents":[...]}`, NOT claimed identical to V4 `GET /legal/registration-documents` response without confirmed parity. No CUser::Add, b_consent_user_consent write, V4 controller/JWT or SMS.
+
+**Offline regressions:** `V5PublicContractsTest.php` covers current documents, JWT-free GET, invalid method/body/path/query, no hidden account IDs, no new user, disabled provider/SQL outage 503, preboot does not read body. `V5RouteMapTest.php` verifies route. Machine manifest now has **33** known tracked workstreams, **5** V5-target route links; observed source V4 still **62** registrations, of which exact per-registration mapping remains incomplete. Retirement gate remains **V4_MUST_REMAIN_ACTIVE**. [Developer contract](SAMZABERU_V5_REGISTRATION_DOCUMENTS_2026-10-23.md). **CI/commit status:** verify after feature commit, no production deployment.
+
+**NEXT_STEP=RUN_CI_THEN_IMPLEMENT_NEXT_REAL_V5_BUSINESS_ENDPOINT**; do not invent V4 JSON parity or enable V5 AUTH, do not decommission V4 before consumer migration, do not re-run generic production router inventory.
+

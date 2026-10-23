@@ -258,6 +258,15 @@
       "note": "Origin GET observed 200; external evrasia.rest availability not accepted"
     },
     {
+      "id": "legal-registration-documents",
+      "v4_route": "GET /legal/registration-documents",
+      "v5_route": "GET /legal/registration-documents",
+      "area": "legal",
+      "phase": "feature_only",
+      "parity_accepted": false,
+      "note": "Real V5 read-only current native Bitrix agreement catalog; intentionally uses V5 documents DTO; compare installed V4 registration-documents DTO and externally attest HTTPS evrasia.rest before client cutover"
+    },
+    {
       "id": "legal-accept",
       "v4_route": "POST /legal/consents/accept",
       "v5_route": null,

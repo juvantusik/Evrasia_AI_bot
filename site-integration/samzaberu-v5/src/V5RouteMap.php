@@ -22,6 +22,7 @@ final class V5RouteMap
         'POST /loyalty/pin' => 'showBonusPin',
         'GET /cart' => 'readCart',
         'GET /legal/consents' => 'publicLegalConsents',
+        'GET /legal/registration-documents' => 'publicRegistrationDocuments',
         'POST /legal/consents/validate' => 'validateLegalConsents',
     ];
 }

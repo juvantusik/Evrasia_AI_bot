@@ -19,17 +19,17 @@
 | Публичный адрес | `https://evrasia.rest/api/v5` — целевая основа, внешняя V5 E2E-приёмка ещё требуется |
 | Production V4 | В эксплуатации; нельзя прерывать существующие заказы, SMS, приложения, callback-и |
 | V4 исходник | `api/v4/router.php` на Bitrix, source-only SHA `5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d`; 62 регистрации маршрутов и 11 контроллеров |
-| V5 маршруты в GitHub | **10** записей `V5RouteMap::ROUTES` — кодовый контракт, не 10 принятых production-ручек |
+| V5 маршруты в GitHub | **11** записей `V5RouteMap::ROUTES` — кодовый контракт, не 11 принятых production-ручек |
 | V5 AUTH production | **OFF**; нельзя выдавать реальные JWT без законченных native гарантий |
 | Переиспользование V4 | Реальный `CartApiService` уже включён в feature-only реализацию V5 GET cart; owner через `b_sale_fuser` и total из `calcBasketTotal()`. E2E на Bitrix ещё не принят |
 | Public legal | GET /legal/consents работает на проверенном origin, POST /legal/consents/validate feature-only; внешний `evrasia.rest` не объявлять принятым без smoke |
 | V4 shutdown | **Не разрешён**. Кодового переключения/редиректа/удаления/блокировки не выполнялось |
 
-**Важно:** 62 регистрации — это результат лексического анализа V4-router, включая mount, callback и внутренние методы, а не 62 независимых пользовательских endpoint-а. Записи нужно сверить индивидуально; 32 направления плана — не замена полному инвентарю.
+**Важно:** 62 регистрации — это результат лексического анализа V4-router, включая mount, callback и внутренние методы, а не 62 независимых пользовательских endpoint-а. Записи нужно сверить индивидуально; 33 направления плана — не замена полному инвентарю.
 
 ## Файлы реализации миграции
 
-- `site-integration/samzaberu-v5/migration/v4-replacement-plan.json` — машинно-читаемый план с **32 известными направлениями**, сопоставленными V4/V5 операциями, незакрытыми пунктами, 62 ожидаемыми регистрациями и явно неизвестными потребителями. У статусов `feature_only` нет значения `production accepted`.
+- `site-integration/samzaberu-v5/migration/v4-replacement-plan.json` — машинно-читаемый план с **33 известными направлениями**, сопоставленными V4/V5 операциями, незакрытыми пунктами, 62 ожидаемыми регистрациями и явно неизвестными потребителями. У статусов `feature_only` нет значения `production accepted`.
 - `site-integration/samzaberu-v5/migration/V5V4ReplacementGate.php` — безопасная **только читающая** проверка плана, реальности V5-маршрутов и обязательных условий прекращения V4. Не обращается к Bitrix, не читает продакшен-логи, не отключает маршруты, не проводит миграцию БД.
 - `site-integration/samzaberu-v5/tests/V5V4ReplacementGateTest.php` — offline-регрессия: неизвестный маршрут, ложная готовность, подмена основного домена, преждевременное выключение V4 и несовпадение source-count отвергаются.
 - `.github/workflows/v5-offline-safety.yml` — проверка плана и безопасности решения при изменениях в этой feature-ветке.
@@ -64,3 +64,7 @@ php site-integration/samzaberu-v5/tests/V5V4ReplacementGateTest.php
 Изменение `ec0fb8071b7df3efe1bcbadc185842dce0f2b532` прошло [V5 offline safety checks #39986838493](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39986838493) — **completed SUCCESS** (23 октября 2026). CI проверил PHP-синтаксис, исходный план, текущие зарегистрированные V5 route keys, 32 известных направления миграции и негативные сценарии попытки преждевременно отключить V4. Это **только кодовая/offline проверка**, не свидетельство наличия V5 auth в production или переноса клиентов.
 
 До фактической миграции остаётся `V4_MUST_REMAIN_ACTIVE`, `V4_AUTOMATIC_SHUTDOWN=NO`.
+
+## Новая реальная бизнес-ручка V5: документы регистрации (23.10.2026)
+
+`GET /api/v5/legal/registration-documents` зарегистрирован в V5 и реализован через тот же текущий `V5BitrixPublicLegalCatalog::read()`, который получает документы из действующего `b_consent_agreement`. Текст соглашений не дублируется; согласия и аккаунты не создаются. В машинной карте добавлена отдельная 33-я группа (`legal-registration-documents`) со статусом `feature_only`, **не** `accepted`. Кодовый статус V5: **11 маршрутов**. До proof внешнего `evrasia.rest` и V4/V5 DTO-приёмки клиентский переход по этой ручке не утверждать. [Контракт и статус](SAMZABERU_V5_REGISTRATION_DOCUMENTS_2026-10-23.md).

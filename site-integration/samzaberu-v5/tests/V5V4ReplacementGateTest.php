@@ -33,8 +33,8 @@ replacementAssert(
     $report['status'] === 'V4_MUST_REMAIN_ACTIVE'
     && $report['source_registrations'] === 62
     && $report['source_inventory_rows'] === 0
-    && $report['known_workstreams'] === 32
-    && $report['v5_feature_targets'] === 4
+    && $report['known_workstreams'] === 33
+    && $report['v5_feature_targets'] === 5
     && $report['accepted_or_retired_workstreams'] === 0
     && $report['automatic_shutdown'] === false,
     'incomplete source-only parity explicitly retains V4 while building V5'
