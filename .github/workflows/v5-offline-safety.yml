@@ -501,6 +501,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/website-pilot-password-wrong-host.log
               grep -Fxq "DB_CONNECTION=NO" /tmp/website-pilot-password-wrong-host.log
               echo "PASS: Bitrix PASSWORD_ORIGINAL patch fixture and wrong-host refusal"
+              echo "=== WEBSITE PILOT TRUSTED PIN: ONE-FILE SOURCE DIFF AND INVERSE PROOF ==="
+              php -l "$ROOT/deployment/website-mfa-pilot-pin-trust.php"
+              php "$ROOT/deployment/website-mfa-pilot-pin-trust.php" --self-test
+              if php "$ROOT/deployment/website-mfa-pilot-pin-trust.php" --preflight > /tmp/website-pilot-pin-wronghost.log 2>&1; then
+                echo "FAIL: production PIN trust tool accepted CI host"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/website-pilot-pin-wronghost.log
+              grep -Fxq "LOGIN_TOTP_SMS_SEND_CODE_WRITE=NO" /tmp/website-pilot-pin-wronghost.log
+              echo "PASS: pilot-only PIN trust patch and foreign-host refusal"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
