@@ -283,3 +283,13 @@ Installed \`CUser\` import line 18 is \`Bitrix\Main\Authentication\Internal\User
 
 **NEXT_STEP=OPERATOR_GUARDED_PUBLIC_LEGAL_ROLLOUT_THEN_NATIVE_AUTH_PROVIDERS**. Run pinned V5-only upgrade on \`evrasia\` and verify real HTTPS postcheck/rollback status. Then continue real \`V5CurrentLoginControlsPort\`, independent site MFA/SMS policy, native locked AUTH_EPOCH lifecycle, actual SMS/TOTP/trusted/JWT+PIN providers before enabling auth. Mobile public access must have NO IP allowlist. \`V5_AUTH=OFF\` until those gates are truly accepted.
 
+## 23. 2026-10-23 — accepted V4 business reuse for real V5 (no duplicate logic)
+
+**NEWER USER DECISION — PRECEDENCE OVER PREVIOUS V5-GREENFIELD IMPLICATIONS:** retain fully independent V4 API; use *existing V4/Bitrix production business services* from separate V5 HTTP handlers instead of rebuilding equivalent business logic. Reuse vetted RestIS/loyalty, profile, registration/legal, existing trusted-device core where compatible. **Do not reuse V4 password-only auth, its JWT, refresh, weak trust or paid SMS shortcut as V5 strong session.** Reuse existing feature-only V5 MFA/OTP/SMS budget/strong JWT/session/epoch guards wherever needed. User explicitly rejected synthetic account creation and mock public API. Main public API domain **evrasia.rest**; evrasia.spb.ru remains Bitrix origin/site filesystem. **STOP old unmodified installer** `upgrade-public-legal-v5.sh` whose HTTPS smoke is pinned to evrasia.spb.ru rather than accepted public evrasia.rest; do not claim a full public acceptance based on that host check.
+
+**VERIFIED SOURCE LIMIT:** GitHub contains V5-only site integration, while actual V4 business router/controllers reside on production evrasia. Already verified V4 auth and TrustedDevice/PIN code structures are indexed in `docs/STRUCTURE_REGISTRY.md` §4; no reason to repeat prior security probes. Other V4 route names and service signatures are NOT sufficiently archived for safe direct business calls, so do not invent route names or code against guesses. Run **one narrow pinned read-only V4 business-route declaration inventory**, no V4 modifications; then implement the first functional V5 business adapter to the existing verified service in a separate feature-only file, test and deploy with V4 unchanged. Separate mandatory V5 authentication/epoch acceptance before exposing protected personal data or PIN.
+
+**Canonical decision:** [SAMZABERU_V5_V4_BUSINESS_REUSE_DECISION_2026-10-23.md](SAMZABERU_V5_V4_BUSINESS_REUSE_DECISION_2026-10-23.md).
+
+**NEXT_STEP=V4_BUSINESS_ROUTE_PINNED_INVENTORY_THEN_V5_FACADE_REUSE**, NOT H_DEPTH/Bitrix/global inventory or redesign of V5 JWT; public legal feature deployment separately domain-guarded.
+
