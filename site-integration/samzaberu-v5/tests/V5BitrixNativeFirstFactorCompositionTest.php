@@ -12,7 +12,8 @@ use Evrasia\Samzaberu\V5\{
     V5AttemptBudgetPolicy,
     V5AttemptLimit,
     V5PinnedBitrixPasswordComparator,
-    V5NativeBitrixMfaRowSource,
+    V5PinnedBitrixMfaRowSource,
+    V5PinnedBitrixGlobalOtpConfig,
     V5StrictExistingLoginPolicy,
     V5StrictNoMfaFallbackPolicy,
     V5AtomicFirstFactorAttemptGate,
@@ -187,10 +188,26 @@ firstFactorCheck($rows instanceof V5PdoUserRowSource
 $mfaRows = (new ReflectionProperty($mfa, 'rows'))->getValue($mfa);
 $fallback = (new ReflectionProperty($mfa, 'fallback'))->getValue($mfa);
 $store = (new ReflectionProperty($gate, 'store'))->getValue($gate);
-firstFactorCheck($mfaRows instanceof V5NativeBitrixMfaRowSource
+firstFactorCheck($mfaRows instanceof V5PinnedBitrixMfaRowSource
     && $fallback instanceof V5StrictNoMfaFallbackPolicy
     && $store instanceof V5MySqlAttemptWindowStore,
     'native MFA reader, mandatory fallback and atomic counter wired');
+
+$nativeOtpConfig = (new ReflectionProperty($fallback, 'global'))->getValue($fallback);
+firstFactorCheck($nativeOtpConfig instanceof V5PinnedBitrixGlobalOtpConfig,
+    'global native OTP flags are pinned to the installed Bitrix Otp.php source');
+firstFactorCheck($nativeOtpConfig->read() === null,
+    'no Bitrix bootstrap cannot be mistaken for optional MFA');
+firstFactorCheck($fallback->permitsPasswordPlusSms(41) === null,
+    'missing current per-user MFA proof never grants SMS fallback');
+$nativeRowsDenied = false;
+try {
+    $mfaRows->findCurrentRow(41);
+} catch (RuntimeException) {
+    $nativeRowsDenied = true;
+}
+firstFactorCheck($nativeRowsDenied,
+    'missing native UserTable source must not mean no MFA credentials');
 
 firstFactorCheck($first->verifyWithoutLogin('', 'synthetic') === null,
     'invalid empty login denied before SQL and native code');
