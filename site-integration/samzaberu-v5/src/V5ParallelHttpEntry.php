@@ -49,11 +49,20 @@ final readonly class V5ParallelHttpEntry
         }
         if (!$head->trustedHttps) return self::deny(403, 'secure_transport_required');
         if ($head->method === 'GET') {
-            // Exactly one public read route. Never read request body or load
-            // Bitrix until method/TLS/path/body-length guards have passed.
-            if ($action !== 'publicLegalConsents'
+            // Only current legal GET is anonymous; V5 cart GET is strongly
+            // authenticated and must reject wrong/missing Authorization BEFORE
+            // constructing a Bitrix/native transport or reading a request body.
+            if (!in_array($action, ['publicLegalConsents', 'readCart'], true)
                 || ($head->contentLength !== null && $head->contentLength !== '0')) {
                 return self::deny(400, 'invalid_request');
+            }
+            if ($action === 'readCart') {
+                $authorization = $head->authorizationHeader;
+                if (!is_string($authorization) || strlen($authorization) < 117
+                    || strlen($authorization) > 4103
+                    || !str_starts_with($authorization, 'Bearer ')) {
+                    return self::deny(401, 'authentication_failed');
+                }
             }
             try {
                 $transport = ($this->transportFactory)();

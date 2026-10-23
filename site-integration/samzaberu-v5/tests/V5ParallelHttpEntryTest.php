@@ -126,8 +126,17 @@ foreach (array_keys(V5RouteMap::ROUTES) as $route) {
         'REQUEST_METHOD' => $verb,
         'REQUEST_URI' => '/api/v5' . $relative,
     ]);
+    if ($verb === 'GET' && $relative === '/cart') {
+        $missing = $parallelEntry->dispatch($server, static function (): never {
+            throw new RuntimeException('GET cart must not read body');
+        });
+        parallelCheck($missing->status === 401 && $parallelFactories === $before,
+            'anonymous protected cart GET denied before native factory');
+        $server['HTTP_AUTHORIZATION'] = 'Bearer eyJhbGciOiJIUzI1NiJ9.'
+            . str_repeat('a', 100) . '.signature';
+    }
     $reply = $parallelEntry->dispatch($server, static fn(int $limit): string => '{"unexpected":true}');
-    parallelCheck($parallelFactories === $before + 1, 'each of the seven canonical routes dispatches');
+    parallelCheck($parallelFactories === $before + 1, 'all canonical routes dispatch after transport preflight');
     parallelCheck(in_array($reply->status, [400, 503], true), 'unconfigured native operation never succeeds');
 }
 foreach ([static fn() => null, static fn() => new stdClass(), static function () {
