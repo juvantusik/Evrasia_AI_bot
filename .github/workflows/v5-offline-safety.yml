@@ -481,6 +481,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/mfa-pilot-install-wronghost.log
               grep -Fxq "ONE_SIGNIN_FILE_ONLY=YES" /tmp/mfa-pilot-install-wronghost.log
               echo "PASS: atomic pilot rollback fixture and wrong-host production refusal"
+              echo "=== WEBSITE PIN NOTICE TWO TEMPLATE COPY PATCH: OFFLINE TEST ==="
+              php -l "$ROOT/deployment/website-pin-notice-two-templates.php"
+              php "$ROOT/deployment/website-pin-notice-two-templates.php" --self-test
+              if php "$ROOT/deployment/website-pin-notice-two-templates.php" --preflight > /tmp/ev-pin-notice-wrong-host.log 2>&1; then
+                echo "FAIL: production PIN-notice updater accepted nonproduction CI host"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/ev-pin-notice-wrong-host.log
+              grep -Fxq "PRODUCTION_AUTH_CODE_CHANGED=NO" /tmp/ev-pin-notice-wrong-host.log
+              echo "PASS: PIN notice fixture and production-only guard"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
