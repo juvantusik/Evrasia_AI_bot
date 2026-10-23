@@ -11,7 +11,7 @@ use Evrasia\Samzaberu\V5\{
     V5PerUserSmsEligibilityPort,
     V5AttemptBudgetPolicy,
     V5AttemptLimit,
-    V5NativeBitrixPasswordComparator,
+    V5PinnedBitrixPasswordComparator,
     V5NativeBitrixMfaRowSource,
     V5StrictExistingLoginPolicy,
     V5StrictNoMfaFallbackPolicy,
@@ -166,9 +166,16 @@ firstFactorCheck($db->queries === 0 && $rate->queries === 0,
 $reader = (new ReflectionProperty($first, 'accounts'))->getValue($first);
 $gate = (new ReflectionProperty($first, 'attempts'))->getValue($first);
 $comparator = (new ReflectionProperty($first, 'passwords'))->getValue($first);
+$pinDenied = false;
+try {
+    $comparator->matches('synthetic-not-a-real-hash', 'synthetic-password');
+} catch (RuntimeException) {
+    $pinDenied = true;
+}
+firstFactorCheck($pinDenied, 'unattested native Bitrix Password.php source must not check a password');
 firstFactorCheck($reader instanceof V5SiteAccountReader
     && $gate instanceof V5AtomicFirstFactorAttemptGate
-    && $comparator instanceof V5NativeBitrixPasswordComparator,
+    && $comparator instanceof V5PinnedBitrixPasswordComparator,
     'wires existing native Bitrix comparator with strict read and attempt gate');
 $rows = (new ReflectionProperty($reader, 'rows'))->getValue($reader);
 $mfa = (new ReflectionProperty($reader, 'totp'))->getValue($reader);
