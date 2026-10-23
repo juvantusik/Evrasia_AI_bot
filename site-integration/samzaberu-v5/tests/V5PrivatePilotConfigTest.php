@@ -25,8 +25,10 @@ function privateChild(string $program, string $target): array {
 }
 $workspace = sys_get_temp_dir().'/v5-private-pilot-'.bin2hex(random_bytes(10));
 if (!mkdir($workspace,0700)) throw new RuntimeException('temp workspace unavailable');
-$private = $workspace.'/release'; $public = $workspace.'/public';
-mkdir($private,0700); mkdir($public,0700);
+$private = $workspace.'/private/samzaberu-v5'; $public = $workspace.'/public';
+mkdir($workspace.'/private',0700); mkdir($private,0700); mkdir($public,0700);
+privateCheck(dirname($public).'/private/samzaberu-v5'===$private,
+    'private pilot fixture follows the deployed fixed document-root layout');
 $configPath = $private.'/site-config.json'; $factoryPath = $private.'/site-factory.php';
 // Generated TEST credential, never printed or persisted as plaintext config.
 $key = bin2hex(random_bytes(32));
