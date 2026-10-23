@@ -426,3 +426,40 @@ The old \`upgrade-public-legal-v5.sh\` is stale because it pins previous \`api/v
 **Завершено и подтверждено в GitHub:** hardened installer commit [`71783db5`](https://github.com/juvantusik/Evrasia_AI_bot/commit/71783db5200bbc5a50798a8d16c9ea39d0adecbf), script Git blob `dbfdb0db2a3996bde744274333281161c819702f`. [V5 offline safety CI #39990113566](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39990113566) **COMPLETED SUCCESS**: Bash syntax and wrong-host refusal. Feature code `0a035f96`: three CI **SUCCESS** — [offline #39988953512](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39988953512), [first factor #39988954079](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39988954079), [ephemeral MariaDB #39988953778](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39988953778). **Это не production run и не выпуск авторизации**. Внешний `evrasia.rest` веб-запрос из исследовательского интерфейса не дал проверяемого ответа; поэтому доступность нельзя утверждать без operator HTTPS smoke. Настоящий installer строго проверяет её или откатывает.
 
 **NEXT=RUN_PINNED_OFF_ONLY_ROLLOUT_ON_EVRASIA_AND_READ_OPERATOR_RESULT**, no V4 route changes, no real login enabled.
+
+## 36. 2026-10-23 — V5 public registration production install BLOCKED by single live shim drift
+
+**Operator executed hardened V5 public registration installer**, exact immutable installer blob `dbfdb0db2a3996bde744274333281161c819702f` preflight PASS for root/hostname and source SHA, but guard **stopped before release staging/atomic code switch**:
+
+```text
+FAIL: Installed SHA baseline differs
+FINAL_STATUS=FAIL
+FINAL_RC=2
+ROLLBACK_STATUS=NOT_NEEDED
+WRAPPER_RC=2
+WRAPPER_FINAL_STATUS=FAIL
+```
+
+The subsequent manually run **READ_ONLY manifest diagnostic** finished `FINAL_STATUS=PASS, FINAL_RC=0, WRAPPER_RC=0` (the *diagnostic* ran successfully; integrity baseline DID NOT pass). Its 42 entries yielded exactly **41 MATCHED, 1 SHA256_MISMATCH** on manifest **entry #41**, group `PUBLIC_V5_ROUTER`, referring to `/home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5/router.php`. No missing files or manifest record format errors:
+
+```text
+ORIGINAL_MANIFEST_CHECK=FAIL
+LIVE_ROUTER_POINTS_TO_EXPECTED_OLD=NO
+EXPECTED_OLD_RELEASE_PRESENT=YES
+OLD_RELEASE_COMMIT_MATCH=YES
+PREVIOUS_PUBLIC_LEGAL_RELEASE_PRESENT=NO
+TARGET_REGISTRATION_RELEASE_PRESENT=NO
+V4_ROUTER_PIN=PASS
+MANIFEST_ENTRIES=42
+MATCHED_ENTRIES=41
+MISMATCH_ENTRIES=1
+CHANGED_HASHES=1
+MISSING_FILES=0
+INVALID_RECORDS=0
+WRAPPER_RC=0
+```
+
+**Interpretation:** installed live public V5 shim bytes and release reference no longer match the original OFF-only baseline pinned by `installed.sha256`, even though the OLD source release exists. This does NOT establish that a particular V5 upgrade, authorized edit, or compromise occurred. The installer rightly refused; V4 unchanged; no Bitrix/auth or DB deployment performed. Do NOT edit manifest, replace the live router, silently adopt observed current router or re-run installer until its provenance is verified. `V5_AUTH_ENABLED=NO` in the script is a declared write-scope result, not proof of active live auth state under an unrecognized public shim.
+
+**NEXT_STEP=PINNED_BYTE_EXACT_PUBLIC_V5_SHIM_PROVENANCE_READONLY**: compare live `api/v5/router.php` to pinned trusted `deployment/public-router.php` Git blob `e1a02fc6dd94fbe78c04cad42289b716269798a1`, with canonical `$release`/`$documentRoot` literal values extracted WITHOUT executing the site PHP source. Output only sanitized installed path role and hashes, exact template equality, expected original manifest SHA, target release code router Git blob and site-factory presence. This is one narrow review, not a new Bitrix inventory. If exact trusted template but points to a different valid release, review/attest that release and preserve rollback before any V5-only installation. Main API domain `evrasia.rest`; V4 remains transition-active, native V5 AUTH release still DENIED.
+
