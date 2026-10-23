@@ -165,6 +165,12 @@ final class EvrasiaPinNoticeUpdate
         self::requireIt(is_string($stage)&&is_file($stage)
             &&!is_link($stage),'staging_file_creation_failed');
         self::$stages[]=$stage;
+        register_shutdown_function(static function() use ($stage): void {
+            if (is_file($stage) && !is_link($stage)
+                && str_starts_with(basename($stage),'.ev-pin-notice.')) {
+                unlink($stage);
+            }
+        });
         self::requireIt(file_put_contents($stage,$bytes,LOCK_EX)
             ===strlen($bytes),'staging_byte_write_failed');
         self::requireIt(chown($stage,$meta['uid'])
