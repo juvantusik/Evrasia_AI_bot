@@ -461,6 +461,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-package-wronghost.log
               grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-mfa-package-wronghost.log
               echo "PASS: private MFA release package source syntax/fixtures and foreign-host refusal"
+              echo "=== WEBSITE MFA EXISTING PILOT-ONLY TRUSTED TOTP CANARY ==="
+              php -l "$ROOT/deployment/website-mfa-pilot-trust-canary.php"
+              php "$ROOT/deployment/website-mfa-pilot-trust-canary.php" --self-test
+              if php "$ROOT/deployment/website-mfa-pilot-trust-canary.php" --prepare > /tmp/website-mfa-canary-foreign-host.log 2>&1; then
+                echo "FAIL: pilot-only TOTP canary preparer accepted GitHub CI as production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/website-mfa-canary-foreign-host.log
+              grep -Fxq "SITE_CODE_WRITE=NO" /tmp/website-mfa-canary-foreign-host.log
+              echo "PASS: pilot-only TOTP native trust source fixture / wrong-host guard"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
