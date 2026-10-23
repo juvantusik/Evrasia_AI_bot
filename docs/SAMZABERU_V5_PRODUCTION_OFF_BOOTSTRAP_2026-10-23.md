@@ -33,3 +33,14 @@
 4. До допуска — `V5_AUTH=OFF`, V4 работает без изменений.
 
 **Правило:** никаких новых утверждений о production готовности по наличию файлов, PHP lint, статическому осмотру либо CLI fake HTTPS.
+
+## 5. 2026-10-23 — REAL HTTPS network smoke on evrasia.spb.ru PASS
+
+Оператор выполнил `curl` через реальный HTTPS (не PHP CLI), сохранил JSON-ответы локально на время пробы, проверил итоговые статусы. `FINAL_STATUS=PASS`, `FINAL_RC=0`, без SQL/изменений кода/SMS.
+
+- `GET https://evrasia.spb.ru/api/v5/health`: `HEALTH_HTTP_STATUS=200`, `HEALTH_STATUS=online`, `AUTH_READY=false`.
+- `GET https://evrasia.spb.ru/api/v5/legal/consents`: `LEGAL_HTTP_STATUS=200`, `LEGAL_DOCUMENT_COUNT=3`, `LEGAL_TYPES=offer,personal_data,marketing`, `LEGAL_RESPONSE=DOCUMENTS`.
+- `PRODUCTION PHP sources unchanged=YES`. Рабочий V4, БД, SMS не затронуты. **AUTH остаётся OFF**.
+- **Не проверено:** `https://evrasia.rest/api/v5/...`. Исторический контракт мобильных разработчиков использовал `evrasia.rest`; без отдельной проверки второго хоста нельзя утверждать, что публичные V5-методы доступны с того же API origin. Не менять host в задании разработчикам автоматически. Другие методы `POST /api/v5/auth/*` не приняты.
+
+**Новый next step:** один точечный read-only HTTPS cross-host probe для `evrasia.rest` с выводом только статуса и формата ответа (без следования редиректам и вывода PII), затем продолжить 10-path native hooks AUTH_EPOCH и настоящие провайдеры V5. Никаких повторных больших файловых инвентаризаций.
