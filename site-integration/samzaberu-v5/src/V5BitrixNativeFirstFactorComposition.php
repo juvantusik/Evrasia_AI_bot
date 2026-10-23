@@ -9,6 +9,7 @@ require_once __DIR__ . '/V5PdoUserRowSource.php';
 require_once __DIR__ . '/V5NativeTotpStatus.php';
 require_once __DIR__ . '/V5ExistingLoginPolicy.php';
 require_once __DIR__ . '/V5NoMfaFallbackPolicy.php';
+require_once __DIR__ . '/V5PinnedBitrixMfaPolicies.php';
 require_once __DIR__ . '/V5MySqlAttemptWindowStore.php';
 
 use InvalidArgumentException;
@@ -72,9 +73,9 @@ final class V5BitrixNativeFirstFactorComposition
 
         $phones = new V5NativePhoneLoginNormalizer();
         $mfa = new V5NativeTotpStatus(
-            new V5NativeBitrixMfaRowSource(),
+            new V5PinnedBitrixMfaRowSource(),
             new V5StrictNoMfaFallbackPolicy(
-                new V5NativeBitrixGlobalOtpConfig(),
+                new V5PinnedBitrixGlobalOtpConfig(),
                 $userSmsPolicy,
             ),
         );
