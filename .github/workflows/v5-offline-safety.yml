@@ -64,6 +64,18 @@ jobs:
               grep -Fxq "V4_MODIFIED=NO" /tmp/v5-registration-upgrader-denied.log
               grep -Fxq "V5_AUTH_ENABLED=NO" /tmp/v5-registration-upgrader-denied.log
               echo "PASS: guarded V5-only updater syntax and wrong-host refusal"
+              echo "=== ACCEPTED TWO-FILE V5 BOOTSTRAP: ADDITIVE REGISTRATION PUBLISH ==="
+              bash -n "$ROOT/deployment/upgrade-twofile-public-registration-v5.sh"
+              if bash "$ROOT/deployment/upgrade-twofile-public-registration-v5.sh" > /tmp/v5-twofile-wrong-host.log 2>&1; then
+                echo "FAIL: two-file production updater ran in CI"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-twofile-wrong-host.log
+              grep -Fxq "PUBLIC_V5_ROUTER_WRITE=NO" /tmp/v5-twofile-wrong-host.log
+              grep -Fxq "API_V4_WRITE=NO" /tmp/v5-twofile-wrong-host.log
+              grep -Fxq "LEGACY_INSTALLED_MANIFEST_WRITE=NO" /tmp/v5-twofile-wrong-host.log
+              grep -Fxq "ORIGIN_HTTPS_ACCEPTED=NO" /tmp/v5-twofile-wrong-host.log
+              echo "PASS: pinned two-file deployment stays closed outside exact Bitrix server"
               echo "=== REAL REGISTRATION DOCUMENTS: V5 ROUTE / SITE CODE LINT ==="
               php -l "$ROOT/api/v5/router.php"
               php -l "$ROOT/src/V5RouteMap.php"

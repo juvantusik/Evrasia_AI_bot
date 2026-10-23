@@ -1,3 +1,5 @@
+> **НЕ ПРИМЕНЯТЬ: этот установщик несовместим с подтверждённой двухфайловой production архитектурой.** Предыдущее выполнение остановилось до записи при `FAIL: Installed SHA baseline differs`. Новый правильный V5-only вариант — [SAMZABERU_V5_TWOFILE_PUBLIC_REGISTRATION_ROLLOUT_2026-10-23.md](SAMZABERU_V5_TWOFILE_PUBLIC_REGISTRATION_ROLLOUT_2026-10-23.md) и `deployment/upgrade-twofile-public-registration-v5.sh`. Не восстанавливать старый release-based публичный shim и не исправлять старый манифест вслепую.
+
 # V5-only публичное обновление: юридические документы регистрации
 
 **Назначение:** безопасно опубликовать реальные `GET /api/v5/legal/registration-documents` и `POST /api/v5/legal/consents/validate` без включения авторизации V5, без изменений V4, существующих пользователей и БД. Предыдущий script `upgrade-public-legal-v5.sh` НЕ запускать: он закреплён на старом V4-router SHA и проверяет лишь origin `evrasia.spb.ru`.
