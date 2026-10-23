@@ -113,4 +113,23 @@ Feature commit [`1afe27c`](https://github.com/juvantusik/Evrasia_AI_bot/commit/1
 
 First offline CI [`#40026600177`](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40026600177) FAIL due ONLY to accidental PHP interpolation of `$a` in a new synthetic selftest string, not production source. Fixed in [`97470161`](https://github.com/juvantusik/Evrasia_AI_bot/commit/97470161e3592a63e62a77114cd9a4edb6ad0afb) with single-quoted fixture; final [offline CI #40026698283](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40026698283) **SUCCESS**. The PHP parse-only selftest includes a positive fixture and a negative intentional `ParseError`, proving disabled `exec()` is no longer required.
 
-**Current gate:** runtime `--prepare` with corrected pinned `97470161` NOT YET RUN on site; four file candidates, their final PHP CLI lint, SMS global/per-IP budgets, and actual website login E2E NOT accepted. `WEBSITE_ROLLOUT=NOT_DEPLOYED`; `CURRENT_44210_TRUST_RECORDS=UNCHANGED` (count user reported), `V4=UNCHANGED`, `V5_AUTH=OFF`.
+**Historical gate (now resolved for private candidates):** runtime `--prepare` with corrected pinned `97470161` was pending; all four private candidates and CLI lint have since passed, as recorded in the latest checkpoint below. `WEBSITE_ROLLOUT=NOT_DEPLOYED`; `CURRENT_44210_TRUST_RECORDS=UNCHANGED` (count user reported), `V4=UNCHANGED`, `V5_AUTH=OFF`.
+
+
+## 24.10.2026 — четыре WEB MFA candidate подтверждены на production, общий SMS budget создан в feature
+
+**Оператор прислал FINAL_STATUS=PASS, FINAL_RC=0, WRAPPER_FINAL_STATUS=PASS, WRAPPER_RC=0.** Иммутабельный preparer `97470161` прошёл host/source SHA, PHP self-test PASS_COUNT=14, генерацию четырёх кандидатов TOKEN_PARSE PASS, backend PASS_COUNT=157, отдельный Bash `php -l` PASS на всех четырёх, manifest and source SHA PASS. **Приватный checkpoint:** `/root/ev-web-mfa-checkpoints/public-web-mfa-20261023-212912-e0abd92d` (mode 0700; files 0600).
+
+Кандидаты и их SHA256:
+- enrollment: `38917de2dfb94d161ecb51d62cbb2837a38910af808c092216c2b843cb9adad8`;
+- signin: `c1d68591d2caeb83f715935fdb618685fa8d2c833cf69e41272ab57ed463dcc0`;
+- account UI: `afaa8d03db683a965a83d68eaf3fe5c03fdf1afb450749f2698eb540a5ccfec8`;
+- bonus PIN: `0b12ed47cd74bfa03c91bdcab2c4bfd07c7ccac7b67852e9540ed9a71390c94c`.
+
+**Положительное доказательство только для private candidates:** `CANDIDATES_SHA_VERIFIED=YES`, `CANDIDATE_PHP_LINT=PASS`, `PUBLIC_ROLLOUT=NOT_INSTALLED`. Production site SHA не изменились, БД/SMS/V4/V5/trusted devices не изменялись. НЕЛЬЗЯ утверждать, что реальные гости уже получили новый веб-вход.
+
+**Новое feature-решение против SMS-abuse:** [`15ca9f0`](https://github.com/juvantusik/Evrasia_AI_bot/commit/15ca9f00450a175055899a075e5df69179715b1b) — самостоятельный `deployment/website-mfa/GlobalSmsBudget.php` для **обоих** веб-SMS сценариев (login и TOTP enrollment), атомарный Redis EVAL с тремя счётчиками, лимиты **100 глобально/час, 500 глобально/сутки, 20 на серверный REMOTE_ADDR/час**. IP хранится только как SHA-256 от нормализованного адреса; оба сценария используют общий global budget. Нет Redis/EVAL/корректного IP → отказ в платной отправке. Бюджетный слот расходуется даже при неудаче отправки, чтобы избежать бесконечных платных попыток. CI [#40027587348](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40027587348) **SUCCESS**, но тест fake Redis — **не реальный Redis и не реальный CSms**. **Компонент пока НЕ подключён к производственным источникам SMS.** Дополнительно нужно убедиться, что REMOTE_ADDR — реальный клиент, а не общий reverse proxy, иначе лимит 20/час заблокирует много законных пользователей.
+
+**Приватный semantically focused audit:** [`0628bab9`](https://github.com/juvantusik/Evrasia_AI_bot/commit/0628bab9a1b53b47dd3f1917b4b420967f144b23) `deployment/website-mfa-release-review.php`: exact same checkpoint hashes; masked, source-only control flow для `processAction, startPilotSmsChallenge, getPilotSmsState, smsAction, issuePilotSmsCode, enforcePilotSmsRateLimit`, enrollment 3 methods and PIN. CI [#40027811058](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40027811058) **SUCCESS** (synthetic + fail-closed on wrong CI host). Review does NOT approve installation. Need run its `--review` on exact private checkpoint and close any cross-account binding or trust-first gaps before code replacement.
+
+**Next actual work:** inspect that single masked report, make source-pinned extension of prepared candidates to enforce the shared global Redis budget on *both* CSms send paths, test trust-first when native Bitrix TOTP is active, then release installer with guards/backups and rollback, and operator's real-account browser acceptance. Reuse existing 44 210 trusted devices, without touching their rows. WEBSITE_PUBLIC_MFA=NOT_DEPLOYED, V4 working, V5 AUTH OFF.
