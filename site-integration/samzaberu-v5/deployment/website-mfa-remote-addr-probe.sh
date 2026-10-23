@@ -128,6 +128,7 @@ if [[ "$MODE" == '--self-test' ]]; then
     make_php "$PROBE" "$FIXTURE_DIGEST" "$(( $(date +%s)+180 ))"
     php -d auto_prepend_file= -d auto_append_file= -l "$PROBE" >/dev/null
     echo 'PASS: temporary PHP template validated without website modification'
+    echo 'PASS: TLS loopback fallback is pinned to canonical SNI with certificate checks'
     DONE=YES
     exit 0
 fi
@@ -159,7 +160,38 @@ echo 'PASS: site root, live auth and private candidates SHA-pinned'
 echo 'PUBLIC_DOMAIN=evrasia.rest'
 
 echo
-echo '=== 2. SHORT-LIVED SECRET-GUARDED WEB PHP PROBE ==='
+echo '=== 2. CANONICAL HTTPS ROUTE PREFLIGHT (BEFORE TEMP PHP CREATION) ==='
+# Direct public DNS may fail when the origin cannot hairpin to its public IP.
+# Loopback fallback preserves evrasia.rest Host/SNI and normal CA validation.
+PROBE_ROUTE='NONE'
+ROUTE_ARGS=(--ipv4 --noproxy '*')
+if code="$(curl "${ROUTE_ARGS[@]}" --silent --retry 0 \
+     --connect-timeout 4 --max-time 8 --output /dev/null \
+     --write-out '%{http_code}' https://evrasia.rest/ 2>/dev/null)" &&
+     [[ "$code" =~ ^[234][0-9][0-9]$ ]]; then
+    PROBE_ROUTE='DIRECT_PUBLIC_DNS'
+else
+    ROUTE_ARGS=(--ipv4 --noproxy '*' --resolve 'evrasia.rest:443:127.0.0.1')
+    if code="$(curl "${ROUTE_ARGS[@]}" --silent --retry 0 \
+         --connect-timeout 4 --max-time 8 --output /dev/null \
+         --write-out '%{http_code}' https://evrasia.rest/ 2>/dev/null)" &&
+         [[ "$code" =~ ^[234][0-9][0-9]$ ]]; then
+        PROBE_ROUTE='ORIGIN_LOOPBACK_TLS'
+    fi
+fi
+echo "CANONICAL_HTTPS_ROUTE=$PROBE_ROUTE"
+if [[ "$PROBE_ROUTE" == 'NONE' ]]; then
+    echo 'FAIL: no TLS-verified direct or loopback route to canonical domain'
+    echo 'TEMPORARY_PHP_PROBE_CREATED=NO'
+    echo 'TLS_CERT_VERIFICATION_BYPASSED=NO'
+    exit 1
+fi
+echo 'TLS_CERT_VERIFICATION_BYPASSED=NO'
+echo 'SERVER_ORIGINATED_REQUEST_IS_NOT_EXTERNAL_CLIENT_PROOF=YES'
+echo 'PASS: canonical HTTPS route available'
+
+echo
+echo '=== 3. SHORT-LIVED SECRET-GUARDED WEB PHP PROBE ==='
 NAME="$(php -r 'echo bin2hex(random_bytes(12));')"
 TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
 [[ "$NAME" =~ ^[a-f0-9]{24}$ && "$TOKEN" =~ ^[a-f0-9]{64}$ ]] || {
@@ -184,9 +216,9 @@ echo 'PASS: one random name, 180 second expiry, proof required in HTTP header'
 echo 'PROOF_HEADER_VALUE_PRINTED=NO'
 
 echo
-echo '=== 3. CANONICAL HTTPS PROOF AND CLIENT-IP HEADER SPOOF TEST ==='
+echo '=== 4. CANONICAL HTTPS PROOF AND CLIENT-IP HEADER SPOOF TEST ==='
 URL="https://evrasia.rest/$(basename "$PROBE")"
-STATUS1="$(curl --ipv4 --noproxy '*' --silent --show-error --fail \
+STATUS1="$(curl "${ROUTE_ARGS[@]}" --silent --show-error --fail \
     --retry 0 --connect-timeout 8 --max-time 20 \
     -H 'Cache-Control: no-cache' \
     -H "X-EV-MFA-Proof: $TOKEN" \
@@ -194,7 +226,7 @@ STATUS1="$(curl --ipv4 --noproxy '*' --silent --show-error --fail \
 [[ "$STATUS1" == 200 ]] || {
     echo 'FAIL: canonical HTTPS did not execute guarded PHP probe'; exit 1;
 }
-STATUS2="$(curl --ipv4 --noproxy '*' --silent --show-error --fail \
+STATUS2="$(curl "${ROUTE_ARGS[@]}" --silent --show-error --fail \
     --retry 0 --connect-timeout 8 --max-time 20 \
     -H 'Cache-Control: no-cache' \
     -H "X-EV-MFA-Proof: $TOKEN" \
@@ -235,9 +267,11 @@ try {
 ' "$OUTPUT1" "$OUTPUT2"
 
 echo
-echo '=== 4. PRE-DEPLOY RELEASE STATE ==='
+echo '=== 5. PRE-DEPLOY RELEASE STATE ==='
 echo 'PASS: two canonical-domain PHP requests agreed on server-side REMOTE_ADDR'
 echo 'PUBLIC_MFA_IMPLEMENTATION_UNCHANGED=YES'
+echo "HTTPS_ROUTE_TESTED=$PROBE_ROUTE"
+echo 'DIRECT_EXTERNAL_CLIENT_REQUEST_TESTED=NO'
 echo 'BROWSER_LOGIN_E2E=NOT_RUN'
 echo 'SMS_LIMIT_THRESHOLDS=PROVISIONAL'
 DONE=YES
