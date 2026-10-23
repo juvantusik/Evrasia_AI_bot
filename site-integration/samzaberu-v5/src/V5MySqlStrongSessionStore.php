@@ -62,7 +62,7 @@ interface V5LockedBonusPinReaderPort
  */
 interface V5LockedCartReaderPort
 {
-    /** @return list<array<string,mixed>>|null */
+    /** @return array{items:list<array<string,mixed>>,total:array<string,mixed>}|null */
     public function readLockedCart(PDO $db, int $userId): ?array;
 }
 
@@ -290,7 +290,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
      * Unlike V4 Cart controller, never invoke CUser::Authorize() or use
      * client-request FUSER_ID / legacy JwtAuthorization.
      *
-     * @return list<array<string,mixed>>|null
+     * @return array{items:list<array<string,mixed>>,total:array<string,mixed>}|null
      */
     public function readCartForAccess(
         #[\SensitiveParameter] string $accessJwt,
@@ -313,8 +313,14 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
                 ) return null;
 
-                $items = $reader->readLockedCart($this->db, $userId);
-                return is_array($items) && array_is_list($items) ? $items : null;
+                $snapshot = $reader->readLockedCart($this->db, $userId);
+                return is_array($snapshot) && count($snapshot) === 2
+                    && isset($snapshot['items'], $snapshot['total'])
+                    && is_array($snapshot['items'])
+                    && array_is_list($snapshot['items'])
+                    && is_array($snapshot['total'])
+                    && !array_is_list($snapshot['total'])
+                    ? $snapshot : null;
             });
         } catch (Throwable) {
             return null;

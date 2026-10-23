@@ -19,6 +19,7 @@ final readonly class V5MySqlCartRead implements V5CartHttpReaderPort
         private V5LockedCartReaderPort $cart,
     ) {}
 
+    /** @return array{items:list<array<string,mixed>>,total:array<string,mixed>}|null */
     public function readVerifiedCart(#[\SensitiveParameter] string $accessJwt): ?array
     {
         return $this->sessions->readCartForAccess($accessJwt, $this->cart);

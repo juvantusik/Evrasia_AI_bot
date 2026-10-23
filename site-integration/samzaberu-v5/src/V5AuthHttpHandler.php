@@ -54,7 +54,7 @@ interface V5SessionLogoutPort
  */
 interface V5CartHttpReaderPort
 {
-    /** @return list<array<string,mixed>>|null */
+    /** @return array{items:list<array<string,mixed>>,total:array<string,mixed>}|null */
     public function readVerifiedCart(#[\SensitiveParameter] string $accessJwt): ?array;
 }
 
@@ -182,12 +182,20 @@ final readonly class V5AuthHttpHandler
             return new V5HttpReply(401, ['error' => 'authentication_failed']);
         }
         try {
-            $items = $this->cartReader->readVerifiedCart($accessJwt);
-            if (!is_array($items) || !array_is_list($items)) {
+            $cart = $this->cartReader->readVerifiedCart($accessJwt);
+            if ($cart === null) {
                 return new V5HttpReply(401, ['error' => 'authentication_failed']);
             }
-            // Don't add a second pricing/discount calculation layer.
-            return new V5HttpReply(200, ['items' => $items]);
+            if (!is_array($cart) || count($cart) !== 2
+                || !isset($cart['items'], $cart['total'])
+                || !is_array($cart['items']) || !array_is_list($cart['items'])
+                || !is_array($cart['total']) || array_is_list($cart['total'])) {
+                return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+            }
+            // Price/discount totals are directly calculated by installed V4.
+            return new V5HttpReply(200, [
+                'items' => $cart['items'], 'total' => $cart['total']
+            ]);
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }

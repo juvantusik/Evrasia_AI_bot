@@ -229,7 +229,10 @@ final class SessionFakeCartReader implements \Evrasia\Samzaberu\V5\V5LockedCartR
         if (!$db->inTransaction() || $userId!==41 || $this->throws) {
             throw new RuntimeException('cart owner/locked transaction unavailable');
         }
-        return $this->deny ? null : [['product_id'=>101,'price'=>200,'quantity'=>2]];
+        return $this->deny ? null : [
+            'items'=>[['product_id'=>101,'price'=>200,'quantity'=>2]],
+            'total'=>['price'=>400,'discount'=>0,'payable'=>400],
+        ];
     }
 }
 
@@ -325,8 +328,11 @@ yes($pinReader->calls===$priorCalls,'no PIN read after invalid bearer');
 
 $cartReader=new SessionFakeCartReader();
 $cartItems=$store->readCartForAccess($rotation->accessToken,$cartReader);
-yes($cartItems===[['product_id'=>101,'price'=>200,'quantity'=>2]],
-    'same strong JWT and locked native epoch are required for V4 business cart read');
+yes($cartItems===[
+        'items'=>[['product_id'=>101,'price'=>200,'quantity'=>2]],
+        'total'=>['price'=>400,'discount'=>0,'payable'=>400]
+    ],
+    'same strong JWT and locked native epoch preserve native business totals');
 yes($cartReader->calls===1,'cart backend called once under user/epoch/session locks');
 $cartReader->deny=true;
 yes($store->readCartForAccess($rotation->accessToken,$cartReader)===null,

@@ -32,6 +32,7 @@ final class CartHttpContractPort implements V5CartHttpReaderPort
     public array $items=[
         ['product_id'=>81,'price'=>330,'quantity'=>2],
     ];
+    public array $total=['price'=>660,'discount'=>0,'payable'=>660];
 
     public function readVerifiedCart(
         #[\SensitiveParameter] string $accessJwt
@@ -43,7 +44,7 @@ final class CartHttpContractPort implements V5CartHttpReaderPort
         return $this->deny || !hash_equals(
             'eyJhbGciOiJIUzI1NiJ9.' . str_repeat('a', 100) . '.signature',
             $accessJwt
-        ) ? null : $this->items;
+        ) ? null : ['items'=>$this->items,'total'=>$this->total];
     }
 }
 
@@ -91,8 +92,10 @@ cartAssert($cartPort->calls===0, 'disabled route cannot read Bitrix cart');
 
 $r=$boundary->dispatch(cartRequest('Bearer '.$bearer));
 $data=json_decode($r->jsonBody,true,16,JSON_THROW_ON_ERROR);
-cartAssert($r->status===200 && $data===['items'=>$cartPort->items],
-    'GET cart preserves existing service business data without recalculation');
+cartAssert($r->status===200 && $data===[
+        'items'=>$cartPort->items,'total'=>$cartPort->total
+    ],
+    'GET cart carries real V4 service price/discount totals without recalculation');
 cartAssert($cartPort->calls===1,'cart reader invoked only with a bearer');
 cartAssert(str_contains($r->headers['Cache-Control']??'','no-store')
     && !isset($r->headers['Set-Cookie'])
@@ -131,6 +134,14 @@ cartAssert($cartPort->calls===1,'no cart read on insecure transport');
 
 $r=$boundary->dispatch(cartRequest('Bearer '.$bearer,'GET','/api/v5/cart','',true,'9'));
 cartAssert($r->status===400,'GET with content-length claiming body denied');
+
+
+$cartPort->total=[];
+$r=$boundary->dispatch(cartRequest('Bearer '.$bearer));
+cartAssert($r->status===503 && json_decode($r->jsonBody,true)===
+    ['error'=>'temporarily_unavailable'],
+    'malformed native price totals must never return 200');
+$cartPort->total=['price'=>660,'discount'=>0,'payable'=>660];
 
 $cartPort->deny=true;
 $r=$boundary->dispatch(cartRequest('Bearer '.$bearer));

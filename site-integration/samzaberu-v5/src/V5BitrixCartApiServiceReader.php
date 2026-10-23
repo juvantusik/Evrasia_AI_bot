@@ -64,9 +64,16 @@ final readonly class V5BitrixCartApiServiceReader implements V5LockedCartReaderP
                 || !self::pureJsonData($items, 0)) {
                 return null;
             }
-            // Prices, discounts, line items are from the EXISTING service:
-            // V5 does not reconstruct or second-guess the business rules.
-            return $items;
+            // Both line items AND total come from the installed V4 service,
+            // NOT a second V5 pricing/discount implementation.
+            $total = $cart->calcBasketTotal($items);
+            if (!is_array($total) || count($total) < 1
+                || array_is_list($total)
+                || !self::pureJsonData($total, 0)
+                || !$db->inTransaction()) {
+                return null;
+            }
+            return ['items' => $items, 'total' => $total];
         } catch (Throwable) {
             return null;
         }
@@ -86,7 +93,8 @@ final readonly class V5BitrixCartApiServiceReader implements V5LockedCartReaderP
             || @hash_file('sha256', $file) !== self::SOURCE_SHA256) {
             return false;
         }
-        foreach (['__construct','getCartItems','useRedPrice','useRedSku','useGifts'] as $name) {
+        foreach (['__construct','getCartItems','calcBasketTotal',
+            'useRedPrice','useRedSku','useGifts'] as $name) {
             if (!$class->hasMethod($name)) {
                 return false;
             }
