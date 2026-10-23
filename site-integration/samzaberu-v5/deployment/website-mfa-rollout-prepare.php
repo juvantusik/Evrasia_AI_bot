@@ -4,8 +4,10 @@ declare(strict_types=1);
 /**
  * Source-pinned WEBSITE-only public MFA migration candidate builder.
  *
- * --prepare: TOKEN_PARSE-check four source candidates and save them in
- *   a ROOT-ONLY checkpoint, WITHOUT changing installed site, DB, V4 or V5.
+ * --prepare: TOKEN_PARSE-check four source candidates (including the
+ *   shared Redis SMS budget at both paid-send sites) and save them in a
+ *   ROOT-ONLY checkpoint. Helper is separate; it is NOT installed by PHP.
+ *   NEVER changes installed site, DB, V4 or V5.
  *   Final php -l for each candidate is intentionally executed by the
  *   operator Bash wrapper, NOT PHP exec() (disabled on production).
  * --self-test: synthetic fixture for the source-only rewrite primitives.
@@ -158,6 +160,75 @@ final class EvrasiaWebsiteMfaCandidate
         }
     }
 
+    // Website-only shared global quota; the installer must put the helper in
+    // this exact source-pinned site path BEFORE any modified PHP is enabled.
+    private static function paidSmsGuard(string $purpose): string
+    {
+        self::require(in_array($purpose, ['login', 'enrollment'], true),
+            'invalid_sms_budget_purpose');
+        $helper = '/home/site_evrasia/web/evrasia.spb.ru/public_html'
+            . '/local/php_interface/website-mfa/GlobalSmsBudget.php';
+        return "\n        // Server-side global/per-IP paid-SMS quota (both flows).\n"
+            . '        require_once ' . var_export($helper, true) . ";\n"
+            . "        if (!\\Evrasia\\WebMfa\\GlobalSmsBudget::reserve(\n"
+            . "            \$redis,\n"
+            . "            (string)(\$_SERVER['REMOTE_ADDR'] ?? ''),\n"
+            . "            " . var_export($purpose, true) . "\n"
+            . "        )) {\n"
+            . "            throw new \\RuntimeException('SMS temporarily unavailable');\n"
+            . "        }\n";
+    }
+
+    private static function addEnrollmentBudget(string $s): string
+    {
+        return self::changeMethod($s, 'requestSmsAction',
+            static function (string $m): string {
+                self::require(str_contains($m, '$redis')
+                    && str_contains($m, '$rateLimiter')
+                    && str_contains($m, '\\CUser::GeneratePhoneCode')
+                    && str_contains($m, '\\CSms::send'),
+                    'enrollment_budget_source_guard');
+                $count = 0;
+                $next = preg_replace_callback(
+                    '/(\$rateLimiter\s*->\s*limit\s*\([\s\S]*?\)\s*;)/',
+                    static fn(array $match) => $match[0] . self::paidSmsGuard('enrollment'),
+                    $m, -1, $count
+                );
+                self::require(is_string($next) && $count === 1,
+                    'enrollment_budget_unique_rate_limit_missing');
+                $quota = strpos($next, 'GlobalSmsBudget::reserve');
+                $otp = strpos($next, '\\CUser::GeneratePhoneCode');
+                $send = strpos($next, '\\CSms::send');
+                self::require($quota !== false && $otp !== false && $send !== false
+                    && $quota < $otp && $otp < $send,
+                    'enrollment_budget_not_before_paid_sms');
+                return $next;
+            }, 'enrollment_global_sms_budget');
+    }
+
+    private static function addSigninBudget(string $s): string
+    {
+        $issue = self::method($s, 'issuePilotSmsCode')[2];
+        self::require(str_contains($issue, 'enforcePilotSmsRateLimit')
+            && str_contains($issue, 'GeneratePhoneCode')
+            && str_contains($issue, '\\CSms::send'),
+            'login_sms_issue_unguarded');
+        return self::changeMethod($s, 'enforcePilotSmsRateLimit',
+            static function (string $m): string {
+                self::require(str_contains($m, '$redis')
+                    && str_contains($m, 'SMS_HOURLY_LIMIT')
+                    && preg_match_all('/\$limiter\s*->\s*limit\s*\(/', $m) === 2,
+                    'login_budget_local_limit_changed');
+                $end = strrpos($m, '}');
+                self::require($end !== false, 'login_budget_method_end_missing');
+                $next = substr_replace($m, self::paidSmsGuard('login'), $end, 0);
+                self::require(strpos($next, 'GlobalSmsBudget::reserve')
+                    > strpos($next, 'SMS_HOURLY_LIMIT'),
+                    'login_budget_not_after_local_limit');
+                return $next;
+            }, 'signin_global_sms_budget');
+    }
+
     private static function replaceIdentifier(
         string $body, string $replacement, string $label
     ): string {
@@ -189,7 +260,9 @@ final class EvrasiaWebsiteMfaCandidate
         }
         self::require(substr_count($s, 'self::PILOT_USER_ID') === 0,
             'enrollment_pilot_branch_remains');
+        $s = self::addEnrollmentBudget($s);
         self::requireInvariants($s, [
+            'shared_paid_sms_budget' => 'GlobalSmsBudget::reserve',
             'signed_phone_data' => 'PhoneAuth::extractData',
             'sms_verified_state' => 'getVerifiedSmsState',
             'phone_fingerprint' => 'phoneFingerprint',
@@ -254,7 +327,9 @@ final class EvrasiaWebsiteMfaCandidate
         }, 'signin_' . $method);
         self::require(substr_count($s, 'self::PILOT_USER_ID') === 0,
             'signin_pilot_branch_remains');
+        $s = self::addSigninBudget($s);
         self::requireInvariants($s, [
+            'shared_paid_sms_budget' => 'GlobalSmsBudget::reserve',
             'password_proof' => 'CUser::LoginInternal',
             'native_phone_verification' => 'VerifyPhoneCode',
             'native_phone_code_issue' => 'GeneratePhoneCode',
@@ -383,8 +458,13 @@ final class EvrasiaWebsiteMfaCandidate
             . bin2hex(random_bytes(4));
         self::require(mkdir($dir, 0700), 'cannot_create_checkpoint');
         $manifest = [
-            'version' => 1,
+            'version' => 2,
             'mode' => 'CANDIDATES_ONLY',
+            'shared_paid_sms_budget_integrated' => true,
+            'budget_helper_git_blob' => 'bd8f8c5f82025058ade0ce2f1e1865d7575b1788',
+            'budget_helper_install_before_login' => true,
+            'native_totp_trusted_device_login_bypass' => 'PENDING',
+            'trusted_proxy_remote_addr_validation' => 'PENDING',
             'source_branch' => 'feature/samzaberu-api-v5-auth-contract',
             'current_status' => 'NOT_INSTALLED',
             'v4_write' => false,
@@ -432,7 +512,10 @@ final class EvrasiaWebsiteMfaCandidate
         echo 'PREPARE_SOURCE_PINS=PASS', "\n";
         echo 'CANDIDATE_TOKEN_PARSE=PASS', "\n";
         echo 'CANDIDATE_PHP_LINT=PENDING', "\n";
-        echo 'SMS_GLOBAL_BUDGET_PROOF=PENDING', "\n";
+        echo 'SMS_GLOBAL_BUDGET_IN_TWO_CANDIDATES=PREPARED', "\n";
+        echo 'SMS_BUDGET_HELPER_INSTALL=NOT_DONE', "\n";
+        echo 'TOTP_TRUST_FIRST_LOGIN_VALIDATION=PENDING', "\n";
+        echo 'REMOTE_ADDR_PROXY_VALIDATION=PENDING', "\n";
         echo 'WEBSITE_AUTH_E2E=NOT_RUN', "\n";
         echo 'PRODUCTION_CODE_CHANGED=NO', "\n";
         echo 'NEXT_ACTION=CLI_LINT_AND_VERIFY_PRIVATE_CHECKPOINT_THEN_RELEASE_REVIEW', "\n";
@@ -489,6 +572,39 @@ final class EvrasiaWebsiteMfaCandidate
         }
         self::require($denied, 'selftest_invalid_php_accepted');
         echo "PASS: TOKEN_PARSE syntax fail-closed without disabled PHP exec\n";
+        $enrollmentFixture = '<?php class E { function requestSmsAction() {'
+            . '$redis = new Redis(); $rateLimiter = new RedisRateLimiter($redis);'
+            . '$rateLimiter->limit($rateKey, Rate::custom(1,60));'
+            . '$result = \CUser::GeneratePhoneCode($uid);'
+            . '\CSms::send($phone,$result); } }';
+        $quotaEnrollment = self::addEnrollmentBudget($enrollmentFixture);
+        self::require(strpos($quotaEnrollment, 'GlobalSmsBudget::reserve')
+            < strpos($quotaEnrollment, '\CSms::send')
+            && count(token_get_all($quotaEnrollment, TOKEN_PARSE)) > 5,
+            'enrollment_budget_selftest_failed');
+        $signinFixture = '<?php class S {'
+            . 'function issuePilotSmsCode(){'
+            . '$this->enforcePilotSmsRateLimit($uid);'
+            . '\CUser::GeneratePhoneCode($uid); \CSms::send($phone,$code);}'
+            . 'function enforcePilotSmsRateLimit(){'
+            . '$redis = new Redis(); $limiter = new RedisRateLimiter($redis);'
+            . '$limiter->limit($key, Rate::custom(1,60));'
+            . '$limiter->limit($key, Rate::custom(self::SMS_HOURLY_LIMIT,3600));'
+            . '} }';
+        $quotaSignin = self::addSigninBudget($signinFixture);
+        self::require(str_contains($quotaSignin, "GlobalSmsBudget::reserve")
+            && count(token_get_all($quotaSignin, TOKEN_PARSE)) > 5,
+            'signin_budget_selftest_failed');
+        $blocked = false;
+        try {
+            self::addEnrollmentBudget(str_replace('$rateLimiter->limit',
+                'disabled_limit', $enrollmentFixture));
+        } catch (RuntimeException $e) {
+            $blocked = true;
+        }
+        self::require($blocked, 'sms_budget_missing_local_guard_accepted');
+        echo "PASS: both existing paid-SMS flows reserve quota before sending\n";
+        echo "PASS: missing per-user rate limiter blocks candidate generation\n";
         echo "MODE=OFFLINE_SELF_TEST\n";
     }
 
