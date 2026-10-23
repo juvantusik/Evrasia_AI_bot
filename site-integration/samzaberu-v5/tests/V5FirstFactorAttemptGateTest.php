@@ -8,7 +8,7 @@ use Evrasia\Samzaberu\V5\{
     V5AttemptClockPort,V5AttemptWindow,V5AttemptBudgetPolicy,V5AttemptLimit,
     V5AttemptRequestContext,V5AccountLoginRateKey,V5PhoneLoginNormalizerPort,
     V5BitrixPasswordProofPort,V5PasswordAccountReaderPort,V5PasswordHashComparatorPort,
-    V5PasswordAccountSnapshot,AuthenticationRejected,
+    V5PasswordAccountSnapshot,V5PasswordLoginAdmissionPort,AuthenticationRejected,
 };
 
 final class SyntheticClock implements V5AttemptClockPort {
@@ -56,6 +56,16 @@ final class SyntheticComparator implements V5PasswordHashComparatorPort {
     public function matches(string $storedHash, string $enteredPassword): bool {
         $this->calls++;
         return $storedHash==='fake-hash' && $enteredPassword==='correct';
+    }
+}
+final class SyntheticNativePasswordAdmission implements V5PasswordLoginAdmissionPort {
+    public int $calls = 0;
+    public function permitsAfterProof(
+        int $userId,
+        #[\SensitiveParameter] string $enteredPassword,
+    ): ?bool {
+        $this->calls++;
+        return $userId === 41 && $enteredPassword === 'correct' ? true : null;
     }
 }
 
@@ -184,12 +194,14 @@ check($store->calls===0,'clock failure avoids store');
 // lookup, and does not need changes to route/password/session mechanics.
 [$gate,$store,$clock,$phones]=build(null,null,null,'192.0.2.11','',policy(2,100,100,100));
 $account=new SyntheticAccountReader();$passwords=new SyntheticComparator();
-$proof=new V5BitrixPasswordProofPort($account,$gate,$passwords);
+$nativeAdmission=new SyntheticNativePasswordAdmission();
+$proof=new V5BitrixPasswordProofPort($account,$gate,$passwords,$nativeAdmission);
 check($proof->verifyWithoutLogin('user@example.invalid','wrong')===null,'wrong password first attempt denied');
 check($proof->verifyWithoutLogin('user@example.invalid','correct')!==null,'correct password second attempt passes proof');
 try{$proof->verifyWithoutLogin('user@example.invalid','correct');check(false,'third request should block');}
 catch(AuthenticationRejected $e){check(true,'third request rejected before account read');}
 check($account->calls===2 && $passwords->calls===2,'rate limit prevents DB/hash cost');
+check($nativeAdmission->calls===1,'only correct password reaches explicitly synthetic post-hash native policy');
 check(array_sum($store->counts)===8,'two allowed proof calls reserve all quotas');
 
 echo "PASS: V5 first-factor attempt gate ($pass assertions)\n";
