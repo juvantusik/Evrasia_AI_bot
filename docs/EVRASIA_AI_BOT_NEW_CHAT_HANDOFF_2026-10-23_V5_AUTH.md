@@ -1,6 +1,8 @@
 # Evrasia AI Bot — актуальная передача работы в новый чат
 ## СамЗаберу API V5 / авторизация / native Bitrix / 23 октября 2026
 
+> **ПОДТВЕРЖДЁННОЕ ПРОДОЛЖЕНИЕ 23.10.2026 (после исходного handoff):** текущий проверенный code/test HEAD \`7c0837a23fa9f9bdb5112934384b5ffee632e87a\` (последующие docs-only коммиты возможны); \`CUser::getPolicy\` и \`UserPasswordTable::passwordExpired\` source-only объявлены и SHA закреплены. Новый feature-only post-hash native password policy gate реализован; CI first-factor [39961617459](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39961617459) SUCCESS, full offline [39961617374](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39961617374) SUCCESS, ephemeral MariaDB [39961384581](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39961384581) SUCCESS на предшествующем code commit. **Native Bitrix real acceptance / site login restrictions / AUTH_EPOCH ten-path НЕ ПРОВЕРЕНЫ, V5 AUTH OFF.** Детали и NEXT в [production checkpoint](SAMZABERU_V5_PRODUCTION_OFF_BOOTSTRAP_2026-10-23.md), §§15–21. Более старый NEXT ниже не должен отменять этот результат.
+
 **Назначение документа:** без повторного исследования длинных чатов продолжить работу с последнего подтверждённого состояния. Это *фактический checkpoint*, не допуск V5 AUTH в production.
 
 - **Репозиторий:** \`juvantusik/Evrasia_AI_bot\`.
