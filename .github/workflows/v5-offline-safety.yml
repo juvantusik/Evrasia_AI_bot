@@ -411,6 +411,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-totp-trust-wronghost.log
               grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/web-mfa-totp-trust-wronghost.log
               echo "PASS: trust-first patch does not permit non-production staging"
+              echo "=== WEBSITE MFA READ-ONLY PROXY / REDIS RELEASE PROBE ==="
+              bash -n "$ROOT/deployment/website-mfa-proxy-redis-readonly.sh"
+              bash "$ROOT/deployment/website-mfa-proxy-redis-readonly.sh" --self-test
+              if bash "$ROOT/deployment/website-mfa-proxy-redis-readonly.sh" --audit > /tmp/website-mfa-wronghost-ip-probe.log 2>&1; then
+                echo "FAIL: website MFA proxy/Redis audit accepted CI as production"
+                exit 1
+              fi
+              grep -Fq "FINAL_STATUS=FAIL" /tmp/website-mfa-wronghost-ip-probe.log
+              grep -Fq "SITE_CODE_WRITE=NO" /tmp/website-mfa-wronghost-ip-probe.log
+              echo "PASS: proxy/Redis preflight has only offline test/read-only audit modes"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
