@@ -169,3 +169,9 @@ This section supersedes the earlier **unconfirmed CI** status for the new first-
 - Native first-factor targeted CI already verified separately [#39949357505](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39949357505), **132 synthetic assertions PASS**, no Bitrix bootstrap.
 
 **Do not overclaim:** PHP/fixture offline CI SUCCESS is NOT real native Bitrix transaction-depth+AUTH_EPOCH 10-path acceptance. As of writing, ephemeral MariaDB run [#39950293611](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950293611) for native-factor savepoint repair is still being checked separately, and no success attestation is recorded here. No production deployment, DB write, SMS, JWT for real users, or V4 change occurred. Default `V5_AUTH=OFF`.
+
+## 14. 2026-10-23 — native getPolicy declaring-file pin and next source-only admission
+
+The native policy reader `V5PinnedBitrixLoginAttemptLimits` now additionally requires the reflection method `getPolicy` itself (not only CUser class) to have the same declaring class and **same pinned file** as the verified `CUser` source. No inherited method of unknown provenance may be used. Commit `d86e375fd4d6f5b2e87c4f458ff207944698f177`. A method missing, non-public, non-static, inherited from other file or redefined after a Bitrix upgrade continues to return UNKNOWN and deny V5. **No positive Bitrix method attestation has been executed.**
+
+One narrow read-only inspection is now needed on production **only to determine method declaration visibility/origin** of `CUser::getPolicy`. No native execution, user data, SQL, login attempt or SMS. Do not re-run any prior H_DEPTH/COMMIT parser probes for this.
