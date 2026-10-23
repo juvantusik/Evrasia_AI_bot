@@ -854,8 +854,13 @@ $db->exec('CREATE TABLE ev_v5_ci_totp_replay_guard '
     .'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 $db->exec('INSERT INTO ev_v5_ci_totp_replay_guard (USER_ID,LAST_TIMECODE) '
     .'VALUES (41,0)');
-$separateA=str_repeat('6',64);
-$separateB=str_repeat('7',64);
+$separateA=hash('sha256','ci:v5:two-distinct-totp-challenges:a');
+$separateB=hash('sha256','ci:v5:two-distinct-totp-challenges:b');
+$freeIdCheck=$db->prepare('SELECT COUNT(*) FROM ev_v5_auth_challenges '
+    .'WHERE challenge_id IN (?,?)');
+$freeIdCheck->execute([$separateA,$separateB]);
+smsCheck((int)$freeIdCheck->fetchColumn()===0 && $separateA!==$separateB,
+    'distinct TOTP CI replay IDs do not collide with earlier fixtures');
 foreach ([$separateA,$separateB] as $ticket) {
     smsChallenge($db,$ticket);
     $q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
@@ -912,7 +917,7 @@ smsCheck(is_array($loserState) && $loserState['status']==='pending'
  * Native callback failure AFTER changing replay SQL must roll back BOTH
  * tables. Still synthetic; positive Bitrix Otp persist/rollback is untested.
  */
-$rollbackId=str_repeat('8',64);
+$rollbackId=hash('sha256','ci:v5:totp-native-failure-rollback');
 smsChallenge($db,$rollbackId);
 $q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
 $q->execute(['totp',$rollbackId]);
