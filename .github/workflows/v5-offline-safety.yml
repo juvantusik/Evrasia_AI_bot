@@ -491,6 +491,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/ev-pin-notice-wrong-host.log
               grep -Fxq "PRODUCTION_AUTH_CODE_CHANGED=NO" /tmp/ev-pin-notice-wrong-host.log
               echo "PASS: PIN notice fixture and production-only guard"
+              echo "=== PILOT-ONLY NATIVE PASSWORD ORIGINAL CONTRACT HOTFIX ==="
+              bash -n "$ROOT/deployment/website-mfa-trusted-password-contract-repair.sh"
+              bash "$ROOT/deployment/website-mfa-trusted-password-contract-repair.sh" --self-test
+              if bash "$ROOT/deployment/website-mfa-trusted-password-contract-repair.sh" --preflight > /tmp/website-pilot-password-wrong-host.log 2>&1; then
+                echo "FAIL: production login source patch accepted CI host"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/website-pilot-password-wrong-host.log
+              grep -Fxq "DB_CONNECTION=NO" /tmp/website-pilot-password-wrong-host.log
+              echo "PASS: Bitrix PASSWORD_ORIGINAL patch fixture and wrong-host refusal"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
