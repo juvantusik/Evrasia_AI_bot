@@ -188,15 +188,17 @@ final class EvrasiaWebsiteMfaCandidate
         // Keep the nonce, timestamp, phone fingerprint and LoginInternal proof;
         // only widen its positive stored USER_ID requirement.
         $remaining = [];
-        foreach (['smsAction', 'getPilotSmsState', 'getVerifiedPilotSmsState',
-            'getPilotLoginChallenge', 'resendSmsAction', 'resendPilotSmsAction'] as $candidate) {
+        preg_match_all('/\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/',
+            $s, $discovered);
+        foreach (array_unique($discovered[1] ?? []) as $candidate) {
             try {
                 [, , $body] = self::method($s, $candidate);
                 if (str_contains($body, 'self::PILOT_USER_ID')) {
                     $remaining[] = $candidate;
                 }
             } catch (RuntimeException) {
-                // Names vary between pilot revisions, source SHA stays pinned.
+                // Ignore non-method references; fail closed unless exactly
+                // ONE real remaining challenge method can be attributed.
             }
         }
         self::require(count($remaining) === 1,
@@ -351,7 +353,7 @@ final class EvrasiaWebsiteMfaCandidate
             chmod($candidatePath,0600);
             $lint = [];
             $code = 1;
-            exec(escapeshellarg(PHP_BINARY) . ' -d auto_prepend_file= -d auto_append_file= -l '
+            exec(escapeshellarg(PHP_BINARY) . ' -d auto_prepend_file= -d auto_append_file= -d short_open_tag=1 -l '
                 . escapeshellarg($candidatePath) . ' 2>&1', $lint, $code);
             self::require($code === 0, 'candidate_php_syntax_failed_' . $key);
             $manifest['source'][$key] = [
