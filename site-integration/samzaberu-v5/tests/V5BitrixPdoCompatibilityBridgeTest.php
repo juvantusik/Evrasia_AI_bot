@@ -22,6 +22,7 @@ namespace Bitrix\Main\DB {
         public array $phone=['USER_ID'=>'41','PHONE_NUMBER'=>'+79120000000','CONFIRMED'=>'Y'];
         public array $challenge=['user_id'=>'41','status'=>'pending','sms_sent_count'=>'0'];
         public bool $active=false;
+        public bool $sessionGuardOpen=false;
         public bool $throwBegin=false;
         public bool $throwCommit=false;
         public bool $throwRollback=false;
@@ -43,6 +44,7 @@ namespace Bitrix\Main\DB {
             if($this->active || $this->throwBegin)throw new \RuntimeException('native begin fault');
             $this->snapshot=[$this->budgets,$this->outbox,$this->challenge];
             $this->active=true;
+            $this->sessionGuardOpen=false;
             return null;
         }
         public function commitTransaction():mixed {
@@ -50,6 +52,7 @@ namespace Bitrix\Main\DB {
             if($this->silentCommitFailure)return false;
             if($this->throwCommit)throw new \RuntimeException('native commit fault');
             if(!$this->active)throw new \RuntimeException('no active tx');
+            if($this->sessionGuardOpen)throw new \RuntimeException('unreleased native savepoint');
             $this->active=false;
             $this->snapshot=[];
             return null;
@@ -61,6 +64,7 @@ namespace Bitrix\Main\DB {
             if(!$this->active)throw new \RuntimeException('no active tx');
             [$this->budgets,$this->outbox,$this->challenge]=$this->snapshot;
             $this->active=false;
+            $this->sessionGuardOpen=false;
             return null;
         }
         public function query(string $sql):FakeResult {
@@ -83,6 +87,16 @@ namespace Bitrix\Main\DB {
             if($this->silentWriteFailure)return false;
             if(!$this->active || $this->throwExecute)throw new \RuntimeException('native write unavailable');
             $this->affected=0;
+            if($sql==='SAVEPOINT v5_strong_session_guard') {
+                if($this->sessionGuardOpen)throw new \RuntimeException('duplicate guard');
+                $this->sessionGuardOpen=true;
+                return null;
+            }
+            if($sql==='RELEASE SAVEPOINT v5_strong_session_guard') {
+                if(!$this->sessionGuardOpen)throw new \RuntimeException('missing guard');
+                $this->sessionGuardOpen=false;
+                return null;
+            }
             if(str_starts_with($sql,'INSERT INTO ev_v5_sms_budget_windows')) {
                 if(!preg_match("/VALUES \\('([a-f0-9]{64})', 0, ([0-9]+)\\)/",$sql,$m))throw new \RuntimeException('budget insert shape');
                 $this->budgets[$m[1]]??=['used_units'=>0,'expires_at'=>(int)$m[2]];
@@ -152,6 +166,19 @@ namespace {
     rejects(fn()=>$db->prepare('SELECT * FROM evil_table WHERE ID = ?'),'unexpected table refused');
     rejects(fn()=>$db->prepare('SELECT ID FROM b_user WHERE ID = ?; DROP TABLE b_user'),'multiple statements refused');
     rejects(fn()=>$db->prepare('UPDATE b_user SET ACTIVE = ? WHERE ID = ?'),'writes to Bitrix users forbidden');
+    foreach(['SAVEPOINT other', 'RELEASE SAVEPOINT other',
+        'ROLLBACK TO SAVEPOINT v5_strong_session_guard',
+        'SAVEPOINT v5_strong_session_guard; DROP TABLE b_user',
+        'SAVEPOINT v5_strong_session_guard_extra'] as $unsafeSavepoint) {
+        rejects(fn()=>$db->prepare($unsafeSavepoint),
+            'unreviewed savepoint statement refused');
+    }
+    $guardBegin=$db->prepare('SAVEPOINT v5_strong_session_guard');
+    $guardRelease=$db->prepare('RELEASE SAVEPOINT v5_strong_session_guard');
+    ok($guardBegin instanceof PDOStatement && $guardRelease instanceof PDOStatement,
+        'only exact strong-session savepoint and release are in SQL allowlist');
+    rejects(fn()=>$guardBegin->execute([]),
+        'savepoint cannot execute without a bridge-owned native transaction');
 
     // V5 strong-session SQL is whitelisted by EXACT template, never by
     // arbitrary table name/WHERE substring. V4/native tables remain forbidden.
@@ -202,6 +229,12 @@ namespace {
     ok($clock->execute([]) && $clock->fetchColumn()==='1800000000','DB clock query supported');
     ok($db->beginTransaction() && $db->inTransaction(),'native startTransaction started');
     ok($native->active && $native->beginCalls===1,'native ORM connection owns same transaction');
+    ok($guardBegin->execute([]) && $native->sessionGuardOpen,
+        'native savepoint executed only inside owned transaction');
+    ok($guardRelease->execute([]) && !$native->sessionGuardOpen,
+        'native savepoint released before commit');
+    ok($guardBegin->rowCount()===0 && $guardRelease->rowCount()===0,
+        'savepoint control statements report no modified user rows');
     rejects(fn()=>$db->beginTransaction(),'no nested transaction in bridge');
     rejects(fn()=>$q->execute([$key]),'missing positional parameter denied');
     rejects(fn()=>$q->execute(['x'=>$key,'expiry'=>1800004800]),'associative parameter binding denied');
