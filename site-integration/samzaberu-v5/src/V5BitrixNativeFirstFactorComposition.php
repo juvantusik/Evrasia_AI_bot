@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5BitrixPasswordProofPort.php';
 require_once __DIR__ . '/V5PinnedBitrixPasswordComparator.php';
+require_once __DIR__ . '/V5BitrixNativePasswordLoginAdmission.php';
 require_once __DIR__ . '/V5PdoUserRowSource.php';
 require_once __DIR__ . '/V5NativeTotpStatus.php';
 require_once __DIR__ . '/V5ExistingLoginPolicy.php';
@@ -21,7 +22,8 @@ use Throwable;
 /**
  * Concrete first-factor composition for the existing installed Bitrix site.
  *
- * Uses native Password::equals() (without CUser::Login or setting cookies),
+ * Uses native Password::equals() plus pinned native post-hash policy checks
+ * (without CUser::Login or setting cookies),
  * the verified physical b_user columns, current Bitrix MFA ORM and global OTP
  * policy, plus the four-scope InnoDB attempt counter.
  *
@@ -111,6 +113,7 @@ final class V5BitrixNativeFirstFactorComposition
             $reader,
             $attemptGate,
             new V5PinnedBitrixPasswordComparator(),
+            new V5PinnedBitrixPasswordLoginAdmission(),
         );
     }
 

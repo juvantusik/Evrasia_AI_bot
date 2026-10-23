@@ -9,6 +9,8 @@ on:
       - 'site-integration/samzaberu-v5/src/**'
       - 'site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php'
       - 'site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5BitrixNativePasswordLoginAdmissionTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5BitrixPasswordProofPortTest.php'
       - 'site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php'
       - 'site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php'
@@ -55,11 +57,15 @@ jobs:
             site-integration/samzaberu-v5/src/V5PinnedBitrixMfaPolicies.php \
             site-integration/samzaberu-v5/src/V5BitrixMfaAdmissionGuards.php \
             site-integration/samzaberu-v5/src/V5BitrixNativeLoginPolicyLimits.php \
+            site-integration/samzaberu-v5/src/V5BitrixNativePasswordLoginAdmission.php \
+            site-integration/samzaberu-v5/src/V5BitrixPasswordProofPort.php \
             site-integration/samzaberu-v5/src/V5PublicTrafficPreflight.php \
             site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php \
+            site-integration/samzaberu-v5/tests/V5BitrixNativePasswordLoginAdmissionTest.php \
+            site-integration/samzaberu-v5/tests/V5BitrixPasswordProofPortTest.php \
             site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php; do
             php -l "$file"
@@ -76,6 +82,8 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php
+          php site-integration/samzaberu-v5/tests/V5BitrixNativePasswordLoginAdmissionTest.php
+          php site-integration/samzaberu-v5/tests/V5BitrixPasswordProofPortTest.php
           echo 'FIRST_FACTOR_PUBLIC_GATES=PASS'
 
       - name: Final no-production attestation

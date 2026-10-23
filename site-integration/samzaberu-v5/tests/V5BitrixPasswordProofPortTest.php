@@ -6,7 +6,7 @@ require_once __DIR__ . '/../src/V5BitrixPasswordProofPort.php';
 use Evrasia\Samzaberu\V5\{
     V5BitrixPasswordProofPort, V5NativeBitrixPasswordComparator,
     V5PasswordAccountReaderPort, V5FirstFactorAttemptGatePort,
-    V5PasswordHashComparatorPort, V5PasswordAccountSnapshot,
+    V5PasswordHashComparatorPort, V5PasswordLoginAdmissionPort, V5PasswordAccountSnapshot,
     PasswordVerifiedAccount, AuthenticationRejected,
 };
 
@@ -53,6 +53,27 @@ final class ComparatorFake implements V5PasswordHashComparatorPort
     }
 }
 
+final class NativePasswordAdmissionFake implements V5PasswordLoginAdmissionPort
+{
+    public int $calls = 0;
+    public ?bool $allowed = true;
+    public bool $unavailable = false;
+
+    public function permitsAfterProof(
+        int $userId,
+        #[\SensitiveParameter] string $enteredPassword,
+    ): ?bool {
+        $this->calls++;
+        if ($this->unavailable) {
+            throw new RuntimeException('synthetic native admission outage');
+        }
+        if ($userId !== 123 || $enteredPassword !== 'test_correct_password') {
+            return null;
+        }
+        return $this->allowed;
+    }
+}
+
 $passed = 0;
 function assertV5(bool $condition, string $reason): void
 {
@@ -68,7 +89,8 @@ function makeProof(?V5PasswordAccountSnapshot $record): array
     $reader->record = $record;
     $gate = new AttemptGateFake();
     $comparator = new ComparatorFake();
-    return [new V5BitrixPasswordProofPort($reader, $gate, $comparator),$reader,$gate,$comparator];
+    $native = new NativePasswordAdmissionFake();
+    return [new V5BitrixPasswordProofPort($reader, $gate, $comparator, $native),$reader,$gate,$comparator,$native];
 }
 function syntheticRecord(?bool $active = true, ?bool $antiFraud = true, ?bool $totp = false): V5PasswordAccountSnapshot
 {
@@ -92,6 +114,9 @@ assertV5($ok->userId === 123, 'derived ID is server-side');
 assertV5($ok->accountAllowed === true, 'active account allowed');
 assertV5($ok->nativeTotpActive === false, 'server-reported MFA off');
 assertV5($gate->calls === 1 && $reader->calls === 1 && $comparator->calls === 1, 'reserve before check');
+$nativePolicy = (new ReflectionProperty($proof, 'nativePasswordPolicy'))->getValue($proof);
+assertV5($nativePolicy instanceof NativePasswordAdmissionFake && $nativePolicy->calls === 1,
+    'post-hash native password policy must positively approve');
 
 [$proof,$reader,$gate,$comparator] = makeProof(syntheticRecord());
 $bad = $proof->verifyWithoutLogin('test@example.invalid', 'wrong_password');
@@ -172,6 +197,28 @@ foreach ([[0,'synthetic_hash'],[1,''],[1,str_repeat('x',4097)]] as [$id,$hash]) 
         assertV5(true, 'invalid record rejected');
     }
 }
+
+// Missing, rejected and unavailable post-hash native policy must deny, including
+// when the password comparator has already proved the correct hash.
+foreach ([false, null] as $approval) {
+    [$proof,$reader,$gate,$comparator,$admission] = makeProof(syntheticRecord());
+    $admission->allowed = $approval;
+    expectDenied(fn() => $proof->verifyWithoutLogin(
+        'test@example.invalid', 'test_correct_password'
+    ), 'post-hash policy false/unknown must deny');
+    assertV5($comparator->calls === 1 && $admission->calls === 1,
+        'denial occurs after password verification, no approval fabricated');
+}
+[$proof,$reader,$gate,$comparator,$admission] = makeProof(syntheticRecord());
+$admission->unavailable = true;
+expectDenied(fn() => $proof->verifyWithoutLogin(
+    'test@example.invalid', 'test_correct_password'
+), 'native policy exception must produce generic authentication rejection');
+[$proof,$reader,$gate,$comparator,$admission] = makeProof(syntheticRecord());
+$withoutProvider = new V5BitrixPasswordProofPort($reader, $gate, $comparator);
+expectDenied(fn() => $withoutProvider->verifyWithoutLogin(
+    'test@example.invalid', 'test_correct_password'
+), 'omitted native post-hash policy must fail closed');
 
 $native = new V5NativeBitrixPasswordComparator();
 if (!class_exists(\Bitrix\Main\Security\Password::class, false)) {

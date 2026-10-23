@@ -26,6 +26,7 @@ use Evrasia\Samzaberu\V5\{
     V5PinnedBitrixMandatoryRightsProbe,
     V5NativeCappedLoginControls,
     V5PinnedBitrixLoginAttemptLimits,
+    V5PinnedBitrixPasswordLoginAdmission,
 };
 
 final class FirstFactorFakeDb extends PDO
@@ -179,6 +180,11 @@ try {
     $pinDenied = true;
 }
 firstFactorCheck($pinDenied, 'unattested native Bitrix Password.php source must not check a password');
+$nativePasswordPolicy = (new ReflectionProperty($first, 'nativePasswordPolicy'))->getValue($first);
+firstFactorCheck($nativePasswordPolicy instanceof V5PinnedBitrixPasswordLoginAdmission,
+    'source-pinned native password complexity and age gate required after hash match');
+firstFactorCheck($nativePasswordPolicy->permitsAfterProof(41, 'synthetic') === null,
+    'unattested installed native policy cannot approve a password in offline CI');
 firstFactorCheck($reader instanceof V5SiteAccountReader
     && $gate instanceof V5AtomicFirstFactorAttemptGate
     && $comparator instanceof V5PinnedBitrixPasswordComparator,

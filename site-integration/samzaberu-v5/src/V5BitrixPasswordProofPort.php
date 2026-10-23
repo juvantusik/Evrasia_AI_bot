@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5LoginWorkflow.php';
+require_once __DIR__ . '/V5BitrixNativePasswordLoginAdmission.php';
 
 use InvalidArgumentException;
 use RuntimeException;
@@ -86,6 +87,8 @@ final readonly class V5BitrixPasswordProofPort implements V5PasswordProofPort
         private V5PasswordAccountReaderPort $accounts,
         private V5FirstFactorAttemptGatePort $attempts,
         private V5PasswordHashComparatorPort $passwords,
+        // Default null fails closed for older/standalone callers.
+        private ?V5PasswordLoginAdmissionPort $nativePasswordPolicy = null,
     ) {}
 
     public function verifyWithoutLogin(string $login, string $password): ?PasswordVerifiedAccount
@@ -120,6 +123,21 @@ final readonly class V5BitrixPasswordProofPort implements V5PasswordProofPort
         // a PHP session, register/rotate a trusted device, or issue a JWT.
         if (!$this->passwords->matches($record->passwordHash, $password)) {
             return null;
+        }
+
+        // A correct hash is not enough: native LoginInternal also applies
+        // current password-complexity and last-change age rules. This cannot
+        // be decided by V5CurrentLoginControlsPort(userId) alone. No provider,
+        // UNKNOWN, explicit denial and backend exceptions all deny.
+        try {
+            $admitted = $this->nativePasswordPolicy?->permitsAfterProof(
+                $record->userId, $password
+            );
+        } catch (\Throwable) {
+            throw new AuthenticationRejected('authentication_failed');
+        }
+        if ($admitted !== true) {
+            throw new AuthenticationRejected('authentication_failed');
         }
 
         return new PasswordVerifiedAccount(
