@@ -292,6 +292,24 @@ yes(V5SessionAssurancePolicy::permitsProtectedAction($claims,[
     'assured_at'=>$db->now,'expires_at'=>$db->now+86400
 ],$db->now),'JWT and server assurance policy compose');
 
+// Active native TOTP does NOT bar current strong trust; still require native
+// locked trust proof and hook coverage before any new JWT is minted.
+[$trustedTotpStore,$trustedTotpDb,$trustedTotpProof,$trustedTotpCoverage]=$state=environment();
+$trustedTotpToken=$trustedTotpStore->afterTrustedDevice(
+    new PasswordVerifiedAccount(41,true,true),ID,'ios','synthetic-strong-trust-token');
+yes($trustedTotpToken instanceof AuthenticatedV5Session,
+    'native-TOTP account can use existing strongly enrolled trusted device');
+yes($trustedTotpDb->commits===1 && count($trustedTotpDb->sessions)===1
+    && $trustedTotpProof->calls===1 && $trustedTotpCoverage->calls===1,
+    'native-TOTP trusted JWT requires server proof and epoch-covered commit');
+[$deniedTotpStore,$deniedTotpDb,$deniedTotpProof]=environment();
+$deniedTotpProof->allow=false;
+denies(fn()=>$deniedTotpStore->afterTrustedDevice(
+    new PasswordVerifiedAccount(41,true,true),ID,'ios','synthetic-strong-trust-token'),
+    'native-TOTP account with revoked/unverified trust cannot mint JWT');
+yes($deniedTotpDb->sessions===[] && $deniedTotpDb->commits===0,
+    'denied trust does not persist session even for active TOTP');
+
 $rotation=$store->rotateRefresh($s1->refreshToken);
 yes($rotation instanceof AuthenticatedV5Session,'valid refresh rotated');
 yes($rotation->refreshToken!==$s1->refreshToken,'refresh bearer changes each rotation');

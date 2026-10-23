@@ -165,15 +165,35 @@ check($p->calls === 1 && $c->begins === 0 && $s->trustCalls === 0, 'wrong creden
 reject(fn() => $f->signIn('test', 'secret', DID, 'ios'), 'inactive account denied');
 check($c->begins === 0 && $s->grantCalls === 0, 'inactive does not start challenge');
 
-// Native Bitrix TOTP overrides any trust token and SMS is never selected.
+// Strongly enrolled/current trusted device skips TOTP EVEN when it is active.
 [$f, $p, $t, $c, $s] = fixture($totpUser);
 $t->result = new MobileTrustAssessment(true, true);
 $result = $f->signIn('test', 'secret', DID, 'ios', 'already_valid_token');
-check($result instanceof PendingLoginChallenge, 'TOTP pending result');
-check($result->kind === ChallengeKind::TOTP, 'TOTP selected');
-check($t->calls === 0, 'TOTP does not check trust');
-check($s->trustCalls === 0 && $s->grantCalls === 0, 'TOTP pending creates no JWT');
-check($c->begins === 1, 'TOTP challenge begun');
+check($result instanceof AuthenticatedV5Session, 'strong current trust skips repeated native TOTP');
+check($t->calls === 1, 'active TOTP account still verifies current trust');
+check($s->trustCalls === 1 && $s->grantCalls === 0, 'trusted TOTP account delegates to locked trust issuer');
+check($c->begins === 0, 'trusted TOTP account creates NO new TOTP or SMS challenge');
+
+// No trust token, revoked/invalid token or password-only V4 enrollment must
+// NEVER bypass active native TOTP or silently fall back to SMS.
+foreach ([[false,false],[false,true],[true,false]] as [$tokenValid, $strong]) {
+    [$f, $p, $t, $c, $s] = fixture($totpUser);
+    $t->result = new MobileTrustAssessment($tokenValid, $strong);
+    $result = $f->signIn('test', 'secret', DID, 'ios', 'untrusted_token');
+    check($result instanceof PendingLoginChallenge && $result->kind === ChallengeKind::TOTP,
+        'untrusted active-TOTP account demands native TOTP challenge');
+    check($t->calls === 1, 'trust is checked before current TOTP challenge');
+    check($s->trustCalls === 0 && $s->grantCalls === 0,
+        'untrusted TOTP account never issues session directly');
+    check($c->begins === 1 && $c->lastKind === ChallengeKind::TOTP,
+        'no SMS fallback for configured native TOTP');
+}
+[$f, $p, $t, $c, $s] = fixture($totpUser);
+$result = $f->signIn('test', 'secret', DID, 'ios');
+check($result instanceof PendingLoginChallenge && $result->kind === ChallengeKind::TOTP,
+    'missing current trust requires TOTP');
+check($t->calls === 0 && $c->begins === 1 && $s->trustCalls === 0,
+    'missing trust never accesses trust port or issues JWT');
 
 // Valid cryptographic token + strong-enrollment proof can skip SMS.
 [$f, $p, $t, $c, $s] = fixture($user);

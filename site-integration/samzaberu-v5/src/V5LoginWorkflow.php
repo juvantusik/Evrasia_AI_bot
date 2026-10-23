@@ -232,13 +232,9 @@ final readonly class V5LoginWorkflow
             throw new AuthenticationRejected('authentication_failed');
         }
 
-        // Mandatory TOTP has priority over any existing trusted-device record.
-        if ($account->nativeTotpActive) {
-            return $this->requireChallenge(
-                $account, $login, $password, $deviceId, $platform, ChallengeKind::TOTP
-            );
-        }
-
+        // Validate current STRONG enrollment first, irrespective of native
+        // TOTP enrollment. Device ID without a current trust token is NEVER
+        // sufficient, and the issuing transaction re-checks trust + epoch.
         $validTrust = false;
         $mfaEnrolled = false;
         if ($trustToken !== null && $trustToken !== '' && strlen($trustToken) <= 1024) {
@@ -249,7 +245,7 @@ final readonly class V5LoginWorkflow
             $mfaEnrolled = $assessment->strongEnrollmentProven;
         }
         $decision = AuthDecision::afterPassword(
-            true, true, false, $validTrust, $mfaEnrolled
+            true, true, $account->nativeTotpActive, $validTrust, $mfaEnrolled
         );
 
         if ($decision === NextFactor::COMPLETE) {
@@ -257,6 +253,11 @@ final readonly class V5LoginWorkflow
             // and assurance before minting a server-side V5 session.
             return $this->sessions->afterTrustedDevice(
                 $account, $deviceId, $platform, (string)$trustToken
+            );
+        }
+        if ($decision === NextFactor::TOTP) {
+            return $this->requireChallenge(
+                $account, $login, $password, $deviceId, $platform, ChallengeKind::TOTP
             );
         }
         if ($decision === NextFactor::SMS) {

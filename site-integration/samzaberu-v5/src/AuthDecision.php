@@ -28,14 +28,18 @@ final class AuthDecision
             return NextFactor::DENY;
         }
 
-        // Native Bitrix MFA has priority even for trusted installations.
-        if ($nativeTotpActive) {
-            return NextFactor::TOTP;
-        }
-
-        // V4 password-only device registrations must never authorize SMS bypass.
+        // A CURRENT, server-verified STRONG trust enrollment skips repeated
+        // MFA, even when the account has active Bitrix native TOTP. Neither
+        // device_id nor an old V4 password-only record is sufficient proof.
+        // Issuer MUST lock user+epoch and reverify trust on this very request.
         if ($trustTokenValid && $trustStronglyEnrolled) {
             return NextFactor::COMPLETE;
+        }
+
+        // Without current strong trust, a configured native TOTP credential
+        // ALWAYS requires TOTP. Never downgrade it to paid SMS.
+        if ($nativeTotpActive) {
+            return NextFactor::TOTP;
         }
 
         return NextFactor::SMS;

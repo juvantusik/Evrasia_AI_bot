@@ -22,10 +22,10 @@ foreach ([false, true] as $passwordVerified) {
 
                     if (!$passwordVerified || !$accountAllowed) {
                         $expected = NextFactor::DENY;
-                    } elseif ($nativeTotpActive) {
-                        $expected = NextFactor::TOTP;
                     } elseif ($trustTokenValid && $trustStronglyEnrolled) {
                         $expected = NextFactor::COMPLETE;
+                    } elseif ($nativeTotpActive) {
+                        $expected = NextFactor::TOTP;
                     } else {
                         $expected = NextFactor::SMS;
                     }
@@ -39,9 +39,13 @@ foreach ([false, true] as $passwordVerified) {
                         throw new RuntimeException('Authentication bypass');
                     }
 
-                    // Even valid trust cannot override an active native TOTP requirement.
-                    if ($passwordVerified && $accountAllowed && $nativeTotpActive && $actual !== NextFactor::TOTP) {
-                        throw new RuntimeException('TOTP bypass');
+                    // Only CURRENT strongly enrolled trust can bypass repeat TOTP.
+                    if ($passwordVerified && $accountAllowed && $nativeTotpActive) {
+                        $expectedTotpDecision = ($trustTokenValid && $trustStronglyEnrolled)
+                            ? NextFactor::COMPLETE : NextFactor::TOTP;
+                        if ($actual !== $expectedTotpDecision) {
+                            throw new RuntimeException('Native TOTP/trust ordering mismatch');
+                        }
                     }
 
                     // A password-only legacy trust token is not sufficient.

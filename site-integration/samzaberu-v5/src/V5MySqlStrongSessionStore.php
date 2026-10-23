@@ -93,7 +93,11 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         string $platform,
         string $trustToken,
     ): AuthenticatedV5Session {
-        if (!$account->accountAllowed || $account->nativeTotpActive
+        // TOTP enrollment is not a ban on CURRENT strongly enrolled trust.
+        // verifiedTrustWithUserLock must independently check the active native
+        // MFA state, current MFA/epoch version, token hash, expiry/revocation,
+        // and strong-enrollment evidence, under the SAME transaction.
+        if (!$account->accountAllowed
             || !V5LoginWorkflow::validInstallation($deviceId, $platform)
             || $trustToken === '' || strlen($trustToken) > 1024
         ) {
