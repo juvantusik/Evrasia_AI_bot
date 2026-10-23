@@ -26,3 +26,19 @@
 До WRITE: `hostname=evrasia`, root, exact realpath, SHA всех затрагиваемых файлов, обзор текущих source guards и фактического режима OTP, **настоящий проверенный backup каждого изменяемого файла**, syntax lint, минимальная whitelist-only замена, post-SHA check, rollback. Ни бизнес-данные, ни текущие OTP secrets, ни V4, ни API v5 legal не изменять. Чужие секреты и коды никогда не печатать.
 
 **Следующий шаг:** получить с production одним READ_ONLY скриптом текущие hashes, безопасно обезличенные фрагменты pilot-gate в web component/account template/PIN, структуру SMS anti-abuse, и зависимость mobile V4 `CUser->Login`; затем создать точно source-pinned, idempotent one-block deployment с backup/rollback и verify. Пилот TOTP/PIN на `880339` повторно не тестировать ради исследования.
+
+## 24.10.2026 — фактическая READ_ONLY карта production (операторский вывод)
+
+Скрипт source-only на host `evrasia` завершился **FINAL_STATUS=PASS, FINAL_RC=0**. Загрузки Bitrix и соединения с БД нет; CODE/DB/V4/V5 write нет; SMS/TOTP не вызывались. Настоящий `Otp.php` SHA `285a0fa1d87ebf3e1268e7fe8ea561634e7d9f645d6b8f08e19bdcc34b20372c` совпал. PHPT tokenizer доступен через CLI `php` с `php.ini` (не через `php -n`), `auto_prepend_file` отключён.
+
+| Файл production | SHA256, подтверждённый read-only | Где pilot gate |
+| --- | --- | --- |
+| `local/components/eurasia/totp.enrollment/class.php` | `27de8a0d74b1613672740b2899afcc7a333b2f8e40557f5095fd98ad9ee6608e` | `private const PILOT_USER_ID=880339`; `requirePilotUser()`, `requirePilotUserForDisable()`, SMS session state comparisons `self::PILOT_USER_ID` |
+| `local/templates/eurasia/components/eurasia/account/main/template.php` | `022991446ef70634fc6175e2e4b96cc9d318ac2dc51ff2112ecb73ff1e73a823` | around line 224 `if ((int)$arResult[..][..] === 880339)` |
+| `local/php_interface/pincode.php` | `c7fa868712ab10bef5e85384158bb1c8b21548379b278de5fb808a0e3505afff` | around line 83 `if ($userId === 880339)` protects current direct-PIN branch; then `Otp::getByUser()`/`isActivated()` and Bitrix session `context->getUserId()===userId && isOtpUsed()`; alternative non-TOTP branch contains `$_SESSION` assurance |
+| `local/components/eurasia/signin/class.php` | `6131767c182fd269766420b4d72dd44213a31e9c378627b6b4e04fdd1258ece9` | pilot-only trust/assurance logic; `CUser->Login` with `Otp::isOtpRequired()` + `otpAction()` also present |
+| `local/php_interface/Controllers/V4/Auth.php` | `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362` | no pilot ID; legacy mobile sign-in calls `CUser->Login` and returns error when no boolean success; needs **non-invasive compatibility proof** before enrollment visible to all |
+
+**Observed from sanitized source, not yet proven:** enrollment `requestSmsAction()` has Redis per-user+hashed-phone rate limit and calls `CSms::send()`; global per-IP budget/anti-spam and limit numeric values were masked in the current output and still require a precise *nonsecret* static check. `pincode.php` has a non-TOTP `$_SESSION` assurance fallback; widening the outer pilot check without reviewing that fallback could grant unintended direct-PIN privileges. Website login has pilot-only trust behavior, but generic Bitrix OTP action appears present. Mobile V4 may be affected by enabling native OTP for an account because it calls `CUser->Login`; **do not state the impact as tested until actual source control flow is inspected**.
+
+**Rollout gate:** DO NOT perform indiscriminate global 880339 replacement. First do one narrow read-only, sha-pinned, literal-masked source gate analysis of (1) four Bitrix SMS enrollment / session identity invariants, (2) PIN non-TOTP assurance branch, (3) V4 login and native MFA handling, (4) native website signin second step. Only then produce minimum production patch and backup+rollback. Rollout remains `APPROVED_NOT_DEPLOYED`; all existing Bitrix OTP/pilot users are preserved, no V4/V5 API or production code touched.
