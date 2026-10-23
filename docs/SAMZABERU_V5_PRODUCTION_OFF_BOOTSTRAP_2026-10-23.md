@@ -302,3 +302,15 @@ Installed \`CUser\` import line 18 is \`Bitrix\Main\Authentication\Internal\User
 
 **Operator run status: NOT RUN.** Need production output before claiming actual V4 business endpoint names or wiring to real classes. **NEXT_STEP=RUN_ONE_V4_BUSINESS_ROUTE_LEXICAL_INVENTORY_THEN_IMPLEMENT_V5_BUSINESS_ADAPTER**: one copy-paste block fetches parser+runner by exact immutable commit SHA and verifies Git blob SHA, executes on \`evrasia\` root; after output map real \`V4 route -> existing service/method -> separate V5 route\` and implement first real facade without V4 auth/JWT. Do not repeat generic Bitrix source inventory, MFA/H_DEPTH or hairpin diagnostics. Public base domain \`https://evrasia.rest\`; V5 production AUTH remains OFF. Previous old legal-upgrader command pinned to \`evrasia.spb.ru\` is still not approved as public .rest rollout.
 
+## 25. 2026-10-23 — V4 router archived SHA guard failed before any source read
+
+Production operator ran the pinned V4 route-inventory wrapper from commit \`81d93456a0b61c996733ef275d204557df77a81d\`. Parser and runner Git blobs and syntax verified, host/root/site guard PASS, then the **archived V4 router SHA256 pin failed**, before parsing router or any controllers:
+
+- \`FAIL: V4 router changed: STOP before business mapping\`
+- \`FINAL_STATUS=FAIL\`, \`FINAL_RC=2\`, \`WRAPPER_RC=2\`, \`PASS_COUNT=1\`.
+- \`MODE=READ_ONLY\`, \`SITE_PHP_SOURCE_EXECUTED=NO\`, \`BITRIX_BOOTSTRAP=NO\`, \`DATABASE_CONNECTION=NO\`, \`DATABASE_WRITE=NO\`, \`PRODUCTION_FILE_WRITE=NO\`, \`USER_DATA_READ=NO\`, \`SMS_SENT=NO\`, \`V4_MODIFIED=NO\`, \`V5_AUTH_ENABLED=NO\`.
+
+Archived router pin: \`3b263c09387a3d588f972960b6c74b35794f017fe8eb44e4d88b21065539be50\`. **Actual installed current SHA and route mappings still UNKNOWN**; mismatch does not by itself prove compromise nor consent to replace pin.
+
+**NEXT_STEP=READ_ONLY_OBSERVED_SHA_AND_LEXICAL_V4_BUSINESS_ROUTE_MAP**: on exact host, obtain SHA, file mode, size/time and safely masked lexical route/controller names directly from observed installed file **without running PHP site source**. Use immutable Git-blob pinned parser from commit \`81d93456\`, preserve and rehash observed source and controller files after read, output \`V4_ROUTER_SOURCE_DRIFT=YES\` and \`RUNTIME_REUSE_APPROVED=NO\` pending comparison. Then implement V5 business facade against truly observed V4 services, with independent V5 JWT/MFA. Do not change V4, overwrite its pin or ask for global Bitrix scan. Main public domain \`evrasia.rest\`.
+
