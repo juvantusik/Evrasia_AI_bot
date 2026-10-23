@@ -265,3 +265,21 @@ Installed \`CUser\` import line 18 is \`Bitrix\Main\Authentication\Internal\User
 
 **NEXT_STEP=SITE_LOGIN_CONTROLS_NATIVE_EVIDENCE_AND_EPOCH_LOCKED_RECHECK**. Inspect only exact current site-specific login/security veto registrations and read-only contract, then implement an independently verified \`V5CurrentLoginControlsPort\` (no blanket \`true\`), and require native locked password policy+account+epoch recheck at factor/session issuance. Don't re-run CUser declaration/age-source/name inventory, network hairpin or H_DEPTH checks.
 
+## 22. 2026-10-23 — real V5 public legal validation, protected logout, guarded live upgrade
+
+**User-approved direction:** move the **real** V5 forward now, **NO synthetic accounts or mock API**. Preserve existing production Bitrix accounts and V4; do not expose real V5 account/JWT/SMS writes before their minimum authoritative native security gates are accepted.
+
+**Feature runtime commit** \`d7c5d5e87f2d5a80d621f08e42b857963a6c3506\`:
+- New anonymous **\`POST /api/v5/legal/consents/validate\`**: server-revalidated current Bitrix legal revisions, \`V5PublicLegalCodeValidation\`, no account/JWT/consent writes. Real OFF-router branch reads native catalog through existing \`V5BitrixPublicLegalCatalog::read()\`, strict HTTPS/JSON/body guard and 200 valid vs 409 documents_changed vs 400 invalid. No typed password/user_id/SMS accepted.
+- New protected **\`POST /api/v5/auth/logout\`**: \`V5MySqlSessionLogout\` delegates to existing session store \`revokeAccess\`, guarded current native user/epoch/revocation. No V4 token accepted, never accept user_id. Public/pilot compositions wire it only with real session store. Real \`V5MySqlTokenValidation\` now wired to pilot composition (no fake positive validator).
+- Existing V5 signin/challenge/refresh/PIN remain release-gated. Route/handler/transport/docs/tests updated; no live Bitrix writes, no user created, no real SMS.
+
+**Three code CI runs actually completed SUCCESS on \`d7c5d5e8\`:**
+1. [offline safety #39965294174](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39965294174) — SUCCESS.
+2. [first-factor/public admission #39965294084](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39965294084) — SUCCESS.
+3. [real disposable MariaDB #39965294112](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39965294112) — SUCCESS. This is NOT native Bitrix prod authentication acceptance.
+
+**V5-only guarded operator rollout script commit** \`49f84e97caf38e8a41f0bee877d7f8ece3c9ee8f\`, file \`site-integration/samzaberu-v5/deployment/upgrade-public-legal-v5.sh\`, Git blob \`8684272b63885db8e2aab9d1cdd0cadce94ec585\`: new **private immutable legal-only release**, copies existing installed OFF bootstrap and overlays **only** the new public router + legal validator; old release preserved. Host/root/UID + V4 SHA/manifests/off-state/lock/Git source SHA guards, verified fresh backup, staged PHP CLI smoke, atomic public router shim switch/manifest, HTTPS origin GET health/legal and POST legal validation using **current real document codes**, POST auth remains 503, automatic rollback on post-switch failure. No V4/Bitrix code or DB write. This script has **NOT been run on production** in this conversation; do not describe endpoint as externally live before operator's successful output. [Offline deployment safety CI #39967321149](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39967321149) completed SUCCESS (bash -n + wrong-host refusal). No need new VM. Avoid rerunning old H_DEPTH/hairpin/file inventories.
+
+**NEXT_STEP=OPERATOR_GUARDED_PUBLIC_LEGAL_ROLLOUT_THEN_NATIVE_AUTH_PROVIDERS**. Run pinned V5-only upgrade on \`evrasia\` and verify real HTTPS postcheck/rollback status. Then continue real \`V5CurrentLoginControlsPort\`, independent site MFA/SMS policy, native locked AUTH_EPOCH lifecycle, actual SMS/TOTP/trusted/JWT+PIN providers before enabling auth. Mobile public access must have NO IP allowlist. \`V5_AUTH=OFF\` until those gates are truly accepted.
+
