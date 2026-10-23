@@ -7,6 +7,7 @@ require_once __DIR__ . '/V5PublicTrafficPreflight.php';
 require_once __DIR__ . '/V5MySqlConsumedChallengeProof.php';
 require_once __DIR__ . '/V5MySqlSessionActions.php';
 require_once __DIR__ . '/V5MySqlSessionLogout.php';
+require_once __DIR__ . '/V5MySqlCartRead.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 
@@ -54,6 +55,7 @@ final class V5MySqlPublicComposition
         V5OpaqueRefreshTokens $refresh,
         #[\SensitiveParameter] string $bindingKey,
         #[\SensitiveParameter] string $smsCodeHmacKey,
+        ?V5LockedCartReaderPort $cartReader = null,
     ): V5HttpTransportBoundary {
         // No secret, request header or client-provided assertion can bypass
         // installed release evidence. The real providers MUST be attested.
@@ -88,6 +90,7 @@ final class V5MySqlPublicComposition
             $tokenValidator,
             null,
             new V5MySqlSessionLogout($sessions),
+            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
         ));
     }
 }

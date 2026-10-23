@@ -217,6 +217,22 @@ final class SessionFakePinReader implements V5LockedBonusPinReaderPort
     }
 }
 
+final class SessionFakeCartReader implements \Evrasia\Samzaberu\V5\V5LockedCartReaderPort
+{
+    public int $calls=0;
+    public bool $deny=false;
+    public bool $throws=false;
+
+    public function readLockedCart(PDO $db, int $userId): ?array
+    {
+        $this->calls++;
+        if (!$db->inTransaction() || $userId!==41 || $this->throws) {
+            throw new RuntimeException('cart owner/locked transaction unavailable');
+        }
+        return $this->deny ? null : [['product_id'=>101,'price'=>200,'quantity'=>2]];
+    }
+}
+
 const ID = 'sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 $checkCount=0;
 function yes(bool $value,string $why):void {
@@ -307,6 +323,25 @@ yes($store->showBonusPinForAccess('v4.invalid.jwt',$pinReader)===null,
     'V4 JWT cannot reach site bonus-PIN reader');
 yes($pinReader->calls===$priorCalls,'no PIN read after invalid bearer');
 
+$cartReader=new SessionFakeCartReader();
+$cartItems=$store->readCartForAccess($rotation->accessToken,$cartReader);
+yes($cartItems===[['product_id'=>101,'price'=>200,'quantity'=>2]],
+    'same strong JWT and locked native epoch are required for V4 business cart read');
+yes($cartReader->calls===1,'cart backend called once under user/epoch/session locks');
+$cartReader->deny=true;
+yes($store->readCartForAccess($rotation->accessToken,$cartReader)===null,
+    'unknown authoritative native FUSER owner prevents cart read');
+$cartReader->deny=false;
+$cartReader->throws=true;
+yes($store->readCartForAccess($rotation->accessToken,$cartReader)===null,
+    'native cart business service failure cannot expose cached result');
+$cartReader->throws=false;
+$oldCartCalls=$cartReader->calls;
+yes($store->readCartForAccess('v4.old.jwt',$cartReader)===null,
+    'legacy V4 bearer cannot reveal protected cart');
+yes($cartReader->calls===$oldCartCalls,
+    'invalid V4 JWT never executes native cart business service');
+
 $snapshot=$store->currentAssuranceSnapshot($rotation->accessToken);
 yes(is_array($snapshot) && $snapshot['revocation_verified']===true,
     'revocation-verified server snapshot read');
@@ -314,6 +349,11 @@ yes($store->revokeAccess($rotation->accessToken),'JWT owner can revoke active se
 yes($db->sessions[$row['sid']]['status']==='revoked','revocation persisted');
 yes($store->currentAssuranceSnapshot($rotation->accessToken)===null,
     'revoked session denied to assurance reader');
+$oldCartCalls=$cartReader->calls;
+yes($store->readCartForAccess($rotation->accessToken,$cartReader)===null,
+    'revoked V5 strong session cannot expose cart even if former JWT cryptographically valid');
+yes($cartReader->calls===$oldCartCalls,
+    'revoked cart bearer does not reach native cart business service');
 $priorCalls=$pinReader->calls;
 yes($store->showBonusPinForAccess($rotation->accessToken,$pinReader)===null,
     'revoked session cannot expose PIN');

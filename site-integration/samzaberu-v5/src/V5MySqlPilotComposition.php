@@ -8,6 +8,7 @@ require_once __DIR__ . '/V5MySqlConsumedChallengeProof.php';
 require_once __DIR__ . '/V5MySqlSessionActions.php';
 require_once __DIR__ . '/V5MySqlTokenValidation.php';
 require_once __DIR__ . '/V5MySqlSessionLogout.php';
+require_once __DIR__ . '/V5MySqlCartRead.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 
 use InvalidArgumentException;
@@ -40,6 +41,7 @@ final class V5MySqlPilotComposition
         V5OpaqueRefreshTokens $refresh,
         #[\SensitiveParameter] string $bindingKey,
         #[\SensitiveParameter] string $smsCodeHmacKey,
+        ?V5LockedCartReaderPort $cartReader = null,
     ): V5HttpTransportBoundary {
         if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'mysql'
             || $db->getAttribute(PDO::ATTR_ERRMODE) !== PDO::ERRMODE_EXCEPTION
@@ -64,7 +66,8 @@ final class V5MySqlPilotComposition
             new V5MySqlSessionActions($sessions, $scope),
             new V5MySqlTokenValidation($sessions),
             null,
-            new V5MySqlSessionLogout($sessions)
+            new V5MySqlSessionLogout($sessions),
+            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader)
         ));
     }
 }

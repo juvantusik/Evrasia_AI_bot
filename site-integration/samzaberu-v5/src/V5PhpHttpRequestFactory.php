@@ -38,7 +38,28 @@ final class V5PhpHttpRequestFactory
             self::literal($server['CONTENT_TYPE'] ?? null, 128),
             $rawBody,
             self::length($server),
+            self::authorization($server),
         );
+    }
+
+    /**
+     * Never fall back to client-controlled proxy headers or cookies. A missing
+     * Authorization header is not a session; malformed CGI input is denied.
+     * Real deployments must confirm the trusted web-server passes this field.
+     *
+     * @param array<string,mixed> $server
+     */
+    private static function authorization(array $server): ?string
+    {
+        if (!array_key_exists('HTTP_AUTHORIZATION', $server)) {
+            return null;
+        }
+        $value = $server['HTTP_AUTHORIZATION'];
+        if (!is_string($value) || strlen($value) > 4103
+            || preg_match('/[\x00-\x1f\x7f]/', $value) === 1) {
+            return 'INVALID_AUTHORIZATION';
+        }
+        return $value;
     }
 
     private static function literal(mixed $value, int $limit): string

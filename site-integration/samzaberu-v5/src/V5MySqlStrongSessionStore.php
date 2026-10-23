@@ -54,6 +54,18 @@ interface V5LockedBonusPinReaderPort
     public function readLockedBonusPin(PDO $db, int $userId): ?string;
 }
 
+/**
+ * READ-ONLY cart business service inside the SAME V5 user + epoch + session
+ * row-locked transaction. Caller never supplies FUSER_ID or user_id.
+ * The implementation MUST independently verify native FUSER ownership
+ * and read-side-effect safety; no permissive default is provided.
+ */
+interface V5LockedCartReaderPort
+{
+    /** @return list<array<string,mixed>>|null */
+    public function readLockedCart(PDO $db, int $userId): ?array;
+}
+
 final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
 {
     private const TABLES = [
@@ -264,6 +276,45 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                     && strlen($pin) <= 128
                     && preg_match('/[\x00-\x1f\x7f]/', $pin) !== 1
                     ? $pin : null;
+            });
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Authenticated cart read for real existing Bitrix CartApiService.
+     * The reader runs under the same user->epoch->session locks/transaction,
+     * not after a detached snapshot. Missing provider/owner/FUSER is denial.
+     *
+     * Unlike V4 Cart controller, never invoke CUser::Authorize() or use
+     * client-request FUSER_ID / legacy JwtAuthorization.
+     *
+     * @return list<array<string,mixed>>|null
+     */
+    public function readCartForAccess(
+        #[\SensitiveParameter] string $accessJwt,
+        V5LockedCartReaderPort $reader
+    ): ?array {
+        try {
+            $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());
+            if ($claims === null) return null;
+            $this->assertReady();
+            $userId = self::positive($claims['sub'] ?? null);
+            if ($userId === null) return null;
+            return $this->transaction(function () use ($claims, $userId, $reader): ?array {
+                $now = $this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch = $this->lockedEpoch($userId);
+                $row = $this->lockedSession($claims['sid']);
+                $state = self::state($row, $userId, $now);
+                if ($state === null || $epoch !== $state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
+                ) return null;
+
+                $items = $reader->readLockedCart($this->db, $userId);
+                return is_array($items) && array_is_list($items) ? $items : null;
             });
         } catch (Throwable) {
             return null;

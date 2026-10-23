@@ -77,6 +77,15 @@ jobs:
               grep -Fxq "MODE=READ_ONLY" /tmp/v5-v4-cart-wrong-host.log
               grep -Fxq "USER_DATA_READ=NO" /tmp/v5-v4-cart-wrong-host.log
               echo "PASS: Cart/Restaurant source-only guarded inspection and wrong-host denial"
+              echo "=== REAL V4 CartApiService -> STRONG V5 CART READER (FEATURE ONLY) ==="
+              php -l "$ROOT/src/V5BitrixCartApiServiceReader.php"
+              php -l "$ROOT/src/V5MySqlCartRead.php"
+              php -l "$ROOT/src/V5AuthHttpHandler.php"
+              php -l "$ROOT/src/V5HttpTransportBoundary.php"
+              php -l "$ROOT/src/V5PhpHttpRequestFactory.php"
+              php -l "$ROOT/src/V5MySqlStrongSessionStore.php"
+              php -l "$ROOT/tests/V5CartBusinessReuseTest.php"
+              echo "PASS: V4 reuse cart PHP files and service contract syntax"
               echo "=== 2A. SERVER DIAGNOSTIC SYNTAX (NO EXECUTION) ==="
               bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
@@ -302,6 +311,7 @@ jobs:
                 V5BitrixPasswordProofPortTest.php \
                 V5BitrixPdoCompatibilityBridgeTest.php \
                 V5BitrixStrongSessionBridgeIntegrationTest.php \
+                V5CartBusinessReuseTest.php \
                 V5BitrixStagedSignupConsentWriterTest.php \
                 V5FirstFactorAttemptGateTest.php \
                 V5LoginWorkflowTest.php \
@@ -344,7 +354,7 @@ jobs:
                 php "$ROOT/tests/$suite"
                 suite_count=$((suite_count + 1))
               done
-              test "$suite_count" -eq 48
+              test "$suite_count" -eq 49
               printf "PASS: %s approved offline suites completed\n" "$suite_count"
               echo "=== 4. NEGATIVE PRE-BOOTSTRAP GUARDS ==="
               if php "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" > /tmp/v5-preflight-denial.log 2>&1; then

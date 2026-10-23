@@ -48,6 +48,16 @@ interface V5SessionLogoutPort
     public function revoke(#[\SensitiveParameter] string $accessJwt): bool;
 }
 
+/**
+ * Server-validated V5 cart GET, no caller-supplied FUSER or user ID.
+ * The native business-service adapter is required; no V4-controller/JWT call.
+ */
+interface V5CartHttpReaderPort
+{
+    /** @return list<array<string,mixed>>|null */
+    public function readVerifiedCart(#[\SensitiveParameter] string $accessJwt): ?array;
+}
+
 interface V5TokenValidationPort
 {
     public function isValidAccessToken(string $accessJwt): bool;
@@ -79,6 +89,7 @@ final readonly class V5AuthHttpHandler
         private ?V5TokenValidationPort $tokenValidator = null,
         private ?V5PublicLegalConsentsPort $publicLegalConsents = null,
         private ?V5SessionLogoutPort $logout = null,
+        private ?V5CartHttpReaderPort $cartReader = null,
     ) {}
 
     /**
@@ -152,6 +163,31 @@ final readonly class V5AuthHttpHandler
                 return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
             }
             return new V5HttpReply(200, ['documents' => $documents]);
+        } catch (Throwable) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+    }
+
+    /**
+     * Protected GET /cart: the real V5 JWT MUST pass locked user, epoch,
+     * assurance and session checks BEFORE calling the native cart service.
+     */
+    public function handleProtectedCartGet(#[\SensitiveParameter] string $accessJwt): V5HttpReply
+    {
+        if ($this->cartReader === null) {
+            return new V5HttpReply(503, ['error' => 'v5_unavailable']);
+        }
+        if (strlen($accessJwt) < 110 || strlen($accessJwt) > 4096
+            || preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D', $accessJwt) !== 1) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        try {
+            $items = $this->cartReader->readVerifiedCart($accessJwt);
+            if (!is_array($items) || !array_is_list($items)) {
+                return new V5HttpReply(401, ['error' => 'authentication_failed']);
+            }
+            // Don't add a second pricing/discount calculation layer.
+            return new V5HttpReply(200, ['items' => $items]);
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }

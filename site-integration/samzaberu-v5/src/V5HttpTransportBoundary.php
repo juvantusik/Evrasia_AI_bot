@@ -27,6 +27,9 @@ final readonly class V5StagedHttpRequest
         public string $contentType,
         #[\SensitiveParameter] public string $rawBody,
         public ?string $contentLength = null,
+        // Exact Authorization header from trusted CGI request metadata.
+        // This is untrusted bearer INPUT, never an HTTPS attestation.
+        public ?string $authorizationHeader = null,
     ) {}
 }
 
@@ -94,16 +97,28 @@ final readonly class V5HttpTransportBoundary
             return self::fail(404, 'not_found');
         }
 
-        // The only anonymous GET: current public legal documents.
-        // Public POST agreement-code validation uses the same JSON guards.
-        // No caller-supplied body, token, query string, cookie or consent write.
+        // GET is either anonymous legal documents or strongly protected cart.
+        // Neither route accepts body, query parameters, cookies or FUSER_ID.
         if ($request->method === 'GET') {
-            if ($action !== 'publicLegalConsents'
-                || $request->rawBody !== ''
+            if ($request->rawBody !== ''
                 || ($request->contentLength !== null && $request->contentLength !== '0')) {
                 return self::fail(400, 'invalid_request');
             }
-            return self::serialize($this->handler->handlePublicLegalConsents(), 131072);
+            if ($action === 'publicLegalConsents') {
+                return self::serialize($this->handler->handlePublicLegalConsents(), 131072);
+            }
+            if ($action === 'readCart') {
+                $header = $request->authorizationHeader;
+                if (!is_string($header) || strlen($header) < 117
+                    || strlen($header) > 4103
+                    || !str_starts_with($header, 'Bearer ')) {
+                    return self::fail(401, 'authentication_failed');
+                }
+                return self::serialize(
+                    $this->handler->handleProtectedCartGet(substr($header, 7)), 131072
+                );
+            }
+            return self::fail(405, 'method_not_allowed');
         }
         if ($request->method !== 'POST') return self::fail(405, 'method_not_allowed');
 
