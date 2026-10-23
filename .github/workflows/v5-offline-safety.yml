@@ -382,6 +382,15 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-review-wrong-host.log
               grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-review-wrong-host.log
               echo "PASS: locked private-site review rejects CI host and self-tests token masking"
+              echo "=== WEBSITE MFA PRIVATE FIVE-FILE SMS BUDGET STAGING ==="
+              bash -n "$ROOT/deployment/prepare-website-mfa-budget-candidates.sh"
+              if bash "$ROOT/deployment/prepare-website-mfa-budget-candidates.sh" --prepare > /tmp/website-mfa-candidate-wronghost.log 2>&1; then
+                echo "FAIL: website private candidate builder ran on GitHub Actions"
+                exit 1
+              fi
+              grep -Fq "FINAL_STATUS=FAIL" /tmp/website-mfa-candidate-wronghost.log
+              grep -Fq "PRODUCTION_CODE_WRITE=NO" /tmp/website-mfa-candidate-wronghost.log
+              echo "PASS: five-file private website candidate installer is wrong-host denied"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
