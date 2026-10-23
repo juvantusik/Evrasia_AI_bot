@@ -804,6 +804,153 @@ $q->execute([$raceId]);$state=$q->fetch(PDO::FETCH_ASSOC);
 smsCheck($state['status']==='consumed' && (int)$state['failed_attempts']===0,
     'one committed TOTP grant and zero failed attempts after race');
 
+/**
+ * A *different challenge* must NOT be able to reuse the same TOTP timestep.
+ * This is deliberately SYNTHETIC: a tiny disposable InnoDB timecode ledger
+ * models persisted Bitrix b_sec_user.PARAMS without pretending to implement
+ * Otp::verify or claiming real native Bitrix E2E acceptance.
+ *
+ * Unlike the earlier test (two workers on ONE challenge_id), two distinct
+ * pending challenges have independent row locks. Only the user-wide replay
+ * marker should serialize them. All tables/users/codes below are CI fixtures.
+ */
+final class CiSyntheticDurableTotpReplay implements V5LockedChallengeNativeFactorPort {
+    public function currentFactorEligibleWithLocks(
+        PDO $db, int $userId, ChallengeKind $kind,
+        string $challengeAuthEpoch, ?string $verifiedPhoneStamp
+    ): bool {
+        return $db->inTransaction() && $userId===41
+            && $kind===ChallengeKind::TOTP && $challengeAuthEpoch===SMS_EPOCH
+            && $verifiedPhoneStamp===null;
+    }
+    public function consumeNativeTotpWithLocks(PDO $db, int $userId, string $code): bool {
+        if (!$db->inTransaction() || $userId!==41 || $code!=='123456') return false;
+        // Exact same physical PDO transaction as challenge status/CAS. The
+        // native Bitrix implementation is NOT called in this CI-only test.
+        $q=$db->prepare('SELECT LAST_TIMECODE FROM ev_v5_ci_totp_replay_guard '
+            .'WHERE USER_ID=? FOR UPDATE');
+        $q->execute([$userId]);
+        $last=$q->fetchColumn();
+        if ($last===false || (int)$last!==0) return false;
+        $u=$db->prepare('UPDATE ev_v5_ci_totp_replay_guard SET LAST_TIMECODE=1 '
+            .'WHERE USER_ID=? AND LAST_TIMECODE=0');
+        $u->execute([$userId]);
+        return $u->rowCount()===1;
+    }
+}
+function ciDistinctTotpRace(string $challengeId): int {
+    try {
+        $db=smsDb();
+        $verifier=new V5MySqlChallengeConsumption(
+            $db, new CiSyntheticDurableTotpReplay(), BIND_KEY, SMS_HMAC_KEY
+        );
+        $grant=$verifier->verifyAndConsume($challengeId,'123456',DEVICE_ID,'ios');
+        return $grant instanceof ConsumedLoginChallenge ? 0 : 1;
+    } catch (Throwable) { return 2; }
+}
+
+$db->exec('CREATE TABLE ev_v5_ci_totp_replay_guard '
+    .'(USER_ID INT NOT NULL PRIMARY KEY, LAST_TIMECODE INT NOT NULL) '
+    .'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+$db->exec('INSERT INTO ev_v5_ci_totp_replay_guard (USER_ID,LAST_TIMECODE) '
+    .'VALUES (41,0)');
+$separateA=str_repeat('6',64);
+$separateB=str_repeat('7',64);
+foreach ([$separateA,$separateB] as $ticket) {
+    smsChallenge($db,$ticket);
+    $q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+    $q->execute(['totp',$ticket]);
+}
+$initialSeparate=$db->prepare('SELECT COUNT(*) FROM ev_v5_auth_challenges '
+    .'WHERE challenge_id IN (?,?) AND status=? AND kind=?');
+$initialSeparate->execute([$separateA,$separateB,'pending','totp']);
+smsCheck((int)$initialSeparate->fetchColumn()===2,
+    'two DIFFERENT valid TOTP challenge rows exist before replay race');
+
+unset($db);
+gc_collect_cycles();
+$pid=pcntl_fork();
+if ($pid===-1) throw new RuntimeException('ephemeral distinct TOTP race fork failed');
+if ($pid===0) exit(ciDistinctTotpRace($separateA));
+$parent=ciDistinctTotpRace($separateB);
+$waited=pcntl_waitpid($pid,$status);
+$child=pcntl_wifexited($status)?pcntl_wexitstatus($status):2;
+smsCheck($waited===$pid
+    && in_array($parent,[0,1],true) && in_array($child,[0,1],true)
+    && (int)($parent===0)+(int)($child===0)===1,
+    'two independent InnoDB workers cannot consume SAME synthetic timestep '
+    .'from DIFFERENT challenge IDs');
+
+$db=smsDb();
+$q=$db->query('SELECT LAST_TIMECODE FROM ev_v5_ci_totp_replay_guard '
+    .'WHERE USER_ID=41');
+smsCheck((int)$q->fetchColumn()===1,
+    'exactly one durable synthetic shared last_timecode advance');
+$q=$db->prepare('SELECT challenge_id,status,failed_attempts FROM '
+    .'ev_v5_auth_challenges WHERE challenge_id IN (?,?)');
+$q->execute([$separateA,$separateB]);
+$rows=$q->fetchAll(PDO::FETCH_ASSOC);
+$consumed=0;$stillPending=0;
+foreach ($rows as $row) {
+    if ($row['status']==='consumed' && (int)$row['failed_attempts']===0) $consumed++;
+    if ($row['status']==='pending' && (int)$row['failed_attempts']===1) $stillPending++;
+}
+smsCheck(count($rows)===2 && $consumed===1 && $stillPending===1,
+    'one grant committed; losing independent challenge charged one failed attempt');
+
+$loser=$parent===0 ? $separateA : $separateB;
+smsCheck(ciDistinctTotpRace($loser)===1,
+    'replaying consumed timestep in loser challenge remains denied');
+$q=$db->prepare('SELECT failed_attempts,status FROM ev_v5_auth_challenges '
+    .'WHERE challenge_id=?');
+$q->execute([$loser]);$loserState=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck(is_array($loserState) && $loserState['status']==='pending'
+    && (int)$loserState['failed_attempts']===2,
+    'second loser replay is durably charged without consumed grant');
+
+/**
+ * Native callback failure AFTER changing replay SQL must roll back BOTH
+ * tables. Still synthetic; positive Bitrix Otp persist/rollback is untested.
+ */
+$rollbackId=str_repeat('8',64);
+smsChallenge($db,$rollbackId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$rollbackId]);
+$failAfterWrite=new class implements V5LockedChallengeNativeFactorPort {
+    public function currentFactorEligibleWithLocks(
+        PDO $db,int $userId,ChallengeKind $kind,
+        string $epoch,?string $stamp
+    ):bool {
+        return $db->inTransaction() && $userId===41
+            && $kind===ChallengeKind::TOTP && $epoch===SMS_EPOCH && $stamp===null;
+    }
+    public function consumeNativeTotpWithLocks(PDO $db,int $userId,string $code):bool {
+        $u=$db->prepare('UPDATE ev_v5_ci_totp_replay_guard '
+            .'SET LAST_TIMECODE=2 WHERE USER_ID=?');
+        $u->execute([$userId]);
+        throw new RuntimeException('ci_synthetic_native_fail_after_write');
+    }
+};
+smsDeny(fn()=>(new V5MySqlChallengeConsumption(
+    $db,$failAfterWrite,BIND_KEY,SMS_HMAC_KEY
+))->verifyAndConsume($rollbackId,'123456',DEVICE_ID,'ios'),
+    'unexpected native verifier failure denies entire TOTP challenge transaction');
+$q=$db->query('SELECT LAST_TIMECODE FROM ev_v5_ci_totp_replay_guard '
+    .'WHERE USER_ID=41');
+smsCheck((int)$q->fetchColumn()===1,
+    'native-style replay write rolled back when factor fails before COMMIT');
+$q=$db->prepare('SELECT status,failed_attempts FROM ev_v5_auth_challenges '
+    .'WHERE challenge_id=?');
+$q->execute([$rollbackId]);$rolledBackChallenge=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck(is_array($rolledBackChallenge)
+    && $rolledBackChallenge['status']==='pending'
+    && (int)$rolledBackChallenge['failed_attempts']===0,
+    'failed native factor granted nothing and made no partial challenge write');
+echo "PASS: real disposable InnoDB distinct-challenge same-timestep "
+    ."replay race and native-callback rollback (synthetic factor ONLY)\n";
+echo "REAL_NATIVE_BITRIX_TOTP=NOT_TESTED\n";
+
+
 
 
 /**
