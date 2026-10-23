@@ -1,0 +1,84 @@
+name: V5 first-factor and public admission offline
+
+on:
+  push:
+    branches:
+      - feature/samzaberu-api-v5-auth-contract
+    paths:
+      - '.github/workflows/v5-native-first-factor-offline.yml'
+      - 'site-integration/samzaberu-v5/src/**'
+      - 'site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  first-factor-offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Checkout feature source without persisted credentials
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Guard CI environment and PHP
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== 1. ENVIRONMENT ==='
+          test "$GITHUB_ACTIONS" = true
+          test "$(hostname -s)" != evrasia
+          test "$(hostname -s)" != eur-bot-01
+          echo 'MODE=CI_OFFLINE_ONLY'
+          echo 'PRODUCTION_DATABASE_CONNECTION=NO'
+          echo 'PRODUCTION_CODE_WRITE=NO'
+          echo 'BITRIX_BOOTSTRAP=NO'
+          echo 'SMS_SENT=NO'
+          php -v | head -n 1
+          php -m | grep -Fxq PDO
+          echo 'PASS: GitHub runner and PHP PDO'
+
+      - name: Lint real first-factor and public V5 composition
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== 2. PHP SYNTAX ==='
+          for file in \
+            site-integration/samzaberu-v5/src/V5BitrixNativeFirstFactorComposition.php \
+            site-integration/samzaberu-v5/src/V5PublicTrafficPreflight.php \
+            site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php \
+            site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php \
+            site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php \
+            site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php; do
+            php -l "$file"
+          done
+          echo 'PHP_LINT=PASS'
+
+      - name: Offline provider dependency and denial tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== 3. TARGETED TESTS ==='
+          php site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php
+          php site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php
+          php site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php
+          echo 'FIRST_FACTOR_PUBLIC_GATES=PASS'
+
+      - name: Final no-production attestation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== 4. RESULT ==='
+          echo 'REAL_BITRIX_NATIVE_E2E=NOT_RUN'
+          echo 'REAL_NATIVE_SECURITY_COVERAGE=NOT_ATTESTED'
+          echo 'PRODUCTION_DATABASE_WRITE=NO'
+          echo 'PRODUCTION_CODE_WRITE=NO'
+          echo 'V4_CHANGED=NO'
+          echo 'V5_ENABLED=NO'
+          echo 'SMS_SENT=NO'
+          echo 'FINAL_STATUS=PASS'
+          echo 'FINAL_RC=0'
