@@ -90,6 +90,60 @@ tassert(!Ledger::eligible(array_diff_key($base, ['DEACTIVATE_UNTIL' => true]), 4
 tassert(!Ledger::advanced($base, array_replace($next, ['PARAMS' => '0:60000001']), 41),
     'native true with old last-used counter cannot produce a V5 grant');
 
+
+// The staging adapter must reject a production DB even when a different
+// CLI machine has the correct Bitrix classes and TOTP source pins.
+$root = '/srv/v5-staging/bitrix-site';
+$schema = 'evrasia_v5_test_totp';
+$host = 'isolated-db-01';
+tassert(\Evrasia\Samzaberu\V5\V5NativeTotpStagingIdentity::approved(
+    $root, $root, $schema, $host, 'ev-v5-stage-01'
+), 'dedicated isolated staging identity shape allowed');
+
+foreach ([
+    [$root, $root, 'bitrix_production', $host, 'ev-v5-stage-01'],
+    [$root, $root, $schema, 'evrasia', 'ev-v5-stage-01'],
+    [$root, $root, $schema, 'mysql-prod-01', 'ev-v5-stage-01'],
+    [$root, $root, $schema, $host, 'evrasia'],
+    [$root, $root, $schema, $host, 'eur-bot-01'],
+    [$root, $root, $schema, $host, 'evrasia-prod-01'],
+    [$root, '/srv/a-different-site', $schema, $host, 'ev-v5-stage-01'],
+    ['/home/site_evrasia/web/evrasia.spb.ru/public_html',
+     '/home/site_evrasia/web/evrasia.spb.ru/public_html',
+     $schema, $host, 'ev-v5-stage-01'],
+    ['/srv/production/bitrix', '/srv/production/bitrix', $schema, $host, 'ev-v5-stage-01'],
+    [$root, $root, $schema, $host, 'production-node'],
+] as $badStage) {
+    tassert(!\Evrasia\Samzaberu\V5\V5NativeTotpStagingIdentity::approved(...$badStage),
+        'nonisolated staging host/path/schema denied without native OTP call');
+}
+
+$row = [
+    'schema_name' => $schema,
+    'server_hostname' => $host,
+    'connection_id' => '17001',
+    'autocommit_value' => '1',
+    'in_transaction_value' => '1',
+];
+tassert(\Evrasia\Samzaberu\V5\V5NativeTotpStagingIdentity::verifiedNativeSession(
+    $row, $schema, $host
+) === '17001', 'same live native connection within active transaction allowed');
+foreach ([
+    ['schema_name' => 'bitrix_prod'],
+    ['server_hostname' => 'live-db'],
+    ['connection_id' => '0'],
+    ['connection_id' => ''],
+    ['connection_id' => 'abc'],
+    ['autocommit_value' => '0'],
+    ['in_transaction_value' => '0'],
+    ['in_transaction_value' => null],
+    ['in_transaction_value' => true],
+] as $mutation) {
+    tassert(\Evrasia\Samzaberu\V5\V5NativeTotpStagingIdentity::verifiedNativeSession(
+        array_replace($row, $mutation), $schema, $host
+    ) === null, 'native connection/schema/session mismatch denied');
+}
+
 echo "PASS: Bitrix-native TOTP persisted replay evidence ($checks offline assertions)\n";
 echo "LIVE_BITRIX_OTP_CALLED=NO\n";
 echo "ACTUAL_TOTP_SECRET_READ=NO\n";

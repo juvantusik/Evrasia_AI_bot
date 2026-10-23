@@ -6,6 +6,7 @@ namespace Evrasia\Samzaberu\V5;
 require_once __DIR__ . '/V5MySqlChallengeConsumption.php';
 require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 require_once __DIR__ . '/V5VerifiedBitrixNativeTransactionDepth.php';
+require_once __DIR__ . '/V5NativeTotpStagingIdentity.php';
 
 use PDO;
 use ReflectionClass;
@@ -107,6 +108,7 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
     private const ALGO_FILE = '/bitrix/modules/main/lib/security/mfa/totpalgorithm.php';
 
     private ?int $eligibleUser = null;
+    private ?string $nativeSessionId = null;
 
     public function __construct(
         private V5BitrixPdoCompatibilityBridge $bridge,
@@ -126,6 +128,7 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
         string $challengeAuthEpoch, ?string $verifiedPhoneStamp
     ): bool {
         $this->eligibleUser = null;
+        $this->nativeSessionId = null;
         if ($kind !== ChallengeKind::TOTP
             || $verifiedPhoneStamp !== null
             || $userId < 1 || $userId > 2147483647
@@ -175,7 +178,8 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
                 || !$otp->isInitialized()
                 || $otp->isAttemptsReached()
                 || !hash_equals(strtolower($before['SECRET']), strtolower((string)$otp->getHexSecret()))
-                || !hash_equals($before['PARAMS'], (string)$otp->getParams())) {
+                || !hash_equals($before['PARAMS'], (string)$otp->getParams())
+                || !$this->attestedScope($db)) {
                 return false;
             }
 
@@ -218,22 +222,60 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
             || !$this->bridge->ownsCurrentNativeTransaction($this->nativeConnection)
             || !class_exists(\Bitrix\Main\Application::class)
             || \Bitrix\Main\Application::getConnection() !== $this->nativeConnection
-            || !is_a($this->nativeConnection, 'Bitrix\\Main\\DB\\MysqliConnection')) {
+            || get_class($this->nativeConnection) !== 'Bitrix\\Main\\DB\\MysqliConnection') {
             return false;
         }
-        $hostname = gethostname();
-        if (!is_string($hostname) || $hostname === ''
-            || in_array(strtolower(explode('.', $hostname, 2)[0]),
-                ['evrasia', 'eur-bot-01', 'prod', 'production'], true)
+
+        // A staging ACK and a non-production PHP hostname cannot prove that
+        // the active MySQL session does not actually belong to production.
+        // Require a canonical, explicitly selected staging Bitrix docroot and
+        // a dedicated evrasia_v5_test_* schema on the exact native connection.
+        $stageRoot = getenv('V5_STAGE_BITRIX_ROOT');
+        $schema = getenv('V5_STAGE_DB_NAME');
+        $dbHost = getenv('V5_STAGE_DB_HOSTNAME');
+        if (!V5NativeTotpStagingIdentity::approved(
+                $stageRoot, $_SERVER['DOCUMENT_ROOT'] ?? null,
+                $schema, $dbHost, gethostname()
+            )
+            || !is_dir($stageRoot) || is_link($stageRoot)
+            || realpath($stageRoot) !== $stageRoot
             || $this->nativeDepth->depthFor($this->nativeConnection) !== 1
-            || !$this->sourceMatches(self::OTP_CLASS, self::OTP_FILE, self::OTP_SHA256)
-            || !$this->sourceMatches(self::ALGO_CLASS, self::ALGO_FILE, $this->reviewedAlgorithmSha256)) {
+            || !$this->sourceMatches(self::OTP_CLASS, self::OTP_FILE, self::OTP_SHA256, $stageRoot)
+            || !$this->sourceMatches(
+                self::ALGO_CLASS, self::ALGO_FILE, $this->reviewedAlgorithmSha256, $stageRoot
+            )) {
             return false;
         }
-        return true;
+
+        try {
+            $query = $this->nativeConnection->query(
+                'SELECT DATABASE() AS schema_name, @@hostname AS server_hostname, '
+                . 'CONNECTION_ID() AS connection_id, '
+                . '@@session.autocommit AS autocommit_value, '
+                . '@@session.in_transaction AS in_transaction_value'
+            );
+            if (!is_object($query) || !method_exists($query, 'fetch')) {
+                return false;
+            }
+            $row = $query->fetch();
+            if (!is_array($row) || $query->fetch() !== false) {
+                return false;
+            }
+            $id = V5NativeTotpStagingIdentity::verifiedNativeSession(
+                $row, $schema, $dbHost
+            );
+            if ($id === null || ($this->nativeSessionId !== null
+                && !hash_equals($this->nativeSessionId, $id))) {
+                return false;
+            }
+            $this->nativeSessionId = $id;
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
-    private function sourceMatches(string $name, string $suffix, string $hash): bool
+    private function sourceMatches(string $name, string $suffix, string $hash, string $stageRoot): bool
     {
         try {
             if (!class_exists($name)) {
@@ -242,7 +284,7 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
             $reflection = new ReflectionClass($name);
             $file = $reflection->getFileName();
             return $reflection->getName() === $name
-                && is_string($file) && str_ends_with($file, $suffix)
+                && is_string($file) && $file === $stageRoot . $suffix
                 && is_file($file) && !is_link($file)
                 && realpath($file) === $file
                 && @hash_file('sha256', $file) === $hash;
