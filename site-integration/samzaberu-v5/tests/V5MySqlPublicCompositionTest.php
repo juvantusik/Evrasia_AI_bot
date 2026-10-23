@@ -6,7 +6,7 @@ require_once __DIR__ . '/../src/V5MySqlPublicComposition.php';
 use Evrasia\Samzaberu\V5\{
     V5MySqlPublicComposition,V5TrustedInstalledNativeCoveragePort,
     V5PublicDependencyAttestationPort,V5PasswordProofPort,V5TrustProofPort,
-    V5LockedStrongSessionProofPort,V5PasswordBoundChallengeLifecyclePort,
+    V5LockedStrongSessionProofPort,V5PublicVerifiedFactorLifecyclePort,
     V5LockedChallengeNativeFactorPort,V5LockedBonusPinReaderPort,
     V5TokenValidationPort,PasswordVerifiedAccount,MobileTrustAssessment,
     ConsumedLoginChallenge,PendingLoginChallenge,ChallengeKind,
@@ -39,11 +39,13 @@ final class PublicWireDependencies implements V5PublicDependencyAttestationPort 
     public function verifiedForPublicTraffic(PDO $db): ?bool { return $this->verified; }
 }
 final class PublicWireDenyingPorts implements V5PasswordProofPort,V5TrustProofPort,
-    V5LockedStrongSessionProofPort,V5PasswordBoundChallengeLifecyclePort,
+    V5LockedStrongSessionProofPort,V5PublicVerifiedFactorLifecyclePort,
     V5LockedChallengeNativeFactorPort,V5LockedBonusPinReaderPort,
     V5TokenValidationPort {
     public int $passwordCalls = 0;
     public int $challengeCalls = 0;
+    public ?bool $publicFactorReady = null;
+    public function verifiedPublicSmsAndTotpLifecycle(PDO $db): ?bool { return $this->publicFactorReady; }
     public function verifyWithoutLogin(string $login,string $password): ?PasswordVerifiedAccount {
         $this->passwordCalls++;
         return null;
@@ -106,6 +108,8 @@ publicWireReject(fn()=>$builder(array_replace($server,['HTTPS'=>'off','HTTP_X_FO
     'proxy-supplied HTTPS never opens public transport');
 publicWireReject(fn()=>$builder(array_replace($server,['HTTP_X_EVRASIA_V5_PILOT'=>'legacy-pilot'])),
     'pilot credentials are never a public release switch');
+publicWireReject(fn()=>$builder($server),'missing real SMS/TOTP lifecycle denies public assembly');
+$ports->publicFactorReady=true;
 $transport=$builder($server);
 publicWireCheck($transport instanceof V5HttpTransportBoundary,'synthetic gated public transport assembled');
 publicWireCheck($ports->passwordCalls===0 && $ports->challengeCalls===0,
