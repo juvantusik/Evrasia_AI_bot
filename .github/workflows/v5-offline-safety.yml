@@ -451,6 +451,16 @@ jobs:
               grep -Fq "FINAL_STATUS=FAIL" /tmp/web-mfa-network-wronghost.log
               grep -Fq "PUBLIC_PHP_FILE_CREATED=NO" /tmp/web-mfa-network-wronghost.log
               echo "PASS: source-only network topology offline guard"
+              echo "=== WEBSITE MFA PRIVATE FIVE-FILE ROLLBACK RELEASE PACKAGE ==="
+              php -l "$ROOT/deployment/website-mfa-release-package.php"
+              php "$ROOT/deployment/website-mfa-release-package.php" --self-test
+              if php "$ROOT/deployment/website-mfa-release-package.php" --prepare > /tmp/web-mfa-package-wronghost.log 2>&1; then
+                echo "FAIL: private web MFA release packager accepted CI as production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-package-wronghost.log
+              grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-mfa-package-wronghost.log
+              echo "PASS: private MFA release package source syntax/fixtures and foreign-host refusal"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
