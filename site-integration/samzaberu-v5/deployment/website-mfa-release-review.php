@@ -42,6 +42,15 @@ final class WebMfaCandidateReview
 
     public static function mask(string $code): string
     {
+        // method() extracts PHP function source without the opening "<?php".
+        // Without this prefix, PHP tokenizer classifies the entire fragment
+        // as T_INLINE_HTML and silently removes its full control flow.
+        // Such a zero-output review previously (incorrectly) returned PASS.
+        $trimmed = ltrim($code);
+        if (!str_starts_with($trimmed, '<?php')
+            && !str_starts_with($trimmed, '<? ')) {
+            $code = "<?php\n" . $code;
+        }
         $out = '';
         foreach (token_get_all($code) as $token) {
             if (is_string($token)) {
@@ -129,6 +138,9 @@ final class WebMfaCandidateReview
             echo $label, '_', (++$printed), '=',substr($item,0,230),"\n";
         }
         echo $label,"_RELEVANT_EXPRESSIONS=",$printed,"\n";
+        // Missing business logic is never a PASS. This is a real semantic
+        // examination only if we can SEE source expressions from each method.
+        self::ok($printed >= 2, 'missing_visible_auth_logic_' . $label);
     }
 
     private static function exactRead(string $f,string $sha): string
@@ -226,6 +238,32 @@ final class WebMfaCandidateReview
             &&str_contains($out,'$userId'),'mask_selftest_failed');
         $fn=self::method($in,'x');
         self::ok(str_contains($fn,'return true;'),'method_boundary_failed');
+        $maskedMethod = self::mask($fn);
+        self::ok(str_contains($maskedMethod, '$userId')
+            && str_contains($maskedMethod, 'return true;')
+            && !str_contains($maskedMethod, 'SECRET_PASSWORD'),
+            'method_fragment_html_mask_fail');
+        ob_start();
+        self::expressions($fn, 'SYNTHETIC_auth', 12);
+        $report = (string)ob_get_clean();
+        self::ok(str_contains($report, 'SYNTHETIC_auth_RELEVANT_EXPRESSIONS=')
+            && !str_contains($report, 'RELEVANT_EXPRESSIONS=0')
+            && str_contains($report, '$userId'),
+            'zero_expression_reviewer_accepted');
+        $negative = false;
+        try {
+            ob_start();
+            self::expressions('<?php function empty() { return true; }',
+                'SYNTHETIC_missing', 12);
+        } catch (RuntimeException $e) {
+            $negative = $e->getMessage() === 'missing_visible_auth_logic_SYNTHETIC_missing';
+        } finally {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        self::ok($negative, 'reviewer_missing_auth_logic_not_rejected');
+        echo "PASS: token-masked method source visible and empty auth blocks fail closed\n";
         echo "PASS: no literal credential leakage; named method token extraction\n";
         echo "MODE=OFFLINE_SELF_TEST\n";
     }
