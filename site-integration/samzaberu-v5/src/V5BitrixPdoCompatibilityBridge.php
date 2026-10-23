@@ -74,6 +74,19 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         return $this->opened;
     }
 
+    /**
+     * Restrict staged native OTP writers to the EXACT Bitrix mysqli connection
+     * with an active transaction opened by THIS bridge. A different bridge,
+     * PHP global Bitrix connection or a poisoned scope must never claim it.
+     * This is necessary but not sufficient: native depth, source identity and
+     * SAVEPOINT continuity are checked independently by the TOTP consumer.
+     */
+    public function ownsCurrentNativeTransaction(object $candidate): bool
+    {
+        return $this->opened && !$this->poisoned
+            && $candidate === $this->native;
+    }
+
     public function beginTransaction(): bool
     {
         if ($this->opened || $this->poisoned) {

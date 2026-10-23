@@ -170,6 +170,10 @@ namespace {
     ok($db->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql','PDO driver check preserves MySQL-compatible branch');
     ok($db->getAttribute(PDO::ATTR_ERRMODE)===PDO::ERRMODE_EXCEPTION,'PDO exception mode check preserved');
     ok(!$db->inTransaction(),'new bridge has no owned transaction');
+    ok(!$db->ownsCurrentNativeTransaction($native),
+        'native OTP verifier cannot claim a connection before its own BEGIN');
+    ok(!$db->ownsCurrentNativeTransaction(new MysqliConnection()),
+        'unrelated mysqli cannot claim owned native transaction');
     $eng=$db->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
     ok($eng instanceof PDOStatement,'Bitrix-backed PDOStatement shape accepted');
     ok($eng->execute(['ev_v5_sms_outbox']),'metadata query executes read-only');
@@ -250,6 +254,10 @@ namespace {
     $clock=$db->prepare('SELECT UNIX_TIMESTAMP()');
     ok($clock->execute([]) && $clock->fetchColumn()==='1800000000','DB clock query supported');
     ok($db->beginTransaction() && $db->inTransaction(),'native startTransaction started');
+    ok($db->ownsCurrentNativeTransaction($native),
+        'staging native OTP factor recognizes exact bridge-owned mysqli transaction');
+    ok(!$db->ownsCurrentNativeTransaction(new MysqliConnection()),
+        'native OTP factor denies a different mysqli in same scope');
     ok($native->active && $native->beginCalls===1,'native ORM connection owns same transaction');
     ok($guardBegin->execute([]) && $native->sessionGuardOpen,
         'native savepoint executed only inside owned transaction');
@@ -286,6 +294,8 @@ namespace {
     ok(count($native->outbox)===1,'one fake native outbox entry');
     ok($db->commit(),'commit delegates to Bitrix connection');
     ok(!$db->inTransaction() && !$native->active && $native->commitCalls===1,'single native commit, scope closed');
+    ok(!$db->ownsCurrentNativeTransaction($native),
+        'released scope cannot authorize another native OTP verification');
     ok($native->budgets[$key]['used_units']===1200 && count($native->outbox)===1,'committed mutations retained');
 
     [$db,$native]=fixture();
