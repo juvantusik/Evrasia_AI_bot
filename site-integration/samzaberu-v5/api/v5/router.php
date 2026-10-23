@@ -24,6 +24,73 @@ if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/health'
     exit;
 }
 
+// Anonymous validation of CURRENT legal revision codes. This is a real
+// read-only V5 endpoint backed by the same live Bitrix agreement catalog as
+// GET /legal/consents; it never accepts/records consent or creates accounts.
+// Public client access is not conditional on the private V5 AUTH factory.
+if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/legal/consents/validate'
+    && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+    && in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on', '1'], true)
+) {
+    require_once dirname(__DIR__, 2) . '/src/V5BitrixPublicLegalCatalog.php';
+    require_once dirname(__DIR__, 2) . '/src/V5PublicLegalCodeValidation.php';
+
+    header_remove('Set-Cookie');
+    header_remove('Location');
+    header_remove('Access-Control-Allow-Origin');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, max-age=0');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+
+    $result = ['status' => 400, 'body' => ['error' => 'invalid_request']];
+    $type = $_SERVER['CONTENT_TYPE'] ?? null;
+    $len = $_SERVER['CONTENT_LENGTH'] ?? null;
+
+    if (!is_string($type)
+        || preg_match('/\Aapplication\/json(?:[ \t]*;[ \t]*charset=utf-8)?\z/iD', $type) !== 1) {
+        $result = ['status' => 415, 'body' => ['error' => 'unsupported_media_type']];
+    } elseif ($len !== null && (!is_string($len)
+        || preg_match('/\A(?:0|[1-9][0-9]*)\z/D', $len) !== 1
+        || strlen($len) > 5)) {
+        $result = ['status' => 400, 'body' => ['error' => 'invalid_request']];
+    } elseif ($len !== null && (int)$len > 8192) {
+        $result = ['status' => 413, 'body' => ['error' => 'invalid_request']];
+    } else {
+        try {
+            $raw = file_get_contents('php://input', false, null, 0, 8193);
+            if (!is_string($raw)) {
+                $result = ['status' => 503, 'body' => ['error' => 'temporarily_unavailable']];
+            } elseif ($raw === '' || strlen($raw) > 8192) {
+                $result = ['status' => 413, 'body' => ['error' => 'invalid_request']];
+            } elseif ($len !== null && strlen($raw) !== (int)$len) {
+                $result = ['status' => 400, 'body' => ['error' => 'invalid_request']];
+            } else {
+                $submission = json_decode($raw, true, 16, JSON_THROW_ON_ERROR);
+                $site = dirname(__DIR__, 4);
+                $documents = \Evrasia\Samzaberu\V5\V5BitrixPublicLegalCatalog::read(
+                    $site . '/bitrix/.settings.php'
+                );
+                $result = \Evrasia\Samzaberu\V5\V5PublicLegalCodeValidation::evaluate(
+                    $submission, $documents
+                );
+            }
+        } catch (\JsonException) {
+            $result = ['status' => 400, 'body' => ['error' => 'invalid_request']];
+        } catch (\Throwable) {
+            $result = ['status' => 503, 'body' => ['error' => 'temporarily_unavailable']];
+        }
+    }
+
+    http_response_code($result['status']);
+    echo json_encode(
+        $result['body'],
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+    );
+    exit;
+}
+
 // Public current legal agreements: read-only native Bitrix catalog.
 // Independent of private auth factory; all authentication routes stay closed.
 if (($_SERVER['REQUEST_URI'] ?? '') === '/api/v5/legal/consents'

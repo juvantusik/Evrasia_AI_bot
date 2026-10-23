@@ -6,6 +6,7 @@ require_once __DIR__ . '/../src/V5AuthHttpHandler.php';
 use Evrasia\Samzaberu\V5\{
     V5LoginWorkflow, V5PasswordProofPort, V5TrustProofPort,
     V5AtomicChallengePort, V5StrongSessionPort, V5AuthHttpHandler, V5SessionActionsPort,
+    V5SessionLogoutPort,
     PasswordVerifiedAccount, MobileTrustAssessment, ChallengeKind,
     PendingLoginChallenge, ConsumedLoginChallenge, AuthenticatedV5Session,
 };
@@ -106,6 +107,26 @@ final class V5SessionActionsStub implements V5SessionActionsPort
         $this->pinCalls++;
         if($this->throwOnBackend)throw new RuntimeException('private RestIS failure');
         return (!$this->denyPin && $accessJwt==='a.b.c')?'00042':null;
+    }
+}
+
+final class LogoutPortStub implements V5SessionLogoutPort
+{
+    public int $calls = 0;
+    public bool $revoked = false;
+    public bool $unavailable = false;
+
+    public function revoke(string $accessJwt): bool
+    {
+        $this->calls++;
+        if ($this->unavailable) {
+            throw new RuntimeException('private native logout unavailable');
+        }
+        if ($this->revoked || !hash_equals('a.' . str_repeat('b', 120) . '.sig', $accessJwt)) {
+            return false;
+        }
+        $this->revoked = true;
+        return true;
     }
 }
 
@@ -256,6 +277,35 @@ check($r->status===503 && $r->body===['error'=>'temporarily_unavailable'],
     'PIN backend outage fails closed without private details');
 check(!str_contains(json_encode($r->body),'private RestIS failure'),
     'private backend errors never reach client');
+
+$logoutToken = 'a.' . str_repeat('b', 120) . '.sig';
+$logoutPort = new LogoutPortStub();
+$logoutHandler = new V5AuthHttpHandler(null, null, null, null, $logoutPort);
+$r=$handler->handleJson('logout', j(['access_token'=>$logoutToken]));
+check($r->status===503 && $r->body===['error'=>'v5_unavailable'],
+    'logout unavailable without verified native revocation provider');
+$r=$logoutHandler->handleJson('logout', j(['access_token'=>$logoutToken]));
+check($r->status===200 && $r->body===['status'=>'logged_out'],
+    'logout succeeds only after native revocation confirmed');
+check($logoutPort->calls===1, 'logout called once');
+$r=$logoutHandler->handleJson('logout', j(['access_token'=>$logoutToken]));
+check($r->status===401 && $r->body===['error'=>'authentication_failed'],
+    'replayed/revoked JWT denied');
+foreach ([
+    ['access_token'=>'v4.jwt.invalid'],
+    ['access_token'=>''],
+    ['access_token'=>23],
+    ['access_token'=>$logoutToken,'user_id'=>11],
+    ['access_token'=>$logoutToken,'refresh_token'=>'illegal'],
+] as $bad) {
+    $r=$logoutHandler->handleJson('logout',j($bad));
+    check(in_array($r->status,[400,401],true), 'malformed/foreign logout denied');
+}
+check($logoutPort->calls===2, 'invalid logout inputs avoid revocation backend');
+$logoutPort->unavailable=true;
+$r=$logoutHandler->handleJson('logout',j(['access_token'=>$logoutToken]));
+check($r->status===503 && $r->body===['error'=>'temporarily_unavailable'],
+    'logout backend outage generic 503');
 
 printf("PASS: V5 auth JSON handler %d assertions\n",$pass);
 echo "API_ROUTER_STILL_DISABLED=YES\nSMS_SENT=NO\nV5_HTTP_ROUTER_STILL_DISABLED=YES\n";

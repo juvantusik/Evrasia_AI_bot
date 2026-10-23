@@ -10,14 +10,16 @@ $expected = [
     'POST /auth/challenge/verify' => 'verifyChallenge',
     'POST /auth/challenge/resend' => 'resendChallenge',
     'POST /auth/refresh' => 'refresh',
+    'POST /auth/logout' => 'logout',
     'POST /auth/token/validate' => 'validateToken',
     'POST /loyalty/pin' => 'showBonusPin',
     'GET /legal/consents' => 'publicLegalConsents',
+    'POST /legal/consents/validate' => 'validateLegalConsents',
 ];
 
 if (V5RouteMap::BASE_PATH !== '/api/v5'
     || V5RouteMap::ROUTES !== $expected
-    || count(array_unique(array_values(V5RouteMap::ROUTES))) !== 7
+    || count(array_unique(array_values(V5RouteMap::ROUTES))) !== 9
 ) {
     throw new RuntimeException('V5 route contract mismatch');
 }
@@ -34,7 +36,7 @@ foreach (array_keys(V5RouteMap::ROUTES) as $spec) {
     }
 }
 
-echo 'PASS: V5 isolated route contract (7 routes, public GET legal only)' . PHP_EOL;
+echo 'PASS: V5 isolated route contract (9 routes; anonymous public legal GET and validation POST)' . PHP_EOL;
 echo 'NATIVE_PROVIDERS_NOT_ACTIVATED=YES' . PHP_EOL;
 
 // Keep this regression in the existing approved offline suite, not a new workflow.

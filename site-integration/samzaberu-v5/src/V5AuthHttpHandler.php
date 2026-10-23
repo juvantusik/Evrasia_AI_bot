@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5LoginWorkflow.php';
 require_once __DIR__ . '/V5LegalConsentContract.php';
+require_once __DIR__ . '/V5PublicLegalCodeValidation.php';
 
 use JsonException;
 use Throwable;
@@ -38,6 +39,15 @@ interface V5SessionActionsPort
  * committed strong session, current user state, revocation and AUTH_EPOCH.
  * Missing native proof MUST NOT be interpreted as a valid JWT.
  */
+interface V5SessionLogoutPort
+{
+    /**
+     * Revoke precisely this verified V5 access session; reject stale,
+     * V4, expired or re-used bearers. Never accept client-supplied user IDs.
+     */
+    public function revoke(#[\SensitiveParameter] string $accessJwt): bool;
+}
+
 interface V5TokenValidationPort
 {
     public function isValidAccessToken(string $accessJwt): bool;
@@ -68,6 +78,7 @@ final readonly class V5AuthHttpHandler
         private ?V5SessionActionsPort $sessionActions = null,
         private ?V5TokenValidationPort $tokenValidator = null,
         private ?V5PublicLegalConsentsPort $publicLegalConsents = null,
+        private ?V5SessionLogoutPort $logout = null,
     ) {}
 
     /**
@@ -99,12 +110,18 @@ final readonly class V5AuthHttpHandler
                 'refresh' => $this->sessionActions === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->refresh($body),
+                'logout' => $this->logout === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->logout($body),
                 'showBonusPin' => $this->sessionActions === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->showBonusPin($body),
                 'validateToken' => $this->tokenValidator === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->validateToken($body),
+                'validateLegalConsents' => $this->publicLegalConsents === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->validateLegalConsents($body),
                 default => new V5HttpReply(503, ['error' => 'v5_unavailable']),
             };
         } catch (AuthenticationRejected $e) {
@@ -138,6 +155,30 @@ final readonly class V5AuthHttpHandler
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
+    }
+
+    private function validateLegalConsents(array $body): V5HttpReply
+    {
+        $result = V5PublicLegalCodeValidation::evaluate(
+            $body, $this->publicLegalConsents->currentPublicDocuments()
+        );
+        return new V5HttpReply($result['status'], $result['body']);
+    }
+
+    private function logout(array $body): V5HttpReply
+    {
+        if (!self::hasOnlyKeys($body, ['access_token'])
+            || !self::isString($body, 'access_token')) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        $jwt = $body['access_token'];
+        if (strlen($jwt) < 110 || strlen($jwt) > 4096
+            || substr_count($jwt, '.') !== 2) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        return $this->logout->revoke($jwt)
+            ? new V5HttpReply(200, ['status' => 'logged_out'])
+            : new V5HttpReply(401, ['error' => 'authentication_failed']);
     }
 
     private function validateToken(array $body): V5HttpReply

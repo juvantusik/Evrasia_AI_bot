@@ -94,7 +94,8 @@ final readonly class V5HttpTransportBoundary
             return self::fail(404, 'not_found');
         }
 
-        // The only anonymous V5 action: current public legal documents.
+        // The only anonymous GET: current public legal documents.
+        // Public POST agreement-code validation uses the same JSON guards.
         // No caller-supplied body, token, query string, cookie or consent write.
         if ($request->method === 'GET') {
             if ($action !== 'publicLegalConsents'

@@ -4,8 +4,9 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 /**
- * Proposed V5 HTTP surface. Paths are relative to the /api/v5 base.
- * No controller may be installed before authentication services are ready.
+ * V5 HTTP surface. Paths are relative to the /api/v5 base.
+ * Public legal validation is read-only and may run before auth readiness;
+ * user/session endpoints MUST stay disabled until native gates pass.
  */
 final class V5RouteMap
 {
@@ -16,8 +17,10 @@ final class V5RouteMap
         'POST /auth/challenge/verify' => 'verifyChallenge',
         'POST /auth/challenge/resend' => 'resendChallenge',
         'POST /auth/refresh' => 'refresh',
+        'POST /auth/logout' => 'logout',
         'POST /auth/token/validate' => 'validateToken',
         'POST /loyalty/pin' => 'showBonusPin',
         'GET /legal/consents' => 'publicLegalConsents',
+        'POST /legal/consents/validate' => 'validateLegalConsents',
     ];
 }

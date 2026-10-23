@@ -6,6 +6,7 @@ namespace Evrasia\Samzaberu\V5;
 require_once __DIR__ . '/V5PublicTrafficPreflight.php';
 require_once __DIR__ . '/V5MySqlConsumedChallengeProof.php';
 require_once __DIR__ . '/V5MySqlSessionActions.php';
+require_once __DIR__ . '/V5MySqlSessionLogout.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 
@@ -85,6 +86,8 @@ final class V5MySqlPublicComposition
             new V5LoginWorkflow($passwords, $trust, $challenges, $sessions),
             new V5MySqlSessionActions($sessions, $pinReader),
             $tokenValidator,
+            null,
+            new V5MySqlSessionLogout($sessions),
         ));
     }
 }

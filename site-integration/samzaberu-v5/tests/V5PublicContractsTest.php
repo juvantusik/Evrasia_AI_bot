@@ -138,6 +138,55 @@ v5publicCheck($reply->status === 200 && $body === ['documents'=>$docs],
 v5publicCheck($catalogPort->calls === 1 && $tokenPort->calls === 0,
     'public GET never validates access JWT');
 
+// Real POST /legal/consents/validate contract: anonymous, authoritative
+// catalog, no registration, no account or consent data mutation.
+$validateRequest = static fn (array $json): V5StagedHttpRequest =>
+    new V5StagedHttpRequest('POST', '/api/v5/legal/consents/validate', true,
+        'application/json', json_encode($json, JSON_THROW_ON_ERROR));
+$initialAuthCalls = $tokenPort->calls;
+$r=$transport->dispatch($validateRequest(['agreements'=>$current]));
+v5publicCheck($r->status===200 && v5publicBody($r)===
+    ['valid'=>true,'agreements'=>$current],
+    'anonymous legal code precheck uses current catalog, no account data');
+v5publicCheck($catalogPort->calls===2 && $tokenPort->calls===$initialAuthCalls,
+    'public legal validation reads real catalog provider, not JWT or auth');
+$r=$transport->dispatch($validateRequest(['agreements'=>[
+    'TEST_MARKETING_20261018','TEST_PD_20261018','TEST_OFFER_20261018'
+]]));
+v5publicCheck($r->status===200 && v5publicBody($r)===['valid'=>true,
+    'agreements'=>[...$current,'TEST_MARKETING_20261018']],
+    'marketing stays opt-in and output follows server document order');
+foreach ([
+    ['agreements'=>['TEST_OFFER_20261018','TEST_OLD_PD_REVISION']],
+    ['agreements'=>['TEST_PD_20261018','TEST_MARKETING_20261018']],
+    ['agreements'=>['TEST_OFFER_20261018','TEST_PD_20261018','UNLISTED_REVISION']],
+] as $expired) {
+    $r=$transport->dispatch($validateRequest($expired));
+    v5publicCheck($r->status===409 && v5publicBody($r)===['error'=>'documents_changed'],
+        'outdated or missing mandatory agreement needs fresh catalog');
+}
+foreach ([
+    ['agreements'=>['TEST_OFFER_20261018','TEST_OFFER_20261018']],
+    ['agreements'=>$current,'user_id'=>123],
+    ['agreements'=>[1,2]],
+    ['agreements'=>[]],
+    ['agreements'=>'TEST_OFFER_20261018'],
+] as $malformed) {
+    $r=$transport->dispatch($validateRequest($malformed));
+    v5publicCheck($r->status===400 && v5publicBody($r)===['error'=>'invalid_request'],
+        'public legal validation rejects duplicates, claims, and malformed JSON');
+}
+$r=$transport->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/legal/consents/validate',false,'application/json',
+    json_encode(['agreements'=>$current], JSON_THROW_ON_ERROR)
+));
+v5publicCheck($r->status===403, 'anonymous legal write-free validation still requires TLS');
+$catalogPort->fail=true;
+$r=$transport->dispatch($validateRequest(['agreements'=>$current]));
+v5publicCheck($r->status===503 && v5publicBody($r)===['error'=>'temporarily_unavailable'],
+    'live legal-source outage never confirms an agreement');
+$catalogPort->fail=false;
+
 $tokenRequest = static fn (string $t): V5StagedHttpRequest =>
     new V5StagedHttpRequest('POST','/api/v5/auth/token/validate',true,'application/json',
         json_encode(['access_token'=>$t],JSON_THROW_ON_ERROR));
