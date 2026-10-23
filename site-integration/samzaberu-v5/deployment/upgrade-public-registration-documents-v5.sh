@@ -161,9 +161,9 @@ smoke() {
 smoke GET /api/v5/health '{"status":"online","service":"samzaberu-v5","auth_ready":false}'
 smoke POST /api/v5/auth/signin '{"error":"v5_unavailable"}'
 smoke POST /api/v5/legal/consents/validate '{"error":"unsupported_media_type"}'
-# CLI runs PHP -n without native pdo_mysql. The new GET should execute its
-# own registered branch and deny safely, never require a V5 auth factory.
-smoke GET /api/v5/legal/registration-documents '{"error":"temporarily_unavailable"}'
+# Do NOT invoke GET registration-documents in isolated CLI: depending on the
+# installed PHP build it may open a real Bitrix SQL read. Route bytes are pinned
+# from Git, and real origin/public GETs will be verified AFTER safe V5 publish.
 
 NEXT_MANIFEST="$(mktemp "$HOME_V5/.manifest-next.XXXXXXXX")"
 awk -v target="$LIVE" '$2!=target{print}' "$MANIFEST" > "$NEXT_MANIFEST"
