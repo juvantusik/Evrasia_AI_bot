@@ -24,6 +24,8 @@ use Evrasia\Samzaberu\V5\{
     V5NativeTotpEnabledGate,
     V5MandatoryRightsSmsEligibility,
     V5PinnedBitrixMandatoryRightsProbe,
+    V5NativeCappedLoginControls,
+    V5PinnedBitrixLoginAttemptLimits,
 };
 
 final class FirstFactorFakeDb extends PDO
@@ -188,6 +190,14 @@ firstFactorCheck($rows instanceof V5PdoUserRowSource
     && $mfa instanceof V5NativeTotpEnabledGate
     && $loginPolicy instanceof V5StrictExistingLoginPolicy,
     'b_user physical reader and strict MFA/login policies wired');
+$controlsAdapter = (new ReflectionProperty($loginPolicy, 'controls'))->getValue($loginPolicy);
+firstFactorCheck($controlsAdapter instanceof V5NativeCappedLoginControls,
+    'first-factor site controls cannot bypass native CUser policy ceiling');
+$nativeCeiling = (new ReflectionProperty($controlsAdapter, 'native'))->getValue($controlsAdapter);
+firstFactorCheck($nativeCeiling instanceof V5PinnedBitrixLoginAttemptLimits,
+    'native login policy must come from SHA-pinned CUser source');
+firstFactorCheck($controlsAdapter->readForUser(41) === null,
+    'unknown independent site policy cannot be replaced by CUser getPolicy');
 $nativeMfa = (new ReflectionProperty($mfa, 'native'))->getValue($mfa);
 firstFactorCheck($nativeMfa instanceof V5NativeTotpStatus,
     'global OTP activation guard wraps authoritative native MFA state');
