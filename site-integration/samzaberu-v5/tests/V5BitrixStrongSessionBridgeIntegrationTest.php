@@ -20,6 +20,7 @@ namespace Bitrix\Main\DB {
         public bool $active=false;
         public bool $failCommit=false;
         public bool $failDml=false;
+        public bool $sessionGuardOpen=false;
         public int $now=1800000000;
         public string $epoch='7';
         public string $phoneEventVersion='0';
@@ -34,18 +35,21 @@ namespace Bitrix\Main\DB {
         public function startTransaction():mixed {
             if($this->active)throw new \RuntimeException('already in transaction');
             $this->active=true;
+            $this->sessionGuardOpen=false;
             $this->backup=[$this->sessions,$this->epoch,
                 $this->phoneEventVersion,$this->phoneBinding];return null;
         }
         public function commitTransaction():mixed {
             if(!$this->active||$this->failCommit)throw new \RuntimeException('fake commit failure');
+            if($this->sessionGuardOpen)throw new \RuntimeException('unreleased synthetic savepoint');
             $this->active=false;$this->backup=[];$this->commits++;return null;
         }
         public function rollbackTransaction():mixed {
             if(!$this->active)throw new \RuntimeException('no transaction');
             [$this->sessions,$this->epoch,$this->phoneEventVersion,$this->phoneBinding]
                 =$this->backup;
-            $this->active=false;$this->rollbacks++;return null;
+            $this->active=false;$this->sessionGuardOpen=false;
+            $this->rollbacks++;return null;
         }
         public function getAffectedRowsCount():int{return $this->affected;}
         public function query(string $sql):BridgeMockResult {
@@ -120,6 +124,16 @@ namespace Bitrix\Main\DB {
             $this->queries[]=$sql;
             if(!$this->active||$this->failDml)throw new \RuntimeException('no owned tx');
             $this->affected=0;
+            if($sql==='SAVEPOINT v5_strong_session_guard') {
+                if($this->sessionGuardOpen)throw new \RuntimeException('duplicate synthetic savepoint');
+                $this->sessionGuardOpen=true;
+                return null;
+            }
+            if($sql==='RELEASE SAVEPOINT v5_strong_session_guard') {
+                if(!$this->sessionGuardOpen)throw new \RuntimeException('missing synthetic savepoint');
+                $this->sessionGuardOpen=false;
+                return null;
+            }
             if(str_starts_with($sql,'UPDATE ev_samzaberu_auth_state SET ')) {
                 if(preg_match("/\AUPDATE ev_samzaberu_auth_state SET AUTH_EPOCH = ([0-9]+), PHONE_EVENT_VERSION = ([0-9]+), PHONE_BINDING_HMAC = '([a-f0-9]{64})' WHERE USER_ID = ([0-9]+) AND AUTH_EPOCH = ([0-9]+) AND PHONE_EVENT_VERSION = ([0-9]+)\z/D", $sql, $m)) {
                     if($m[4]!=='41')throw new \RuntimeException('wrong synthetic event user');
@@ -310,7 +324,11 @@ namespace {
     $result=$store->afterTrustedDevice(
         new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
     );
-    bridgeCheck($native->commits===1 && !$native->active,'one native Bitrix commit for V5 issuance');
+    bridgeCheck($native->commits===1 && !$native->active && !$native->sessionGuardOpen,
+        'native Bitrix V5 issuance releases owned savepoint before one commit');
+    bridgeCheck(in_array('SAVEPOINT v5_strong_session_guard',$native->queries,true)
+        && in_array('RELEASE SAVEPOINT v5_strong_session_guard',$native->queries,true),
+        'synthetic native connection sees both exact strong-session continuity statements');
     bridgeCheck(count($native->sessions)===1,'V5 session inserted through native mysqli');
     $record=array_values($native->sessions)[0];
     bridgeCheck($record['auth_epoch']==='7' && $record['assurance']==='trusted',
