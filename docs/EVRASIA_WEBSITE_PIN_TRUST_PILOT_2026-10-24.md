@@ -15,3 +15,18 @@ It pins existing original PIN SHA `c7fa868712ab10bef5e85384158bb1c8b21548379b278
 CLI modes: `--self-test` (offline), `--preflight` (read-only), `--apply` (one-file production PIN fix), `--status`, `--rollback <private_root_only_release_dir>`. Rollback tool is stored locally inside release directory to work without GitHub.
 
 **Production PIN fix has NOT been run yet.** After install, test trusted browser: PIN should be shown in account without new SMS. Unknown-device native TOTP remains unchanged. The two PIN alert UI templates main/main2026 were separately updated PASS and must remain. Full V3 all-user MFA release and shared SMS quotas are NOT deployed.
+
+## Latest production verification: PILOT PIN PATCH INSTALLED
+
+**Confirmed from root@evrasia operator output:** patched tool commit [`71017f9a2fdfa44c0e10b0210d59253789a0b6ce`](https://github.com/juvantusik/Evrasia_AI_bot/commit/71017f9a2fdfa44c0e10b0210d59253789a0b6ce), pinned blob `d4d6df081173ae90285dc7c4667f2f00cb26e696`; offline self-test PASS, preflight PASS, one-file atomic `--apply` PASS and fresh `--status` PASS. `WRAPPER_FINAL_STATUS=PASS`, `WRAPPER_RC=0`.
+
+Previous preflight on commit b4fb48 had failed closed at `only_one_pin_condition_changed_guard` because of original PHP whitespace; no production change on that prior attempt. The updated reverse-byte proof preserves the original matched condition's exact whitespace/offset and CI #40041604720 succeeded.
+
+**Actual installed production PIN source:** `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/pincode.php`, SHA256 `dee875d300403f11ad13fdfafc760fabd52daf39e03f31ee89f847d4dd427510`, `LIVE_PIN_STATE=PILOT_TRUSTED_DIRECT_PIN`, `PILOT_USER_SCOPE=880339_ONLY`. Exact original PIN SHA256 `c7fa868712ab10bef5e85384158bb1c8b21548379b278de5fb808a0e3505afff`. Independent root-private verified rollback `/root/ev-web-mfa-release-packages/pilot-pin-trust-20261023-234931-e815f73a`.
+
+**Offline rollback command** (operator should only run if necessary, not during successful browser test): `php /root/ev-web-mfa-release-packages/pilot-pin-trust-20261023-234931-e815f73a/pin-rollback-local.php --rollback /root/ev-web-mfa-release-packages/pilot-pin-trust-20261023-234931-e815f73a`.
+
+Pilot trusted TOTP login SHA remains `b63094e5d45ad74f28f9594b605944526adbfad9fd0dd507ccabf11f843ed174`. No login, TOTP, SMS send source, DB, Redis, Trusted Device records, V4 or V5 changes. Full V3 all-user rollout NOT DEPLOYED.
+
+**PENDING REQUIRED BROWSER E2E:** On existing trusted pilot browser, click PIN once: PIN must render inside account without a new SMS and without TOTP. Then optional clean incognito TOTP path regression. Server-side source verification does NOT by itself establish browser outcome. Avoid repeated SMS requests while testing.
+
