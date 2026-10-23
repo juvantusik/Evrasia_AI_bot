@@ -401,6 +401,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-native-wrong-host.log
               grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-mfa-native-wrong-host.log
               echo "PASS: native trust source reader refuses all nonproduction environments"
+              echo "=== WEBSITE MFA TRUSTED DEVICE + NATIVE TOTP PRIVATE PATCH ==="
+              php -l "$ROOT/deployment/website-mfa-trusted-totp-private-stage.php"
+              php "$ROOT/deployment/website-mfa-trusted-totp-private-stage.php" --self-test
+              if php "$ROOT/deployment/website-mfa-trusted-totp-private-stage.php" --stage > /tmp/web-mfa-totp-trust-wronghost.log 2>&1; then
+                echo "FAIL: v3 private TOTP trust patch accepted CI as production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-totp-trust-wronghost.log
+              grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/web-mfa-totp-trust-wronghost.log
+              echo "PASS: trust-first patch does not permit non-production staging"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
