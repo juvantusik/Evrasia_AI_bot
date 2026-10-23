@@ -11,6 +11,17 @@ require_once __DIR__ . '/V5HttpTransportBoundary.php';
 
 use InvalidArgumentException;
 use PDO;
+use Throwable;
+
+/**
+ * Separate public capability: unlike the existing TOTP-only staging issuer,
+ * this provider attests BOTH real SMS issue/resend and native TOTP lifecycle.
+ * No production implementation exists; false/unknown must abort assembly.
+ */
+interface V5PublicVerifiedFactorLifecyclePort extends V5PasswordBoundChallengeLifecyclePort
+{
+    public function verifiedPublicSmsAndTotpLifecycle(PDO $db): ?bool;
+}
 
 /**
  * Future public mobile V5 composition, deliberately NOT wired to site.php.
@@ -34,7 +45,7 @@ final class V5MySqlPublicComposition
         V5PasswordProofPort $passwords,
         V5TrustProofPort $trust,
         V5LockedStrongSessionProofPort $lockedTrust,
-        V5PasswordBoundChallengeLifecyclePort $fullChallengeLifecycle,
+        V5PublicVerifiedFactorLifecyclePort $fullChallengeLifecycle,
         V5LockedChallengeNativeFactorPort $factors,
         V5LockedBonusPinReaderPort $pinReader,
         V5TokenValidationPort $tokenValidator,
@@ -48,6 +59,16 @@ final class V5MySqlPublicComposition
         if (!(new V5PublicTrafficPreflight($nativeEvidence, $dependencyEvidence))
             ->mayDispatch($db, $server)) {
             throw new InvalidArgumentException('V5 public native release unavailable');
+        }
+        // A TOTP-only issuer cannot satisfy the public-factor interface.
+        // A failed/unknown real SMS issuer or resend proof aborts before
+        // constructing any JWT, challenge or SMS-dependent services.
+        try {
+            if ($fullChallengeLifecycle->verifiedPublicSmsAndTotpLifecycle($db) !== true) {
+                throw new InvalidArgumentException('V5 public factor lifecycle unavailable');
+            }
+        } catch (Throwable) {
+            throw new InvalidArgumentException('V5 public factor lifecycle unavailable');
         }
         // Reuse the existing strict ten-path gate for EACH USER as well as
         // during the release preflight. No independent permissive coverage.
