@@ -21,6 +21,9 @@ use Evrasia\Samzaberu\V5\{
     V5PdoUserRowSource,
     V5SiteAccountReader,
     V5NativeTotpStatus,
+    V5NativeTotpEnabledGate,
+    V5MandatoryRightsSmsEligibility,
+    V5PinnedBitrixMandatoryRightsProbe,
 };
 
 final class FirstFactorFakeDb extends PDO
@@ -182,22 +185,36 @@ $rows = (new ReflectionProperty($reader, 'rows'))->getValue($reader);
 $mfa = (new ReflectionProperty($reader, 'totp'))->getValue($reader);
 $loginPolicy = (new ReflectionProperty($reader, 'policy'))->getValue($reader);
 firstFactorCheck($rows instanceof V5PdoUserRowSource
-    && $mfa instanceof V5NativeTotpStatus
+    && $mfa instanceof V5NativeTotpEnabledGate
     && $loginPolicy instanceof V5StrictExistingLoginPolicy,
     'b_user physical reader and strict MFA/login policies wired');
-$mfaRows = (new ReflectionProperty($mfa, 'rows'))->getValue($mfa);
-$fallback = (new ReflectionProperty($mfa, 'fallback'))->getValue($mfa);
+$nativeMfa = (new ReflectionProperty($mfa, 'native'))->getValue($mfa);
+firstFactorCheck($nativeMfa instanceof V5NativeTotpStatus,
+    'global OTP activation guard wraps authoritative native MFA state');
+$mfaRows = (new ReflectionProperty($nativeMfa, 'rows'))->getValue($nativeMfa);
+$fallback = (new ReflectionProperty($nativeMfa, 'fallback'))->getValue($nativeMfa);
 $store = (new ReflectionProperty($gate, 'store'))->getValue($gate);
 firstFactorCheck($mfaRows instanceof V5PinnedBitrixMfaRowSource
     && $fallback instanceof V5StrictNoMfaFallbackPolicy
     && $store instanceof V5MySqlAttemptWindowStore,
     'native MFA reader, mandatory fallback and atomic counter wired');
 
+$rightsEligibility = (new ReflectionProperty($fallback, 'perUser'))->getValue($fallback);
+firstFactorCheck($rightsEligibility instanceof V5MandatoryRightsSmsEligibility,
+    'native group rights veto required before independent site SMS decision');
+$nativeRights = (new ReflectionProperty($rightsEligibility, 'rights'))->getValue($rightsEligibility);
+firstFactorCheck($nativeRights instanceof V5PinnedBitrixMandatoryRightsProbe,
+    'mandatory Bitrix group rights come only from source-pinned Otp code');
+firstFactorCheck($rightsEligibility->isSmsAllowedWithoutNativeMfa(41) === null,
+    'unattested native user-rights source never grants SMS');
+
 $nativeOtpConfig = (new ReflectionProperty($fallback, 'global'))->getValue($fallback);
 firstFactorCheck($nativeOtpConfig instanceof V5PinnedBitrixGlobalOtpConfig,
     'global native OTP flags are pinned to the installed Bitrix Otp.php source');
 firstFactorCheck($nativeOtpConfig->read() === null,
     'no Bitrix bootstrap cannot be mistaken for optional MFA');
+firstFactorCheck($mfa->isTotpActive(41) === null,
+    'disabled or missing global native OTP never provides strong TOTP proof');
 firstFactorCheck($fallback->permitsPasswordPlusSms(41) === null,
     'missing current per-user MFA proof never grants SMS fallback');
 $nativeRowsDenied = false;
