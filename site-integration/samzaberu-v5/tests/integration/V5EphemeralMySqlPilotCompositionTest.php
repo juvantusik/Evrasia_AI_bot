@@ -44,13 +44,13 @@ final class CompositionCiPorts implements V5PasswordProofPort, V5TrustProofPort,
     }
     public function evaluate(int $id,string $device,string $platform,string $token):MobileTrustAssessment {
         $this->trustCalls++;
-        $ok=$this->trustAllowed && $token==='ci-strong-trust' && !$this->fixtureTotp;
+        $ok=$this->trustAllowed && $token==='ci-strong-trust';
         return new MobileTrustAssessment($ok,$ok);
     }
     public function verifiedTrustWithUserLock(PDO $db,PasswordVerifiedAccount $account,
         string $device,string $platform,string $token):bool {
         $this->lockedTrustCalls++;
-        return $db===$this->db && $db->inTransaction() && !$account->nativeTotpActive
+        return $db===$this->db && $db->inTransaction()
             && $this->lockedTrustAllowed && $token==='ci-strong-trust';
     }
     public function verifiedConsumedGrantWithUserLock(PDO $db,ConsumedLoginChallenge $grant):bool {
@@ -148,11 +148,18 @@ foreach([false,null] as $coverage) {
 }
 $native->coverageAllowed=true;$native->lockedTrustAllowed=false;
 compositionCall($http,'/auth/signin',$signin,401);$native->lockedTrustAllowed=true;
-$native->fixtureTotp=true;$calls=$native->trustCalls;$before=compositionSnapshot($setup);
+$native->fixtureTotp=true;$calls=$native->trustCalls;$locked=$native->lockedTrustCalls;
+$begin=$native->totpBeginCalls;$before=compositionSnapshot($setup);
+$trustedTotp=compositionCall($http,'/auth/signin',$signin,200);
+smsCheck(($trustedTotp['status']??null)==='authenticated'
+    && $native->trustCalls===$calls+1 && $native->lockedTrustCalls===$locked+1
+    && $native->totpBeginCalls===$begin && $before!==compositionSnapshot($setup),
+    'active native TOTP plus strongly enrolled current trust issues JWT without new code');
+$native->trustAllowed=false;$before=compositionSnapshot($setup);
 compositionCall($http,'/auth/signin',$signin,401);
-smsCheck($native->totpBeginCalls===1 && $native->trustCalls===$calls && $before===compositionSnapshot($setup),
-    'TOTP priority uses existing bound issuer and denied native proof never falls back');
-$native->fixtureTotp=false;$native->trustAllowed=false;
+smsCheck($native->totpBeginCalls===$begin+1 && $before===compositionSnapshot($setup),
+    'active native TOTP without current strong trust uses bound issuer and denied proof NEVER falls back to SMS');
+$native->fixtureTotp=false;
 compositionCall($http,'/auth/signin',$signin,401);
 compositionCall($http,'/auth/challenge/resend',['challenge_id'=>str_repeat('a',64),'device_id'=>DEVICE_ID,'platform'=>'ios'],401);
 compositionCall($http,'/auth/challenge/verify',['challenge_id'=>str_repeat('a',64),'code'=>'123456','device_id'=>DEVICE_ID,'platform'=>'ios'],401);
