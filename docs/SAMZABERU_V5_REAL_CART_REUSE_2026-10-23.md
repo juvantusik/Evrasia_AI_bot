@@ -25,7 +25,12 @@
 ## Тестирование и следующий шаг
 
 - Новый \`V5CartBusinessReuseTest.php\` проверяет HTTP bearer/GET/invalid/foreign/side effects/source-pin refusal на offline in-process contract stubs; старый \`V5MySqlStrongSessionStoreTest.php\` дополнен проверками под lock, deny, native exception, replay/revoke.
-- Офлайн CI расширен новым test suite и PHP lint. **RUNS/CONCLUSIONS: проверить после публикации commit.** CI fake objects — не создание тестового аккаунта и не публичный mock API. Real Bitrix site test ещё не проведён.
+- Офлайн CI расширен новым test suite и PHP lint. **CI: first-factor/public #39976180823 SUCCESS, offline safety #39976180701 SUCCESS** after minimal HTTP GET entry fix commit `6e18b11e`; ephemeral MariaDB #39976180778 SUCCESS (disposable DB; NOT live Bitrix). Original feature commit `e17dc49a` passed first-factor and MariaDB; its offline suite detected a missing HTTP GET prebootstrap admission, which was corrected fail-closed without weakening V5 authentication. CI fake objects — не создание тестового аккаунта и не публичный mock API. Real Bitrix site test ещё не проведён.
 - **NEXT:** выполнить точечную проверку только body \`CartApiService::__construct/getCartItems/calcBasketTotal\` + \`Cart::checkFUserId/getSiteId\` из существующих закреплённых source, убедиться в ownership/writes/Bitrix ORM/transaction coupling, реализовать реальный \`V5VerifiedLockedCartOwnerPort\` в site integration. Затем решить нужен ли GET /cart без авторизации и как реализовать временную гостевую корзину без IDOR (не предполагать). После native guarded integration добавить полное DTO price/total/discounts/extra, используя те же V4 business funcs. **Никакой activation V5 AUTH до native gates**.
 
 Основной адрес мобильного API — **https://evrasia.rest/api/v5**. \`evrasia.spb.ru\` — Bitrix origin/filesystem; прежний public legal install-script с only .spb.ru HTTP smoke не считать выпущенным для .rest.
+
+## Следующая точная производственная проверка (один раз, без повторной инвентаризации)
+
+В \`tests/diagnostics/\` подготовлены \`V5CartFuserBusinessBoundary.php\` и \`v5_cart_fuser_business_boundary_readonly.sh\`. Скрипт source-only с фиксированными SHA из предыдущего production вывода печатает **ТОЛЬКО** \`V4\Cart::checkFUserId/getSiteId\` и \`CartApiService::__construct/getCartItems/calcBasketTotal\` с замаскированными строками/комментариями. Ни один сайт/SQL/Bitrix файл не исполняется и не изменяется. После stdout определить, какие методы способны возвращать подтверждённый FUSER_ID без генерации новой корзины, имеют ли побочные записи и какой полный результат расчёта. Не угадывать SQL-таблицы или DTO на глаз.
+

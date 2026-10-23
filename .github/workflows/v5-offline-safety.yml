@@ -86,6 +86,18 @@ jobs:
               php -l "$ROOT/src/V5MySqlStrongSessionStore.php"
               php -l "$ROOT/tests/V5CartBusinessReuseTest.php"
               echo "PASS: V4 reuse cart PHP files and service contract syntax"
+              echo "=== V4 CartApiService FUSER SOURCE BOUNDARY ==="
+              php -n -l "$ROOT/tests/diagnostics/V5CartFuserBusinessBoundary.php"
+              bash -n "$ROOT/tests/diagnostics/v5_cart_fuser_business_boundary_readonly.sh"
+              php "$ROOT/tests/diagnostics/V5CartFuserBusinessBoundary.php" --self-test
+              if bash "$ROOT/tests/diagnostics/v5_cart_fuser_business_boundary_readonly.sh" /tmp/not-installed.php > /tmp/v5-cart-fuser-wrong-host.log 2>&1; then
+                echo "FAIL: native CartApiService boundary ran in CI"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-cart-fuser-wrong-host.log
+              grep -Fxq "MODE=READ_ONLY" /tmp/v5-cart-fuser-wrong-host.log
+              grep -Fxq "USER_DATA_READ=NO" /tmp/v5-cart-fuser-wrong-host.log
+              echo "PASS: source-only native cart FUSER guard fails closed"
               echo "=== 2A. SERVER DIAGNOSTIC SYNTAX (NO EXECUTION) ==="
               bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
