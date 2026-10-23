@@ -81,6 +81,8 @@ final class V5PinnedBitrixLoginAttemptLimits implements V5NativeLoginAttemptLimi
             $file = $reflection->getFileName();
             $method = new ReflectionMethod(\CUser::class, 'getPolicy');
             if (!$method->isPublic() || !$method->isStatic()
+                || $method->getDeclaringClass()->getName() !== $reflection->getName()
+                || $method->getFileName() !== $file
                 || !is_string($file) || !str_ends_with($file, self::USER_SUFFIX)
                 || !is_file($file) || is_link($file)
                 || realpath($file) !== $file
