@@ -8,6 +8,7 @@ require_once __DIR__ . '/V5PinnedBitrixPasswordComparator.php';
 require_once __DIR__ . '/V5PdoUserRowSource.php';
 require_once __DIR__ . '/V5NativeTotpStatus.php';
 require_once __DIR__ . '/V5ExistingLoginPolicy.php';
+require_once __DIR__ . '/V5BitrixNativeLoginPolicyLimits.php';
 require_once __DIR__ . '/V5NoMfaFallbackPolicy.php';
 require_once __DIR__ . '/V5PinnedBitrixMfaPolicies.php';
 require_once __DIR__ . '/V5BitrixMfaAdmissionGuards.php';
@@ -91,7 +92,12 @@ final class V5BitrixNativeFirstFactorComposition
             new V5PdoUserRowSource($accountReadDb),
             $phones,
             $mfa,
-            new V5StrictExistingLoginPolicy($loginControls),
+            new V5StrictExistingLoginPolicy(
+                new V5NativeCappedLoginControls(
+                    $loginControls,
+                    new V5PinnedBitrixLoginAttemptLimits(),
+                ),
+            ),
         );
         $attemptGate = new V5AtomicFirstFactorAttemptGate(
             new V5MySqlAttemptWindowStore($attemptBudgetDb),
