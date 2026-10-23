@@ -419,3 +419,10 @@ The old \`upgrade-public-legal-v5.sh\` is stale because it pins previous \`api/v
 **NEXT_STEP=CI_PINNED_PUBLIC_INSTALLER_THEN_OPERATOR_REAL_SITE_ROLLOUT**, followed by another real V5 business endpoint (profile, orders, etc.), not more static migration dashboards. V4 remains active temporarily; full V5 AUTH OFF.
 
 **Safety refinement:** script Git blob `dbfdb0db2a3996bde744274333281161c819702f` removes a staged CLI GET that could connect to real Bitrix DB on statically linked PHP MySQL builds. Pre-switch uses only PHP lint and health/auth-off/negative-Content-Type checks. Native legal registration GET is validated *after* the V5-only atomic switch via HTTPS origin **and** `https://evrasia.rest`, with rollback on failures. Full source Git HEAD after hardening must be verified before operator's run. No production execution performed.
+
+## 35. 2026-10-23 — V5 public registration and guarded deploy code CI SUCCESS, prod not run
+
+
+**Завершено и подтверждено в GitHub:** hardened installer commit [`71783db5`](https://github.com/juvantusik/Evrasia_AI_bot/commit/71783db5200bbc5a50798a8d16c9ea39d0adecbf), script Git blob `dbfdb0db2a3996bde744274333281161c819702f`. [V5 offline safety CI #39990113566](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39990113566) **COMPLETED SUCCESS**: Bash syntax and wrong-host refusal. Feature code `0a035f96`: three CI **SUCCESS** — [offline #39988953512](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39988953512), [first factor #39988954079](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39988954079), [ephemeral MariaDB #39988953778](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39988953778). **Это не production run и не выпуск авторизации**. Внешний `evrasia.rest` веб-запрос из исследовательского интерфейса не дал проверяемого ответа; поэтому доступность нельзя утверждать без operator HTTPS smoke. Настоящий installer строго проверяет её или откатывает.
+
+**NEXT=RUN_PINNED_OFF_ONLY_ROLLOUT_ON_EVRASIA_AND_READ_OPERATOR_RESULT**, no V4 route changes, no real login enabled.
