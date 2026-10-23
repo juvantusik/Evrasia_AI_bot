@@ -47,13 +47,23 @@ $b="'APPLICATION_ID' => &\$applicationId,";
 $c="\$passwordOriginal = 'Y';";
 $d="'PASSWORD_ORIGINAL' => &\$passwordOriginal,";
 if(substr_count($source,$mark)!==1||substr_count($source,$a)!==1
-  ||substr_count($source,$b)!==1||str_contains($source,$c)
-  ||str_contains($source,$d))exit(3);
+  ||substr_count($source,$b)!==1)exit(3);
 $start=strpos($source,$mark);
 $p=strpos($source,$a);$q=strpos($source,$b);
 if($p<=$start||$q<=$p||$q>$start+3500)exit(4);
+// Other original login/SMS methods may legitimately already use
+// PASSWORD_ORIGINAL. Change only the two unique BAD expressions in
+// the new pilot helper, not these independent existing native flows.
+$helperSlice=substr($source,$start,3500);
+if(str_contains($helperSlice,$c)||str_contains($helperSlice,$d))exit(4);
 $new=str_replace($b,$d,str_replace($a,$c,$source));
-$reverse=str_replace($c,$a,str_replace($d,$b,$new));
+$shift=strlen($c)-strlen($a);
+if(substr($new,$p,strlen($c))!==$c
+  ||substr($new,$q+$shift,strlen($d))!==$d)exit(5);
+// Reverse only the two known offsets, never a global PASSWORD_ORIGINAL,
+// preserving all pre-existing original login and SMS code byte-for-byte.
+$reverse=substr_replace($new,$b,$q+$shift,strlen($d));
+$reverse=substr_replace($reverse,$a,$p,strlen($c));
 if(!hash_equals(hash('sha256',$source),hash('sha256',$reverse)))exit(5);
 token_get_all($new,TOKEN_PARSE);
 if($argv[3]==='sha'){echo hash('sha256',$new);exit(0);}
