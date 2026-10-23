@@ -372,6 +372,16 @@ jobs:
               php -l "$ROOT/tests/WebsiteGlobalSmsBudgetTest.php"
               php "$ROOT/tests/WebsiteGlobalSmsBudgetTest.php"
               echo "PASS: paid SMS global/hour/day/IP budget fail-closed offline contract"
+              echo "=== WEBSITE MFA PRIVATELY PREPARED CANDIDATE REVIEW ==="
+              php -l "$ROOT/deployment/website-mfa-release-review.php"
+              php "$ROOT/deployment/website-mfa-release-review.php" --self-test
+              if php "$ROOT/deployment/website-mfa-release-review.php" --review /root/ev-web-mfa-checkpoints/public-web-mfa-20261023-212912-e0abd92d > /tmp/web-review-wrong-host.log 2>&1; then
+                echo "FAIL: private review accepted CI as Bitrix production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-review-wrong-host.log
+              grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-review-wrong-host.log
+              echo "PASS: locked private-site review rejects CI host and self-tests token masking"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
