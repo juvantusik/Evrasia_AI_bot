@@ -197,6 +197,11 @@ Password::equals($arUser["PASSWORD"], $arParams["PASSWORD"], $original);
 PHP
  cat > "$FIXTURE/canary.php" <<'PHP'
 <?php class A {
+  private function startPilotSmsChallenge() {
+    $passwordOriginal = 'Y';
+    $params = ['PASSWORD_ORIGINAL' => &$passwordOriginal,];
+    return $params;
+  }
   private function loginByExistingTrustedTotp() {
     $applicationId = 'Y';
     $params = ['APPLICATION_ID' => &$applicationId,];
