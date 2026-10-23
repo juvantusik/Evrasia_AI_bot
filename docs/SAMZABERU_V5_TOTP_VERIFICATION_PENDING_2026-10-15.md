@@ -1,5 +1,7 @@
 # V5 TOTP verification: pending work, 15 October 2026
 
+> **SUPERSEDED BY NEW IMPLEMENTATION 23.10.2026:** Original October 15 staging draft was never committed and this historic note was accurate then. New actual feature source `src/V5BitrixLockedTotpFactor.php` now EXISTS in [commit `c1eb8767`](https://github.com/juvantusik/Evrasia_AI_bot/commit/c1eb87674fb4008d56c4f5106dc2a4b0d064fe35), with replay evidence offline tests and pinned native-source/transaction guard. It is still **STAGING-ONLY, NOT real Bitrix runtime accepted, NOT production enabled**. Current accepted readme: [SAMZABERU_V5_NATIVE_TOTP_FACTOR_2026-10-23.md](SAMZABERU_V5_NATIVE_TOTP_FACTOR_2026-10-23.md). The earlier upload block applied to the earlier draft and must not be mistaken for a passing October 15 test. 
+
 ## Status: DRAFT / LOCAL_LINT_ONLY / NOT_CI_TESTED
 
 This is a continuation note, NOT a new passing code checkpoint. The authoritative tested code remains `c3f92ba3197157e1cd19f9aa21df3d353862279d`: offline run 38743961486 and disposable MariaDB run 38743961127 passed; the previous total remains 329 checks. The feature ref was reread as `45024505e0b2d668733d0bdb45b373c820961aea` immediately before this documentation-only addition. Do not describe this note's commit as tested application code.
