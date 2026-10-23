@@ -998,6 +998,47 @@ $q->execute([$rogueId]);$rogueRow=$q->fetch(PDO::FETCH_ASSOC);
 smsCheck(is_array($rogueRow) && $rogueRow['status']==='pending'
     && (int)$rogueRow['failed_attempts']===0,
     'no challenge grant or failed-attempt mutation after lost native ownership');
+
+/**
+ * Also exercise the actual TOTP consumption callback (not just eligibility).
+ * A native verifier that performs hidden COMMIT+BEGIN must never produce a
+ * consumed grant, even if it returns TRUE and PDO reports an active tx.
+ */
+$rogueVerifyId=hash('sha256','ci:v5:native-otp-verify-hidden-commit-begin');
+smsChallenge($db,$rogueVerifyId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$rogueVerifyId]);
+$rogueVerification=new class implements V5LockedChallengeNativeFactorPort {
+    public bool $called=false;
+    public function currentFactorEligibleWithLocks(
+        PDO $db,int $userId,ChallengeKind $kind,string $epoch,?string $stamp
+    ): bool {
+        return $db->inTransaction() && $userId===41
+            && $kind===ChallengeKind::TOTP && $epoch===SMS_EPOCH && $stamp===null;
+    }
+    public function consumeNativeTotpWithLocks(
+        PDO $db,int $userId,string $code
+    ): bool {
+        $this->called=true;
+        $db->commit(); // destroys the V5 caller's challenge SAVEPOINT
+        $db->beginTransaction(); // simulates unrelated native owner
+        return true; // caller MUST NOT accept this optimistic result
+    }
+};
+smsDeny(fn()=>(new V5MySqlChallengeConsumption(
+    $db,$rogueVerification,BIND_KEY,SMS_HMAC_KEY
+))->verifyAndConsume($rogueVerifyId,'123456',DEVICE_ID,'ios'),
+    'hidden native OTP verify COMMIT+BEGIN cannot mint consumed challenge');
+smsCheck($rogueVerification->called && $db->inTransaction(),
+    'OTP callback reached; foreign replacement transaction was NOT rolled back');
+$db->rollBack(); // explicitly dispose the synthetic foreign owner in CI
+$q=$db->prepare('SELECT status,failed_attempts FROM ev_v5_auth_challenges '
+    .'WHERE challenge_id=?');
+$q->execute([$rogueVerifyId]);$verifyRogueRow=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck(is_array($verifyRogueRow) && $verifyRogueRow['status']==='pending'
+    && (int)$verifyRogueRow['failed_attempts']===0,
+    'optimistic native OTP true after hidden COMMIT cannot authorize a V5 grant');
+
 echo "PASS: lost native SAVEPOINT prevents foreign transaction rollback "
     ."(ephemeral MariaDB synthetic callback ONLY)\n";
 echo "BITRIX_BRIDGE_QUARANTINE_TEST=OFFLINE_ONLY\n";
