@@ -127,3 +127,27 @@ Observed `CUser::Login` (1744–1934) calls `GetModuleEvents` and `LoginInternal
 - An attempted modification of `.github/workflows/v5-native-first-factor-offline.yml` was **blocked** by the GitHub tool. Its contents were not changed and the standalone new 21-assertion test is not newly listed by this attempted update. No new GitHub Actions successful run has been confirmed, do not claim automated acceptance.
 
 **Still missing and cannot be guessed:** source-backed read-only `V5CurrentLoginControlsPort` for exact site `LoginInternal` + event-handler security/temporary lockout logic; separately independently attested `V5PerUserSmsEligibilityPort` custom site policy (the new rights probe alone does not grant SMS). Need inspect the **specific native `LoginInternal` method**, since the broad `Login` method does not show policy thresholds. Full 10-path native AUTH_EPOCH proof, SMS dispatch/provider receipts, trust/TOTP replay, PIN and JWT validation remain disabled/unattested. Public mobile access must continue to support arbitrary client IPs; IP is only an anti-bruteforce bucket.
+
+## 12. 2026-10-23 — native CUser policy limits wired; CI 132/132 PASS
+
+This section supersedes the earlier **unconfirmed CI** status for the new first-factor classes. Operator's latest production *source-only* evidence remains `FINAL_STATUS=PASS`, `FINAL_RC=0`, no DB/Bitrix execution. In `CUser::LoginInternal()` (installed `user.php` SHA `bd591263fc4f5c6b634f6f8d802a6d00cca82ba4271d3f08f1f02532d0c6cc99`, lines ~1944–2180), the following decision points were observed:
+- `$loginAttempts = intval(current LOGIN_ATTEMPTS) + 1`;
+- `getLoginAttempts()` is the CAPTCHA threshold; if the **next** attempt exceeds it, regular login may require CAPTCHA. V5 has no approved CAPTCHA equivalent, so fail before that threshold.
+- `getBlockLoginAttempts()` AND `getBlockTime()` define a wrong-password blocking boundary. V5 preflight takes the stricter of configured CAPTCHA and enabled block thresholds, without assuming any threshold when a native value is zero.
+- Password hash comparisons and optional native rehash / password expiry / password age history and event rules are separate; `LoginInternal` is **NOT** a safe read-only proof method and must not be called.
+
+**GitHub-only implementation** (no production installation):
+- `src/V5BitrixNativeLoginPolicyLimits.php`, commit `71bd066118069376a8200cbcccb557bc0899b85f`: a pinned-source *candidate* reader for public static `CUser::getPolicy($userId)` (method public/static existence checked before calling) with exact canonical-source SHA256 pin. It reads **only** `getLoginAttempts`, `getBlockLoginAttempts`, `getBlockTime`; malformed/unavailable/source-drift -> UNKNOWN. It does not call `LoginInternal`, `CUser::Login`, CAPTCHA, `blockUser` or event handlers. `V5NativeCappedLoginControls` composes the native cap with the existing separately trusted `V5CurrentLoginControlsPort` by taking the stricter known cap; existing site veto/unknown cannot be upgraded to true. The live method visibility/read-only behavior have **NOT yet been verified** in an installed Bitrix request, so this remains a candidate.
+- Wired into `V5BitrixNativeFirstFactorComposition.php`, commit `1a272753e5b9b59d06d8a1e4d4014edc52fd9996`.
+- `tests/V5BitrixNativeLoginPolicyLimitsTest.php` new, commit `3266cc4670ce56fc809d0ab8003d9fd4e9433efc`; native CAPTCHA/block ordering, disabled native thresholds, independent site limits, lock/security/event vetoes, exception failure, source canary. The assembly negative wiring test extended in commit `c15760aa03b56b44161fe35a62062b84d8629fd7`.
+- Existing CI workflow `.github/workflows/v5-native-first-factor-offline.yml` now runs this test plus the previously unlisted `V5BitrixMfaAdmissionGuardsTest.php`, and lints both source files. Commit `d5032c52c7130c2bbbcc027fba8da5c755cf9b1c`.
+
+**Verified GitHub Actions run: [#39949357505](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39949357505), push commit `d5032c52c7130c2bbbcc027fba8da5c755cf9b1c`, completed SUCCESS (job `first-factor-offline` success, PHP lint success, test step success, final pass)**. Job logs:
+- public mobile preflight: **33** synthetic assertions PASS;
+- public V5 composition: **10** synthetic assertions PASS;
+- native Bitrix first-factor composition: **40** synthetic assertions PASS;
+- native mandatory-MFA/global-OTP admission: **21** synthetic assertions PASS;
+- native LoginInternal attempt limit cap: **28** synthetic assertions PASS;
+- **132 synthetic assertions total**. `FIRST_FACTOR_PUBLIC_GATES=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `REAL_BITRIX_NATIVE_E2E=NOT_RUN`, `REAL_BITRIX_POLICY_ATTESTED=NO`.
+
+**Critical unresolved release blockers:** the independent `V5CurrentLoginControlsPort` still needs trusted, real site-specific evidence for current temporary block, security/admission/event hook restrictions and password expiry/history; `V5PerUserSmsEligibilityPort` still needs actual authorized group/site policy. Source-pinned `CUser::getPolicy` itself has not yet been accepted on real loaded Bitrix and cannot prove these other facts. The ten native `AUTH_EPOCH` mutation paths, SMS issue/resend actual provider receipts, trusted-device enrollment, native TOTP replay, independent JWT/token validation and RestIS PIN reader remain unattested. Production V5 AUTH **OFF**, V4 untouched, no production code/DB changes, no SMS.
