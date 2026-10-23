@@ -12,6 +12,18 @@ fi
 
 if [[ "$MODE" == '--self-test' ]]; then
     bash -n "$0"
+    php -d auto_prepend_file= -d auto_append_file= -r '
+$pattern = "~\\" . chr(36)
+    . "redis\\s*->\\s*connect\\s*\\(\\s*([\"\\x27])([^\"\\x27]+)\\1\\s*,\\s*([0-9]{1,5})~";
+$fixture = "\$redis->connect(\"127.0.0.1\",6379,0.75);";
+$n = preg_match_all($pattern, $fixture, $m, PREG_SET_ORDER);
+if ($n !== 1 || ($m[0][2] ?? null) !== "127.0.0.1"
+    || (int)($m[0][3] ?? 0) !== 6379) {
+    echo "FAIL: Redis target source parser fixture\n";
+    exit(1);
+}
+echo "PASS: Redis source-only loopback endpoint parser fixture\n";
+'
     echo 'PASS: source-only proxy/Redis preflight Bash grammar'
     echo 'MODE=OFFLINE_SELF_TEST'
     echo 'PRODUCTION_CODE_WRITE=NO'
