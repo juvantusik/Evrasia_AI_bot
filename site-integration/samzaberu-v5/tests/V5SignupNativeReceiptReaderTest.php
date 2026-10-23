@@ -29,9 +29,9 @@ final class V5ReceiptConnection
 }
 $docs = [
     ['code'=>'EVRASIA_OFFER_20261018', 'type'=>'offer', 'title'=>'Offer',
-        'required'=>true,'format'=>'url','content'=>null,'url'=>'https://example.test/offer'],
+        'required'=>true,'format'=>'url','content'=>null,'url'=>'https://evrasia.spb.ru/legal/public-offer/'],
     ['code'=>'EVRASIA_PD_20261018', 'type'=>'personal_data', 'title'=>'PD',
-        'required'=>true,'format'=>'url','content'=>null,'url'=>'https://example.test/pd'],
+        'required'=>true,'format'=>'url','content'=>null,'url'=>'https://evrasia.spb.ru/legal/personal-data-consent/'],
 ];
 $plan = V5SignupNativeConsentPlan::fromFreshNativeRows(
     ['agreements'=>['EVRASIA_OFFER_20261018','EVRASIA_PD_20261018']],
