@@ -1,0 +1,160 @@
+name: V5 canonical public API external HTTPS acceptance
+
+on:
+  push:
+    branches:
+      - feature/samzaberu-api-v5-auth-contract
+    paths:
+      - '.github/workflows/v5-public-external-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-public-https:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Probe evrasia.rest from an independent GitHub runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          echo '=== 1. EXTERNAL TEST CONTEXT ==='
+          echo 'TARGET=https://evrasia.rest/api/v5'
+          echo 'ORIGIN_IP_OVERRIDE=NO'
+          echo 'LOCAL_BITRIX_CONNECTION=NO'
+          echo 'PROXY_ENV_USED=NO'
+          echo 'AUTHORIZATION_SENT=NO'
+          echo 'API_WRITE=NO'
+          echo 'DATABASE_WRITE=NO'
+          echo 'SMS_SENT=NO'
+          python3 - <<'PY'
+          import json
+          import socket
+          import ssl
+          import sys
+          import urllib.error
+          import urllib.request
+
+          HOST='evrasia.rest'
+          BASE='https://' + HOST
+          PATHS=(
+              '/api/v5/health',
+              '/api/v5/legal/consents',
+              '/api/v5/legal/registration-documents',
+          )
+
+          def failure(code, message):
+              print('FAIL: ' + message, flush=True)
+              print('FINAL_STATUS=FAIL')
+              print('FAILURE_KIND=' + code)
+              print('EXTERNAL_EVRASIA_REST_ACCEPTANCE=NO')
+              sys.exit(2)
+
+          try:
+              ipv4=set()
+              for addr in socket.getaddrinfo(HOST, 443, socket.AF_INET,
+                                              socket.SOCK_STREAM):
+                  ipv4.add(addr[4][0])
+              if not ipv4:
+                  failure('DNS_NO_A_RECORD', 'Public DNS has no reachable IPv4 target')
+              print('PUBLIC_DNS_IPV4_RECORDS=' + str(len(ipv4)), flush=True)
+          except (OSError, ValueError) as error:
+              failure('DNS_LOOKUP_FAILED', error.__class__.__name__)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, fp, code, msg, headers,
+                                   newurl):
+                  return None
+
+          context=ssl.create_default_context()
+          opener=urllib.request.build_opener(
+              urllib.request.ProxyHandler({}),
+              urllib.request.HTTPSHandler(context=context),
+              NoRedirect(),
+          )
+
+          def get(path):
+              print('CHECK=GET ' + path, flush=True)
+              request=urllib.request.Request(
+                  BASE+path,
+                  headers={'Accept':'application/json',
+                           'User-Agent':'EvrasiaV5ExternalAcceptance/1.0'},
+                  method='GET',
+              )
+              try:
+                  with opener.open(request, timeout=16) as response:
+                      status=response.status
+                      content_type=response.headers.get('Content-Type','')
+                      cache_control=response.headers.get('Cache-Control','')
+                      cookies=response.headers.get_all('Set-Cookie',[])
+                      cors=response.headers.get('Access-Control-Allow-Origin')
+                      location=response.headers.get('Location')
+                      received=response.read(131073)
+              except urllib.error.HTTPError as error:
+                  print('HTTP_STATUS=' + str(error.code), flush=True)
+                  failure('HTTP_STATUS_NON_200', 'Public host returned non-200')
+              except ssl.SSLError as error:
+                  failure('TLS_CERTIFICATE_FAILED', error.__class__.__name__)
+              except (urllib.error.URLError, OSError, TimeoutError) as error:
+                  reason=getattr(error, 'reason', error)
+                  failure('NETWORK_OR_TLS_UNAVAILABLE',
+                          reason.__class__.__name__)
+              print('HTTP_STATUS=' + str(status), flush=True)
+              if status != 200:
+                  failure('WRONG_HTTP_STATUS', 'Expected 200 OK')
+              if not content_type.lower().startswith('application/json'):
+                  failure('NOT_JSON', 'Public V5 returned non-JSON response')
+              if 'no-store' not in cache_control.lower():
+                  failure('CACHE_POLICY', 'Expected V5 no-store response')
+              if cookies or cors is not None or location is not None:
+                  failure('RESPONSE_HEADER_LEAK',
+                          'Unexpected cookie, CORS or redirect')
+              if len(received)>131072:
+                  failure('BODY_TOO_LARGE', 'Unusually large public JSON')
+              try:
+                  payload=json.loads(received.decode('utf-8'))
+              except (UnicodeDecodeError, ValueError):
+                  failure('JSON_DECODE_FAILED', 'Invalid public JSON')
+              if not isinstance(payload,dict):
+                  failure('JSON_OBJECT_MISSING', 'Expected JSON object')
+              return payload
+
+          print('=== 2. REAL PUBLIC API HEALTH ===', flush=True)
+          health=get(PATHS[0])
+          if health.get('status') != 'online' or health.get('auth_ready') is not False:
+              failure('HEALTH_OR_AUTH_MISMATCH',
+                      'Unexpected status or public auth activation')
+          print('HEALTH_STATUS=online')
+          print('V5_AUTH_READY=false')
+          print('=== 3. REAL PUBLIC REGISTRATION DOCUMENTS ===', flush=True)
+          consents=get(PATHS[1])
+          registration=get(PATHS[2])
+          docs=consents.get('documents')
+          if not isinstance(docs,list) or len(docs)!=3 or (
+              docs != registration.get('documents')
+          ):
+              failure('DOCUMENT_CATALOG_MISMATCH',
+                      'Public consents and registration documents differ')
+          types=set()
+          required=0
+          for doc in docs:
+              if not isinstance(doc,dict):
+                  failure('INVALID_DOCUMENT_SHAPE','Document must be object')
+              t=doc.get('type')
+              if not isinstance(t,str):
+                  failure('INVALID_DOCUMENT_TYPE','Document type unavailable')
+              types.add(t)
+              if doc.get('required') is True:
+                  required+=1
+          if types!={'offer','personal_data','marketing'} or required!=2:
+              failure('LEGAL_CONTRACT_MISMATCH',
+                      'Unexpected public current legal agreement catalog')
+          print('DOCUMENT_COUNT=3')
+          print('REQUIRED_DOCUMENT_COUNT=2')
+          print('DOCUMENT_TYPES=offer,personal_data,marketing')
+          print('EXTERNAL_EVRASIA_REST_ACCEPTANCE=YES')
+          print('FINAL_STATUS=PASS')
+          PY
