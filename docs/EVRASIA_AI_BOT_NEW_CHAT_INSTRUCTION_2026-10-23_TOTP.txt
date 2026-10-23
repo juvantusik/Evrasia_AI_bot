@@ -1,0 +1,42 @@
+ПРОДОЛЖАЕМ ПРОЕКТ EVRASIA AI BOT — САМЗАБЕРУ API V5 / NATIVE TOTP
+Контрольная точка: 23.10.2026. Это НЕ новый проект и НЕ просьба начать проектирование заново.
+
+1. Сначала восстанови контекст по текущему GitHub, не проси заново вводные:
+   Репозиторий: juvantusik/Evrasia_AI_bot
+   Ветка: feature/samzaberu-api-v5-auth-contract
+   Последний проверенный HEAD на момент handoff: 2ff4c786a67e25c004ae11b8d7845587f066f3fb
+   Прочти docs/EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-23_V5_AUTH.md (новейший верхний блок и последние разделы), docs/SAMZABERU_V5_PRODUCTION_OFF_BOOTSTRAP_2026-10-23.md (последние §§42–45), docs/SAMZABERU_V5_NATIVE_TOTP_FACTOR_2026-10-23.md, docs/SAMZABERU_V5_MOBILE_DEVELOPER_TZ_LEGAL_TRUST_TOTP_SMS_2026-10-23.md и docs/SAMZABERU_V5_EVRASIA_REST_EXTERNAL_ACCEPTANCE_2026-10-23.md. Текущее состояние репозитория важнее старого snapshot; проверь последние коммиты/CI.
+
+2. Главный публичный мобильный API — ТОЛЬКО https://evrasia.rest/api/v5. evrasia.spb.ru — технический Bitrix origin (host evrasia, IP 192.168.103.141), а не домен, который надо давать разработчику «СамЗаберу». Не переделывай и не «чини» сеть снова: независимый внешний GitHub Actions #39999984588 прошёл SUCCESS по обычному PUBLIC DNS и TLS, GET /api/v5/health, /legal/consents и /legal/registration-documents — все HTTP 200, три документа offer/personal_data/marketing (обязательны первые два), V5 auth_ready=false. Публичная ручка POST /legal/consents/validate проверена HTTP 200 на Bitrix origin, но ещё не аттестована отдельным внешним POST. Это настоящие production GET, их можно использовать для экрана регистрации. Нативный V5 signup+сохранение consent, JWT и защищённые методы в production ещё НЕ выпущены.
+
+3. На 23.10 оператор действительно установил на production ONLY публичный V5 legal/registration релиз по существующему ДВУХФАЙЛОВОМУ загрузчику (api/v5/router.php → local/samzaberu-v5/api/v5/site.php → локальный V5 router). Результат FINAL_STATUS=PASS / WRAPPER_RC=0 / ORIGIN_HTTPS_ACCEPTED=YES, V4 неизменён, AUTH signin=503/OFF, DB/accounts/SMS не менялись. Приватный rollback: /root/ev-v5-checkpoints/v5-legal-twofile-20261023.Dfdererr. НЕ возвращай старый release-based public router, НЕ трогай старый installed.sha256: там 41/42 совпадающих записей и ОДНО объяснённое старое SHA-расхождение public V5 router. Не удаляй backup. V4 должен временно работать до полного переноса клиентов и бизнес-методов.
+
+4. Согласованная бизнес-логика ВХОДА после проверенных пароля и статуса:
+   А) Текущий server-verified STRONG trusted_device с действующим trust_token, привязкой USER_ID+device_id+platform, неизменённой версией/epoch, ранее пройденным полноценным MFA, без истечения или отзыва → сразу сильная V5-сессия, БЕЗ TOTP/SMS ДАЖЕ когда TOTP включён.
+   Б) Нет действующего сильного доверия, а TOTP активен → native Bitrix TOTP challenge, НИКАКОГО автоматического SMS fallback.
+   В) Нет действующего доверия/TOTP и native policy ДОКАЗАННО разрешает SMS → SMS challenge только на подтверждённый номер Bitrix; не на введённый клиентом номер.
+   Г) Неизвестные/опасные состояния → FAIL CLOSED, без JWT, без платного SMS.
+   Строки TrustedDevice V4, полученные исключительно по паролю, не могут сами по себе дать V5 strong enrollment. device_id = sz_ + 64 lower-hex, platform ios/android; device_id сам по себе не удостоверяет устройство.
+   После действительной сильной V5-сессии PIN списания должен показываться без ещё одного SMS при серверной проверке текущих assurance/epoch.
+
+5. ПОСЛЕДНИЙ КОДОВЫЙ ПРОГРЕСС УЖЕ СДЕЛАН В FEATURE — НЕ ПОВТОРЯЙ:
+   - d626ee27...: в src/AuthDecision.php, src/V5LoginWorkflow.php и src/V5MySqlStrongSessionStore.php реализован приоритет STRONG TRUST → TOTP → SMS, не обходящий session native lock/epoch/proof; обновлены тесты.
+   - c3f866159df6202e90f2c357b0eb9a99e1de131f: исправлен MariaDB pilot integration test под trust-first; MariaDB CI #40004366187 SUCCESS.
+   - c1eb87674fb4008d56c4f5106dc2a4b0d064fe35: новый stage-only src/V5BitrixLockedTotpFactor.php, src/V5BitrixPdoCompatibilityBridge.php доп. guard; тесты V5BitrixLockedTotpFactorTest и bridge. Реальный native Bitrix\Security\Mfa\Otp::verify(code, true) планируется с readback persisted b_sec_user.PARAMS last_timecode, повторным lock/transaction/source/epoch/coverage контролем, без второго TOTP secret.
+   - 2ff4c786a67e25c004ae11b8d7845587f066f3fb — docs checkpoint после этих коммитов.
+   Три CI на c1eb8767: OFFLINE #40005309621 SUCCESS, FIRST-FACTOR #40005309623 SUCCESS, REAL EPHEMERAL MariaDB #40005309662 COMPLETED SUCCESS. Последний — реальный InnoDB для синтетического Bitrix, НЕ полноценная native Bitrix staging приёмка. Не объявлять TOTP V5 работающим в production из-за зелёного CI.
+   - НОВЫЙ stage adapter намеренно отказывается исполняться на production и требует CLI + V5_STAGE_WRITE_ACK=ISOLATED_STAGING_ONLY, exact original Bitrix class/source SHA + reviewed staging TotpAlgorithm source, единственный физический mysqli/транзакцию, depth=1 и 10-path native hook coverage. Не ослабляй эти guards ради «быстрого зелёного теста».
+
+6. Реальная Bitrix TOTP система на сайте существует и была проверена на пилотном аккаунте: подключение, браузерный вход с TOTP и отключение ранее проходили, см. docs/TOTP_2FA_DESIGN_CHECKPOINT_2026-09-18.md. Но по read-only от 16.10.2026 пилот UID 880339 уже без OTP-row после отключения, V5_AUTH_STATE отсутствует. Это НЕ TOTP V5. Не включать OTP/не создавать MFA на его реальном аккаунте без отдельного явного допуска на production write.
+
+7. СЕЙЧАС ПРОДОЛЖАЙ С ПОСЛЕДНЕЙ ТОЧКИ ПО TOTP:
+   а) Прочитай новый V5BitrixLockedTotpFactor.php и V5MySqlChallengeConsumption.php, V5MySqlConsumedChallengeProof.php, текущие test/CI; не придумывай новые verifier/секреты.
+   б) Следующая конкретная цель — сделать безопасную интеграцию/приёмку реального native Bitrix TOTP в изолированном staging: точно установленный Bitrix TotpAlgorithm source SHA, один native-owned transaction + SAVEPOINT, b_user/b_sec_user row locks, persisted replay timecode, однократный challenge grant, 2 параллельных запроса с тем же TOTP, проверить rollback/COMMIT/EPOCH и отсутствие SMS/JWT при ошибке. Действующая staging-инфраструктура НЕ подтверждена. Если её нет, делай всю возможную кодовую/CI работу в feature без реальных production-мутаторов, затем предложи конкретный минимальный следующий инфраструктурный шаг, а не длинное повторное изучение.
+   в) Полное покрытие 10 native security mutation paths для AUTH_EPOCH, strong trust issuer/legacy V4 trust separation, current verified phone и paid SMS gateway ещё НЕ приняты. Защищённый V5 AUTH остаётся HTTP 503/OFF до этих доказательств. Сначала проверять фактический код, затем минимальные правки, CI, целевой staging E2E и только с отдельным guard/backup/rollback продакшн-выпуск.
+   г) Пока мобильный разработчик делает интерфейсы TOTP/SMS и уже работающий экран юридических документов, параллельно переносить функции V4 в V5 (профиль/корзина/заказы/бонусы), переиспользуя реальные Bitrix Services, не V4 HTTP/JWT и не копируя расчёты. Публичный V5 станет единственным API ТОЛЬКО после полной миграции 62 исходных V4 route registrations, потребителей, DTO и E2E/rollback.
+
+8. ТЗ для разработчика уже создано, не переписывай заново: docs/SAMZABERU_V5_MOBILE_DEVELOPER_TZ_LEGAL_TRUST_TOTP_SMS_2026-10-23.md. Рабочие GET legal задокументированы. Текущие защищённые маршруты в src/V5RouteMap.php: POST /auth/signin, /auth/challenge/verify, /auth/challenge/resend, /auth/refresh, /auth/logout, /auth/token/validate, /loyalty/pin; GET /cart. Это целевые feature DTO, ещё НЕ включённые prod. Не выдавать пользователю фиктивные готовые ручки.
+
+9. Правила проекта: production — критический; перед любым серверным изменением точный hostname/root/site SHA/backup/rollback/транзакция/CI. Никаких секретов в выводе, реальных SMS или экспериментов с аккаунтами без разрешения. Для пользователя выдавать ОДИН готовый copy-paste безопасный bash wrapper, с секциями === HOST / CHECKS / ACTION / VERIFY / RESULT ===, FINAL_STATUS, FINAL_RC, и оставлять терминал открытым. GitHub сверять по HEAD, избегать повторных аудитов и остановок «давай исследуем ещё». Новый чат — продолжение одного Project, не начало новой разработки.
+
+СРАЗУ НАЧНИ с проверки текущего GitHub HEAD и наиболее свежих TOTP CI; затем продолжи уже начатую нативную V5 TOTP реализацию/проверку. Не проси повторно прислать эти сведения. Не трогай V4 и работающий PUBLIC V5 legal API. Если работа с production не требуется — выполняй код и CI непосредственно, а не выдавай пользователю лишние команды.

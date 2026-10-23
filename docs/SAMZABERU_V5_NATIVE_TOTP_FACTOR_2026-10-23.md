@@ -37,3 +37,8 @@
 После успешного CI: реализовать/аттестовать реальные locked eligibility/trust proof providers и изолированную native Bitrix TOTP проверку; закрыть 10-path `AUTH_EPOCH`, native MFA replay и SMS/phone use case. Проверять публичный адрес только `evrasia.rest`, V4 не изменять.
 
 **Статус:** `V5_TRUST_FIRST_CODE=FEATURE_IMPLEMENTED`; `V5_NATIVE_TOTP_ADAPTER=STAGING_CANDIDATE`; `NATIVE_TOTP_REAL_BITRIX_E2E=NOT_TESTED`; `V5_AUTH_PRODUCTION=OFF`; `PRODUCTION_CODE_WRITE=NO`.
+
+## 5. Завершённая CI-приёмка feature (последняя проверка перед handoff)
+
+Для нативного TOTP source commit [`c1eb8767`](https://github.com/juvantusik/Evrasia_AI_bot/commit/c1eb87674fb4008d56c4f5106dc2a4b0d064fe35) все три джоба GitHub Actions к 23.10.2026 завершились **COMPLETED SUCCESS**: [offline safety #40005309621](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40005309621), [first-factor/public #40005309623](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40005309623), [real ephemeral MariaDB #40005309662](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40005309662). Предыдущая заметка checkpoint §44 о `IN PROGRESS` для MariaDB устарела. Ephemeral MariaDB подтверждает code/SQL tests, **не нативную проверку Bitrix OTP на реально изолированном сайте** и не разрешает production release. Полная инструкция продолжения: [`EVRASIA_AI_BOT_NEW_CHAT_INSTRUCTION_2026-10-23_TOTP.txt`](EVRASIA_AI_BOT_NEW_CHAT_INSTRUCTION_2026-10-23_TOTP.txt).
+
