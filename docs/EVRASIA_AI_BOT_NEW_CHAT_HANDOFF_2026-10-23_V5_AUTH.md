@@ -1,0 +1,96 @@
+# Evrasia AI Bot — актуальная передача работы в новый чат
+## СамЗаберу API V5 / авторизация / native Bitrix / 23 октября 2026
+
+**Назначение документа:** без повторного исследования длинных чатов продолжить работу с последнего подтверждённого состояния. Это *фактический checkpoint*, не допуск V5 AUTH в production.
+
+- **Репозиторий:** \`juvantusik/Evrasia_AI_bot\`.
+- **Рабочая ветка:** \`feature/samzaberu-api-v5-auth-contract\`.
+- **Последний проверенный HEAD непосредственно перед составлением handoff:** \`d1cccf7eef2f50c434cb4583340587e676ba3f32\` (23.10.2026); **перед следующими изменениями повторно прочитать актуальный HEAD и CI**, особенно если другая рабочая ветка проекта продвинулась.
+- **Подробная история сегодняшнего V5 OFF bootstrap, evidence и коммиты:** [SAMZABERU_V5_PRODUCTION_OFF_BOOTSTRAP_2026-10-23.md](SAMZABERU_V5_PRODUCTION_OFF_BOOTSTRAP_2026-10-23.md), особенно поздние разделы 12–14. Это обязательный детальный источник, новый документ является коротким оперативным маршрутом.
+- **Общие инструкции и исторические ветви:** [SAMZABERU_V5_START_HERE_2026-10-15.md](SAMZABERU_V5_START_HERE_2026-10-15.md), [STRUCTURE_REGISTRY.md](STRUCTURE_REGISTRY.md), [NEW_CHAT_HANDOFF.md](NEW_CHAT_HANDOFF.md), [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-18_V5_LEGAL_SIGNUP.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-18_V5_LEGAL_SIGNUP.md) и [SAMZABERU_V5_SMS_BOOTSTRAP_CHECKPOINT_2026-10-19.md](SAMZABERU_V5_SMS_BOOTSTRAP_CHECKPOINT_2026-10-19.md). Документы 15–19 октября остаются важны для LEGAL, SIGNUP, SMS и других направлений, но их старые «NEXT» по AUTH заменяются более поздними подтверждёнными результатами.
+
+## 1. Неизменяемая бизнес-логика
+
+Клиенты мобильного приложения **«СамЗаберу»** подключаются с любых устройств и мобильных/внешних сетей к HTTPS-публичному API \`https://evrasia.rest/api/v5/\`. **Нельзя ограничивать обычных мобильных пользователей списком IP** и нельзя указывать внутренний IP Bitrix внутри приложения. Безопасность строится на доказанной авторизации, MFA, доверии, challenge, лимитах, сессии и \`AUTH_EPOCH\`.
+
+Согласованный вход: **логин+пароль →** если у клиента уже настроен TOTP, проверка кода аутентификатора; если TOTP нет и устройство предварительно доверенное, разрешён сильный вход при актуальном доверии; иначе — **SMS challenge на подтверждённый телефон из самого аккаунта, без формы ввода телефона**. После успешного входа бонусы и получение PIN/использование бонусов выполняются **без повторной SMS**, но только в реально подтверждённой сильной сессии. Защищать отправку SMS от спама/массовых попыток; не оплачивать тестовые SMS без явного допуска. Глобально обязательная MFA, активный нативный TOTP и индивидуальная обязательность MFA не могут быть обойдены через SMS.
+
+Также приняты в V5, не в V4: публичный \`GET /api/v5/legal/consents\` без токена (актуальные документы и коды), \`POST /api/v5/auth/token/validate\` с **реальной проверкой JWT+актуальной серверной сессии/epoch/revocation**, а не только подписью. В будущем signup revalidates legal consent codes и native persistence.
+
+## 2. Production: что действительно работает
+
+- Хост production Bitrix: \`evrasia\` / \`evrasia.spb.ru\`; document root: \`/home/site_evrasia/web/evrasia.spb.ru/public_html\`. **Не путать** с сервером бота \`eur-bot-01\` или GitHub/CI, staging на отдельном Bitrix-сервере нет.
+- 23 октября установлен и SHA-проверен **OFF-only** двухфайловый V5 HTTP bootstrap: \`public_html/api/v5/router.php\` → \`public_html/local/samzaberu-v5/api/v5/site.php\` → существующий внутренний маршрутизатор. Загрузчик ожидает приватные config/factory в \`dirname(documentRoot)/private/samzaberu-v5\`, то есть **вне public_html**. Приватные \`site-config.json\`/\`site-factory.php\` для AUTH **НЕ установлены**, массовый V5 signin остаётся закрытым. Deployment checkpoint \`/root/ev-v5-checkpoints/v5-off-deployed-20261023.npcVIr3E\`; source candidate \`/root/ev-v5-checkpoints/v5-bootstrap-corrected-20261023.Vj1s42V9\`. GitHub feature \`site.php\` уже приведён к действующему пути, не откатывать на старую версию.
+- Реальный HTTPS smoke (именно по сети) на \`https://evrasia.spb.ru\`: \`GET /api/v5/health\` — **HTTP 200**, \`status=online\`, \`auth_ready=false\`; \`GET /api/v5/legal/consents\` — **HTTP 200**, **3 документа** типов \`offer,personal_data,marketing\`. Это НЕ приёмка auth.
+- \`evrasia.rest\` — публичный API-домен для мобильных клиентов. Внутренний адрес Bitrix \`192.168.103.141\` используется только для LAN/self-test. Прямой \`curl\` с \`evrasia\` к публичному \`evrasia.rest\` вернул \`RC=7 HTTP 000\`; причина — известный риск hairpin/обратного подключения, а **не доказанная недоступность API с мобильных сетей**. Не менять DNS/nginx из-за этого результата. Реальный внешний запрос к JSON V5 на \`evrasia.rest\` с мобильного интернета (Wi-Fi OFF) ещё не подтверждён окончательно.
+- Существующие таблицы V5 и Bitrix уже изучены; **не создавать их повторно и не выполнять массовую инициализацию AUTH_EPOCH**. V4 и живые пользовательские сессии не трогать. Production \`V5_AUTH=OFF\` / \`auth_ready=false\`, никаких реальных V5 JWT для пользователей, SMS/DB writes во время последних проверок не выполнялось.
+- \`V5PrivatePilotConfig\` с IP allowlist + \`X-Evrasia-V5-Pilot\` — строго отдельный **закрытый технический пилот**. Он **НЕ** контракт мобильного публичного API. Не передавать pilot key в приложение. Feature-only публичный preflight и composition существуют, но не подключены к production factory.
+
+## 3. Реализованный feature-only V5 AUTH код
+
+**Public mobile / no client allowlist**
+- \`src/V5PublicTrafficPreflight.php\`: серверный HTTPS, отсутствие pilot header, подтверждённый native release coverage, отдельная проверенная готовность провайдеров; client IP не allowlist, используется только как ключ антибрутфорса.
+- \`src/V5MySqlPublicComposition.php\`: сборка существующих challenge/JWT/refresh/PIN/strong-session интерфейсов под отдельный PUBLIC режим; требует \`V5PublicVerifiedFactorLifecyclePort\`, реально подтверждённые SMS issue/resend **и** native TOTP. Не установлен в \`site.php\`.
+- Синтетические тесты этих блоков: 33 + 10 assertions.
+
+**Password first factor / Bitrix policy**
+- \`src/V5BitrixNativeFirstFactorComposition.php\`: физический \`b_user\` read-only lookup, правильная V4-совместимая нормализация логина, \`V5PinnedBitrixPasswordComparator\` на штатном \`Bitrix\Main\Security\Password::equals\` без вызова \`CUser::Login\`, pinned MFA read \`b_sec_user\`, четыре атомарных rate windows на отдельной InnoDB-связи, строгие пользовательские ограничения, защищённый native-login policy cap.
+- \`src/V5PinnedBitrixMfaPolicies.php\` и \`src/V5BitrixMfaAdmissionGuards.php\`: SOURCE SHA PIN для Otp/UserTable, mandatory group-rights veto и запрет считать TOTP доказанным, если глобальный native OTP отключён.
+- \`src/V5BitrixNativeLoginPolicyLimits.php\`: SOURCE SHA PIN \`CUser\` с проверкой того, что **сам** публичный статический метод \`getPolicy\` объявлен тем же проверенным классом/файлом; чтение \`getLoginAttempts()\`, \`getBlockLoginAttempts()\`, \`getBlockTime()\` без \`LoginInternal\`; \`V5NativeCappedLoginControls\` принимает более строгий лимит native и site, но **не может отменить независимую блокировку сайта**. Уточнено последним source-code commit \`d86e375fd4d6f5b2e87c4f458ff207944698f177\`, статус метода в реальном установленном Bitrix ещё нужно независимо подтвердить READ_ONLY.
+- \`CUser::Login()\` вызывает события, \`LoginInternal\`, сессию/cookie; \`LoginInternal\` может записывать attempts/rehash/block и т.д. **Запрещено** использовать их для V5 password proof. Это не side-effect-free API.
+
+**Strong session / synthetic regression**
+- Existing \`V5MySqlStrongSessionStore\`, \`V5BitrixPdoCompatibilityBridge\`, \`V5BitrixStrongSessionBridgeIntegrationTest\`, \`V5MySqlChallengeConsumption\`: строгий allowlist SQL, без произвольного доступа к user/secret tables. Последние исправления разрешили **ТОЛЬКО exact** \`SAVEPOINT/RELEASE SAVEPOINT\` пары для \`v5_strong_session_guard\` и \`v5_native_factor_guard\` внутри принадлежащей V5 native-транзакции. Нельзя расширять SQL allowlist на произвольные savepoint/queries. Вся работа только в feature branch + CI; production native E2E по этим изменениям нет.
+- Синтетический signup receipt fixture исправлен на допустимый текущим контрактом legal origin; политику URL/подтверждений для production ради теста не ослабляли.
+
+## 4. Фактическое изучение установленного Bitrix
+
+Production **READ_ONLY** source-only probes оператора, SHA guards PASS:
+- \`bitrix/modules/main/classes/general/user.php\`: SHA256 \`bd591263fc4f5c6b634f6f8d802a6d00cca82ba4271d3f08f1f02532d0c6cc99\`.
+- \`bitrix/modules/security/lib/Mfa/Otp.php\`: SHA256 \`285a0fa1d87ebf3e1268e7fe8ea561634e7d9f645d6b8f08e19bdcc34b20372c\`.
+- \`bitrix/modules/security/lib/Mfa/UserTable.php\`: ранее закреплён SHA256 \`cf3979c6bed5684bacc758656c55431a60cefe2e356b1b2a4e63fb323a283a64\`.
+- \`bitrix/modules/main/lib/Security/Password.php\`: ранее закреплён SHA256 \`a1ffbba30510caa373087127d3af5714d36be526f5df854610f80ff227a10296\`.
+
+\`CUser::Login\` около строк 1744–1934: события pre/auth/post, \`LoginInternal\`, side effects.
+
+\`CUser::LoginInternal\` около 1944–2180: \`$loginAttempts=intval(LOGIN_ATTEMPTS)+1\`; после \`getLoginAttempts()\` порога Bitrix требует CAPTCHA; при неверном пароле блокировка определяется **обоими** \`getBlockLoginAttempts()\` и \`getBlockTime()\`. После проверки пароля возможны rehash/password-expiry/history и другие сайд-эффекты. Исходник проверен и не исполнялся.
+
+\`Otp::isOtpRequired()\` на ~1302 проверяет *отложенные параметры*, **не пользовательскую обязательность OTP**. \`Otp::verifyUser()\` (около 1126) при выключенном глобальном OTP немедленно возвращает TRUE **без TOTP-проверки**. \`canSkipMandatory()\` учитывает skip rights, \`CAccess::getUserCodesArray\` и настройки обязательности, но это не основание обойти активную MFA. При неизвестных правовых/сайтовых правилах — deny.
+
+## 5. CI — реальное последнее подтверждение, а не догадка
+
+На commit \`d86e375fd4d6f5b2e87c4f458ff207944698f177\` **три самостоятельных GitHub Actions completed/success**, проверено по GitHub runs, jobs и логам:
+
+1. **[V5 offline safety checks #39950665513](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950665513)** — PASS, \`FINAL_STATUS=PASS\`, \`FINAL_RC=0\`; синтетическая цепочка strong session/JWT/PIN + signup/legal и negative wrong-host checks; \`REAL_STAGING_E2E=NOT_RUN\`.
+2. **[V5 first-factor and public admission offline #39950665499](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950665499)** — PHP lint and **132 synthetic assertions PASS**: public preflight 33 + public composition 10 + Bitrix first-factor 40 + MFA admission 21 + login policy limits 28. \`REAL_BITRIX_NATIVE_E2E=NOT_RUN\`.
+3. **[V5 real ephemeral MariaDB integration #39950665494](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950665494)** — disposable MariaDB tests PASS, \`FINAL_STATUS=PASS FINAL_RC=0\`; \`REAL_BITRIX_STAGE=NOT_RUN\`, \`PRODUCTION_WRITE=NO\`.
+
+Ранее возникали красные CI на SAVEPOINT SQL и синтетическом signup legal URL, **сейчас они исправлены**, перечисленные поздние runs — SUCCESS. **Это не разрешение включать AUTH на реальном Bitrix.** Обычные PHPUnit/SQL фикстуры не подтверждают natively atomic password/MFA mutation/rollback или боевой SMS-провайдер.
+
+## 6. Незакрытые release gates
+
+1. **Настоящие site-specific ограничения входа** в \`V5CurrentLoginControlsPort\`: уже есть native CAPTCHA/block thresholds, но нет положительной доверенной production-аттестации реальной временной блокировки, security/event hooks, password-expiry и правил сайта. Нельзя подставить \`true\`/произвольный threshold.
+2. **Индивидуальная SMS-eligibility policy** \`V5PerUserSmsEligibilityPort\` на основе реального сайта/групп. Native rights veto — только отрицательная защита, не самодостаточное SMS-разрешение.
+3. **Полное ten-path native \`AUTH_EPOCH\` security mutation coverage**, атомарность Bitrix password-change/MFA/phone/groups/recovery/logout, владение одним физическим соединением/транзакцией, rollback/COMMIT/readback/concurrency. Нельзя выдавать регистрацию hook за реальное coverage attestation.
+4. Реальный **доверенный девайс**, native TOTP consume/anti-replay, безопасные SMS issuance/resend + провайдер/receipt и anti-spam, session epoch/current JWT revocation + PIN reader, реальные подписи/ключи в private config. Никаких фиктивных прод-провайдеров.
+5. Контролируемая **приёмка на настоящем Bitrix**, затем собственный gated pilot, дальнейший публичный V5 без IP allowlist. Отдельной Bitrix staging-системы **нет**; не утверждать обратное и не требовать новую VM по умолчанию.
+6. Финальный **external-mobile HTTPS probe** \`evrasia.rest/api/v5\` снаружи сети ещё не принят; internal hairpin troubleshooting не повторять.
+
+## 7. Старые private checkpoints и запреты повторной работы
+
+История password/epoch 20–23 октября хранится в server \`/root/ev-v5-checkpoints\`. Основной hardened helper \`password-boundary-hardened-20261020-f1989b9aaefc/V5HardenedPasswordEpochTransaction.php\`, SHA256 \`cffe143cbb095892cc71231579ce654b1b8b8bf09d2e38423c86a1b3b3849a4e\`. Приватный исправленный candidate \`v5-depth-access-repair-20261023.Iu6MGLrF\`, SHA256 \`c9056ad8dd2a412d587a2477d03b145e7e71ba29d1a4479d0950d0bc08281645\`. Скрипт тогда показал, что локальному UID **65534** (обычно \`nobody\`, технический тестовый пользователь, НЕ клиент) недоступен файл под \`/root\`; это было исправление доступа только к **кандидату**, а НЕ реальное доказательство AUTH_EPOCH atomic commit. Сохранённые ранее \`COMMIT_ASSERT\`/rollback E2E failures нельзя переименовать в PASS. **НЕ начинать заново с H_DEPTH**, пересоздания этих кандидатов или инвентаризации уже проверенных PHP-файлов.
+
+Рабочая website TOTP/PIN логика для пилотного пользователя была ранее браузерно проверена, но это **V4/website acceptance**, не V5 и не разрешение менять его MFA.
+
+## 8. Точная точка следующего действия в новом чате
+
+**NEXT_STEP=PINNED_NATIVE_GETPOLICY_DECLARATION_THEN_SITE_CONTROLS**
+
+1. Перед новым кодом сверить живой feature-HEAD, последние CI, разделы 12–14 подробного checkpoint. Проверить существующий \`V5BitrixNativeLoginPolicyLimits.php\`, не переписывать его.
+2. Единственный новый **READ_ONLY source-only** шаг на production (хост \`evrasia\`): установить фактическое место **объявления** \`CUser::getPolicy\`, \`public/static\`, наследование, файл/строка и контекст вызова. Проверять pinned SHA \`user.php\`; НЕ включать Bitrix bootstrap, не вызывать метод, БД, login, SMS, MFA, API write. Если объявлен в другом файле, нельзя ослабить source pin без доказательств — исследовать точный источник.
+3. По результату реализовать **узкий источник реальных ограничений сайта**, сохраняя независимые запреты \`V5CurrentLoginControlsPort\`; возможные обработчики событий и blocked-until должны быть подтверждены фактическим кодом и их безопасным read-only контрактом.
+4. Затем продолжить фундаментальные ten-path AUTH_EPOCH atomicity/native transaction и real SMS+TOTP+trusted-device/PIN providers. Не предлагать создавать отдельную VM и не запускать изменения на реальных аккаунтах без отдельной транзакционной защиты.
+5. **Один** paste-ready shell block на сервер для каждой диагностической/миграционной логической операции, со структурой \`=== 1 HOST/GUARD === / === 2 CHECK === / === 3 ACTION === / === 4 VERIFY === / === 5 RESULT ===\`, \`MODE=READ_ONLY/WRITE\`, \`DATABASE_WRITE=NO/YES\`, \`SECRETS_PRINTED=NO\`, \`FINAL_STATUS\`/\`FINAL_RC\`, \`bash -n\` wrapper, \`trap\` cleanup и fail-closed hostname/root/source SHA guards. Не печатать пароли, телефоны, API/Telegram/GitHub токены, cookies, headers. На production читать прежде чем менять; никакого \`rm -rf\` без точной цели/защиты.
+6. При изменениях записывать evidence/version/status в GitHub docs; \`Idea → Code-only → Offline tested → disposable MariaDB tested → native Bitrix E2E → closed pilot → production/public\` различать жёстко.
+
+**Главное:** последний факт — публичный legal/health отвечают на \`evrasia.spb.ru\`, offline+ephemeral MariaDB CI зелёные, но V5 AUTH **OFF**. Следующий чат должен продолжать native Bitrix, а не переделывать сеть/дизайн/работающие V4 функции.
