@@ -88,8 +88,16 @@ final class EvPilotTrustedPinRelease
         $insertion='$directPinEligible = $directPinEligible'."\n"
             .'    || \Evrasia\Services\TrustedDeviceWebService::hasValidCurrentTrust($userId);'
             ."\n\n".'if ($directPinEligible &&';
-        $pilot=preg_replace('/if\s*\(\s*\$directPinEligible\s*&&/s',
-            $insertion,$old,1,$matches);
+        $marker='/if\s*\(\s*\$directPinEligible\s*&&/s';
+        // Preserve the EXACT original matched bytes and offset.
+        // Production's PHP source may have noncanonical whitespace/newlines;
+        // replacing the new text with a hardcoded canonical "if (..."
+        // would fail our inverse-byte proof even if no other code changed.
+        self::need(preg_match_all($marker,$old,$originalMatches,
+            PREG_OFFSET_CAPTURE)===1,'pin_condition_marker_count_guard');
+        $originalMarker=$originalMatches[0][0][0];
+        $originalOffset=$originalMatches[0][0][1];
+        $pilot=preg_replace($marker,$insertion,$old,1,$matches);
         self::need(is_string($pilot)&&$matches===1
             &&substr_count($pilot,$insertion)===1
             &&preg_match_all('/if\s*\(\s*\$userId\s*===\s*880339\s*\)/',$pilot)===1,
@@ -107,9 +115,9 @@ final class EvPilotTrustedPinRelease
             'candidate_php_parse_guard');
         // Remove exactly the approved new branch and prove all other
         // production bytes unchanged (no side effects on existing PIN flow).
-        self::need(hash_equals(self::hash($old),
-            self::hash(str_replace($insertion,
-                'if ($directPinEligible &&',$pilot))),
+        $reversed=substr_replace($pilot,$originalMarker,
+            $originalOffset,strlen($insertion));
+        self::need(hash_equals(self::hash($old),self::hash($reversed)),
             'only_one_pin_condition_changed_guard');
         return $pilot;
     }
@@ -327,6 +335,24 @@ PHP;
             &&str_contains($candidate,
               '|| \Evrasia\Services\TrustedDeviceWebService::hasValidCurrentTrust($userId);'),
             'selftest_pilot_scope_or_trust_missing');
+        // Regression: original production PIN template is not required
+        // to use the canonical "if ($directPinEligible &&" spacing.
+        // Inverting the insertion must recover ALL original bytes exactly.
+        $noncanonical=str_replace(
+            'if ($directPinEligible && check_bitrix_sessid())',
+            "if (\n\t".'$directPinEligible'." \t&& check_bitrix_sessid())",
+            $fixture
+        );
+        self::need($noncanonical!==$fixture,
+            'variable_whitespace_fixture_guard');
+        $noncanonicalCandidate=self::rewrite($noncanonical);
+        self::need(substr_count($noncanonicalCandidate,
+            '|| \Evrasia\Services\TrustedDeviceWebService::hasValidCurrentTrust($userId);')
+            >=1,'variable_whitespace_patch_guard');
+        $v3Denied=false;
+        try{self::rewrite($fixture,str_repeat('0',64));}
+        catch(RuntimeException){$v3Denied=true;}
+        self::need($v3Denied,'v3_candidate_mismatch_accepted');
         $denied=false;
         try{self::rewrite(str_replace('880339','880340',$fixture));}
         catch(RuntimeException){$denied=true;}
@@ -336,6 +362,7 @@ PHP;
         catch(RuntimeException){$denied=true;}
         self::need($denied,'missing_csrf_guard_was_allowed');
         echo "PASS: exact pilot-only trust branch, inverse byte proof and PHP token parse\n";
+        echo "PASS: noncanonical live PHP spacing and wrong V3 SHA fail closed\n";
         echo "PASS: changed pilot identity and missing CSRF fail closed\n";
     }
     public static function main(array $argv): void
