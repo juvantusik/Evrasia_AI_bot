@@ -43,3 +43,10 @@ GitHub branch `feature/samzaberu-api-v5-auth-contract`, последняя по�
 **STOP для старой команды деплоя:** операторский upgrade-script `site-integration/samzaberu-v5/deployment/upgrade-public-legal-v5.sh` из commit `49f84e97` проводит HTTPS postcheck с `VHOST=evrasia.spb.ru`. После подтверждения основного домена `evrasia.rest` **не использовать тот старый copy-paste запуск как публичную приёмку**. Сначала изменить и проверить доменные/сертификатные guards для основного публичного адреса и выполнить соответствующую rollout/rollback-верификацию; имена site filesystem и origin при этом не переименовывать по одному URL.
 
 **Следующая задача:** узкий pinned READ_ONLY снимок точных V4 business route registrations + точных контроллеров/методов, затем одна итерация подключения уже имеющихся бизнес-сервисов в V5. Ни одного нового synthetic/production account.
+
+## Implementation progress — 2026-10-23, after reuse decision
+
+- Code commit \`81d93456a0b61c996733ef275d204557df77a81d\`: source-only V4 route+controller declaration reader, PINNED old \`api/v4/router.php\`, controller SHA snapshot and static callback hints. [Offline CI #39970491449](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39970491449) SUCCESS.
+- The production readout has **NOT yet been executed** and actual additional V4 business route names remain UNKNOWN. Do not infer them from desired V5 DTOs.
+- The next step is ONLY the operator's short immutable-blob fetch+READ_ONLY code-map on \`evrasia\`, followed immediately by first real business adapter implementation on V5. No synthetic accounts, no site/DB/SMS writes, and do not enable V5 auth.
+
