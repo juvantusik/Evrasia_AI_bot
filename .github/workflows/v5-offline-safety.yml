@@ -347,6 +347,16 @@ jobs:
               grep -Fxq "DATABASE_CONNECTION=NO" /tmp/v5-phone-inventory-denial.log
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-phone-inventory-denial.log
               echo "PASS: phone audit refused wrong host before source access"
+              echo "=== WEBSITE MFA PILOT EXPANSION SOURCE-ONLY SAFETY ==="
+              php -l "$ROOT/deployment/website-mfa-rollout-source-preflight.php"
+              php "$ROOT/deployment/website-mfa-rollout-source-preflight.php" --self-test
+              if php "$ROOT/deployment/website-mfa-rollout-source-preflight.php" --inspect > /tmp/web-mfa-wronghost.out 2>&1; then
+                echo "FAIL: website MFA scanner accepted GitHub Actions as production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-wronghost.out
+              grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/web-mfa-wronghost.out
+              echo "PASS: web pilot gate scanner safe, masked and production-only"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
