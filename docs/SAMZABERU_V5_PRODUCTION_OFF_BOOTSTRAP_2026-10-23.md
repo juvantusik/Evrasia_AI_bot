@@ -463,3 +463,24 @@ WRAPPER_RC=0
 
 **NEXT_STEP=PINNED_BYTE_EXACT_PUBLIC_V5_SHIM_PROVENANCE_READONLY**: compare live `api/v5/router.php` to pinned trusted `deployment/public-router.php` Git blob `e1a02fc6dd94fbe78c04cad42289b716269798a1`, with canonical `$release`/`$documentRoot` literal values extracted WITHOUT executing the site PHP source. Output only sanitized installed path role and hashes, exact template equality, expected original manifest SHA, target release code router Git blob and site-factory presence. This is one narrow review, not a new Bitrix inventory. If exact trusted template but points to a different valid release, review/attest that release and preserve rollback before any V5-only installation. Main API domain `evrasia.rest`; V4 remains transition-active, native V5 AUTH release still DENIED.
 
+## 37. 2026-10-23 — recovered actual production two-file bootstrap, prior shim parser assumed wrong deployment design
+
+**Operator follow-up:**
+
+```text
+MANIFEST_ROUTER_SHA256=fa794b1404ebb3b0b44d82bb326af9406c5c9a186dcd462f8142f2783bf1ef74
+ACTUAL_ROUTER_SHA256=f502ae4718a3193d2765d30b75dff638a684cb75078534fecfd3524dce3b94d8
+LIVE_ROUTER_UID=0 GID=1005 MODE=644 LINKS=1 MTIME=2026-10-23 12:38:37 +0300
+MANIFEST_MATCHES_ORIGINAL_V5_TEMPLATE=YES
+LIVE_RELEASE_LITERAL_PARSE=INVALID
+LIVE_ROUTER_EXACT_TRUSTED_TEMPLATE=NO
+LIVE_DOCUMENT_ROOT_MATCH=NO
+WRAPPER_RC=0
+```
+
+**Recovered prior operator-confirmed evidence already recorded in §1 and in handoff §2:** on Oct 23 the production V5 OFF bootstrap was *intentionally replaced by a distinct two-file loader* `public_html/api/v5/router.php → public_html/local/samzaberu-v5/api/v5/site.php → existing local inner router`, with fixed Bitrix docroot and a private config root *outside* public_html. Checkpoint `/root/ev-v5-checkpoints/v5-off-deployed-20261023.npcVIr3E` recorded `DEPLOY_STATUS=PASS, FINAL_STATUS=PASS`; candidate checkpoint `/root/ev-v5-checkpoints/v5-bootstrap-corrected-20261023.Vj1s42V9`. Native AUTH remained OFF by prior operator tests. The later GitHub `deployment/install-disabled-v5.sh` used a different source layout: public shim rendered from `deployment/public-router.php` and pointing to `private/samzaberu-v5/releases/0caa0248.../api/v5/site.php`, and `installed.sha256` still pins *that original release-based template*. The recent strict PHP literal parser only accepted `$release = '...';` and therefore cannot recognize the distinct two-file local loader. **Do not infer attack, trust, or actual referenced source from that parser's INVALID result.**
+
+**Crucial next check:** compare exact live current router SHA `f502ae47...` against files from BOTH pre-existing pinned root checkpoints and check the local `local/samzaberu-v5/api/v5/site.php` and inner router SHA / metadata, source-only. If exact checkpoint match, use the *already operator-accepted two-file bootstrap* as the basis of a NEW add-on V5-only release. Do not replace it with `deployment/public-router.php` or modify `installed.sha256` until current deployment is attested and rollback-compatible. Public `evrasia.rest` is the canonical mobile address. Prior self-curl from production to its PUBLIC domain returned `RC=7 HTTP000` (probable hairpin), **not proof that external phones fail to connect**. Future deployment script must not require production self-hairpin test as sole public acceptance or automatically rollback just because public NAT loops fail; origin SSL verification and independent true-external test must be separated.
+
+**NO WRITES from any operator diagnostic yet.** Deployment remains BLOCKED until checkpoint match. V4 unchanged; AUTH not newly enabled; no SQL, users or SMS touched.
+
