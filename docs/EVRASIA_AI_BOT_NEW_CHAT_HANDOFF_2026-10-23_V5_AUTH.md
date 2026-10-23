@@ -10,6 +10,8 @@
 
 > **23.10.2026 CONTINUATION, V4 BUSINESS REUSE IMPLEMENTATION:** source-only production business router/controller inventory prepared at GitHub commit `81d93456`, parser blob `159e83349129f2927402b625425b7be64c838095`, runner blob `9de2ac31aefa848516d6e3fddda6fe71ccf764ef`; offline safety CI [39970491449](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39970491449) SUCCESS. **Operator has NOT run it**; route names only from real V4 pinned source, no guesses. Next collect one READ_ONLY stdout and implement actual V5 facade. Primary public API domain **evrasia.rest**; V5 AUTH remains OFF.
 
+> **АКТУАЛЬНО 23.10.2026 — V4 БИЗНЕС-РОУТЫ ИЗ PRODUCTION ПОЛУЧЕНЫ:** операторский скан `FINAL_STATUS=PASS, FINAL_RC=0, WRAPPER_RC=0`, **62** регистрации V4, **11** контроллеров. Current SHA `api/v4/router.php` `5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d` (старый архивный SHA устарел); production V4 неизменён, V5 AUTH OFF. Корзина в `V4\\Cart` через `Evrasia\\Services\\CartApiService`, точные сигнатуры чтения до сих пор нужны. Первое прямое V5-переиспользование: READ корзины, только после настоящего V5 strong session/epoch. Документ карты маршрутов: [SAMZABERU_V5_V4_REAL_BUSINESS_ROUTE_PARITY_2026-10-23.md](SAMZABERU_V5_V4_REAL_BUSINESS_ROUTE_PARITY_2026-10-23.md). Детали production checkpoint §26; NEXT — один pinned source-only Cart/Restaurants/CartApiService method inspection, затем конкретный V5 adapter, не повторять общий роутер-аудит. Публичный API `evrasia.rest`.
+
 **Назначение документа:** без повторного исследования длинных чатов продолжить работу с последнего подтверждённого состояния. Это *фактический checkpoint*, не допуск V5 AUTH в production.
 
 - **Репозиторий:** \`juvantusik/Evrasia_AI_bot\`.
