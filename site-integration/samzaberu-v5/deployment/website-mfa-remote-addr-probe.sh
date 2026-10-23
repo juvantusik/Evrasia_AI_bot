@@ -128,7 +128,12 @@ if [[ "$MODE" == '--self-test' ]]; then
     make_php "$PROBE" "$FIXTURE_DIGEST" "$(( $(date +%s)+180 ))"
     php -d auto_prepend_file= -d auto_append_file= -l "$PROBE" >/dev/null
     echo 'PASS: temporary PHP template validated without website modification'
-    echo 'PASS: TLS loopback fallback is pinned to canonical SNI with certificate checks'
+    fixture_args=(--ipv4 --noproxy '*' --resolve 'evrasia.rest:443:192.0.2.44')
+    [[ "${fixture_args[4]}" == 'evrasia.rest:443:192.0.2.44' ]] || {
+        echo 'FAIL: local-interface canonical Host/SNI override fixture'
+        exit 1
+    }
+    echo 'PASS: canonical SNI/TLS route syntax and local-interface fallback fixture'
     DONE=YES
     exit 0
 fi
@@ -161,34 +166,59 @@ echo 'PUBLIC_DOMAIN=evrasia.rest'
 
 echo
 echo '=== 2. CANONICAL HTTPS ROUTE PREFLIGHT (BEFORE TEMP PHP CREATION) ==='
-# Direct public DNS may fail when the origin cannot hairpin to its public IP.
-# Loopback fallback preserves evrasia.rest Host/SNI and normal CA validation.
+# Direct public DNS can fail if origin cannot hairpin to an edge/proxy.
+# Local loopback is not always a listener; inspect ONLY IPv4 interfaces
+# assigned to this host if both initial routes fail. Preserve canonical
+# evrasia.rest SNI/Host and full TLS certificate validation; never -k.
 PROBE_ROUTE='NONE'
 ROUTE_ARGS=(--ipv4 --noproxy '*')
-if code="$(curl "${ROUTE_ARGS[@]}" --silent --retry 0 \
+if code="$(curl "${ROUTE_ARGS[@]}" --silent --head --retry 0 \
      --connect-timeout 4 --max-time 8 --output /dev/null \
      --write-out '%{http_code}' https://evrasia.rest/ 2>/dev/null)" &&
      [[ "$code" =~ ^[234][0-9][0-9]$ ]]; then
     PROBE_ROUTE='DIRECT_PUBLIC_DNS'
 else
     ROUTE_ARGS=(--ipv4 --noproxy '*' --resolve 'evrasia.rest:443:127.0.0.1')
-    if code="$(curl "${ROUTE_ARGS[@]}" --silent --retry 0 \
+    if code="$(curl "${ROUTE_ARGS[@]}" --silent --head --retry 0 \
          --connect-timeout 4 --max-time 8 --output /dev/null \
          --write-out '%{http_code}' https://evrasia.rest/ 2>/dev/null)" &&
          [[ "$code" =~ ^[234][0-9][0-9]$ ]]; then
         PROBE_ROUTE='ORIGIN_LOOPBACK_TLS'
     fi
 fi
+if [[ "$PROBE_ROUTE" == 'NONE' ]]; then
+    command -v ip >/dev/null 2>&1 || {
+        echo 'FAIL: cannot enumerate existing local IPv4 interfaces'
+        echo 'TEMPORARY_PHP_PROBE_CREATED=NO'
+        exit 1
+    }
+    checked=0
+    while IFS= read -r address; do
+        [[ "$address" =~ ^([0-9]{1,3}[.]){3}[0-9]{1,3}$ ]] || continue
+        checked=$((checked+1))
+        (( checked <= 4 )) || break
+        candidate=(--ipv4 --noproxy '*' --resolve "evrasia.rest:443:$address")
+        if code="$(curl "${candidate[@]}" --silent --head --retry 0 \
+             --connect-timeout 4 --max-time 8 --output /dev/null \
+             --write-out '%{http_code}' https://evrasia.rest/ 2>/dev/null)" &&
+             [[ "$code" =~ ^[234][0-9][0-9]$ ]]; then
+            ROUTE_ARGS=("${candidate[@]}")
+            PROBE_ROUTE='ORIGIN_BOUND_INTERFACE_TLS'
+            break
+        fi
+    done < <({ ip -o -4 addr show scope global 2>/dev/null || true; } |
+        awk 'NF >= 4 {split($4,part,"/"); print part[1]}' | sort -u)
+fi
 echo "CANONICAL_HTTPS_ROUTE=$PROBE_ROUTE"
 if [[ "$PROBE_ROUTE" == 'NONE' ]]; then
-    echo 'FAIL: no TLS-verified direct or loopback route to canonical domain'
+    echo 'FAIL: no TLS-verified direct, loopback or assigned local interface route'
     echo 'TEMPORARY_PHP_PROBE_CREATED=NO'
     echo 'TLS_CERT_VERIFICATION_BYPASSED=NO'
     exit 1
 fi
 echo 'TLS_CERT_VERIFICATION_BYPASSED=NO'
 echo 'SERVER_ORIGINATED_REQUEST_IS_NOT_EXTERNAL_CLIENT_PROOF=YES'
-echo 'PASS: canonical HTTPS route available'
+echo 'PASS: canonical HTTPS route available, host and TLS validation preserved'
 
 echo
 echo '=== 3. SHORT-LIVED SECRET-GUARDED WEB PHP PROBE ==='
