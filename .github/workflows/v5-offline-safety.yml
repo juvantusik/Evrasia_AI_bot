@@ -391,6 +391,16 @@ jobs:
               grep -Fq "FINAL_STATUS=FAIL" /tmp/website-mfa-candidate-wronghost.log
               grep -Fq "PRODUCTION_CODE_WRITE=NO" /tmp/website-mfa-candidate-wronghost.log
               echo "PASS: five-file private website candidate installer is wrong-host denied"
+              echo "=== WEBSITE MFA NATIVE TRUST/PASSWORD SOURCE BOUNDARY ==="
+              php -l "$ROOT/deployment/website-mfa-native-trust-readonly.php"
+              php "$ROOT/deployment/website-mfa-native-trust-readonly.php" --self-test
+              if php "$ROOT/deployment/website-mfa-native-trust-readonly.php" --inspect > /tmp/web-mfa-native-wrong-host.log 2>&1; then
+                echo "FAIL: source-only native trust audit accepted CI as production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-native-wrong-host.log
+              grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-mfa-native-wrong-host.log
+              echo "PASS: native trust source reader refuses all nonproduction environments"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
