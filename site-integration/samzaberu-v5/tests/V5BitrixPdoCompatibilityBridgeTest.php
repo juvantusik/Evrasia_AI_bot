@@ -356,6 +356,22 @@ namespace {
     rejects(fn()=>$q->execute([$key]),'native write exception fails closed');
     ok($db->rollBack(),'native cleanup possible after write error');
 
+    [$db,$native]=fixture();$db->beginTransaction();
+    $rollbacks=$native->rollbackCalls;
+    $db->abandonUncertainNativeTransaction();
+    ok(!$db->inTransaction() && !$db->ownsCurrentNativeTransaction($native),
+        'lost native savepoint revokes V5 ownership even if native transaction remains active');
+    rejects(fn()=>$db->rollBack(),
+        'quarantined bridge must not rollback a possibly foreign native transaction');
+    rejects(fn()=>$db->commit(),
+        'quarantined bridge must not commit a possibly foreign native transaction');
+    rejects(fn()=>$db->beginTransaction(),
+        'quarantined bridge cannot begin another transaction');
+    rejects(fn()=>$db->prepare('SELECT UNIX_TIMESTAMP()'),
+        'quarantined bridge refuses all further SQL');
+    ok($native->active && $native->rollbackCalls===$rollbacks,
+        'quarantine never rolls back or closes a native scope with unknown ownership');
+
     [$db,$native]=fixture();$other=new MysqliConnection();Application::$current=$other;
     rejects(fn()=>$db->beginTransaction(),'wrong application connection refused');
     ok($native->beginCalls===0,'wrong-connection request does not start transaction');

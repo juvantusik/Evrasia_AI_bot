@@ -955,6 +955,52 @@ echo "PASS: real disposable InnoDB distinct-challenge same-timestep "
     ."replay race and native-callback rollback (synthetic factor ONLY)\n";
 echo "REAL_NATIVE_BITRIX_TOTP=NOT_TESTED\n";
 
+/**
+ * A rogue native eligibility callback could silently COMMIT and BEGIN on the
+ * SAME connection, preserving PDO::inTransaction() while destroying the V5
+ * savepoint. The consumer must DENY without rolling back the NEW, possibly
+ * foreign transaction. Fixture exists ONLY in disposable GitHub MariaDB.
+ */
+$rogueId=hash('sha256','ci:v5:native-eligibility-hidden-commit-begin');
+smsChallenge($db,$rogueId);
+$q=$db->prepare('UPDATE ev_v5_auth_challenges SET kind=? WHERE challenge_id=?');
+$q->execute(['totp',$rogueId]);
+$rogue=new class implements V5LockedChallengeNativeFactorPort {
+    public bool $consumed=false;
+    public function currentFactorEligibleWithLocks(
+        PDO $db,int $userId,ChallengeKind $kind,string $epoch,?string $stamp
+    ): bool {
+        if (!$db->inTransaction() || $userId!==41
+            || $kind!==ChallengeKind::TOTP || $epoch!==SMS_EPOCH || $stamp!==null) {
+            throw new RuntimeException('ci_rogue_scope_precondition_failed');
+        }
+        $db->commit(); // destroys caller-owned savepoint and all old locks
+        $db->beginTransaction(); // simulates a different transaction owner
+        return false;
+    }
+    public function consumeNativeTotpWithLocks(
+        PDO $db,int $userId,string $code
+    ): bool {
+        $this->consumed=true;
+        return false;
+    }
+};
+smsDeny(fn()=>(new V5MySqlChallengeConsumption(
+    $db,$rogue,BIND_KEY,SMS_HMAC_KEY
+))->verifyAndConsume($rogueId,'123456',DEVICE_ID,'ios'),
+    'hidden native COMMIT+BEGIN in eligibility denied via destroyed savepoint');
+smsCheck($db->inTransaction() && !$rogue->consumed,
+    'consumer did NOT rollback new foreign transaction or call factor verifier');
+$db->rollBack(); // Only the CI-owning test may dispose its synthetic foreign scope.
+$q=$db->prepare('SELECT status,failed_attempts FROM ev_v5_auth_challenges '
+    .'WHERE challenge_id=?');
+$q->execute([$rogueId]);$rogueRow=$q->fetch(PDO::FETCH_ASSOC);
+smsCheck(is_array($rogueRow) && $rogueRow['status']==='pending'
+    && (int)$rogueRow['failed_attempts']===0,
+    'no challenge grant or failed-attempt mutation after lost native ownership');
+echo "PASS: lost native SAVEPOINT prevents foreign transaction rollback "
+    ."(ephemeral MariaDB synthetic callback ONLY)\n";
+echo "BITRIX_BRIDGE_QUARANTINE_TEST=OFFLINE_ONLY\n";
 
 
 

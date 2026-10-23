@@ -87,6 +87,19 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             && $candidate === $this->native;
     }
 
+    /**
+     * Terminal quarantine after a native callback lost its V5-owned SQL
+     * savepoint. A hidden native COMMIT+BEGIN may now own this connection:
+     * never let V5 roll back, commit or reuse that possibly FOREIGN scope.
+     * This DOES NOT close/disconnect Bitrix; the staging driver must discard
+     * the entire native connection before any next authentication operation.
+     */
+    public function abandonUncertainNativeTransaction(): void
+    {
+        $this->poisoned = true;
+        $this->opened = false;
+    }
+
     public function beginTransaction(): bool
     {
         if ($this->opened || $this->poisoned) {

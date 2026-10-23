@@ -73,6 +73,8 @@ final readonly class V5MySqlChallengeConsumption
 
         $this->assertReady();
         $started=false;
+        $nativeGuardOpen=false;
+        $nativeGuardReleaseStarted=false;
         try {
             if (!$this->db->beginTransaction()) {
                 throw new RuntimeException('v5_challenge_begin_failed');
@@ -99,10 +101,19 @@ final readonly class V5MySqlChallengeConsumption
             }
             $kind=ChallengeKind::from($record['kind']);
             $this->execute('SAVEPOINT v5_native_factor_guard', []);
+            $nativeGuardOpen=true;
             if($this->native->currentFactorEligibleWithLocks(
                 $this->db,$record['user_id'],$kind,
                 $record['auth_epoch'],$record['verification_stamp']
             ) !== true) {
+                // Eligibility may be native Bitrix code, not a pure read.
+                // Prove the ORIGINAL savepoint survived before rollback.
+                $nativeGuardReleaseStarted=true;
+                $this->execute('RELEASE SAVEPOINT v5_native_factor_guard', []);
+                $nativeGuardOpen=false;
+                if (!$this->db->inTransaction()) {
+                    throw new RuntimeException('v5_challenge_transaction_lost');
+                }
                 $this->db->rollBack();$started=false;
                 return null;
             }
@@ -154,7 +165,9 @@ final readonly class V5MySqlChallengeConsumption
             // The native TOTP provider might have implicitly committed and
             // restarted a transaction. RELEASE fails if the original savepoint
             // was destroyed, even if PDO still reports inTransaction().
+            $nativeGuardReleaseStarted=true;
             $this->execute('RELEASE SAVEPOINT v5_native_factor_guard', []);
+            $nativeGuardOpen=false;
             if (!$this->db->inTransaction()) {
                 throw new RuntimeException('v5_challenge_transaction_lost');
             }
@@ -190,6 +203,30 @@ final readonly class V5MySqlChallengeConsumption
                 $record['user_id'],$deviceId,$platform,$kind,$challengeId
             );
         } catch (Throwable) {
+            if ($started && $nativeGuardOpen) {
+                // A failed factor callback may have COMMITted the old native
+                // transaction and started another on the same SQL connection.
+                // RELEASE is proof of continuity; inTransaction() alone is not.
+                // Never retry a RELEASE that itself failed/was uncertain.
+                if (!$nativeGuardReleaseStarted) {
+                    $nativeGuardReleaseStarted=true;
+                    try {
+                        $this->execute('RELEASE SAVEPOINT v5_native_factor_guard', []);
+                        $nativeGuardOpen=false;
+                    } catch (Throwable) {
+                        // The old savepoint is unproven. Do NOT roll back a
+                        // potentially foreign transaction.
+                    }
+                }
+                if ($nativeGuardOpen) {
+                    if ($this->db instanceof V5BitrixPdoCompatibilityBridge) {
+                        // Terminally poison the staging-only Bitrix bridge:
+                        // no further SQL/BEGIN/COMMIT/ROLLBACK from V5 on it.
+                        $this->db->abandonUncertainNativeTransaction();
+                    }
+                    $started=false; // The caller must discard this connection.
+                }
+            }
             if($started && $this->db->inTransaction()) {
                 try{$this->db->rollBack();}catch(Throwable){}
             }
