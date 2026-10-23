@@ -275,6 +275,14 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         if ($sql === 'SELECT UNIX_TIMESTAMP()') {
             return;
         }
+        // Exactly the two transaction-continuity guard statements issued by
+        // V5MySqlStrongSessionStore::transaction(). Both are accepted ONLY
+        // inside this bridge's owned native transaction by runStatement().
+        // No generic SAVEPOINT name, rollback-to-savepoint or SQL batch.
+        if ($sql === 'SAVEPOINT v5_strong_session_guard'
+            || $sql === 'RELEASE SAVEPOINT v5_strong_session_guard') {
+            return;
+        }
         // No generic EMAIL/LOGIN predicate allowance or ACTIVE pre-filter.
         if (in_array($sql, self::AUTH_IDENTITY_READ_SQL, true)) {
             return;
