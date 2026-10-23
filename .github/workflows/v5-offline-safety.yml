@@ -53,6 +53,17 @@ jobs:
               grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-public-legal-upgrader-denied.log
               grep -Fxq "V5_AUTH_ENABLED=NO" /tmp/v5-public-legal-upgrader-denied.log
               echo "PASS: deploy script Bash lint + fail-closed outside production"
+              echo "=== REAL MAIN-DOMAIN V5 PUBLIC REGISTRATION ROLLOUT SAFETY ==="
+              bash -n "$ROOT/deployment/upgrade-public-registration-documents-v5.sh"
+              if bash "$ROOT/deployment/upgrade-public-registration-documents-v5.sh" > /tmp/v5-registration-upgrader-denied.log 2>&1; then
+                echo "FAIL: live public-registration updater ran in CI"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-registration-upgrader-denied.log
+              grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-registration-upgrader-denied.log
+              grep -Fxq "V4_MODIFIED=NO" /tmp/v5-registration-upgrader-denied.log
+              grep -Fxq "V5_AUTH_ENABLED=NO" /tmp/v5-registration-upgrader-denied.log
+              echo "PASS: guarded V5-only updater syntax and wrong-host refusal"
               echo "=== REAL REGISTRATION DOCUMENTS: V5 ROUTE / SITE CODE LINT ==="
               php -l "$ROOT/api/v5/router.php"
               php -l "$ROOT/src/V5RouteMap.php"
