@@ -78,6 +78,8 @@ jobs:
               grep -Fxq "USER_DATA_READ=NO" /tmp/v5-v4-cart-wrong-host.log
               echo "PASS: Cart/Restaurant source-only guarded inspection and wrong-host denial"
               echo "=== REAL V4 CartApiService -> STRONG V5 CART READER (FEATURE ONLY) ==="
+              php -l "$ROOT/src/V5BitrixLockedCartFuserOwner.php"
+              php -l "$ROOT/tests/V5BitrixLockedCartFuserOwnerTest.php"
               php -l "$ROOT/src/V5BitrixCartApiServiceReader.php"
               php -l "$ROOT/src/V5MySqlCartRead.php"
               php -l "$ROOT/src/V5AuthHttpHandler.php"
@@ -310,7 +312,7 @@ jobs:
                 lint_count=$((lint_count + 1))
               done < /tmp/v5-php-file-manifest
               printf "PASS: linted %s PHP files\n" "$lint_count"
-              echo "=== 3. SYNTHETIC REGRESSION (PINNED 48 SUITES) ==="
+              echo "=== 3. OFFLINE REGRESSION (PINNED 50 SUITES) ==="
               suite_count=0
               for suite in \
                 AuthDecisionTest.php \
@@ -324,6 +326,7 @@ jobs:
                 V5BitrixPdoCompatibilityBridgeTest.php \
                 V5BitrixStrongSessionBridgeIntegrationTest.php \
                 V5CartBusinessReuseTest.php \
+                V5BitrixLockedCartFuserOwnerTest.php \
                 V5BitrixStagedSignupConsentWriterTest.php \
                 V5FirstFactorAttemptGateTest.php \
                 V5LoginWorkflowTest.php \
@@ -366,7 +369,7 @@ jobs:
                 php "$ROOT/tests/$suite"
                 suite_count=$((suite_count + 1))
               done
-              test "$suite_count" -eq 49
+              test "$suite_count" -eq 50
               printf "PASS: %s approved offline suites completed\n" "$suite_count"
               echo "=== 4. NEGATIVE PRE-BOOTSTRAP GUARDS ==="
               if php "$ROOT/tests/integration/V5BitrixNativeDepthReadOnlyPreflight.php" > /tmp/v5-preflight-denial.log 2>&1; then

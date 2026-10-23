@@ -348,3 +348,26 @@ Operator-confirmed V4 Cart/CartApiService SHA pins are in §27. Initial implemen
 
 **NEXT_STEP=ONE_SOURCE_ONLY_V4_FUSER_AND_CART_READ_CONTRACT**: New narrow \`V5CartFuserBusinessBoundary.php\` (immutable Git blob \`9807b335e19f6ccc26fef95d786eb57c8092a7d9\`) plus \`v5_cart_fuser_business_boundary_readonly.sh\` (Git blob \`856712d5a19332f50bcdb8d3689fb89525a44178\`), exact Cart/CartApiService/router source SHA guards; checks \`Cart::checkFUserId/getSiteId\` and \`CartApiService::__construct/getCartItems/calcBasketTotal\`. No V4 source execution or account/DB/SMS write. Then implement authoritative V5 user→FUSER binding/locked native read and full pricing DTO. V5 AUTH remains OFF; \`evrasia.rest\` main domain, no synthetic accounts/mock API.
 
+## 29. 2026-10-23 — real V5 locked USER_ID-to-FUSER_ID native ownership adapter
+
+## Реализована строгая серверная привязка USER_ID → FUSER_ID (после операторского PASS)
+
+Оператор запустил закреплённый source-only reader на production \`evrasia\`: \`FINAL_STATUS=PASS\`, \`FINAL_RC=0\`, \`WRAPPER_RC=0\`. Источники \`Cart.php\` SHA \`73989036542321bbac5ee76a1b104713ff932621ffaa0f4e2aa08ed28949a039\` и \`CartApiService.php\` SHA \`61671c764f23a82ce66a990d5c9122ebf25fdac800ab51828c0805c8c9db18e0\` НЕ изменены.
+
+**Что выяснилось:**
+- В установленном \`V4\Cart::checkFUserId\` (стр. 1236–1263) \`$DB->Query(...$this->fUserId)\` проверяет существование FUSER. Несовпадение \`USER_ID\` с текущим пользователем отвергается **только если в строке вообще указан USER_ID**. V4 пропускает **unlinked guest FUSER**, и \`fUserId\` берётся из caller GET/POST. Это НЕ авторитетная V5 security policy; V4 оставить неизменным.
+- \`Evrasia\Services\CartApiService::__construct(?int $fUserId)\` (стр. 18–21) записывает переданный идентификатор в \`$this->id\`; ни авторизации, ни явных записей нет.
+- \`getCartItems()\` (стр. 37–140) выполняет global \`$DB->Query\` по этой корзине, обрабатывает элементы, \`CIBlockElement::GetList\`, цену и итог позиции с существующими флагами \`useRedPrice(true)\`, \`useRedSku(false)\`, \`useGifts(false)\`. В наблюдаемом методе нет явного UPDATE/INSERT/DELETE, однако в нём есть **\`unserialize($item[...])\`**, а legacy \`$DB\` и ORM могут использовать не тот же физический connection, что V5 PDO. Отсутствие скрытых эффектов/безопасность десериализации/согласованность с native-lock ещё **НЕ доказаны real Bitrix E2E**.
+- \`calcBasketTotal($items)\` (стр. 141–157) суммирует существующие величины V4 без прямого SQL. Полный V4 DTO (\`total\`, \`extra\`, gifts) ПОКА НЕ реализован в V5, и это нельзя объявлять готовым.
+
+**Уже реализованный feature-only слой:**
+- \`V5BitrixLockedCartFuserOwner.php\` — реализация \`V5VerifiedLockedCartOwnerPort\`: внутри текущей V5-транзакции и после strong JWT/b_user/AUTH_EPOCH/session proof выполняет ровно
+  \`SELECT ID, USER_ID FROM b_sale_fuser WHERE USER_ID = ? ORDER BY ID ASC LIMIT 2 FOR UPDATE\`.
+  Находит корзину **только через VERIFIED SERVER user ID**, сравнивает \`USER_ID\` с ним, требует положительный канонический \`ID\`, ровно одну строку; NULL guest/чужую/две привязанные/неверный тип отвергает. Никакого создания FUSER, merge, сброса V4 PHP-session, SMS, JWT или аккаунта.
+- \`V5BitrixPdoCompatibilityBridge::assertStatementAllowed\` пропускает **только этот точный шаблон** FUSER SELECT (с \`FOR UPDATE\`). Никогда не разрешает общие SELECT/UPDATE Sale/basket и не выполняет блокировку вне owned V5 transaction.
+- Инъекция существующей композицией: \`new V5BitrixCartApiServiceReader(new V5BitrixLockedCartFuserOwner())\` как \`V5LockedCartReaderPort\` через *explicit* \`V5MySqlPublicComposition::build(..., cartReader: ...)\`. Без этой инъекции V5 cart остаётся 503. Сайт/production пока не менялся.
+- \`V5BitrixLockedCartFuserOwnerTest.php\` — pure in-process test без SQL сокета: positive linked single FUSER; missing/NULL/unlinked/other user/ambiguous/invalid ID/wrong driver/no transaction => DENY; exact SQL bridge allowlist vs arbitrary SELECT or sale write => DENY. **Созданных тестовых или реальных аккаунтов нет.**
+- Текущий статус: **код в feature-ветке**, production V5 AUTH OFF; CI conclusion станет известен после commit. Ни runtime SqlHelper, ни \`b_sale_fuser\` actual schema/индексы/nullable usage, ни Bitrix \`$DB\` read continuity не проверялись на живой БД.
+
+**Следующее безопасное действие:** не повторять file inventories. Сделать один targeted native read-only check exact installed b_sale_fuser \`ID/USER_ID\` schema/index и физическую транзакционную связь legacy \`$DB\` с \`Application::getConnection()\` без аккаунтов/записей; затем реальная заверенная композиция, empty cart/двойной FUSER semantic + total/discount DTO. Если native service нельзя безопасно вызывать, fail-closed, без V4 rewrite.
+

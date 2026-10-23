@@ -262,6 +262,12 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             . 'LOGIN_ATTEMPTS FROM b_user WHERE LOGIN = ? LIMIT 2 FOR UPDATE',
     ];
 
+    // Exact native sale FUSER ownership point read for protected V5 cart.
+    // b_sale_fuser ownership must remain locked until the cart read completes;
+    // NO generic allowlisting of sale/basket tables or arbitrary SQL shapes.
+    private const CART_OWNER_SQL = 'SELECT ID, USER_ID FROM b_sale_fuser '
+        . 'WHERE USER_ID = ? ORDER BY ID ASC LIMIT 2 FOR UPDATE';
+
     private static function assertStatementAllowed(string $sql): void
     {
         if ($sql === '' || strlen($sql) > 8000
@@ -273,6 +279,11 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             throw new RuntimeException('v5_bitrix_sql_shape_forbidden');
         }
         if ($sql === 'SELECT UNIX_TIMESTAMP()') {
+            return;
+        }
+        // Ownership proof is a single, fixed indexed-row read. A FOR UPDATE
+        // statement still requires an owned native V5 transaction in runStatement.
+        if ($sql === self::CART_OWNER_SQL) {
             return;
         }
         // Only the two known transaction-continuity guard pairs issued by
