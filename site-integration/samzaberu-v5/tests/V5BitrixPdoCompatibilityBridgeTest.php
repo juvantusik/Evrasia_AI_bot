@@ -23,6 +23,7 @@ namespace Bitrix\Main\DB {
         public array $challenge=['user_id'=>'41','status'=>'pending','sms_sent_count'=>'0'];
         public bool $active=false;
         public bool $sessionGuardOpen=false;
+        public bool $nativeFactorGuardOpen=false;
         public bool $throwBegin=false;
         public bool $throwCommit=false;
         public bool $throwRollback=false;
@@ -45,6 +46,7 @@ namespace Bitrix\Main\DB {
             $this->snapshot=[$this->budgets,$this->outbox,$this->challenge];
             $this->active=true;
             $this->sessionGuardOpen=false;
+            $this->nativeFactorGuardOpen=false;
             return null;
         }
         public function commitTransaction():mixed {
@@ -52,7 +54,8 @@ namespace Bitrix\Main\DB {
             if($this->silentCommitFailure)return false;
             if($this->throwCommit)throw new \RuntimeException('native commit fault');
             if(!$this->active)throw new \RuntimeException('no active tx');
-            if($this->sessionGuardOpen)throw new \RuntimeException('unreleased native savepoint');
+            if($this->sessionGuardOpen || $this->nativeFactorGuardOpen)
+                throw new \RuntimeException('unreleased native savepoint');
             $this->active=false;
             $this->snapshot=[];
             return null;
@@ -65,6 +68,7 @@ namespace Bitrix\Main\DB {
             [$this->budgets,$this->outbox,$this->challenge]=$this->snapshot;
             $this->active=false;
             $this->sessionGuardOpen=false;
+            $this->nativeFactorGuardOpen=false;
             return null;
         }
         public function query(string $sql):FakeResult {
@@ -95,6 +99,16 @@ namespace Bitrix\Main\DB {
             if($sql==='RELEASE SAVEPOINT v5_strong_session_guard') {
                 if(!$this->sessionGuardOpen)throw new \RuntimeException('missing guard');
                 $this->sessionGuardOpen=false;
+                return null;
+            }
+            if($sql==='SAVEPOINT v5_native_factor_guard') {
+                if($this->nativeFactorGuardOpen)throw new \RuntimeException('duplicate native factor guard');
+                $this->nativeFactorGuardOpen=true;
+                return null;
+            }
+            if($sql==='RELEASE SAVEPOINT v5_native_factor_guard') {
+                if(!$this->nativeFactorGuardOpen)throw new \RuntimeException('missing native factor guard');
+                $this->nativeFactorGuardOpen=false;
                 return null;
             }
             if(str_starts_with($sql,'INSERT INTO ev_v5_sms_budget_windows')) {
@@ -169,7 +183,9 @@ namespace {
     foreach(['SAVEPOINT other', 'RELEASE SAVEPOINT other',
         'ROLLBACK TO SAVEPOINT v5_strong_session_guard',
         'SAVEPOINT v5_strong_session_guard; DROP TABLE b_user',
-        'SAVEPOINT v5_strong_session_guard_extra'] as $unsafeSavepoint) {
+        'SAVEPOINT v5_strong_session_guard_extra',
+        'SAVEPOINT v5_native_factor_guard_extra',
+        'RELEASE SAVEPOINT v5_native_factor_guard; DROP TABLE b_user'] as $unsafeSavepoint) {
         rejects(fn()=>$db->prepare($unsafeSavepoint),
             'unreviewed savepoint statement refused');
     }
@@ -177,8 +193,14 @@ namespace {
     $guardRelease=$db->prepare('RELEASE SAVEPOINT v5_strong_session_guard');
     ok($guardBegin instanceof PDOStatement && $guardRelease instanceof PDOStatement,
         'only exact strong-session savepoint and release are in SQL allowlist');
+    $factorBegin=$db->prepare('SAVEPOINT v5_native_factor_guard');
+    $factorRelease=$db->prepare('RELEASE SAVEPOINT v5_native_factor_guard');
+    ok($factorBegin instanceof PDOStatement && $factorRelease instanceof PDOStatement,
+        'exact native-factor savepoint and release in SQL allowlist');
     rejects(fn()=>$guardBegin->execute([]),
         'savepoint cannot execute without a bridge-owned native transaction');
+    rejects(fn()=>$factorBegin->execute([]),
+        'native factor savepoint cannot execute without bridge-owned transaction');
 
     // V5 strong-session SQL is whitelisted by EXACT template, never by
     // arbitrary table name/WHERE substring. V4/native tables remain forbidden.
@@ -235,6 +257,12 @@ namespace {
         'native savepoint released before commit');
     ok($guardBegin->rowCount()===0 && $guardRelease->rowCount()===0,
         'savepoint control statements report no modified user rows');
+    ok($factorBegin->execute([]) && $native->nativeFactorGuardOpen,
+        'native factor guard created under same owned transaction');
+    ok($factorRelease->execute([]) && !$native->nativeFactorGuardOpen,
+        'native factor guard released under same owned transaction');
+    ok($factorBegin->rowCount()===0 && $factorRelease->rowCount()===0,
+        'native factor guard cannot report account writes');
     rejects(fn()=>$db->beginTransaction(),'no nested transaction in bridge');
     rejects(fn()=>$q->execute([$key]),'missing positional parameter denied');
     rejects(fn()=>$q->execute(['x'=>$key,'expiry'=>1800004800]),'associative parameter binding denied');
