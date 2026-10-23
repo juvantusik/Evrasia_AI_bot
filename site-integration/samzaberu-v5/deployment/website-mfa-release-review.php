@@ -198,12 +198,24 @@ final class WebMfaCandidateReview
         echo "=== 2. KEY SECURITY DECISIONS IN CANDIDATES (TOKEN-MASKED) ===\n";
         foreach (['processAction','startPilotSmsChallenge','getPilotSmsState',
             'smsAction','issuePilotSmsCode','enforcePilotSmsRateLimit'] as $fn) {
+            $limit = match ($fn) {
+                'smsAction' => 65,
+                'startPilotSmsChallenge' => 65,
+                'processAction' => 50,
+                'getPilotSmsState' => 50,
+                default => 38,
+            };
             self::expressions(self::method($sources['signin'],$fn),
-                'SIGNIN_'.$fn,26);
+                'SIGNIN_'.$fn,$limit);
         }
         foreach (['requestSmsAction','verifySmsAction','getVerifiedSmsState'] as $fn) {
+            $limit = match ($fn) {
+                'verifySmsAction' => 56,
+                'requestSmsAction' => 44,
+                default => 38,
+            };
             self::expressions(self::method($sources['enrollment'],$fn),
-                'ENROLL_'.$fn,18);
+                'ENROLL_'.$fn,$limit);
         }
         self::expressions($sources['pin'],'PIN',28);
         echo "=== 3. RELEASE INVARIANTS / CURRENT BLOCKERS ===\n";
