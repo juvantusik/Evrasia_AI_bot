@@ -121,6 +121,41 @@ final class EvrasiaWebsiteMfaCandidate
         return $value;
     }
 
+    /**
+     * Preserve PHP grammar in static invariants despite line wrapping.
+     *
+     * The installed Bitrix site separates PhoneAuth:: from extractData()
+     * with whitespace. Literal substring checks used to report a false
+     * security error even though the native signed-phone verification exists.
+     * This compacts ONLY whitespace/comment tokens for comparison; the actual
+     * PHP source and every candidate remain byte-for-byte unchanged outside
+     * the explicit source-pinned transformations.
+     */
+    private static function compactPhpCode(string $source): string
+    {
+        $result = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token)) {
+                if (in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                $result .= $token[1];
+            } else {
+                $result .= $token;
+            }
+        }
+        return $result;
+    }
+
+    private static function requireInvariants(string $source, array $invariants, string $group): void
+    {
+        $compact = self::compactPhpCode($source);
+        foreach ($invariants as $label => $literal) {
+            self::require(str_contains($compact, $literal),
+                $group . '_missing_' . $label);
+        }
+    }
+
     private static function replaceIdentifier(
         string $body, string $replacement, string $label
     ): string {
@@ -152,13 +187,15 @@ final class EvrasiaWebsiteMfaCandidate
         }
         self::require(substr_count($s, 'self::PILOT_USER_ID') === 0,
             'enrollment_pilot_branch_remains');
-        self::require(str_contains($s, 'PhoneAuth::extractData')
-            && str_contains($s, 'getVerifiedSmsState')
-            && str_contains($s, 'phoneFingerprint')
-            && str_contains($s, 'MAX_ATTEMPTS')
-            && str_contains($s, 'CODE_TTL_SECONDS')
-            && str_contains($s, 'Csrf()')
-            && str_contains($s, 'Authentication()'), 'enrollment_security_invariant_missing');
+        self::requireInvariants($s, [
+            'signed_phone_data' => 'PhoneAuth::extractData',
+            'sms_verified_state' => 'getVerifiedSmsState',
+            'phone_fingerprint' => 'phoneFingerprint',
+            'sms_max_attempts' => 'MAX_ATTEMPTS',
+            'sms_ttl' => 'CODE_TTL_SECONDS',
+            'csrf_filter' => 'Csrf()',
+            'authenticated_filter' => 'Authentication()',
+        ], 'enrollment_security');
         return $s;
     }
 
@@ -215,14 +252,16 @@ final class EvrasiaWebsiteMfaCandidate
         }, 'signin_' . $method);
         self::require(substr_count($s, 'self::PILOT_USER_ID') === 0,
             'signin_pilot_branch_remains');
-        self::require(str_contains($s, 'CUser::LoginInternal')
-            && str_contains($s, 'VerifyPhoneCode')
-            && str_contains($s, 'GeneratePhoneCode')
-            && str_contains($s, 'SMS_MAX_ATTEMPTS')
-            && str_contains($s, 'SMS_TTL_SECONDS')
-            && str_contains($s, 'TrustedDeviceWebService::')
-            && str_contains($s, 'Authorize(')
-            && str_contains($s, 'LoginByOtp('), 'signin_security_invariant_missing');
+        self::requireInvariants($s, [
+            'password_proof' => 'CUser::LoginInternal',
+            'native_phone_verification' => 'VerifyPhoneCode',
+            'native_phone_code_issue' => 'GeneratePhoneCode',
+            'sms_failed_attempt_limit' => 'SMS_MAX_ATTEMPTS',
+            'sms_expiry' => 'SMS_TTL_SECONDS',
+            'trusted_device_service' => 'TrustedDeviceWebService::',
+            'final_authentication' => 'Authorize(',
+            'native_totp_login' => 'LoginByOtp(',
+        ], 'signin_security');
         return $s;
     }
 
@@ -403,7 +442,26 @@ final class EvrasiaWebsiteMfaCandidate
             $sentinel, '/if\s*\(\s*\$directPinEligible\s*&&/',
             'if ($directPinEligible && true &&', 1, 'test_pin_marker'
         ), '$directPinEligible && true &&'), 'selftest_pin_gate_failed');
+        $wrapped = "<?php \n Main\\Controller\\PhoneAuth::\n extractData(\$cid);"
+            . " new \\\\Bitrix\\Main\\Engine\\ActionFilter\\Csrf ( );";
+        self::require(str_contains(self::compactPhpCode($wrapped), 'PhoneAuth::extractData(')
+            && str_contains(self::compactPhpCode($wrapped), 'Csrf()'),
+            'selftest_whitespace_in_native_signed_phone_guard');
+        self::requireInvariants($wrapped, [
+            'signed_data' => 'PhoneAuth::extractData',
+            'csrf' => 'Csrf()',
+        ], 'selftest_source');
+        $negativeDenied = false;
+        try {
+            self::requireInvariants($wrapped, [
+                'native_otp' => 'LoginByOtp(',
+            ], 'selftest_negative');
+        } catch (RuntimeException $e) {
+            $negativeDenied = $e->getMessage() === 'selftest_negative_missing_native_otp';
+        }
+        self::require($negativeDenied, 'selftest_missing_security_invariant_accepted');
         echo "PASS: source-only method boundaries and positive user rewrites\n";
+        echo "PASS: whitespace-tolerant native auth guards, exact missing-guard refusal\n";
         echo "MODE=OFFLINE_SELF_TEST\n";
     }
 
