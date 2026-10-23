@@ -426,10 +426,11 @@ yes($db->sessions===$committed,'replayed grant cannot persist another session');
 [$store,$db,$proof]=environment();
 $proof->restartTransaction=true;
 denies(fn()=>trusted($store),'COMMIT and BEGIN inside native proof must destroy savepoint and deny JWT');
-yes($db->commits===0 && $db->sessions===[],'restarted native transaction cannot commit session');
-yes($db->inTransaction() && $db->rollbacks===0,
-    'foreign transaction opened by native proof is NOT rolled back by V5 session store');
-$db->rollBack(); // Test fixture explicitly discards its synthetic foreign transaction.
+yes($db->commits===0 && $db->inTransaction() && $db->rollbacks===0,
+    'hidden native COMMIT+BEGIN cannot authorize V5 COMMIT or rollback foreign session');
+$db->rollBack(); // Only the test fixture owns and discards its foreign transaction.
+yes($db->sessions===[],
+    'test-owner rollback removes uncommitted foreign session writes after V5 denial');
 
 [$store,$db,$proof]=environment();
 $proof->loseTransaction=true;
