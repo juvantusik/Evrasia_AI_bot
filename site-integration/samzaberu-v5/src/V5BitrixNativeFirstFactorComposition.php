@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5BitrixPasswordProofPort.php';
+require_once __DIR__ . '/V5PinnedBitrixPasswordComparator.php';
 require_once __DIR__ . '/V5PdoUserRowSource.php';
 require_once __DIR__ . '/V5NativeTotpStatus.php';
 require_once __DIR__ . '/V5ExistingLoginPolicy.php';
@@ -94,7 +95,7 @@ final class V5BitrixNativeFirstFactorComposition
         return new V5BitrixPasswordProofPort(
             $reader,
             $attemptGate,
-            new V5NativeBitrixPasswordComparator(),
+            new V5PinnedBitrixPasswordComparator(),
         );
     }
 
