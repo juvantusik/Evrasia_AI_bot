@@ -471,6 +471,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/website-mfa-canary-foreign-host.log
               grep -Fxq "SITE_CODE_WRITE=NO" /tmp/website-mfa-canary-foreign-host.log
               echo "PASS: pilot-only TOTP native trust source fixture / wrong-host guard"
+              echo "=== WEBSITE MFA SINGLE PILOT SIGNIN ATOMIC RELEASE / OFFLINE ROLLBACK ==="
+              bash -n "$ROOT/deployment/website-mfa-pilot-canary-deploy.sh"
+              bash "$ROOT/deployment/website-mfa-pilot-canary-deploy.sh" --self-test
+              if bash "$ROOT/deployment/website-mfa-pilot-canary-deploy.sh" --preflight > /tmp/mfa-pilot-install-wronghost.log 2>&1; then
+                echo "FAIL: pilot-only production installer accepted CI host"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/mfa-pilot-install-wronghost.log
+              grep -Fxq "ONE_SIGNIN_FILE_ONLY=YES" /tmp/mfa-pilot-install-wronghost.log
+              echo "PASS: atomic pilot rollback fixture and wrong-host production refusal"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
