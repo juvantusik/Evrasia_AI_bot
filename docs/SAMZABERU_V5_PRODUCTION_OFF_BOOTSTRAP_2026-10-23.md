@@ -151,3 +151,21 @@ This section supersedes the earlier **unconfirmed CI** status for the new first-
 - **132 synthetic assertions total**. `FIRST_FACTOR_PUBLIC_GATES=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `REAL_BITRIX_NATIVE_E2E=NOT_RUN`, `REAL_BITRIX_POLICY_ATTESTED=NO`.
 
 **Critical unresolved release blockers:** the independent `V5CurrentLoginControlsPort` still needs trusted, real site-specific evidence for current temporary block, security/admission/event hook restrictions and password expiry/history; `V5PerUserSmsEligibilityPort` still needs actual authorized group/site policy. Source-pinned `CUser::getPolicy` itself has not yet been accepted on real loaded Bitrix and cannot prove these other facts. The ten native `AUTH_EPOCH` mutation paths, SMS issue/resend actual provider receipts, trusted-device enrollment, native TOTP replay, independent JWT/token validation and RestIS PIN reader remain unattested. Production V5 AUTH **OFF**, V4 untouched, no production code/DB changes, no SMS.
+
+## 13. 2026-10-23 — restored full offline V5 regression after exact native savepoint bridge repair
+
+**Why broader CI was failing:** target first-factor workflow already SUCCESS, but `V5 offline safety checks` had failures predating new CUser limits: `V5MySqlStrongSessionStore::transaction()` added an exact `SAVEPOINT v5_strong_session_guard` / `RELEASE ...` continuity check and `V5MySqlChallengeConsumption::verifyAndConsume()` added `v5_native_factor_guard`. The V5 native Bitrix PDO compatibility bridge rejected ALL SAVEPOINT SQL, so the synthetic HTTP strong-session test failed at `V5MySqlStrongSessionStore.php:393` with generic `session_unavailable`. A separate older synthetic signup native-receipt fixture used `https://example.test` legal URLs, violating current trusted-origin contract. Neither issue proves a production incident; V5 live AUTH stays OFF.
+
+**Minimal feature-branch repairs (no broad SQL allowlist, no changes to auth proof policy):**
+- Commit `8243816b44478abc2077d11a33b87182428a36f8`: Bitrix PDO bridge allows only the exact strong-session guard `SAVEPOINT/RELEASE SAVEPOINT` pair **inside an owned bridge transaction**; all other savepoint names/rollback-to/savepoint SQL batches denied.
+- `9e635d07f13fcc0e2006103edc2802654abac93e`: native mock validates the savepoint creation/release before a committed V5 strong session.
+- `cfb6c4aecbae54216109af1ca37d5a4047377e4d`: direct bridge negative tests for arbitrary savepoints, nested/unowned transactions.
+- `13e33fdfb20b93d09a7df4099a72068f078e2d5d`: ONLY test fixture links updated to `https://evrasia.spb.ru/legal/public-offer/` and `/legal/personal-data-consent/`. Live legal-origin validation was NOT relaxed.
+- `9c058568fd08e7bda99b58a1e41c0a4bd6122e3a`: bridge allows the second exact native-factor savepoint guard pair required for one-time SMS/TOTP challenge consumption, same mandatory transaction ownership.
+- `213187b39000e0c9ed0f1a448453dad4381d727c`: direct bridge test extends mock to require exact second pair, no arbitrary SQL.
+
+**Verified full offline CI result:**
+- [GitHub Actions V5 offline safety checks #39950293630](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950293630), revision `9c058568fd...`, completed **SUCCESS**; PHP fake Bitrix bridge **106/106** assertions PASS, synthetic strong-session HTTP/JWT/PIN **212/212** PASS, transactional V5 session/refresh offline **279/279** PASS, all other offline suites and wrong-host default-deny tests PASS, `FINAL_STATUS=PASS`. Later run [#39950395081](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950395081), revision `213187b390...`, also **SUCCESS**, covering final strict second-savepoint negative tests.
+- Native first-factor targeted CI already verified separately [#39949357505](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39949357505), **132 synthetic assertions PASS**, no Bitrix bootstrap.
+
+**Do not overclaim:** PHP/fixture offline CI SUCCESS is NOT real native Bitrix transaction-depth+AUTH_EPOCH 10-path acceptance. As of writing, ephemeral MariaDB run [#39950293611](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39950293611) for native-factor savepoint repair is still being checked separately, and no success attestation is recorded here. No production deployment, DB write, SMS, JWT for real users, or V4 change occurred. Default `V5_AUTH=OFF`.
