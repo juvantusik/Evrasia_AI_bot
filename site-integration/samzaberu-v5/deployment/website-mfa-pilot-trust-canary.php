@@ -272,6 +272,82 @@ final class WebsiteMfaPilotTrustCanary
         try {self::canaryDir('/tmp/wrong');}
         catch(RuntimeException) {$denied=true;}
         self::need($denied,'private_path_escape_accepted');
+        $original=<<<'PHP'
+<?php
+class PilotFixture {
+    private const PILOT_USER_ID = 7;
+    private function processAction() {
+        $arUser = ['ID' => 7];
+        $login = "pilot";
+        $password = "fixture";
+        $userId = 7;
+        $pilotTotpActivated = $this->isPilotTotpActivated($userId);
+        $pilotTrustedBeforeLogin = false;
+        if ($userId === self::PILOT_USER_ID && !$pilotTotpActivated) {
+            $pilotTrustedBeforeLogin = $this->hasValidPilotTrust($userId);
+            if (!$pilotTrustedBeforeLogin) {
+                return $this->startPilotSmsChallenge($arUser,$password);
+            }
+        }
+        $result = $obUser->Login($login, $password, 'Y', 'Y');
+        if (\Bitrix\Security\Mfa\Otp::isOtpRequired()) return null;
+        return $result;
+    }
+    private function startPilotSmsChallenge(array $arUser,string $password) {
+        return null;
+    }
+}
+PHP;
+        $trustedFixture=<<<'PHP'
+<?php
+class TrustedFixture {
+    private function loginByExistingTrustedTotp(array $arUser,string $password) {
+        $userId=7;
+        if ($userId <= 0 || !$this->hasValidPilotTrust($userId)) {
+            return false;
+        }
+        $checkedUserId=\CUser::LoginInternal($password);
+        if ($checkedUserId !== $userId
+            || !$this->hasValidPilotTrust($checkedUserId)
+            || \Bitrix\Main\Authentication\Method::Password === null) {
+            return false;
+        }
+        $context->setUserId($checkedUserId);
+        $USER->Authorize($context);
+        $USER->GetID();
+        \Bitrix\Security\Mfa\Otp::setDeferredParams(null);
+        return true;
+    }
+}
+PHP;
+        $canary=self::patch($original,$trustedFixture);
+        self::need(str_contains($canary,
+            '$userId === self::PILOT_USER_ID && $pilotTotpActivated'),
+            'pilot_only_condition_missing');
+        self::need(str_contains($canary,
+            '$userId !== self::PILOT_USER_ID'),
+            'helper_is_not_pilot_only');
+        self::need(str_contains($canary,
+            'private function loginByExistingTrustedTotp'),
+            'new_helper_not_private');
+        self::need(str_contains($canary,
+            '$obUser->Login($login, $password'),
+            'untouched_untrusted_native_login_missing');
+        $negative=false;
+        try {
+            self::patch(str_replace('self::PILOT_USER_ID',
+                '13',$original),$trustedFixture);
+        } catch (RuntimeException) {$negative=true;}
+        self::need($negative,'missing_pilot_scope_was_accepted');
+        $negative=false;
+        try {
+            self::patch($original,str_replace('hasValidPilotTrust',
+                'wrongTrust',$trustedFixture));
+        } catch (RuntimeException) {$negative=true;}
+        self::need($negative,'missing_trust_validator_was_accepted');
+        echo "PASS: synthetic pilot-only trusted TOTP source transformation\n";
+        echo "PASS: missing pilot scope / trust checks rejected\n";
+        echo "PASS: original outside-method bytes preserved\n";
         echo "PASS: no install mode; private path fail-closed\n";
     }
     public static function main(array $args): void
