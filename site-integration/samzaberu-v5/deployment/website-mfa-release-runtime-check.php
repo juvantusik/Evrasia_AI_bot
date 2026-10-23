@@ -297,7 +297,23 @@ PHP;
             } else throw new RuntimeException('invalid_mode');
         } catch(Throwable $e) {
             $rc=1;
-            echo "FAIL: ",$e->getMessage(),"\n";
+            // Do not echo extension/native errors: they could contain a
+            // backend address or URL despite source outputs being redacted.
+            $known = [
+                'wrong_host_or_user', 'production_root_mismatch',
+                'v3_private_checkpoint_guard', 'pinned_source_path',
+                'pinned_source_size', 'pinned_source_SHA',
+                'connection_parser_failure', 'nonloopback_redis_address_refused',
+                'phpredis_unavailable', 'one_unique_loopback_redis_target_required',
+                'loopback_redis_unreachable', 'ephemeral_key_setup_failed',
+                'atomic_global_sms_quota_first_or_second_eval_failed',
+                'ephemeral_counter_or_expiry_mismatch', 'lua_const_absent',
+                'lua_not_same_paid_sms_quota_logic', 'invalid_mode',
+                'php_cli', 'fixture_loopback_parser_wrong',
+                'nonloopback_was_not_rejected',
+            ];
+            echo "FAIL: ",in_array($e->getMessage(),$known,true)
+                ? $e->getMessage() : 'redacted_native_runtime_error',"\n";
         }
         echo "=== 5. RESULT ===\n";
         echo 'MODE=',self::$mode,"\n";
