@@ -54,8 +54,7 @@ stage() {
  [[ "$(sha "$TEMP")" == "$digest" ]] || return 1
  chown "$USER_ID_NUM:$GROUP_ID_NUM" "$TEMP" || return 1
  chmod "$FILE_MODE" "$TEMP" || return 1
- [[ "$(stat -c '%u:%g:%a' "$TEMP")" ==
-    "$USER_ID_NUM:$GROUP_ID_NUM:$FILE_MODE" ]] || return 1
+ [[ "$(stat -c '%u:%g:%a' "$TEMP")" == "$USER_ID_NUM:$GROUP_ID_NUM:$FILE_MODE" ]] || return 1
  php -d auto_prepend_file= -d auto_append_file= \
    -d opcache.enable_cli=0 -l "$TEMP" >/dev/null || return 1
  [[ "$(sha "$TEMP")" == "$digest" ]]
@@ -217,8 +216,7 @@ install_one() {
  TEMP=''
  SWAPPED=YES
  [[ "$(sha "$LIVE")" == "$NEW_SHA" &&
-    "$(stat -c '%u:%g:%a' "$LIVE")" ==
-        "$USER_ID_NUM:$GROUP_ID_NUM:$FILE_MODE" ]] ||
+    "$(stat -c '%u:%g:%a' "$LIVE")" == "$USER_ID_NUM:$GROUP_ID_NUM:$FILE_MODE" ]] ||
     refuse 'postinstall live file SHA/metadata mismatch'
  php -d auto_prepend_file= -d auto_append_file= -l "$LIVE" >/dev/null ||
     refuse 'postinstall PHP syntax invalid'
