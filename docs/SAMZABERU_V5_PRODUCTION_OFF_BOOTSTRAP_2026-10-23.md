@@ -398,3 +398,4 @@ In feature branch code commit \`960792ede369cc40c796dfe2805d2829a2f6faa9\`, \`GE
 
 **NEXT_STEP=V5_REAL_BUSINESS_AND_NATIVE_AUTH_PARITY_THEN_CLIENT_MIGRATION**. Do not convert partial source inventory or CI fake tests into V4-deprecation approval. Keep the previously accepted safety gates but avoid rewriting V4 services.
 
+**Code/CI verification for sole-API migration governance:** commit `ec0fb8071b7df3efe1bcbadc185842dce0f2b532`, [GitHub Actions offline safety #39986838493](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39986838493) — **SUCCESS**. The source registrar check reports `V4_MUST_REMAIN_ACTIVE`: full 62 registrations/consumer inventory and native V5 production approval are incomplete. This is NOT a V4 retirement or native Bitrix release approval.
