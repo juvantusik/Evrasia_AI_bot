@@ -421,6 +421,16 @@ jobs:
               grep -Fq "FINAL_STATUS=FAIL" /tmp/website-mfa-wronghost-ip-probe.log
               grep -Fq "SITE_CODE_WRITE=NO" /tmp/website-mfa-wronghost-ip-probe.log
               echo "PASS: proxy/Redis preflight has only offline test/read-only audit modes"
+              echo "=== WEBSITE MFA REAL REDIS LUA QUOTA / LOG DISTRIBUTION PREVIEW ==="
+              php -l "$ROOT/deployment/website-mfa-release-runtime-check.php"
+              php "$ROOT/deployment/website-mfa-release-runtime-check.php" --self-test
+              if php "$ROOT/deployment/website-mfa-release-runtime-check.php" --audit > /tmp/web-mfa-runtime-wrong-host.log 2>&1; then
+                echo "FAIL: runtime release audit accepted GitHub CI host"
+                exit 1
+              fi
+              grep -Fq "FINAL_STATUS=FAIL" /tmp/web-mfa-runtime-wrong-host.log
+              grep -Fq "SITE_CODE_WRITE=NO" /tmp/web-mfa-runtime-wrong-host.log
+              echo "PASS: restricted Redis quota runtime probe rejects wrong host"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
