@@ -53,6 +53,16 @@ jobs:
               grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-public-legal-upgrader-denied.log
               grep -Fxq "V5_AUTH_ENABLED=NO" /tmp/v5-public-legal-upgrader-denied.log
               echo "PASS: deploy script Bash lint + fail-closed outside production"
+              echo "=== V5 SOLE API CUTOVER: V4 STILL ACTIVE UNTIL EVERY GATE ==="
+              php -n -l "$ROOT/migration/V5V4ReplacementGate.php"
+              php -n -l "$ROOT/tests/V5V4ReplacementGateTest.php"
+              php "$ROOT/migration/V5V4ReplacementGate.php" "$ROOT/migration/v4-replacement-plan.json" > /tmp/v5-sole-api-gate.log
+              grep -Fxq "MANIFEST_VALID=YES" /tmp/v5-sole-api-gate.log
+              grep -Fxq "V4_SOURCE_REGISTRATIONS=62" /tmp/v5-sole-api-gate.log
+              grep -Fxq "CURRENT_STATUS=V4_MUST_REMAIN_ACTIVE" /tmp/v5-sole-api-gate.log
+              grep -Fxq "V4_AUTOMATIC_SHUTDOWN=NO" /tmp/v5-sole-api-gate.log
+              php "$ROOT/tests/V5V4ReplacementGateTest.php"
+              echo "PASS: one-API V5 target, route gaps explicit, V4 retirement fail closed"
               echo "=== V4 BUSINESS ROUTE REUSE: PINNED NO-BOOTSTRAP SOURCE READER ==="
               php -n -l "$ROOT/tests/diagnostics/V5V4BusinessRouteInventory.php"
               bash -n "$ROOT/tests/diagnostics/v5_v4_business_routes_readonly.sh"

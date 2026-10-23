@@ -1,0 +1,329 @@
+{
+  "schema_version": 1,
+  "decision": "V5_SOLE_PUBLIC_API_AFTER_CONTROLLED_CUTOVER",
+  "target_public_base": "https://evrasia.rest/api/v5",
+  "v4_transition_state": "active_until_consumers_migrated",
+  "shared_services_rule": "reuse_Bitrix_business_services_without_V4_HTTP_or_JWT",
+  "v4_evidence": {
+    "observed_router_sha256": "5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d",
+    "observed_route_registrations": 62,
+    "observed_controllers": 11,
+    "route_inventory_complete": false,
+    "observed_source_only": true,
+    "exact_route_inventory": []
+  },
+  "v5_evidence": {
+    "published_route_map_source": "site-integration/samzaberu-v5/src/V5RouteMap.php",
+    "native_bitrix_auth_accepted": false,
+    "production_auth_enabled": false
+  },
+  "client_consumer_inventory": {
+    "complete": false,
+    "verified_consumers": [],
+    "note": "Empty list means NOT INVENTORIED, never zero users or zero calls."
+  },
+  "workstreams": [
+    {
+      "id": "password-signin",
+      "v4_route": "POST /signin",
+      "v5_route": "POST /auth/signin",
+      "area": "auth",
+      "phase": "feature_only",
+      "parity_accepted": false,
+      "note": "Native MFA + verified phone; V4 password-only JWT cannot be reused"
+    },
+    {
+      "id": "sms-request",
+      "v4_route": "POST /send_sms",
+      "v5_route": null,
+      "area": "auth",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Legacy endpoint is not proof of V5 SMS budget; do not alias"
+    },
+    {
+      "id": "sms-request-alias",
+      "v4_route": "POST /send-sms",
+      "v5_route": null,
+      "area": "auth",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Legacy alias, requires consumer evidence before removal"
+    },
+    {
+      "id": "mobileid-start",
+      "v4_route": "POST /signin/mobileid",
+      "v5_route": null,
+      "area": "auth",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Separate MobileID flow; provider callback ownership not yet mapped"
+    },
+    {
+      "id": "mobileid-status",
+      "v4_route": "POST /signin/mobileid/status",
+      "v5_route": null,
+      "area": "auth",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Needs independent native MobileID acceptance"
+    },
+    {
+      "id": "mobileid-code",
+      "v4_route": "POST /signin/mobileid/code",
+      "v5_route": null,
+      "area": "auth",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Needs independent native MobileID acceptance"
+    },
+    {
+      "id": "signup",
+      "v4_route": "POST /signup",
+      "v5_route": null,
+      "area": "account",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Atomic Bitrix registration/consent write not production accepted"
+    },
+    {
+      "id": "pin",
+      "v4_route": "POST /pincode",
+      "v5_route": "POST /loyalty/pin",
+      "area": "loyalty",
+      "phase": "feature_only",
+      "parity_accepted": false,
+      "note": "New strong session PIN read must not send V4 SMS/VK"
+    },
+    {
+      "id": "profile-update",
+      "v4_route": "POST /edit-profile/",
+      "v5_route": null,
+      "area": "profile",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "V5 signed-in user and native ownership, reuse Bitrix writer"
+    },
+    {
+      "id": "profile-change-email-request",
+      "v4_route": "POST /profile/change_email_request",
+      "v5_route": null,
+      "area": "profile",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Must preserve email verification and AUTH_EPOCH"
+    },
+    {
+      "id": "profile-change-email-confirm",
+      "v4_route": "POST /profile/change_email_confirm",
+      "v5_route": null,
+      "area": "profile",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Must preserve email verification and AUTH_EPOCH"
+    },
+    {
+      "id": "cart-read",
+      "v4_route": "GET /cart/",
+      "v5_route": "GET /cart",
+      "area": "cart",
+      "phase": "feature_only",
+      "parity_accepted": false,
+      "note": "Native FUSER binding and Business Total feature code; live acceptance pending"
+    },
+    {
+      "id": "cart-id",
+      "v4_route": "GET /cart/id",
+      "v5_route": null,
+      "area": "cart",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Guest FUSER/ownership must not be exposed"
+    },
+    {
+      "id": "cart-add",
+      "v4_route": "POST /cart/add",
+      "v5_route": null,
+      "area": "cart",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Reuse CartApiService pricing and modifiers"
+    },
+    {
+      "id": "cart-remove",
+      "v4_route": "POST /cart/remove",
+      "v5_route": null,
+      "area": "cart",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Reuse CartApiService mutation with V5 ownership"
+    },
+    {
+      "id": "cart-clear",
+      "v4_route": "POST /cart/clear",
+      "v5_route": null,
+      "area": "cart",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Reuse CartApiService under V5 session; transactional write"
+    },
+    {
+      "id": "cart-order",
+      "v4_route": "POST /cart/order",
+      "v5_route": null,
+      "area": "cart",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Use existing checkout/payment/delivery services; idem needed"
+    },
+    {
+      "id": "orders-list",
+      "v4_route": "GET /orders",
+      "v5_route": null,
+      "area": "orders",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "V4 router callback unresolved; user ownership required"
+    },
+    {
+      "id": "orders-detail",
+      "v4_route": "GET /orders/(\\d+)",
+      "v5_route": null,
+      "area": "orders",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "V4 callback unresolved; foreign order must be denied"
+    },
+    {
+      "id": "orders-cancel",
+      "v4_route": "POST /orders/(\\d+)/cancel",
+      "v5_route": null,
+      "area": "orders",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Mutation, native order ownership and idempotency"
+    },
+    {
+      "id": "orders-pay",
+      "v4_route": "POST /orders/(\\d+)/pay",
+      "v5_route": null,
+      "area": "orders",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Payment must not be forwarded without exact current callback contract"
+    },
+    {
+      "id": "orders-repeat",
+      "v4_route": "POST /orders/(\\d+)/repeat",
+      "v5_route": null,
+      "area": "orders",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Reuse Cart::repeatOrder business service; not V4 HTTP/JWT"
+    },
+    {
+      "id": "restaurants-stop",
+      "v4_route": "GET /restaurants-stop-order",
+      "v5_route": null,
+      "area": "restaurants",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Direct V4 Restaurants::stopOrder; source body side-effects pending"
+    },
+    {
+      "id": "qr-order-read",
+      "v4_route": "GET /qr_order/{order_id}",
+      "v5_route": null,
+      "area": "qr_order",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Existing QrBasketService, bind owner"
+    },
+    {
+      "id": "qr-order-code",
+      "v4_route": "POST /qr_order/qr_code",
+      "v5_route": null,
+      "area": "qr_order",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Existing QrBasketService, bind owner"
+    },
+    {
+      "id": "legal-list",
+      "v4_route": "GET /legal/consents",
+      "v5_route": "GET /legal/consents",
+      "area": "legal",
+      "phase": "feature_only",
+      "parity_accepted": false,
+      "note": "Origin GET observed 200; external evrasia.rest availability not accepted"
+    },
+    {
+      "id": "legal-accept",
+      "v4_route": "POST /legal/consents/accept",
+      "v5_route": null,
+      "area": "legal",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Signup legal writer and consent receipt still production-gated"
+    },
+    {
+      "id": "account-delete",
+      "v4_route": "DELETE /profile",
+      "v5_route": null,
+      "area": "account",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "CUser Update/session epoch account deletion needs separate acceptance"
+    },
+    {
+      "id": "system-notifications",
+      "v4_route": "GET /system_notifications",
+      "v5_route": null,
+      "area": "system",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Caller callback and ownership not yet mapped"
+    },
+    {
+      "id": "client-history",
+      "v4_route": "POST /history/update",
+      "v5_route": null,
+      "area": "system",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Unknown write side effects, cannot forward"
+    },
+    {
+      "id": "orders-status-callback",
+      "v4_route": "POST /orders/set_status",
+      "v5_route": null,
+      "area": "system",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "Must be independently routed as trusted server-to-server operation"
+    },
+    {
+      "id": "mobileid-notification",
+      "v4_route": "POST /mobileid/notification",
+      "v5_route": null,
+      "area": "webhook",
+      "phase": "not_implemented",
+      "parity_accepted": false,
+      "note": "External provider not consumer-facing V5 route; migration evidence needed"
+    }
+  ],
+  "cutover_gates": {
+    "all_62_route_registrations_classified": false,
+    "all_client_workstreams_accepted_or_retired": false,
+    "all_mobile_and_partner_consumers_migrated": false,
+    "background_webhooks_and_integrations_rehomed": false,
+    "v5_native_auth_mfa_sms_epoch_accepted": false,
+    "v5_personal_data_and_cart_order_parity_accepted": false,
+    "external_evrasia_rest_v5_live_e2e_accepted": false,
+    "v4_traffic_zero_in_agreed_observation_window": false,
+    "rollback_and_emergency_reenable_rehearsed": false,
+    "operator_cutover_approval_recorded": false
+  },
+  "automatic_v4_shutdown": false,
+  "status_note": "Partial source-only parity map. This plan cannot authorize V4 removal. Keep V4 working until native V5 E2E, adoption, and rollback gates are evidenced."
+}

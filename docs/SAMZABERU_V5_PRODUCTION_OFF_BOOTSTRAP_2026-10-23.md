@@ -386,3 +386,15 @@ In feature branch code commit \`960792ede369cc40c796dfe2805d2829a2f6faa9\`, \`GE
 
 **NEXT:** finish site Bitrix transaction/owner read-only acceptance for \`b_sale_fuser\` and \`$DB\` read continuity, decide canonical multiple/empty FUSER semantics, assure \`unserialize(PROPS)\` output cannot instantiate attacker-controlled objects. Then guarded native integration; do NOT enable V5 public AUTH or redirect clients while ten-path MFA and SMS lifecycle gates remain incomplete.
 
+## 32. 2026-10-23 — user decision: V5 sole API replaces V4 after controlled consumer migration
+
+**LATEST ACCEPTED USER DECISION:** V4 is **temporary compatibility only**, not an independently maintained API indefinitely. Final public API: `https://evrasia.rest/api/v5`. Keep the existing V4 HTTP routes operational until ALL live mobile app versions, partner clients and internal callbacks have been migrated or independently verified unused; then do a staged V4 HTTP retirement with rollback, preserving shared Bitrix business services. No V4 auth/JWT shortcuts, no V4-to-V5 POST redirects, no premature V4 removal or production edits, no synthetic accounts.
+
+**Observed present state:** V4 source-only `api/v4/router.php` 62 route registrations, 11 controllers, installed SHA256 `5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d`; V5 current `V5RouteMap::ROUTES` has **10 registered route definitions**, NOT ten live-tested endpoints. V5 AUTH remains OFF. Protected native cart business integration is feature-only and pending real Bitrix E2E. No complete inventory of mobile/partner V4 consumers or background callback use exists.
+
+**New code-only migration governance:** `site-integration/samzaberu-v5/migration/v4-replacement-plan.json` has **32 known workstreams**, explicit statuses and no invented live V5 routes. This is intentionally a **partial** business map, not 62 complete route registrations; `exact_route_inventory` is empty until the 62 router records are reconciled. `migration/V5V4ReplacementGate.php` validates that target paths really exist in current V5RouteMap and reports V4 retirement **NO-GO** until all route, native MFA/SMS/epoch, E2E, V4-client adoption, background callbacks, traffic, rollback and explicit operator approval gates pass. **It cannot switch V4 off.** Offline negative regression `tests/V5V4ReplacementGateTest.php`; offline workflow verifies `CURRENT_STATUS=V4_MUST_REMAIN_ACTIVE`. The CLI PASS means only *manifest validation*, never production cutover authorization.
+
+**Source of truth:** [SAMZABERU_V5_SOLE_API_CUTOVER_2026-10-23.md](SAMZABERU_V5_SOLE_API_CUTOVER_2026-10-23.md). Business parity starter map remains [V4 real route parity](SAMZABERU_V5_V4_REAL_BUSINESS_ROUTE_PARITY_2026-10-23.md). Current code commit / CI outcome to be verified after source update. All changes feature-only, V4 and production untouched.
+
+**NEXT_STEP=V5_REAL_BUSINESS_AND_NATIVE_AUTH_PARITY_THEN_CLIENT_MIGRATION**. Do not convert partial source inventory or CI fake tests into V4-deprecation approval. Keep the previously accepted safety gates but avoid rewriting V4 services.
+
