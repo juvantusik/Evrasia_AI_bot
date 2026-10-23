@@ -494,3 +494,6 @@ WRAPPER_RC=0
 
 **CURRENT STATUS=SCRIPT_ONLY/NOT_RUN**. CI success and operator execution still pending. Do not claim the new URL is publicly deployed or production AUTH enabled. Do not remove legacy manifest drift without standalone approved integrity re-baselining. NEXT=CI_BASH_SYNTAX_AND_DENIAL_THEN_OPERATOR_EXACT_HASH_RUN.
 
+## 39. 2026-10-23 — verified new two-file V5-only public registration installer CI
+
+**GitHub CI completed SUCCESS:** new two-file installer source commit [`4826138f`](https://github.com/juvantusik/Evrasia_AI_bot/commit/4826138f79f9b2bdb1550516f43d55001ee46bcf), immutable script Git blob `6ec8e9099f87fdb7bcab99f578113256a67bc2c6`, [offline safety workflow #39997003587](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39997003587) `completed/success` — Bash syntax and negative wrong-host denial. **Operator has not yet run the new installer; do not claim production deployment.** Next: run the exact pinned script through a single guarded root wrapper, inspect final postcheck/rollback output, then independently test `https://evrasia.rest` from a real external network. Old v4 and protected V5 AUTH remain untouched.

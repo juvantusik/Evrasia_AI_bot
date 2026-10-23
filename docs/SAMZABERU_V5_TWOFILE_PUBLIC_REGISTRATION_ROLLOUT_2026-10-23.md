@@ -34,3 +34,7 @@
 - Production V4 остаётся временно действующим; его прекращение произойдёт только после полного замещения через V5 и проверки всех потребителей. V5 auth и коммерческие/cart write-route этим релизом не включаются.
 
 **NEXT_STEP:** получить CI для нового guarded two-file installer → один строго закреплённый root run на evrasia → разобрать фактический результат и только затем объявлять origin-публикацию. Полный публичный V5 и защищённые методы остаются отдельным этапом.
+
+## CI и следующая точка исполнения
+
+**GitHub CI completed SUCCESS:** new two-file installer source commit [`4826138f`](https://github.com/juvantusik/Evrasia_AI_bot/commit/4826138f79f9b2bdb1550516f43d55001ee46bcf), immutable script Git blob `6ec8e9099f87fdb7bcab99f578113256a67bc2c6`, [offline safety workflow #39997003587](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39997003587) `completed/success` — Bash syntax and negative wrong-host denial. **Operator has not yet run the new installer; do not claim production deployment.** Next: run the exact pinned script through a single guarded root wrapper, inspect final postcheck/rollback output, then independently test `https://evrasia.rest` from a real external network. Old v4 and protected V5 AUTH remain untouched.
