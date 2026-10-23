@@ -31,6 +31,9 @@ $next = array_replace($base, ['PARAMS' => '0:60000002']);
 
 tassert(is_subclass_of(V5BitrixLockedTotpFactor::class, V5LockedChallengeNativeFactorPort::class),
     'actual staged Bitrix factor implements V5 challenge consumer contract');
+tassert((new ReflectionClass(V5BitrixLockedTotpFactor::class))->getConstant('ALGO_FILE')
+    === '/bitrix/modules/main/lib/Security/Mfa/TotpAlgorithm.php',
+    'installed Bitrix algorithm exact case-sensitive path from prior verified site source');
 tassert(Ledger::eligible($base, 41), 'fresh active Bitrix MFA TOTP row passes shape guard');
 tassert(Ledger::advanced($base, $next, 41), 'persisted native monotonic replay advances only once');
 tassert(!Ledger::advanced($base, $base, 41), 'no native persistence must deny replay success');

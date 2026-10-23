@@ -54,3 +54,19 @@
 **What this does NOT prove:** the replay ledger is an independent synthetic InnoDB fixture, NOT installed Bitrix b_sec_user; no real `Otp::verify($code,true)` or native TOTP secret was used. Exact installed `Bitrix\Main\Security\Mfa\TotpAlgorithm` SHA remains UNVERIFIED; no isolated real Bitrix two-challenge concurrency proof, ten-path AUTH_EPOCH acceptance or production auth enablement. Public Bitrix source is reference only and must not be substituted for installed source SHA. Next required operator action: READ_ONLY source-only SHA + bounded method review on technical Bitrix origin, not a production auth/write experiment. User's earlier refusal to require an additional VM remains valid; this does not authorize production staging experiments.
 
 **Status:** `STAGING_DB_SESSION_GUARD=FEATURE_TESTED`; `TWO_DISTINCT_CHALLENGE_SYNTHETIC_REPLAY=TESTED`; `INSTALLED_TOTP_ALGORITHM_SHA=UNVERIFIED`; `REAL_BITRIX_TOTP_REPLAY=NOT_TESTED`; `TEN_PATH_AUTH_EPOCH=NOT_ATTESTED`; `V5_AUTH_PRODUCTION=OFF`; `V4_PRODUCTION=UNCHANGED`.
+
+## 7. Восстановлен проверенный исходник TotpAlgorithm (история 11.10.2026, уточнение 24.10)
+
+В исходной истории проекта **уже был read-only source-only аудит установленного Bitrix** от 11.10.2026:
+
+- Class: `Bitrix\Main\Security\Mfa\TotpAlgorithm`.
+- **Точный case-sensitive путь:** `/home/site_evrasia/web/evrasia.spb.ru/public_html/bitrix/modules/main/lib/Security/Mfa/TotpAlgorithm.php`.
+- **SHA256 на 11.10.2026:** `e2192553ea1f4c71c2996c005707c05b5b29c5c89cfbc9b7f758ef7420da538c`.
+- Native `PARAMS` формат `offset:lastTimeCode`; replay code отклоняется; при валидной проверке native algorithm возвращает `[true,newParams]`, при ошибке `[false,null]`.
+- Штатный `Otp::verify($input,$updateParams=true)` вызывает алгоритм и при `updateParams` + ненулевом `newParams` + active OTP делает `setParams($newParams)->save()` с Bitrix `UserTable` persistence.
+
+Предыдущий read-only wrapper от 24.10 завершился `FAIL` **до исходника/хеша и до Bitrix bootstrap**, поскольку ошибочно использовал lower-case `/bitrix/modules/main/lib/security/mfa/totpalgorithm.php`. На регистрозависимой Linux FS это НЕ путь установленного PHP-класса. Это ошибка проверочного скрипта/относительного `ALGO_FILE` в feature, **не свидетельство отказа штатной 2FA**.
+
+**Feature bugfix:** `src/V5BitrixLockedTotpFactor.php::ALGO_FILE` исправлен на `/bitrix/modules/main/lib/Security/Mfa/TotpAlgorithm.php`; offline reflection-regression защищает точный регистр. Никакой Bitrix/V4/V5 production-файл не менялся. Проверенный исторический prod SHA не переносится автоматически в `reviewedAlgorithmSha256` staging-конструктора: требуется отдельно доказать identity исходника для реально тестируемого isolated Bitrix staging.
+
+**Clarification to earlier §6:** SHA установленного production `TotpAlgorithm` был исторически известен с 11.10; НЕИЗВЕСТНЫМИ остаются его *сегодняшняя* неизменность и SHA на настоящем изолированном staging. `REAL_NATIVE_BITRIX_V5_E2E=NOT_RUN`, `V5_AUTH_PRODUCTION=OFF`. Нельзя требовать повторного изучения website 2FA для исправления одного case-sensitive source suffix.

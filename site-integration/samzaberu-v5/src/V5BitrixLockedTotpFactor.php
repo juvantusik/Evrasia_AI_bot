@@ -105,7 +105,7 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
     private const OTP_FILE = '/bitrix/modules/security/lib/Mfa/Otp.php';
     private const OTP_SHA256 = '285a0fa1d87ebf3e1268e7fe8ea561634e7d9f645d6b8f08e19bdcc34b20372c';
     private const ALGO_CLASS = 'Bitrix\\Main\\Security\\Mfa\\TotpAlgorithm';
-    private const ALGO_FILE = '/bitrix/modules/main/lib/security/mfa/totpalgorithm.php';
+    private const ALGO_FILE = '/bitrix/modules/main/lib/Security/Mfa/TotpAlgorithm.php';
 
     private ?int $eligibleUser = null;
     private ?string $nativeSessionId = null;
