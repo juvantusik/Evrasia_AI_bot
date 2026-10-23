@@ -108,6 +108,11 @@ header('X-Content-Type-Options: nosniff');
 echo json_encode([
     'php_executed' => true,
     'valid_ip' => true,
+    // Show only whether PHP sees a routable address, never its value.
+    'ip_scope' => filter_var(
+        $addr, FILTER_VALIDATE_IP,
+        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+    ) !== false ? 'PUBLIC' : 'LOCAL_OR_RESERVED',
     // Request-scoped HMAC, never the actual address or a persistent hash.
     'ip_proof' => hash_hmac('sha256', $addr, $_SERVER['HTTP_X_EV_MFA_PROOF']),
 ], JSON_THROW_ON_ERROR);
@@ -208,6 +213,7 @@ try {
     foreach ([$one,$two] as $v) {
         if (!is_array($v) || ($v["php_executed"]??false)!==true
             || ($v["valid_ip"]??false)!==true
+            || !in_array(($v["ip_scope"]??""),["PUBLIC","LOCAL_OR_RESERVED"],true)
             || !isset($v["ip_proof"])
             || !is_string($v["ip_proof"])
             || preg_match("/^[a-f0-9]{64}$/",$v["ip_proof"])!==1) {
@@ -217,6 +223,7 @@ try {
     $same=hash_equals($one["ip_proof"],$two["ip_proof"]);
     echo "CANONICAL_HTTPS_PHP_EXECUTED=YES\n";
     echo "PHP_REMOTE_ADDR_IS_VALID_IP=YES\n";
+    echo "PHP_REMOTE_ADDR_SCOPE=" . $one["ip_scope"] . "\n";
     echo "FORGED_CLIENT_HEADERS_CHANGED_REMOTE_ADDR="
         . ($same?"NO":"YES") . "\n";
     echo "INDEPENDENT_EXTERNAL_BROWSER_IP_TESTED=NO\n";
