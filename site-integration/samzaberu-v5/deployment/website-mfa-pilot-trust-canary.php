@@ -139,12 +139,11 @@ final class WebsiteMfaPilotTrustCanary
             &&str_contains($helper,'Method::Password')
             &&str_contains($helper,'->GetID()'),
             'trusted_login_server_account_guard');
-        $anchor='/\b(?:private|protected)\s+function\s+startPilotSmsChallenge\s*\(/';
-        self::need(preg_match_all($anchor,$base,$matches,PREG_OFFSET_CAPTURE)===1,
-            'canary_helper_insertion_anchor');
-        $offset=$matches[0][0][1];
+        // Insert AFTER the existing challenge method, not before its PHPDoc,
+        // so reflection and all preexisting method comments remain attached.
+        [$_start,$offset]=self::method($base,'startPilotSmsChallenge');
         // Token extraction starts at T_FUNCTION, not the visibility token.
-        $insertion='private '.$helper."\n\n    ";
+        $insertion="\n\n    private ".$helper;
         $candidate=substr_replace($base,$insertion,$offset,0);
         self::need(substr_count($candidate,'loginByExistingTrustedTotp')===2
             &&substr_count($candidate,'GlobalSmsBudget::reserve')===0
