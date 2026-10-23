@@ -424,6 +424,8 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
     private function transaction(callable $operation): mixed
     {
         $started=false;
+        $nativeGuardOpen=false;
+        $nativeGuardReleaseStarted=false;
         try {
             if (!$this->db->beginTransaction()) {
                 throw new RuntimeException('session_begin_unavailable');
@@ -432,8 +434,11 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             // A savepoint is destroyed by an implicit COMMIT, including when
             // native code immediately starts another transaction afterwards.
             $this->query('SAVEPOINT v5_strong_session_guard', []);
+            $nativeGuardOpen=true;
             $result=$operation();
+            $nativeGuardReleaseStarted=true;
             $this->query('RELEASE SAVEPOINT v5_strong_session_guard', []);
+            $nativeGuardOpen=false;
             // A native proof/read callback may not close our transaction.
             // Never sign JWTs or expose a PIN after that boundary is lost.
             if (!$this->db->inTransaction()) {
@@ -443,8 +448,35 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             $started=false;
             return $result;
         } catch (Throwable $error) {
+            $nativeBoundaryLost=false;
+            if ($started && $nativeGuardOpen) {
+                // A native locked proof/PIN/cart reader may have COMMITted
+                // the old transaction and begun a new one. inTransaction()
+                // is NOT proof that V5 still owns the same transaction.
+                if (!$nativeGuardReleaseStarted) {
+                    $nativeGuardReleaseStarted=true;
+                    try {
+                        $this->query('RELEASE SAVEPOINT v5_strong_session_guard', []);
+                        $nativeGuardOpen=false;
+                    } catch (Throwable) {
+                        // Lost savepoint: never roll back a foreign scope.
+                    }
+                }
+                if ($nativeGuardOpen) {
+                    $nativeBoundaryLost=true;
+                    if ($this->db instanceof V5BitrixPdoCompatibilityBridge) {
+                        $this->db->abandonUncertainNativeTransaction();
+                    }
+                    $started=false; // Do not ROLLBACK an unknown owner.
+                }
+            }
             if ($started && $this->db->inTransaction()) {
                 try { $this->db->rollBack(); } catch (Throwable) { /* deny */ }
+            }
+            // Unknown native transaction ownership is a server fault,
+            // never a valid signed JWT, PIN result or credential decision.
+            if ($nativeBoundaryLost) {
+                throw new RuntimeException('session_unavailable');
             }
             // Distinguish rejected credentials from an unavailable native DB,
             // without exposing account status, token generation, or SQL.

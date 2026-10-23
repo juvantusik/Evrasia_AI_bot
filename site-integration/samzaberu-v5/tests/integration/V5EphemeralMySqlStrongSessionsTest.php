@@ -446,6 +446,55 @@ ciCheck($httpBoundary->dispatch($envelope('/api/v5/auth/refresh',[
 ciCheck($httpChallenge->begins===0,
     'real MariaDB HTTP test emitted no synthetic SMS challenge');
 
+
+/**
+ * Real disposable InnoDB negative fixture: a native trust proof illegally
+ * COMMITs the V5 user-lock transaction and begins another on the SAME PDO.
+ * It may make an uncommitted session INSERT appear to succeed, but the
+ * original savepoint is destroyed: no JWT and no foreign rollback allowed.
+ */
+$rogueSessionDb=ciConnection();
+$beforeRogueSessions=ciCount($rogueSessionDb);
+$rogueSessionProof=new class implements V5LockedStrongSessionProofPort {
+    public bool $entered=false;
+    public function verifiedTrustWithUserLock(
+        PDO $db,PasswordVerifiedAccount $account,string $deviceId,
+        string $platform,string $trustToken
+    ):bool {
+        $this->entered=true;
+        if (!$db->inTransaction() || $account->userId!==TEST_USER
+            || $deviceId!==TEST_DEVICE || $platform!=='ios'
+            || $trustToken!==TEST_TRUST) {
+            throw new RuntimeException('ci_session_native_proof_unavailable');
+        }
+        $db->commit(); // destroys V5 user lock and strong-session SAVEPOINT
+        $db->beginTransaction(); // foreign replacement scope
+        return true;
+    }
+    public function verifiedConsumedGrantWithUserLock(
+        PDO $db,ConsumedLoginChallenge $grant
+    ):bool { return false; }
+};
+$rogueSessionStore=new V5MySqlStrongSessionStore(
+    $rogueSessionDb,new V5AccessJwtCodec(['ci_v5_kid'=>str_repeat('K',64)],'ci_v5_kid'),
+    new V5OpaqueRefreshTokens(str_repeat('R',64)),
+    $rogueSessionProof,new CiSyntheticCoverage(),str_repeat('B',64),3600
+);
+try {
+    ciTrusted($rogueSessionStore);
+    ciCheck(false,'native hidden COMMIT+BEGIN must never mint JWT');
+} catch (RuntimeException $error) {
+    ciCheck($error->getMessage()==='session_unavailable',
+        'hidden native session transaction switch reports unavailable, never issues JWT');
+}
+ciCheck($rogueSessionProof->entered && $rogueSessionDb->inTransaction(),
+    'foreign native replacement transaction was not rolled back by session store');
+$rogueSessionDb->rollBack(); // CI test owner explicitly discards foreign scope
+ciCheck(ciCount($rogueSessionDb)===$beforeRogueSessions,
+    'no durable signed V5 session after illegal native COMMIT+BEGIN');
+echo "PASS: real InnoDB native proof transaction-switch denial "
+    ."(synthetic callback; no Bitrix E2E)\n";
+
 echo "PASS: real ephemeral MariaDB V5 sessions ($checks assertions)\n";
 echo "MODE=EPHEMERAL_GITHUB_CI_ONLY\nREAL_MARIADB_INNODB=YES\n";
 echo "MULTIPROCESS_REFRESH_RACE_TESTED=YES\nREAL_BITRIX_BOOTSTRAP=NO\n";
