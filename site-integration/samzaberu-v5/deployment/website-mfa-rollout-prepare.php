@@ -478,7 +478,7 @@ final class EvrasiaWebsiteMfaCandidate
         self::require($negativeDenied, 'selftest_missing_security_invariant_accepted');
         echo "PASS: source-only method boundaries and positive user rewrites\n";
         echo "PASS: whitespace-tolerant native auth guards, exact missing-guard refusal\n";
-        $fixture = "<?php function validInput(): void { $a = 1; }";
+        $fixture = '<?php function validInput(): void { $a = 1; }';
         self::require(count(token_get_all($fixture, TOKEN_PARSE)) > 2,
             'selftest_token_parse_positive_failed');
         $denied = false;
