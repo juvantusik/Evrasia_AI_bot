@@ -307,7 +307,7 @@ final class EvPilotTrustedPinRelease
         self::need(PHP_SAPI==='cli','php_cli_selftest_guard');
         $fixture=<<<'PHP'
 <?php
-$userId=880339;
+$userId=0;
 if ($userId === 880339) {
     $directPinEligible = false;
     $directPinEligible = $directPinEligible
