@@ -357,6 +357,16 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-wronghost.out
               grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/web-mfa-wronghost.out
               echo "PASS: web pilot gate scanner safe, masked and production-only"
+              echo "=== WEBSITE MFA SOURCE-PINNED PATCH CANDIDATE PREPARER ==="
+              php -l "$ROOT/deployment/website-mfa-rollout-prepare.php"
+              php "$ROOT/deployment/website-mfa-rollout-prepare.php" --self-test
+              if php "$ROOT/deployment/website-mfa-rollout-prepare.php" --prepare > /tmp/v5-website-wronghost.log 2>&1; then
+                echo "FAIL: website public rollout preparer accepted wrong host"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-website-wronghost.log
+              grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/v5-website-wronghost.log
+              echo "PASS: new rollout preparer is denied on GitHub Actions and has no install mode"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
