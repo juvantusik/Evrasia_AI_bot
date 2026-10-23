@@ -68,3 +68,7 @@ php site-integration/samzaberu-v5/tests/V5V4ReplacementGateTest.php
 ## Новая реальная бизнес-ручка V5: документы регистрации (23.10.2026)
 
 `GET /api/v5/legal/registration-documents` зарегистрирован в V5 и реализован через тот же текущий `V5BitrixPublicLegalCatalog::read()`, который получает документы из действующего `b_consent_agreement`. Текст соглашений не дублируется; согласия и аккаунты не создаются. В машинной карте добавлена отдельная 33-я группа (`legal-registration-documents`) со статусом `feature_only`, **не** `accepted`. Кодовый статус V5: **11 маршрутов**. До proof внешнего `evrasia.rest` и V4/V5 DTO-приёмки клиентский переход по этой ручке не утверждать. [Контракт и статус](SAMZABERU_V5_REGISTRATION_DOCUMENTS_2026-10-23.md).
+
+## Публичный V5 юридический этап — факт после принятия первоначального плана
+
+Вступивший в силу факт 23.10.2026 (новее таблиц в начале документа): юридические **GET** `/api/v5/legal/consents` и `/api/v5/legal/registration-documents` опубликованы в production и получили независимое внешнее `evrasia.rest` HTTP 200/TLS/JSON подтверждение через [GitHub Actions #39999984588](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39999984588). [Подробнее](SAMZABERU_V5_EVRASIA_REST_EXTERNAL_ACCEPTANCE_2026-10-23.md). Это закрывает только публичную юридическую GET-готовность, но **НЕ** полный V4/V5 DTO-паритет, все 62 регистрации V4, переводы потребителей и готовность приватной V5 AUTH. Все гейты отключения V4 остаются в силе; V4 не отключён.

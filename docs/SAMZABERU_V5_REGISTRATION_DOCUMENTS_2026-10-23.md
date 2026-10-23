@@ -26,3 +26,7 @@
 **Итоговый статус миграции:** этот публичный метод добавляется как одна из 33 известных бизнес-функций в машинную карту замещения V4. Это **не** означает, что остальные 62 объявления V4 уже перенесены. V4 остаётся действующим, пока не переведены реальные клиенты и не выполнены все критерии sunset.
 
 **Production-раскатка:** подготовлен отдельный безопасный [V5-only guarded installer](SAMZABERU_V5_PUBLIC_REGISTRATION_ROLLOUT_2026-10-23.md), который проверяет реальный `evrasia.rest`, сохраняет backup и выполняет условный rollback при сбое. **Не запущен**, доступность V5 URL снаружи пока НЕ подтверждена.
+
+## Публичный метод реально принят на основном evrasia.rest
+
+23 октября 2026 исправленный production V5-only installer `FINAL_STATUS=PASS`; GET юридических документов/регистрации HTTP 200 на native Bitrix; отдельная внешняя проверка [GitHub Actions #39999984588](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39999984588) подтвердила те же **GET /api/v5/legal/consents** и **GET /api/v5/legal/registration-documents** HTTP 200 по `https://evrasia.rest` с независимым DNS/TLS. Совпадают 3 текущих Bitrix документа, 2 обязательных. **Статус именно GET registration-documents: production deployed + external HTTP accepted.** Валидация POST `/legal/consents/validate` принята на origin, но внешний POST не тестировался. Приватная авторизация V5 выключена. [Отчёт](SAMZABERU_V5_EVRASIA_REST_EXTERNAL_ACCEPTANCE_2026-10-23.md).
