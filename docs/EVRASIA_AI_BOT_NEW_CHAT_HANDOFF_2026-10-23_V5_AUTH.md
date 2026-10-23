@@ -1,5 +1,7 @@
 # Evrasia AI Bot — актуальная передача работы в новый чат
 
+> **CURRENT 24.10.2026:** production 5-file private MFA candidate bundle PASSED (path public-web-mfa-20261023-215541-ff879512) but not installed. Next needed native Bitrix trusted device bypass for user with active TOTP; use pinned source-only reader commit 88b623ed0a4a22e7fbaf55ab41f387dc08832304, blob 7fb2ddaa78c9db17334dfd2689261534ee150e18, [CI #40030708862](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40030708862) SUCCESS; `--inspect` reads native Login/LoginInternal/Authorize/Otp::verifyUser and custom pre-auth trust/assurance (no DB or site write). User should send output; then construct minimal private trust-first PHP candidate, proxy check, final rollback install. Avoid resetting 44,210 devices. Website/public NOT DEPLOYED, V4 unchanged, V5 AUTH OFF.
+
 > **LATEST VERIFIED OPERATOR CHECKPOINT:** 24.10.2026 five-file website MFA private candidates plus shared SMS budget all PASS PHP parser/lint/SHA; path /root/ev-web-mfa-checkpoints/public-web-mfa-20261023-215541-ff879512; SHA details in docs/EVRASIA_WEBSITE_TOTP_PUBLIC_OPT_IN_2026-10-24.md. NO site code written. Next: inspect pinned installed native CUser login/Authorize + trust pre-auth to safely skip repeated TOTP on already valid trusted device (user requirement); then verify proxy REMOTE_ADDR, Redis, paid-SMS caps and E2E before installing. V4 unchanged, V5 AUTH OFF, 44,210 trusted devices preserved.
 
 
