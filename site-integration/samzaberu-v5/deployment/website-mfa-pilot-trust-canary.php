@@ -139,12 +139,13 @@ final class WebsiteMfaPilotTrustCanary
             &&str_contains($helper,'Method::Password')
             &&str_contains($helper,'->GetID()'),
             'trusted_login_server_account_guard');
-        [$pos]=$unused=[];
         $anchor='/\b(?:private|protected)\s+function\s+startPilotSmsChallenge\s*\(/';
         self::need(preg_match_all($anchor,$base,$matches,PREG_OFFSET_CAPTURE)===1,
             'canary_helper_insertion_anchor');
         $offset=$matches[0][0][1];
-        $candidate=substr_replace($base,"\n    ".$helper."\n\n    ",$offset,0);
+        // Token extraction starts at T_FUNCTION, not the visibility token.
+        $insertion='private '.$helper."\n\n    ";
+        $candidate=substr_replace($base,$insertion,$offset,0);
         self::need(substr_count($candidate,'loginByExistingTrustedTotp')===2
             &&substr_count($candidate,'GlobalSmsBudget::reserve')===0
             &&str_contains($candidate,'self::PILOT_USER_ID'),
@@ -153,8 +154,13 @@ final class WebsiteMfaPilotTrustCanary
             'native_php_parse_failed');
         // Prove byte-for-byte that everything outside processAction and
         // one new method is the original installed PHP file.
-        [$hb,$he]=self::method($candidate,'loginByExistingTrustedTotp');
-        $removeHelper=substr_replace($candidate,'',$hb,$he-$hb);
+        self::need(str_contains($candidate,
+            'private function loginByExistingTrustedTotp'),
+            'helper_visibility_must_be_private');
+        self::method($candidate,'loginByExistingTrustedTotp');
+        $removeHelper=substr_replace(
+            $candidate,'',$offset,strlen($insertion)
+        );
         [$cb,$ce]=self::method($removeHelper,'processAction');
         [$ob,$oe,$oldBody]=self::method($original,'processAction');
         $restored=substr_replace($removeHelper,$oldBody,$cb,$ce-$cb);
