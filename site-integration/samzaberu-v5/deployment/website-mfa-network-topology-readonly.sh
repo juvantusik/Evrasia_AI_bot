@@ -16,6 +16,7 @@ finish() {
     echo 'MODE_PRODUCTION=READ_ONLY'
     echo 'SITE_CODE_WRITE=NO'
     echo 'TEMP_PUBLIC_PHP_CREATED=NO'
+    echo 'PUBLIC_PHP_FILE_CREATED=NO'
     echo 'DB_DIRECT_CONNECTION=NO'
     echo 'REDIS_CONNECTION=NO'
     echo 'SMS_SENT=NO'
