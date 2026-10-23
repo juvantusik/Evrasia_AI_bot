@@ -24,6 +24,7 @@ PUBLIC_SHA=f502ae4718a3193d2765d30b75dff638a684cb75078534fecfd3524dce3b94d8
 SITE_SHA=595698a40449b78e3b32335ec09a6c75bbe62fe9f0533acf0d3f274a262e7a51
 INNER_OLD_SHA=6e534f93bcf873eda337439443cb3670f634f0afc1bfe9938e8acc4cef5ae37d
 MANIFEST_PUBLIC_SHA=fa794b1404ebb3b0b44d82bb326af9406c5c9a186dcd462f8142f2783bf1ef74
+V5_PUBLIC_REWRITE_SHA=5d10b20b840fe3f36a348a64a4fe5aee2b9050559cb5d429d6e12196929ed08f
 V4_SHA=5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d
 ROOT_REWRITE_SHA=81544afa0396c6778f263d9b250105913aae9d3621cbaaf0e3cf1e4f3a297b95
 V4_REWRITE_SHA=61ff97841022d2597761577a818e5458fcc05ccc35f3333d72297e5d88adecd3
@@ -128,6 +129,7 @@ flock -n 9 || fail 'concurrent V5 update'
 pin "$PUBLIC" "$PUBLIC_SHA" public_router
 pin "$SITE" "$SITE_SHA" site_entry
 pin "$INNER" "$INNER_OLD_SHA" local_inner_router
+pin "$WEB/api/v5/.htaccess" "$V5_PUBLIC_REWRITE_SHA" public_v5_rewrite
 pin "$WEB/api/v4/router.php" "$V4_SHA" v4_router
 pin "$WEB/api/v4/.htaccess" "$V4_REWRITE_SHA" v4_htaccess
 pin "$WEB/.htaccess" "$ROOT_REWRITE_SHA" root_htaccess
@@ -152,11 +154,19 @@ while read -r expected path; do
       fail 'public V5 mismatch differs from prior verified source'
     ((known_mismatch+=1))
   else
+    # Original install-disabled-v5.sh wrote 40 private release records,
+    # followed by BOTH public router.php and public .htaccess. This one
+    # nonrouter public file belongs to the 41 *valid* original records.
+    # Authorize its exact path AND separately pinned Git-derived SHA only.
     case "$path" in
       "$BASE"/private/samzaberu-v5/releases/*) ;;
-      *) fail 'manifest entry outside known private code release';;
+      "$WEB/api/v5/.htaccess")
+        [[ "$expected" == "$V5_PUBLIC_REWRITE_SHA" ]] ||
+          fail 'public V5 rewrite record SHA not original installer source'
+        ;;
+      *) fail 'manifest entry outside allowed original V5 install paths';;
     esac
-    pin "$path" "$expected" original_code_release
+    pin "$path" "$expected" original_manifest_entry
     ((good+=1))
   fi
 done < "$MANIFEST"
@@ -319,6 +329,7 @@ printf '%s' '{"error":"v5_unavailable"}' | cmp -s - "$BACKUP/signin-off.json" ||
   fail 'V5 AUTH enabled unexpectedly'
 pin "$PUBLIC" "$PUBLIC_SHA" public_after
 pin "$SITE" "$SITE_SHA" site_after
+pin "$WEB/api/v5/.htaccess" "$V5_PUBLIC_REWRITE_SHA" public_v5_rewrite_after
 pin "$WEB/api/v4/router.php" "$V4_SHA" v4_after
 pin "$WEB/api/v4/.htaccess" "$V4_REWRITE_SHA" v4_htaccess_after
 pin "$WEB/.htaccess" "$ROOT_REWRITE_SHA" root_htaccess_after

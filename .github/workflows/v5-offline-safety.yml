@@ -66,6 +66,8 @@ jobs:
               echo "PASS: guarded V5-only updater syntax and wrong-host refusal"
               echo "=== ACCEPTED TWO-FILE V5 BOOTSTRAP: ADDITIVE REGISTRATION PUBLISH ==="
               bash -n "$ROOT/deployment/upgrade-twofile-public-registration-v5.sh"
+              php -n -l "$ROOT/tests/V5TwofilePublicRewriteManifestTest.php"
+              php -n "$ROOT/tests/V5TwofilePublicRewriteManifestTest.php"
               if bash "$ROOT/deployment/upgrade-twofile-public-registration-v5.sh" > /tmp/v5-twofile-wrong-host.log 2>&1; then
                 echo "FAIL: two-file production updater ran in CI"
                 exit 1

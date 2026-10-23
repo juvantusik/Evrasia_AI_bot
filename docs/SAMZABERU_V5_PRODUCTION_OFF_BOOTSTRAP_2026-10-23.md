@@ -497,3 +497,27 @@ WRAPPER_RC=0
 ## 39. 2026-10-23 — verified new two-file V5-only public registration installer CI
 
 **GitHub CI completed SUCCESS:** new two-file installer source commit [`4826138f`](https://github.com/juvantusik/Evrasia_AI_bot/commit/4826138f79f9b2bdb1550516f43d55001ee46bcf), immutable script Git blob `6ec8e9099f87fdb7bcab99f578113256a67bc2c6`, [offline safety workflow #39997003587](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/39997003587) `completed/success` — Bash syntax and negative wrong-host denial. **Operator has not yet run the new installer; do not claim production deployment.** Next: run the exact pinned script through a single guarded root wrapper, inspect final postcheck/rollback output, then independently test `https://evrasia.rest` from a real external network. Old v4 and protected V5 AUTH remain untouched.
+
+## 40. 2026-10-23 — correct original V5 manifest record scope after safe operator stop
+
+**Operator attempted exact pinned new two-file install** via SHA `6ec8e9099f87fdb7bcab99f578113256a67bc2c6` and it stopped at step 2 **before staging/backups/publishing**:
+
+```text
+PASS: installed two-file bootstrap + all original V4 pins
+=== 2. ATTEST 41 CORRECT BASELINE RECORDS ===
+FAIL: manifest entry outside known private code release
+FINAL_STATUS=FAIL
+FINAL_RC=2
+ROLLBACK_STATUS=NOT_NEEDED
+LOCAL_V5_ROUTER_SWITCHED=NO
+LOCAL_V5_LIBRARIES_ADDED=0
+ORIGIN_HTTPS_ACCEPTED=NO
+WRAPPER_RC=2
+WRAPPER_FINAL_STATUS=FAIL
+```
+
+**Exact root cause CONFIRMED IN ORIGINAL REPOSITORY SOURCE**, not a production alteration. The first `deployment/install-disabled-v5.sh` constructs the 42-row `installed.sha256` with `find "$RELEASE" ... | xargs sha256sum`, then **also appends both** `"$PUBLIC/router.php"` and `"$PUBLIC/.htaccess"` to the manifest. The new installer accidentally allowlisted only original private release files and already attested public router mismatch, **omitting the legitimate original public rewrite file**. The previously reported 41 matching files include `/public_html/api/v5/.htaccess`. No additional production read or manifest investigation is needed.
+
+**Narrow corrected script:** `deployment/upgrade-twofile-public-registration-v5.sh`, Git blob `18cfd9fc96f21e6c76f603b409ec41094eca11d8`, now explicitly admits **ONLY exact** `/public_html/api/v5/.htaccess` outside original private release and pins its original Git blob `a1a05fb6d630c24aed627558304f71e7ba0af9b9` → SHA256 `5d10b20b840fe3f36a348a64a4fe5aee2b9050559cb5d429d6e12196929ed08f` before/after installation and verifies that exact SHA is recorded in manifest. It still requires **42 rows / 41 correct / 1 known changed public-router**, all originally pinned V4 and native two-file bootstrap SHAs, preserves old manifest unchanged, performs private checkpoint + atomic inner-V5-only router switch and rollback. `tests/V5TwofilePublicRewriteManifestTest.php` checks this regression against actual original installer source/rewrite bytes. No arbitrary `/api/v5/*` allowlisting.
+
+**NEXT:** run CI PHP test/Bash lint/wrong-host guard on corrected source; then one root wrapper pinned to new commit and blob (NOT older `4826138f`), return operator origin HTTPS smoke/rollback output; only after real external `evrasia.rest` test mark mobile route accepted. V4 active temporary; native V5 auth remains OFF.
