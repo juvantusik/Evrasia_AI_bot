@@ -20,6 +20,8 @@
 
 > **23.10.2026 VERIFIED CI — FUSER binding:** feature commit `57d846b66a39115007a9c7fa47d0aa55517d6d9b`, three successful workflows: offline 39978447180 / first factor 39978447169 / ephemeral MariaDB 39978447256. Source-bound `V5BitrixLockedCartFuserOwner` now SELECTs exact existing b_sale_fuser record by server JWT user under same V5 transaction (guest/foreign/ambiguous -> denied), SQL allowlisted only exact template by V5BitrixPdoCompatibilityBridge. No native Bitrix acceptance; V5 AUTH OFF, no test accounts. Bitrix Fuser::getIdByUserId may write/create; DO NOT call from GET cart. Detailed status checkpoint §§29–30, real-cart doc.
 
+> **23.10.2026 — V5 CART ITEMS+TOTAL в feature:** commit `960792ede369cc40c796dfe2805d2829a2f6faa9`; protected `GET /api/v5/cart` emits `items` from real SHA-pinned V4 CartApiService::getCartItems() and `total` from its **native `calcBasketTotal($items)`**, no rewrite price/discount, strict linked FUSER owner under V5 JWT/epoch/locks (commit `57d846b6`). CI offline 39979292176 SUCCESS and first-factor 39979292144 SUCCESS; MariaDB 39979292097 SUCCESS (disposable DB, not native Bitrix). **Production OFF**; full V4 legacy total equivalence, site Sale FUSER schema/connection, deserialization and empty-cart E2E not yet proven. Detail checkpoint §31 and real-cart documentation. No test accounts.
+
 **Назначение документа:** без повторного исследования длинных чатов продолжить работу с последнего подтверждённого состояния. Это *фактический checkpoint*, не допуск V5 AUTH в production.
 
 - **Репозиторий:** \`juvantusik/Evrasia_AI_bot\`.
