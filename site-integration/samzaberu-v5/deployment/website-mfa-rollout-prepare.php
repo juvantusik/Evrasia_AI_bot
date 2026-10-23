@@ -4,8 +4,10 @@ declare(strict_types=1);
 /**
  * Source-pinned WEBSITE-only public MFA migration candidate builder.
  *
- * --prepare: produce four PHP candidates in a ROOT-ONLY checkpoint and lint
- *   them, WITHOUT changing the installed site, DB, V4 or V5.
+ * --prepare: TOKEN_PARSE-check four source candidates and save them in
+ *   a ROOT-ONLY checkpoint, WITHOUT changing installed site, DB, V4 or V5.
+ *   Final php -l for each candidate is intentionally executed by the
+ *   operator Bash wrapper, NOT PHP exec() (disabled on production).
  * --self-test: synthetic fixture for the source-only rewrite primitives.
  *
  * This script intentionally has NO --install action. A separate production
@@ -359,6 +361,18 @@ final class EvrasiaWebsiteMfaCandidate
         echo "PASS: native Bitrix Otp.php and four live PHP sources SHA-pinned\n";
         echo "=== 2. CANDIDATE PATCH GENERATION ===\n";
         $next = self::candidates($sources);
+        // Validate *all* candidates before creating any private checkpoint.
+        // The production PHP CLI disables exec(), so PHP's native parser is
+        // the code-only first pass; the Bash wrapper runs real php -l later.
+        foreach (self::FILES as $key => $_) {
+            try {
+                $tokens = token_get_all($next[$key], TOKEN_PARSE);
+            } catch (ParseError $e) {
+                throw new RuntimeException('candidate_parse_failed_' . $key);
+            }
+            self::require(count($tokens) > 0, 'candidate_no_php_tokens_' . $key);
+            echo 'PASS: ', $key, ' native PHP parser (TOKEN_PARSE)', "\n";
+        }
         $parent = self::CHECKPOINT_PARENT;
         self::require(!is_link($parent), 'unsafe_checkpoint_parent');
         if (!is_dir($parent)) {
@@ -390,20 +404,21 @@ final class EvrasiaWebsiteMfaCandidate
                 strlen($next[$key]), 'candidate_write_failed_' . $key);
             chmod($originalPath,0600);
             chmod($candidatePath,0600);
-            $lint = [];
-            $code = 1;
-            exec(escapeshellarg(PHP_BINARY) . ' -d auto_prepend_file= -d auto_append_file= -d short_open_tag=1 -l '
-                . escapeshellarg($candidatePath) . ' 2>&1', $lint, $code);
-            self::require($code === 0, 'candidate_php_syntax_failed_' . $key);
+            // php -l is performed outside this process by a guarded shell
+            // wrapper after the complete immutable candidate manifest exists.
+            self::require(hash_equals(hash('sha256', $next[$key]),
+                hash_file('sha256', $candidatePath)),
+                'candidate_file_hash_mismatch_' . $key);
             $manifest['source'][$key] = [
                 'relative_path' => $relative,
                 'sha_before' => $expectedSha,
                 'sha_candidate' => hash('sha256', $next[$key]),
-                'candidate_lint' => 'PASS',
+                'candidate_parse' => 'PASS',
+                'candidate_lint' => 'PENDING_CLI_LINT',
                 'original' => basename($originalPath),
                 'candidate' => basename($candidatePath),
             ];
-            echo 'PASS: ', $key, ' changed and PHP syntax valid', "\n";
+            echo 'PASS: ', $key, ' candidate saved, parse valid, CLI lint pending', "\n";
             echo strtoupper($key), '_CANDIDATE_SHA256=', hash('sha256', $next[$key]), "\n";
         }
         $manifestPath = $dir . '/manifest.json';
@@ -415,11 +430,12 @@ final class EvrasiaWebsiteMfaCandidate
         echo "=== 3. PRIVATELY STORED PATCH CANDIDATES ===\n";
         echo 'PREPARE_CHECKPOINT=', $dir, "\n";
         echo 'PREPARE_SOURCE_PINS=PASS', "\n";
-        echo 'CANDIDATE_PHP_SYNTAX=PASS', "\n";
+        echo 'CANDIDATE_TOKEN_PARSE=PASS', "\n";
+        echo 'CANDIDATE_PHP_LINT=PENDING', "\n";
         echo 'SMS_GLOBAL_BUDGET_PROOF=PENDING', "\n";
         echo 'WEBSITE_AUTH_E2E=NOT_RUN', "\n";
         echo 'PRODUCTION_CODE_CHANGED=NO', "\n";
-        echo 'NEXT_ACTION=SOURCE_PINNED_INSTALLER_AND_WEB_ACCEPTANCE', "\n";
+        echo 'NEXT_ACTION=CLI_LINT_AND_VERIFY_PRIVATE_CHECKPOINT_THEN_RELEASE_REVIEW', "\n";
     }
 
     private static function selfTest(): void
@@ -462,6 +478,17 @@ final class EvrasiaWebsiteMfaCandidate
         self::require($negativeDenied, 'selftest_missing_security_invariant_accepted');
         echo "PASS: source-only method boundaries and positive user rewrites\n";
         echo "PASS: whitespace-tolerant native auth guards, exact missing-guard refusal\n";
+        $fixture = "<?php function validInput(): void { $a = 1; }";
+        self::require(count(token_get_all($fixture, TOKEN_PARSE)) > 2,
+            'selftest_token_parse_positive_failed');
+        $denied = false;
+        try {
+            token_get_all("<?php function invalid( {", TOKEN_PARSE);
+        } catch (ParseError) {
+            $denied = true;
+        }
+        self::require($denied, 'selftest_invalid_php_accepted');
+        echo "PASS: TOKEN_PARSE syntax fail-closed without disabled PHP exec\n";
         echo "MODE=OFFLINE_SELF_TEST\n";
     }
 
