@@ -67,3 +67,14 @@
 2. Новые public POST и logout пока **feature code**, deployment и real Bitrix runtime smoke — отдельная guarded итерация. Ни один production data/user/SMS writer здесь не включён.
 3. Сначала проверить реальное наличие текущего OFF-only release/immutable checksums, существующий snapshot и backup; потом только точечный V5-only upgrade с rollback. Не затрагивать \`api/v4\`, native PHP/Bitrix, SQL schema, consent history и платные SMS.
 4. Native MFA/PIN/AUTH_EPOCH gates для выдачи реальных JWT должны оставаться обязательными; частичная безопасность не является основанием включить вход в реальные аккаунты.
+
+## Продакшен-установка только публичной V5 legal validation
+
+В репозитории добавлен \`site-integration/samzaberu-v5/deployment/upgrade-public-legal-v5.sh\`. Он **НЕ включает авторизацию** и **НЕ создаёт пользователей**: копирует текущую установленную immutable OFF-only V5 release в отдельную новую приватную версию, накладывает ровно два проверенных Git blob из \`d7c5d5e87f2d5a80d621f08e42b857963a6c3506\` (public \`api/v5/router.php\` и \`src/V5PublicLegalCodeValidation.php\`), и переключает только публичный V5 shim атомарной заменой файла.
+
+Guards: точный host \`evrasia\` и root, UID/GID \`site_evrasia\`, три исходных V4/site SHA, существующий проверенный \`installed.sha256\`, неизменный V5 OFF bootstrap, отсутствие private auth factory, существующая блокировка деплоя, SHA Git commit + два blob. Создаётся свежий проверенный backup router/manifest в \`/root\`; старую версию не удалять. При ошибке после переключения скрипт автоматически восстанавливает V5 shim и manifest, если их новые SHA не изменились конкурентно.
+
+Положительный post-check: настоящий origin HTTPS через \`--resolve evrasia.spb.ru:443:192.168.103.141\`, 200 health \`auth_ready=false\`, 200 реальный legal catalog, 200 **новая** проверка свежих обязательных кодов и 503 \`auth/signin\`. Ни один тестовый аккаунт или SMS не создаётся. Реальные коды извлекаются из public GET динамически; не печатать приватные настройки. Не путать LAN-origin smoke с внешней проверкой мобильной доступности \`evrasia.rest\`.
+
+**Статус до операторского вывода:** скрипт и код находятся в GitHub, обновление production ещё не выполнено. Код AUTH/logout/JWT validation — feature-only; источник для logout готов, но V5 AUTH остаётся OFF, выпуск реальных сессий по-прежнему запрещён.
+

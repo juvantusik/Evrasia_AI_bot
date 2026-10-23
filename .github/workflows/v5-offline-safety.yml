@@ -43,6 +43,16 @@ jobs:
             php:8.4-cli sh -eu -c '
               php -v | head -n 1
               ROOT=site-integration/samzaberu-v5
+              echo "=== V5 PUBLIC-LEGAL PRODUCTION UPGRADER SAFETY ==="
+              bash -n "$ROOT/deployment/upgrade-public-legal-v5.sh"
+              if bash "$ROOT/deployment/upgrade-public-legal-v5.sh" > /tmp/v5-public-legal-upgrader-denied.log 2>&1; then
+                echo "FAIL: V5 production upgrader executed on CI"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-public-legal-upgrader-denied.log
+              grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-public-legal-upgrader-denied.log
+              grep -Fxq "V5_AUTH_ENABLED=NO" /tmp/v5-public-legal-upgrader-denied.log
+              echo "PASS: deploy script Bash lint + fail-closed outside production"
               echo "=== 2A. SERVER DIAGNOSTIC SYNTAX (NO EXECUTION) ==="
               bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
