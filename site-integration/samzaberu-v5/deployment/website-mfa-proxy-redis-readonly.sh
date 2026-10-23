@@ -198,10 +198,13 @@ foreach ($files as $path) {
     if (!is_string($source)) {
         echo "REDIS_TARGET_READING=FAILED\n"; exit(0);
     }
-    preg_match_all(
-        "~\\$redis\\s*->\\s*connect\\s*\\(\\s*([\"\\x27])([^\"\\x27]+)\\1\\s*,\\s*([0-9]{1,5})~",
-        $source, $matches, PREG_SET_ORDER
-    );
+    // Avoid PHP variable interpolation when matching the literal "$redis".
+    $pattern = "~\\" . chr(36)
+        . "redis\\s*->\\s*connect\\s*\\(\\s*([\"\\x27])([^\"\\x27]+)\\1\\s*,\\s*([0-9]{1,5})~";
+    if (preg_match_all($pattern, $source, $matches, PREG_SET_ORDER) === false) {
+        echo "REDIS_TARGET_PARSER=FAILED\n";
+        exit(0);
+    }
     foreach ($matches as $m) {
         $host=$m[2]; $port=(int)$m[3];
         if (!in_array($host, ["127.0.0.1","localhost","::1"], true)
