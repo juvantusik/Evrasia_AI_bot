@@ -53,6 +53,18 @@ jobs:
               grep -Fxq "DATABASE_WRITE=NO" /tmp/v5-public-legal-upgrader-denied.log
               grep -Fxq "V5_AUTH_ENABLED=NO" /tmp/v5-public-legal-upgrader-denied.log
               echo "PASS: deploy script Bash lint + fail-closed outside production"
+              echo "=== V4 BUSINESS ROUTE REUSE: PINNED NO-BOOTSTRAP SOURCE READER ==="
+              php -n -l "$ROOT/tests/diagnostics/V5V4BusinessRouteInventory.php"
+              bash -n "$ROOT/tests/diagnostics/v5_v4_business_routes_readonly.sh"
+              php "$ROOT/tests/diagnostics/V5V4BusinessRouteInventory.php" --self-test
+              if bash "$ROOT/tests/diagnostics/v5_v4_business_routes_readonly.sh" /tmp/not-installed.php > /tmp/v5-v4-business-wrong-host.log 2>&1; then
+                echo "FAIL: source-only reader permitted CI as production"
+                exit 1
+              fi
+              grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-v4-business-wrong-host.log
+              grep -Fxq "MODE=READ_ONLY" /tmp/v5-v4-business-wrong-host.log
+              grep -Fxq "USER_DATA_READ=NO" /tmp/v5-v4-business-wrong-host.log
+              echo "PASS: V4 routes lexer/selftest and explicit wrong-host denial"
               echo "=== 2A. SERVER DIAGNOSTIC SYNTAX (NO EXECUTION) ==="
               bash -n "$ROOT/tests/diagnostics/v5_native_mfa_writer_order_readonly.sh"
               bash -n "$ROOT/tests/diagnostics/v5_native_recovery_merge_readonly.sh"
