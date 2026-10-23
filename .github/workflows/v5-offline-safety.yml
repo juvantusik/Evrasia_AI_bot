@@ -441,6 +441,16 @@ jobs:
               grep -Fq "FINAL_STATUS=FAIL" /tmp/web-mfa-probe-wronghost.log
               grep -Fq "PRODUCTION_EXISTING_FILES_CHANGED=NO" /tmp/web-mfa-probe-wronghost.log
               echo "PASS: synthetic PHP-probe grammar and wrong-host denial"
+              echo "=== WEBSITE MFA NETWORK TOPOLOGY READ-ONLY ==="
+              bash -n "$ROOT/deployment/website-mfa-network-topology-readonly.sh"
+              bash "$ROOT/deployment/website-mfa-network-topology-readonly.sh" --self-test
+              if bash "$ROOT/deployment/website-mfa-network-topology-readonly.sh" --audit > /tmp/web-mfa-network-wronghost.log 2>&1; then
+                echo "FAIL: network topology read-only audit ran on wrong host"
+                exit 1
+              fi
+              grep -Fq "FINAL_STATUS=FAIL" /tmp/web-mfa-network-wronghost.log
+              grep -Fq "PUBLIC_PHP_FILE_CREATED=NO" /tmp/web-mfa-network-wronghost.log
+              echo "PASS: source-only network topology offline guard"
               echo "=== 2. PHP LINT (ENTIRE ISOLATED V5 TREE) ==="
               find "$ROOT/src" "$ROOT/tests" "$ROOT/api" -type f -name "*.php" -print | sort > /tmp/v5-php-file-manifest
               test -s /tmp/v5-php-file-manifest
