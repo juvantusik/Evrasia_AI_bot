@@ -5,7 +5,8 @@ printf '\033[3J\033[2J\033[H'
 
 REPO='juvantusik/Evrasia_AI_bot'
 BRANCH='snapshot/website-email-sms-prod-20261024'
-EXPECTED_HEAD='386d7aca149ee8348804940c641e502fdc8c1a7f'
+[[ "$#" -eq 1 && "$1" =~ ^[0-9a-f]{40}$ ]]
+EXPECTED_HEAD="$1"
 MANIFEST_SHA='b28073f058d51b0031c938700e884cf63065dd1e55fc672d5e5160b1d5bb1034'
 BASE='/root/ev-email-first-integration.Q6e5qTqC'
 SNAPSHOT="$BASE/prod-source-github-20261024.qeWwkJLU"
