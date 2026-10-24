@@ -16,6 +16,7 @@ try {
     $test(is_array($p),'valid_payload');
     $test($p['EVENT_NAME']===Mail::EVENT,'isolated_event_type');
     $test($p['MESSAGE_ID']===54 && $p['LID']==='s1','exact_template_and_site');
+    $test($p['DUPLICATE']==='N','OTP_never_copied_to_global_Bitrix_all_bcc');
     $test($p['C_FIELDS']['VERIFY_CODE']==='000012','six_digits_with_leading_zero');
     $test($p['C_FIELDS']['EMAIL_TO']==='guest@example.com',
         'normalized_recipient');
