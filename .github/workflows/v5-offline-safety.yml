@@ -367,6 +367,11 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-website-wronghost.log
               grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/v5-website-wronghost.log
               echo "PASS: new rollout preparer is denied on GitHub Actions and has no install mode"
+              echo "=== WEBSITE MFA EMAIL-FIRST STATE MACHINE (FEATURE ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa/EmailLoginChallenge.php"
+              php -l "$ROOT/tests/WebsiteEmailLoginChallengeTest.php"
+              php "$ROOT/tests/WebsiteEmailLoginChallengeTest.php"
+              echo "PASS: email-first hashed challenge, session isolation and manual SMS fallback"
               echo "=== WEBSITE MFA GLOBAL PAID-SMS QUOTA (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/GlobalSmsBudget.php"
               php -l "$ROOT/tests/WebsiteGlobalSmsBudgetTest.php"
