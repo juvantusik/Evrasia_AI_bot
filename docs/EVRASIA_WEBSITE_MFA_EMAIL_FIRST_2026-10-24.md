@@ -1,5 +1,13 @@
 # Evrasia AI Bot — email-first website login challenge с SMS fallback
 
+## 24 октября 2026 — feature implementation and private two-template stage READY
+
+GitHub offline [CI #40074636759](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40074636759) SUCCESS: `EmailOwnershipEnrollment` **59 offline assertions PASS**, `EmailOwnershipProofStore` **27 offline fake-PDO assertions PASS**, prior `VerifiedEmailStatus`/badge and email-first suites retained. Никаких настоящих email/SMS/DB writes. `VerifiedEmailStatus` теперь требует **exact current `b_user.TIMESTAMP_X`**, записанный после server-verified email OTP; любое изменение штампа блокирует green и email-first, даже когда email вернулся к старому значению (консервативное safety условие).
+
+GitHub offline [CI #40074936150](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40074936150) SUCCESS: новый private candidate stager `deployment/website-mfa-email-private-candidate-stage.sh` bash syntax, `--self-test`, foreign-host fail-closed. Exact immutable script commit `486ec293b9ecf5de8de0f021dbdbc68f850abe3c`, Git blob `a7ca8dce6dc10fe797d4b07f273f64c5f01f4b11`. Он проверяет live account `main` SHA `42e4...`, `cached` SHA `6c9c...`, signin `e1fc...`; собирает **две реальные приватные PHP template candidate** с inline badge в точных email display-строках, загружает 7 feature helpers immutable blob-pinned, делает PHP lint и обратимость byte-for-byte, сохраняет root-only rollback copies и будущую SQL schema для `ev_web_email_ownership_proof` **без SQL execution**. `--stage` ещё не выполнен оператором; поэтому `PRODUCTION_SITE_CODE_WRITE=NO, DB_WRITE=NO, EMAIL_FIRST=OFF, ACCOUNT_BADGE=OFF`.
+
+**Следующие этапы после stage PASS:** server-authenticated email-enrollment actions через существующий account и SMTP event; создание schema/secret отдельным guarded production install с backup; подключение нового ledger к signin only NoTrust/NoTOTP, SMTP/Redis budget, ручная кнопка SMS fallback, QA и source-pinned rollback. Не активировать код, не показывать всем legacy пользователям зелёную галочку, не запускать миграцию старых `UF_CHECK_EMAIL_DATE`. Public main domain `evrasia.rest`. Для каждого SSH wrapper первое действие — clear display+scrollback без закрытия терминала.
+
 ## 24 октября 2026 — окончательный вывод по UF_CHECK_EMAIL_DATE: НЕ ПРИЗНАК ПОДТВЕРЖДЕНИЯ
 
 **Фактический runtime operator result:** `EV_EMAIL_WRITER_CONTEXT` (immutable source `79617e7f7fcf1dba4a34b894798005911d0c4daf`) — `--self-test` 5/5 PASS, `--inspect` 12/12 PASS; wrapper `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`. `DATABASE_CONNECTION=NO`, `SITE_WRITE=NO`, `V4/V5_WRITE=NO`, никаких писем/SMS.
