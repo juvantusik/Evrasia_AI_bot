@@ -1,4 +1,10 @@
 # Evrasia AI Bot — email-first website login challenge с SMS fallback
+## 24.10.2026 — operational contract inspector FAILED SAFE at assurance formatter, no production changes
+
+**Latest operator SSH output:** `website-mfa-email-operational-contract-readonly.php` immutable ref `e1797a59bf1a392ec703f4d87183e4bc98419fa2`, Git blob `50e4414afb4dc0db740fda10a5cbf5f4596404d7`; `--self-test PASS_COUNT=4 FINAL_RC=0` and `--inspect` passes exact production host/site/source checks (6 PASS) then **FAIL: inspection_failed_safely** while entering `=== 2. EXACT AUTH ASSURANCE CONTRACT ===`; `DATABASE_CONNECTION=NO`, `SITE_WRITE=NO`, `REDIS_WRITE=NO`, `EMAIL_SENT=NO`, `SMS_SENT=NO`; outer wrapper `WRAPPER_FINAL_STATUS=FAIL WRAPPER_RC=1`. No mutations, no need for rollback/reinstall, no repeat of ledger bootstrap. Root cause is proven in tracked source: the static formatter used `sanitizedPhp($src)` rather than **`self::sanitizedPhp($src)`**, causing a namespaced undefined function error before opening Bitrix DB. Existing offline test did not invoke formatter, so it missed that defect.
+
+**Fix prepared in feature-only source** `site-integration/samzaberu-v5/deployment/website-mfa-email-operational-contract-readonly.php`, immutable commit `c32bcbd5a3eae9ac515b8f64b299e6a28cc6f2aa`, Git blob `96ab669d563089dc918eca83dd6c9a77cc2e3d67`. It now uses `self::sanitizedPhp` and executes the actual three-method assurance formatter against an offline PII-redacted fixture (regression). The user's next operator step is **only this corrected source** `--self-test` then `--inspect`, SHA-pinned; no other server code/DB/Redis/secret changes. This inspection is needed to bind actual current authenticated assurance, correct site `LID`, existing Bitrix mail event/template and Redis before activating real OTP endpoint + button. Existing email proof table/secret already INSTALLED (empty), warning moved to security block, badge red, V4/V5 and website MFA unchanged.
+
 
 ## 24.10.2026 — functional current-email UI and server action built feature-only, final operational gate ready
 
