@@ -286,6 +286,27 @@ EMAIL;
         return $site;
     }
 
+    private static function prepared(\PDO $pdo):array
+    {
+        $site=self::siteAndMailTables($pdo);
+        $state=self::currentCounts($pdo);
+        self::ok($state['type']===0&&$state['template']===0,
+            'no_mail_registry_rows');
+        self::ok(self::checkpointPresent(),'previous_release_checkpoint');
+        $file=self::CHECKPOINT.'/manifest.txt';
+        $expected="SCOPE=ONE_NEW_BITRIX_EMAIL_EVENT_TYPE_AND_TEMPLATE_ONLY\n"
+            ."EVENT=".self::EVENT."\n"
+            ."SITE=".self::SITE_ID."\n"
+            ."LANGUAGE=".$site['language']."\n"
+            ."PHASE=PREPARED_BEFORE_WRITE\n";
+        self::ok(is_file($file)&&!is_link($file)
+            && (fileperms($file)&0777)===0600
+            && fileowner($file)===0
+            && hash_equals($expected,(string)file_get_contents($file)),
+            'original_prepared_mail_manifest');
+        return $site;
+    }
+
     private static function guardedBitrix():void
     {
         if(!defined('NO_KEEP_STATISTIC'))define('NO_KEEP_STATISTIC',true);
