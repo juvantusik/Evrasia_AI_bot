@@ -1,0 +1,91 @@
+EVRASIA AI BOT — ИНСТРУКЦИЯ ДЛЯ НОВОГО ЧАТА
+Дата: 24 октября 2026
+Репозиторий: juvantusik/Evrasia_AI_bot
+Рабочая ветка: feature/samzaberu-api-v5-auth-contract
+
+СОХРАНИ КОНТЕКСТ И ПРОДОЛЖИ С ПОСЛЕДНЕЙ ПОДТВЕРЖДЁННОЙ ТОЧКИ.
+
+Я продолжаю долгосрочный проект Evrasia AI Bot. Это не новый проект.
+Начни с актуального GitHub (HEAD, связанные файлы, CI) и документов:
+docs/EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-24_EMAIL_BUTTON_CLICK.md
+docs/EVRASIA_WEBSITE_MFA_EMAIL_FIRST_2026-10-24.md
+docs/AI_PROJECT_CONTEXT.md
+Не заставляй меня повторять старые шаги или выполнять заново аудит БД.
+
+ПОСЛЕДНЕЕ СООБЩЕНИЕ ОТ МЕНЯ:
+«кнопка появилась, но она ничего не делает».
+Кнопка «Подтвердить почту» видна рядом с красным крестиком в ЛК на
+https://evrasia.rest. Но при нажатии не открывается окно. Пока НЕТ
+успешной реальной отправки кода, ввода OTP или зелёной галочки.
+
+Что уже в production:
+- Bitrix evrasia (evrasia.spb.ru), сайт evrasia.rest, docroot
+  /home/site_evrasia/web/evrasia.spb.ru/public_html, DB eurasia_new, сайт s1.
+- All-user сайт MFA, доверенные устройства (приоритет), TOTP/SMS challenge,
+  PIN, бонусы работают. НЕ МЕНЯТЬ.
+- API V4 независим; API V5 ещё выключен.
+- Отдельная таблица ev_web_email_ownership_proof и закрытый HMAC secret
+  установлены. Историческим email нельзя автоматически доверять.
+- Почтовое событие EVRASIA_WEB_EMAIL_OWNERSHIP и шаблон ID 94 / site s1
+  созданы и независимо проверены. НЕ ПОВТОРЯТЬ регистрацию.
+- Серверный AJAX /local/ajax/ev-email-ownership.php и кнопка уже
+  установлены; наличие кнопки подтверждено человеком, end-to-end нет.
+- Email-first login OFF.
+
+НАЙДЕНА ВЕРОЯТНАЯ ПРИЧИНА:
+Старый EmailAccountConfirmWidget.php привязывает click через
+document.currentScript.previousElementSibling, что ненадёжно при
+динамическом/кэшированном рендеринге Bitrix.
+
+ИСПРАВЛЕНИЕ ПОДГОТОВЛЕНО, НО ЕЩЁ НЕ ЗАПУЩЕНО В PRODUCTION:
+- два файла: прежний PHP виджет и НОВЫЙ локальный
+  /local/ajax/ev-email-confirm-widget.js с делегированным click.
+- UI, обработчик OTP, почтовый шаблон, БД, signin, PIN, MFA, V4/V5
+  остаются без изменения.
+- исходный PHP сохраняется в root-only rollback checkpoint.
+- точный source commit c5ffc4f68fd7a364341887836db7a242dc54a67a,
+  installer git blob 128690c6512ea24cf2654d3f5de29220271db167,
+  widget blob b73eb7d3529aebacb32af47e3c6f225ee0124d94,
+  external JS blob eb669c7ccfa173ffc7655035a4629716f9bb53a9.
+- GitHub Actions CI 40085963990 SUCCESS (включая симуляцию кнопки).
+- отдельный одноразовый защищённый runner уже создан:
+  site-integration/samzaberu-v5/deployment/website-mfa-email-widget-click-fix-run.sh
+  immutable commit b1a7c5b03c8db37f33fef91f7a8e238568f8bfcd,
+  Git blob 3c0d75e29f76f43818dd78d421b5351651d9a92d.
+
+ГЛАВНОЕ: Я СОБИРАЮСЬ ПРИСЛАТЬ В НОВЫЙ ЧАТ ПОЛНЫЙ ВЫВОД
+ПОСЛЕДНЕГО СКРИПТА EV_EMAIL_CLICK_FIX_HANDOFF.
+Он скачивает pinned runner, проверяет Git blob и bash -n, запускает
+проверки --self-test -> --preflight -> --apply -> --status.
+Если мой следующий текст уже содержит вывод, СНАЧАЛА ПРОАНАЛИЗИРУЙ
+его и только потом дай следующий шаг. Не проси перезапустить без причины.
+
+Ожидаемые индикаторы успешного вывода:
+FINAL_STATUS=PASS и FINAL_RC=0 для всех четырёх фаз;
+BUTTON_CLICK_HANDLER=EXTERNAL_DOCUMENT_DELEGATED;
+ROLLBACK_BACKUP=PRESERVED;
+BROWSER_EMAIL_OTP_E2E=NOT_YET_TESTED;
+WRAPPER_FINAL_STATUS=PASS, WRAPPER_RC=0;
+LAUNCHER_FINAL_STATUS=PASS.
+При FAIL выясни точный этап и SITE_PHP_JS_WRITE=YES/NO; не повторяй
+--apply автоматически и не трогай уже работающий backend.
+
+Если я ещё не успел запустить скрипт, возьми точный одно-блочный
+launcher из раздела 4 документа handoff и дай его. Все серверные
+команды: один copy-paste блок, set -Eeuo pipefail, umask 077, СРАЗУ
+printf '\033[3J\033[2J\033[H', root/host guards, защита секретов,
+один вывод PASS/FAIL, терминал остаётся открытым.
+
+ПОСЛЕ PASS: попроси проверить на РЕАЛЬНОМ аккаунте evrasia.rest
+обновление Ctrl+F5, открытие модального окна, затем отправку письма
+и серверную проверку шестизначного кода. НЕ проси показать сам код,
+cookie, session, email или токен.
+Возможен recent_login_required: сейчас поддержан только недавний
+server-persistent trusted/SMS assurance, TOTP-only ещё требует
+отдельного доказательства на сервере. Не ослабляй безопасность.
+Email-first для сайта/СамЗаберу не включать до успешного E2E.
+
+Не используй синтетические аккаунты. Не меняй production
+auth/TOTP/trust/PIN/API V4/V5 ради исправления JS. Не запускай заново
+Bitrix mail event installer, proof ledger bootstrap или старый deploy.
+Новые версии после текущего checkpoint важнее старых заметок.
