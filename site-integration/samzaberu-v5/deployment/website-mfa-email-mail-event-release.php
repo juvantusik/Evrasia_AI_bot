@@ -424,6 +424,11 @@ EMAIL;
             && !str_contains(self::SUBJECT,'#')
             && strlen(self::TEMPLATE)<2000,
             'safe_russian_subject_and_short_text_body');
+        self::ok(ob_get_level()>0 && !headers_sent(),
+            'PHP_CLI_output_buffer_prevents_headers_sent_before_session');
+        self::ok(str_contains(self::CHECKPOINT,
+            'email-ownership-mail-event-release'),
+            'existing_stage_not_recreated_in_resume_mode');
         echo "EMAIL_SENT=NO\nDATABASE_CONNECTION=NO\n";
     }
 
