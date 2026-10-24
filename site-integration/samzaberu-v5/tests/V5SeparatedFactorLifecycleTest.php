@@ -8,7 +8,8 @@ use Evrasia\Samzaberu\V5\{
     PasswordVerifiedAccount,PendingLoginChallenge,ChallengeKind,
     V5LoginWorkflow,AuthenticationRejected,
     V5PasswordProofPort,V5TrustProofPort,MobileTrustAssessment,
-    V5StrongSessionPort,AuthenticatedV5Session,ConsumedLoginChallenge
+    V5StrongSessionPort,AuthenticatedV5Session,ConsumedLoginChallenge,
+    V5MySqlChallengeHttpPort,V5MySqlChallengeConsumption,V5LockedChallengeNativeFactorPort
 };
 
 const DEVICE = 'sz_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -138,9 +139,23 @@ $sms->fail=false;
 rejectFactor(fn()=>$router->resendSms('bad-id',DEVICE,'ios'),'invalid resend ID denied');
 rejectFactor(fn()=>$router->resendSms(CHALLENGE,DEVICE,'windows'),'invalid platform denied');
 
+// Exercise the actual existing V5 HTTP challenge bridge. This is an
+// unconnected PDO fixture: no query, network, or Bitrix bootstrap can run.
+final class CiNoConnection extends PDO {
+    public function __construct() {}
+}
+final class CiNoNativeFactor implements V5LockedChallengeNativeFactorPort {
+    public function currentFactorEligibleWithLocks(PDO $db,int $userId,ChallengeKind $kind,
+        string $challengeAuthEpoch,?string $verifiedPhoneStamp):bool {return false;}
+    public function consumeNativeTotpWithLocks(PDO $db,int $userId,string $code):bool {return false;}
+}
+$unconnected = new V5MySqlChallengeConsumption(
+    new CiNoConnection(),new CiNoNativeFactor(),str_repeat('x',40),str_repeat('y',40)
+);
+$httpPort = new V5MySqlChallengeHttpPort($unconnected,$router);
 $session = new CiFactorSessions();
 $proof = new CiFactorPassword(true);
-$workflow = new V5LoginWorkflow($proof,new CiFactorTrust(),$router,$session);
+$workflow = new V5LoginWorkflow($proof,new CiFactorTrust(),$httpPort,$session);
 $ticket=$workflow->signIn('login','password',DEVICE,'ios');
 okFactor($ticket instanceof PendingLoginChallenge && $ticket->kind===ChallengeKind::TOTP,
     'existing V5 login workflow chooses native TOTP path');
