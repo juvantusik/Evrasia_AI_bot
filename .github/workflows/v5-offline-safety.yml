@@ -438,6 +438,17 @@ jobs:
               grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/ev-security-warning-wronghost.log
               grep -Fxq 'SIGNIN_WRITE=NO' /tmp/ev-security-warning-wronghost.log
               echo "PASS: source-pinned reversible security card warning move and host guard"
+              echo "=== WEBSITE EMAIL OWNERSHIP AUTH ASSURANCE CONTRACT (FEATURE ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa-email-ownership-assurance-gate.php"
+              php "$ROOT/deployment/website-mfa-email-ownership-assurance-gate.php" --self-test
+              if php "$ROOT/deployment/website-mfa-email-ownership-assurance-gate.php" --inspect > /tmp/ev-email-assurance-wronghost.log 2>&1; then
+                echo "FAIL: email assurance inspection accepted CI host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/ev-email-assurance-wronghost.log
+              grep -Fxq 'SITE_CODE_WRITE=NO' /tmp/ev-email-assurance-wronghost.log
+              grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/ev-email-assurance-wronghost.log
+              echo "PASS: email verification assurance source map fails closed outside production"
               echo "=== WEBSITE MFA ACCOUNT CONFIRM EMAIL UI / WARNING LAYOUT SOURCE CONTRACT ==="
               php -l "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php"
               php "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php" --self-test
