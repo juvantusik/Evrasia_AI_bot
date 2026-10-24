@@ -299,7 +299,14 @@ EMAIL;
         $_SERVER['SERVER_PORT']='443';
         $_SERVER['HTTPS']='on';
         $_SERVER['REQUEST_METHOD']='GET';
-        require_once self::SITE.'/bitrix/modules/main/include/prolog_before.php';
+        self::ok(!headers_sent(),'buffered_CLI_headers_not_sent');
+        $oldLevel=ob_get_level();
+        ob_start();
+        try {
+            require_once self::SITE.'/bitrix/modules/main/include/prolog_before.php';
+        } finally {
+            while(ob_get_level()>$oldLevel)ob_end_clean();
+        }
         self::ok(class_exists('\\CEventType')
             && class_exists('\\CEventMessage'),
             'native_Bitrix_mail_registry_classes_available');
