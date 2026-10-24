@@ -416,6 +416,17 @@ jobs:
               php -l "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               php "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               echo "PASS: compact accessible green/red account email indicator with a single server-owned proof"
+              echo "=== WEBSITE ACCOUNT READABLE SAMZABERU SECURITY WARNING RELOCATION ==="
+              php -l "$ROOT/deployment/website-mfa-security-warning-relocate.php"
+              php "$ROOT/deployment/website-mfa-security-warning-relocate.php" --self-test
+              if php "$ROOT/deployment/website-mfa-security-warning-relocate.php" --preflight > /tmp/ev-security-warning-wronghost.log 2>&1; then
+                echo "FAIL: warning mover accepted CI host as production"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/ev-security-warning-wronghost.log
+              grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/ev-security-warning-wronghost.log
+              grep -Fxq 'SIGNIN_WRITE=NO' /tmp/ev-security-warning-wronghost.log
+              echo "PASS: source-pinned reversible security card warning move and host guard"
               echo "=== WEBSITE MFA ACCOUNT CONFIRM EMAIL UI / WARNING LAYOUT SOURCE CONTRACT ==="
               php -l "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php"
               php "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php" --self-test
