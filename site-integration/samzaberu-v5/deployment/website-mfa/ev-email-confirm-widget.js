@@ -41,7 +41,7 @@
     const title=el("h3","", "Подтверждение почты");
     title.id="ev-email-otp-title";
     Object.assign(title.style,{margin:"0 0 10px",fontSize:"21px",fontWeight:"650"});
-    const expl=el("p","", "Отправим 6-значный код на текущий адрес электронной почты в вашем профиле. Код действует 5 минут.");
+    const expl=el("p","", "Отправляем 6-значный код на адрес электронной почты в вашем профиле. Код действует 5 минут.");
     Object.assign(expl.style,{fontSize:"15px",lineHeight:"1.5",margin:"0 0 18px"});
     const input=el("input");
     input.type="text";
@@ -61,17 +61,19 @@
     Object.assign(status.style,{fontSize:"14px",lineHeight:"1.4",minHeight:"20px"});
     const controls=el("div");
     Object.assign(controls.style,{display:"flex",flexWrap:"wrap",gap:"10px"});
-    const send=el("button","", "Отправить код");
+    const resend=el("button","", "Отправить повторно");
     const verify=el("button","", "Подтвердить");
     const close=el("button","", "Закрыть");
-    for (const button of [send,verify,close]) {
+    for (const button of [verify,resend,close]) {
       button.type="button";
-      Object.assign(button.style,{font:"inherit",padding:"9px 13px",
+      Object.assign(button.style,{font:"inherit",padding:"12px 20px",minHeight:"46px",fontSize:"16px",
         borderRadius:"7px",border:"1px solid #5ba7ad",cursor:"pointer",
         background:"#e9f5f5",color:"#23757b"});
       controls.appendChild(button);
     }
-    verify.hidden=true;
+    verify.hidden=true;resend.hidden=true;
+    Object.assign(verify.style,{background:"#23757b",color:"#fff",fontWeight:"600",flex:"1 1 160px"});
+    Object.assign(resend.style,{background:"#fff"});
     dialog.append(title,expl,input,status,controls);
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
@@ -111,32 +113,36 @@
       if(!body || typeof body.status!=="string")throw new Error("malformed_result");
       return body;
     }
-    send.addEventListener("click",async ()=>{
+    async function sendCode(){
       if(busy)return;
       if(Date.now()<countdownUntil) {
         status.textContent="Повторная отправка доступна через минуту.";
         return;
       }
-      busy=true;send.disabled=true;status.textContent="Отправляем код...";
+      busy=true;resend.disabled=true;status.textContent="Отправляем код...";
       try {
         const r=await post("begin",{});
         if(r.status==="sent" && /^[a-f0-9]{32}$/.test(r.challenge_id||"")) {
           challengeId=r.challenge_id;
           countdownUntil=Date.now()+60000;
-          input.hidden=false;verify.hidden=false;send.textContent="Отправить ещё раз";
+          input.hidden=false;verify.hidden=false;resend.hidden=false;
+          expl.textContent="Введите 6-значный код из письма. Код действует 5 минут.";
           status.textContent="Код отправлен. Проверьте входящие и папку «Спам».";
           input.focus();
         } else if(r.status==="recent_login_required") {
-          status.textContent="Для подтверждения почты выполните повторный вход в личный кабинет.";
+          status.textContent="Нужно дополнительное подтверждение безопасности текущего входа. Код не отправлен.";
         } else {
-          status.textContent="Сейчас не удалось отправить код. Попробуйте позже.";
+          status.textContent="Код не отправлен. Попробуйте ещё раз позже.";
         }
       } catch(e) {
         status.textContent="Связь с сервером недоступна. Попробуйте позже.";
       } finally {
-        busy=false;send.disabled=false;
+        busy=false;resend.disabled=false;
       }
-    });
+    }
+    resend.addEventListener("click",sendCode);
+    // The profile button is the initial send action; no extra send button in dialog.
+    void sendCode();
     verify.addEventListener("click",async ()=>{
       if(busy || !challengeId)return;
       const code=input.value.trim();
