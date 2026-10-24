@@ -1,5 +1,18 @@
 # Evrasia AI Bot — email-first website login challenge с SMS fallback
 
+## 24.10.2026 — native Bitrix mail event+template created, checkpoint manifest-only repair pending
+
+**MOST RECENT operator execution** `EV_MAIL_BUFFERED_RESUME` immutable commit `597fcfff79ac048d23c0a349e8df15db55699bae`: `--self-test PASS_COUNT=6`, `--prepared PASS_COUNT=41`, `--probe PASS_COUNT=43` including `PASS: buffered_CLI_headers_not_sent` and `PASS: native_Bitrix_mail_registry_classes_available`. Thus previous Session.php:143/headers-sent issue **RESOLVED**.
+
+The `--resume` step passed **`new_isolated_Bitrix_mail_event_registered`** and **`new_isolated_Bitrix_mail_message_created`**, then threw **`FAIL_EXCEPTION_CLASS=TypeError, FAIL_EXCEPTION_FILE_BASENAME=ev-email-mail-resume.QwNIqvz9.php, FAIL_EXCEPTION_LINE=407`**, `DATABASE_WRITE=YES`, `--resume PASS_COUNT=46 FINAL_RC=1`, wrapper `WRAPPER_FINAL_STATUS=FAIL WRAPPER_RC=1`. Release checkpoint remains original root-only `PHASE=PREPARED_BEFORE_WRITE`, no template ID recorded; no mail queued/sent and no site code/auth/API/ledger/secret writes.
+
+**Proven exact source cause:** `$manifest=self::CHECKPOINT.'/manifest.txt'` is initialized ONLY in original installer `else` (non-resume path, line 357), while `--resume` skips that branch and reaches `file_put_contents($manifest,$text,LOCK_EX)` at line 407 after both successful native Add calls. The undefined $manifest produces `TypeError`. This is NOT an email event API failure or reason to change Bitrix sessions. **NEVER rerun `--resume` or `--install`; doing so risks duplicate event/template. DO NOT delete checkpoint, DB registry, or old email proof table/secret.**
+
+**FEATURE-ONLY manifest-only recovery** `site-integration/samzaberu-v5/deployment/website-mfa-email-mail-checkpoint-reconcile.php`, immutable source commit `ffe9c489e20da51a8e1f5aceea06630ae6552e88`, Git blob `9481bdaca00a2030d43a9a5513955a588ecb6301`. Strict production root/site/source SHA guards and exclusive lock reusing old mail release lock, read-only PDO queries EXACTLY one matching `b_event_type` (ru) and EXACTLY one active mail template in `b_event_message` linked to s1, correct sender/recipient placeholder/subject/whole body. Requires exact original private manifest (PREPARED state). First writes independent root-only 0600 backup of original manifest, then atomically replaces only `manifest.txt` with original release's expected `TEMPLATE_ID=<actual database ID>` and `PHASE=CREATED_PENDING_STATUS`. `--self-test` / `--preflight` READ ONLY, `--apply` CHECKPOINT MANIFEST ONLY (DATABASE_WRITE=NO, no CEventType::Add/CEventMessage::Add), independent `--status` checks actual DB rows and manifest. Afterwards use immutable original buffered mail installer `--status` (READ ONLY) as second independent post-check. No mail sent. **PRODUCTION RECONCILIATION NOT YET RUN; 1 template and 1 event expected, must be verified in live preflight.**
+
+**Next:** ONE root@evrasia copy/paste wrapper, immediate clear screen, source Git blob verification, offline selftest, --preflight, --apply (checkpoint file only), --status and second original registrar --status. Script fails closed if count/content/site differs and makes NO changes if missing/mismatched. After success move to actual public email OTP POST endpoint, Bitrix mail queue adapter and account badge-inline button; email-first login still OFF.
+
+
 ## 24.10.2026 — Native mail registry was not written; Bitrix CLI Session.php:143 headers-sent cause; guarded RESUME ready
 
 **Latest operator output of recovery diagnostic** immutable `818fdfd28d4f8d103ac47f50b25cccea47bfa6dd`:
