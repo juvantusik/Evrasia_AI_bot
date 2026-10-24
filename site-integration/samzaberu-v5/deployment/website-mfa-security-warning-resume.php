@@ -226,7 +226,7 @@ final class EvWarningSafeResume
         } finally {
             if (is_file($temp)) @unlink($temp);
         }
-        self::must($thisState = self::restoreState() === 'recovered',
+        self::must(self::restoreState() === 'recovered',
             'fixed_restorer_verified');
     }
 
