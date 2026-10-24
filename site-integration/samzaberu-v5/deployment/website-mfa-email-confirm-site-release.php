@@ -110,8 +110,13 @@ final class EvEmailConfirmSiteRelease
         self::known(self::ASSURANCE,self::ASSURANCE_SHA,'existing_server_assurance_source_unchanged');
         $helper=self::ROOT.'/'.self::HELPER;
         $ajax=dirname(self::ROOT.'/'.self::AJAX);
-        self::pass(is_dir($helper)&&!is_link($helper)
-            && realpath($helper)===$helper,'live_helpers_directory_exact');
+        // self::HELPER intentionally ends with '/' for joining filenames.
+        // realpath() strips that slash: compare canonicalized directory paths,
+        // never change the suffix used by existing helper file paths.
+        $canonicalHelper=rtrim($helper,'/');
+        self::pass(is_dir($helper)&&!is_link($canonicalHelper)
+            && realpath($canonicalHelper)===$canonicalHelper,
+            'live_helpers_directory_exact');
         self::pass(is_dir($ajax)&&!is_link($ajax)
             && realpath($ajax)===$ajax,'existing_local_ajax_directory');
         foreach(self::DEPENDENCIES as $name=>$blob)
@@ -484,6 +489,13 @@ final class EvEmailConfirmSiteRelease
             self::pass(preg_match('/^[a-f0-9]{40}$/D',$blob)===1,
                 'immutable_Git_blob_marker_'.$name);
         }
+        $fullHelper=self::ROOT.'/'.self::HELPER;
+        $canonical=rtrim($fullHelper,'/');
+        self::pass(str_ends_with($fullHelper,'/')
+            && str_ends_with($canonical,'website-mfa')
+            && $canonical.'/EmailAccountBadgeBridge.php'
+                ===self::ROOT.'/'.self::HELPER.'EmailAccountBadgeBridge.php',
+            'trailing_slash_canonical_path_does_not_break_helper_names');
         self::pass(self::MAIL_TEMPLATE===94
             && self::MAIL_EVENT==='EVRASIA_WEB_EMAIL_OWNERSHIP',
             'existing_active_mail_event_exact_template_id');
