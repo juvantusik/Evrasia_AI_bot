@@ -438,4 +438,6 @@ EMAIL;
         exit($rc);
     }
 }
+// Keep CLI diagnostic output buffered until Bitrix completes its session initialization.
+ob_start();
 EvEmailOwnershipMailEventRelease::main($argv);
