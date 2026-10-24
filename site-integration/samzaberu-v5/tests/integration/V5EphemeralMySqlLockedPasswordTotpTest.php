@@ -163,6 +163,9 @@ foreach([false,true] as $rebegin){
             'early native COMMIT leaves no owned transaction');
     }
 }
+// Restore the original Bitrix application connection after the isolated
+// hostile-callback fixtures; all following tests still use $f's bridge.
+Application::$current=$f['native'];
 
 $q=$setup->prepare('SELECT challenge_id,kind,password_proven,auth_epoch,sms_sent_count FROM ev_v5_auth_challenges WHERE user_id=81');
 $q->execute(); $issued=$q->fetch(PDO::FETCH_ASSOC);
