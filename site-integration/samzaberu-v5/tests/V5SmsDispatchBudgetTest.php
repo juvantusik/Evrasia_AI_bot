@@ -232,9 +232,49 @@ foreach([0,1000000001] as $quota) {
 foreach([0,2592001] as $seconds) {
     denied(fn()=>new V5SmsLimit(20,$seconds),'invalid quota window');
 }
+// Owner decision after real production outage (500/500 SMS): no
+// mandatory shared daily/hourly blocks until legitimate volumes are measured.
+// Per-account, phone, network and device protections remain mandatory.
+$limits=config()->limits;
+foreach(['global_burst','global_day','global_cost_day'] as $optional) {
+    unset($limits[$optional]);
+}
+$withoutSharedCaps=new V5SmsBudgetPolicy($limits,'RUB');
+yes(count($withoutSharedCaps->limits)===7,
+    'shared global SMS quotas may be omitted without disabling local protections');
+[$noSharedGate,$noSharedContext,$noSharedStore]=fixture(policy:$withoutSharedCaps);
+yes($noSharedGate->reserveAndQueue(41,str_repeat('a',64),$noSharedContext,false)
+    instanceof V5SmsQueuedDelivery,'SMS can be queued without arbitrary shared daily cap');
+yes(count($noSharedStore->last->windows)===7,
+    'all seven per-account/phone/network/device scopes are still reserved');
+yes(array_sum(array_values($noSharedStore->used))===7,
+    'only local quotas charged when all global scopes are absent');
+$noSharedStore->lastSentAt=0;
+yes($noSharedGate->reserveAndQueue(41,str_repeat('e',64),$noSharedContext,true)
+    instanceof V5SmsQueuedDelivery,'resend still uses local quotas');
+$noSharedBefore=$noSharedStore->used;
+denied(fn()=>$noSharedGate->reserveAndQueue(41,str_repeat('c',64),$noSharedContext,true),
+    'per-challenge cooldown still rejects rapid repeat without global cap');
+yes($noSharedStore->used===$noSharedBefore,
+    'rejected local cooldown does not charge quotas');
+
 $limits=config()->limits;
 unset($limits['global_cost_day']);
-denied(fn()=>new V5SmsBudgetPolicy($limits,'RUB'),'missing money budget rejected');
+yes(count((new V5SmsBudgetPolicy($limits,'RUB'))->limits)===9,
+    'optional global cost cap may be omitted independently');
+$limits=config()->limits;
+unset($limits['account_day']);
+denied(fn()=>new V5SmsBudgetPolicy($limits,'RUB'),
+    'missing per-account daily cap rejected despite optional globals');
+
+// Reject underconfigured protection if a required phone, IP or device
+// scope is missing, even though global spend/hour/day limits are optional.
+foreach(['account_burst','phone_burst','phone_day','ip_burst','ip_day','device_burst'] as $missingLocal) {
+    $scopes=config()->limits;
+    unset($scopes[$missingLocal]);
+    denied(fn()=>new V5SmsBudgetPolicy($scopes,'RUB'),
+        'required local SMS throttle cannot be omitted: '.$missingLocal);
+}
 $limits=config()->limits;$limits['unknown']=new V5SmsLimit(20,600);
 denied(fn()=>new V5SmsBudgetPolicy($limits,'RUB'),'extra budget rejected');
 denied(fn()=>new V5SmsBudgetPolicy(config()->limits,'rub'),'invalid config currency rejected');

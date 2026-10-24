@@ -41,3 +41,15 @@
 **Ближайшая точечная проверка:** получить **только метаданные** единственной записи `OnAfterUserLogin` (`TO_MODULE_ID`, `TO_CLASS`, `TO_METHOD`, `TO_PATH`) при наличии колонок; определить тип callback и нужен ли он для V5 бизнес-паритета, не исполнять callback и не читать информацию клиентов. Затем закончить V5-specific readonly site admission/negative-veto implementation. Не повторять сканирование всех 259 файлов и не переизучать `CUser::getPolicy`.
 
 Состояние: `WEBSITE_EMAIL_SMS=ACCEPTED`, `V4=UNCHANGED`, `V5_AUTH_PRODUCTION=OFF`.
+
+## 24.10.2026 — единственный stored OnAfterUserLogin обработчик классифицирован
+
+Следующая read-only `START TRANSACTION READ ONLY` проверка фактической строки `b_module_to_module` (полный PASS/RC=0, без пользовательских записей) определила **ID 718**, `FROM_MODULE_ID=main`, `MESSAGE_ID=OnAfterUserLogin`, `TO_MODULE_ID=sale`, `TO_CLASS=\\Bitrix\\Sale\\Update\\CrmEntityCreatorStepper`, `TO_METHOD=OnAfterUserLogin`, пустой `TO_PATH`. Всего 1 строка; три ранее проверенных pre-login event registration остаются 0.
+
+Опубликованный исходник **Bitrix 25.700.0** `sale/lib/update/crmentitycreatorstepper.php` реализует этот метод как чтение `sale` Option `~ADMIN_PANEL_IS_ENABLED_FOR_<userId>` и сброс значения в `N`, если оно установлено (не проверка пароля/доступа). Источник: https://doc.budagov.ru/crmentitycreatorstepper_8php_source.html (method lines 886–892). **Установленная версия файла на evrasia пока не сверена с этой публикацией.** Это побочный эффект входа в интерфейсе модуля продаж; не следует копировать его как предвходовой V5 auth-veto или искусственно вызывать `CUser::Login` ради этого эффекта.
+
+Разрешение V5 не вытекает из отсутствия зарегистрированных pre-login handlers: runtime `AddEventHandler`, другие события, timed lock/security restriction и ревокация `AUTH_EPOCH` остаются отдельными fail-closed проверками. Нативный V5 AUTH всё ещё OFF.
+
+## 24.10.2026 — владельцем отменены *обязательные* общие SMS-потолки для V5
+
+После реального website outage из-за общего 500/day принято: до измерений 30–60 суток **не делать global/day/hour/cost budgets обязательными для всех пользователей**. В feature-only `V5SmsDispatchBudget` допускается policy с семью обязательными per-account/phone/IP/device scopes и необязательными тремя глобальными. Это не означает отключение антиспама, challenge, проверки номера или отправки; **публичная V5 SMS issuance OFF**, production не изменён. Включать дополнительные global limits только после данных и согласования.

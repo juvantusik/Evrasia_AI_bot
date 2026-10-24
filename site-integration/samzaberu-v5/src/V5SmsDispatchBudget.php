@@ -61,7 +61,13 @@ interface V5SmsPriceCeilingPort
     public function upperBound(V5VerifiedSmsDestination $destination): ?V5SmsPriceCeiling;
 }
 
-/** Every quota, including global cost, must be deliberately configured. */
+/**
+ * Mandatory per-account/phone/network/device scopes remain atomically
+ * enforced. Shared global hour/day/spend caps are opt-in: a previously
+ * uncalibrated daily cap denied real website guests on 2026-10-24.
+ * No default global limits are invented for V5. Owners may explicitly
+ * configure global budgets later using measured legitimate volume.
+ */
 final readonly class V5SmsLimit
 {
     public function __construct(
@@ -86,6 +92,13 @@ final readonly class V5SmsBudgetPolicy
         'global_burst', 'global_day', 'global_cost_day',
     ];
 
+    public const REQUIRED_SCOPES = [
+        'account_burst', 'account_day',
+        'phone_burst', 'phone_day',
+        'ip_burst', 'ip_day',
+        'device_burst',
+    ];
+
     /** @var array<string,V5SmsLimit> */
     public array $limits;
 
@@ -93,11 +106,12 @@ final readonly class V5SmsBudgetPolicy
     public function __construct(array $limits, public string $currency)
     {
         if (preg_match('/\A[A-Z]{3}\z/D', $currency) !== 1
-            || count($limits) !== count(self::SCOPES)
+            || count($limits) < count(self::REQUIRED_SCOPES)
+            || count($limits) > count(self::SCOPES)
         ) {
             throw new InvalidArgumentException('SMS budget configuration incomplete');
         }
-        foreach (self::SCOPES as $scope) {
+        foreach (self::REQUIRED_SCOPES as $scope) {
             if (!isset($limits[$scope]) || !$limits[$scope] instanceof V5SmsLimit) {
                 throw new InvalidArgumentException('Missing SMS budget scope');
             }
@@ -161,7 +175,8 @@ final readonly class V5SmsQueueReservation
         if ($userId < 1 || $destination->userId !== $userId
             || !V5LoginWorkflow::validChallengeId($challengeId)
             || !V5LoginWorkflow::validInstallation($deviceId, $platform)
-            || count($windows) !== count(V5SmsBudgetPolicy::SCOPES)
+            || count($windows) < count(V5SmsBudgetPolicy::REQUIRED_SCOPES)
+            || count($windows) > count(V5SmsBudgetPolicy::SCOPES)
         ) {
             throw new InvalidArgumentException('Invalid SMS queue reservation');
         }
@@ -260,8 +275,7 @@ final readonly class V5SmsDispatchBudget
         ];
 
         $windows = [];
-        foreach (V5SmsBudgetPolicy::SCOPES as $scope) {
-            $limit = $this->policy->limits[$scope];
+        foreach ($this->policy->limits as $scope => $limit) {
             $charge = $scope === 'global_cost_day' ? $price->maxMinorUnits : 1;
             if ($charge > $limit->maxUnits) {
                 throw new AuthenticationRejected('challenge_unavailable');
