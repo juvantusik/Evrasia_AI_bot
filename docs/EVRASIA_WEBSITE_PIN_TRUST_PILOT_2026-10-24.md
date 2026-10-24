@@ -1,3 +1,5 @@
+> **ПИЛОТ ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ / 24.10.2026**: после успешного operator `--apply` и `--status` (`pincode.php` SHA256 `dee875d300403f11ad13fdfafc760fabd52daf39e03f31ee89f847d4dd427510`) пользователь выполнил браузерную проверку и ответил: «да все ок, можем делать для всех». Это пользовательское подтверждение прямого PIN без повторного SMS в обычном доверенном браузере. Более старые слова «PENDING REQUIRED BROWSER E2E» внизу — **историческая запись до подтверждения**, не текущий статус. Дальнейшая задача — [массовый WEBSITE MFA release](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md) с текущим live pilot как исходником; массовый выпуск пока НЕ установлен. Отдельного подтверждения повторного incognito после последнего PIN-патча не записано.
+
 # Evrasia: pilot trusted login works; bonus PIN still sent by SMS (24 Oct 2026)
 
 Canonical public domain: https://evrasia.rest. Internal Bitrix installation path: /home/site_evrasia/web/evrasia.spb.ru/public_html.
