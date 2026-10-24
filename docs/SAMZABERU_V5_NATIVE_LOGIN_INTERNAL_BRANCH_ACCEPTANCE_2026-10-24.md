@@ -24,3 +24,20 @@
 **NEXT:** фактический список хранимых в Bitrix обработчиков `OnBeforeUserLogin`, `OnBeforeUserAuthorize`, `OnUserLoginExternal`, `OnAfterUserLogin` и артефактов текущей блокировки. Для БД использовать только SELECT по известным таблицам/metadata и обезличенный вывод; не вызывать CUser/LoginInternal. После подтверждения реальных источников реализовать read-only native site admission port и регрессионные тесты. Отсутствие обработчиков в одном каталоге не является разрешением входа.
 
 `V5_AUTH_PRODUCTION=OFF`; `V4_CHANGED=NO`; `WEBSITE_EMAIL_SMS_ALREADY_ACCEPTED=YES`; `MOBILE_PUBLIC_HOST=https://evrasia.rest`.
+
+## Подтверждение постоянных регистраций login events — 24.10.2026
+
+Оператор выполнил реальный **только читающий** запрос к Bitrix `eurasia_new.b_module_to_module`. Таблица существует, обязательные поля `FROM_MODULE_ID` и `MESSAGE_ID` присутствуют, `START TRANSACTION READ ONLY` / `COMMIT` выполнены без записи. `FINAL_STATUS=PASS`, `FINAL_RC=0`, `DATABASE_WRITE=NO`.
+
+В `FROM_MODULE_ID='main'` для четырёх известных событий:
+- `OnBeforeUserLogin`: 0 зарегистрированных.
+- `OnBeforeUserAuthorize`: 0 зарегистрированных.
+- `OnUserLoginExternal`: 0 зарегистрированных.
+- `OnAfterUserLogin`: **1 зарегистрированный** (единственный).
+- `STORED_LOGIN_HANDLERS=1`; `DYNAMIC_RUNTIME_HANDLERS=NOT_ATTESTED`.
+
+**Важно:** позднее событие `OnAfterUserLogin` не доказывает наличие предвходового veto, но его единственный зарегистрированный callback ещё не классифицирован по бизнес-последствиям. Влияние обработчиков, назначенных динамически в runtime, иных событий авторизации или конфигурации модулей **не доказано**. Нельзя автоматически выдавать `siteLoginRulesClear=true` / `temporaryLockClear=true` / `securityRestrictionClear=true` только из отсутствия трёх записей. `V5CurrentLoginControlsPort` остаётся fail-closed.
+
+**Ближайшая точечная проверка:** получить **только метаданные** единственной записи `OnAfterUserLogin` (`TO_MODULE_ID`, `TO_CLASS`, `TO_METHOD`, `TO_PATH`) при наличии колонок; определить тип callback и нужен ли он для V5 бизнес-паритета, не исполнять callback и не читать информацию клиентов. Затем закончить V5-specific readonly site admission/negative-veto implementation. Не повторять сканирование всех 259 файлов и не переизучать `CUser::getPolicy`.
+
+Состояние: `WEBSITE_EMAIL_SMS=ACCEPTED`, `V4=UNCHANGED`, `V5_AUTH_PRODUCTION=OFF`.
