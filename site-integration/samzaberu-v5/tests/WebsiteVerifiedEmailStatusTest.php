@@ -25,9 +25,10 @@ try {
         'revoked' => false,
         'verified_at' => $now - 60,
         'email_changed_at' => $now - 180,
+        'profile_updated_at' => $now - 180,
         'current_email_mac' => $mac,
     ];
-    $good = V::evaluate(77, $email, $record, $secret, $now);
+    $good = V::evaluate(77, $email, $record, $secret, $now, $now - 180);
     $check($good['verified'] === true, 'explicit_email_otp_proof_verified');
     $check($good['login_email_allowed'] === true, 'same_proof_eligible_for_login');
     $check($good['icon'] === 'check-circle'
@@ -35,10 +36,11 @@ try {
         'green_check_and_accessible_label');
 
     $bad = static function (?array $proof, string $address = 'guest@example.com',
-        int $id = 77, string $key = '', int $time = 1800000000
+        int $id = 77, string $key = '', int $time = 1800000000,
+        int $profileStamp = 1799999820
     ) use ($check, $secret): void {
         $status = V::evaluate($id, $address, $proof,
-            $key === '' ? $secret : $key, $time);
+            $key === '' ? $secret : $key, $time, $profileStamp);
         $check($status['verified'] === false, 'no_unsafe_verified_indicator');
         $check($status['login_email_allowed'] === false,
             'no_unproven_email_as_second_factor');
@@ -71,6 +73,12 @@ try {
     $bad($record, 'invalid-address');
     $bad($record, '');
     $bad($record, $email, 0);
+    $bad($record, $email, 77, '', $now, $now - 20);
+    $bad($record, $email, 77, '', $now, 0);
+    $bad(array_replace($record, ['profile_updated_at' => $now - 20]), $email);
+    $bad(array_replace($record, ['profile_updated_at' => null]), $email);
+    $check(V::evaluate(77, $email, $record, $secret, $now)['verified'] === false,
+        'missing_current_profile_timestamp_fails_closed');
 
     $check(V::emailMac(77, $email, 'short') === null,
         'missing_site_secret_fail_closed');
