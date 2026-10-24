@@ -25,6 +25,24 @@
 - `site-integration/samzaberu-v5/tests/WebsiteEmailLoginChallengeTest.php`, `WebsiteEmailSendBudgetTest.php`: source-only тесты позитивных/негативных сценариев, cross-user, cross-session, email change, expiry, replay, attempt limit, SMS transition, SMTP failure, Redis error, quota namespace isolation.
 - `site-integration/samzaberu-v5/deployment/website-mfa-email-first-source-audit.php`: source-only read-only mapper **уже установленного** signin/PIN SHA, frontend signin JS/template, signup confirmation/email transport markers. Режим `--inspect` только root@evrasia; без Bitrix bootstrap/DB/SMTP/Redis/web writes, выводит только PHP-token-masked фрагменты и SHA. `--self-test` offline.
 
+## 24.10.2026 — field provenance source + UI anchors: production PASS
+
+Оператор выполнил `website-mfa-email-field-provenance-readonly.php` из exact GitHub commit `9f0124c89ee98028223db1a01afe66dfcb9e2183`, blob `105b6cbdcd6a64f4bd9d6347bc576dc266cd7958`. `--self-test` 4/4 PASS, live `--inspect` 15/15 PASS, wrapper `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`. `DATABASE_CONNECTION=YES DATABASE_WRITE=NO PRODUCTION_CODE_WRITE=NO`. Existing WEBSITE MFA unmodified.
+
+**Доказанная структура:** `UF_CHECK_EMAIL_DATE` `datetime`, `MULTIPLE=NO`, `MANDATORY=NO`; `b_uts_user` `FIELD_STORAGE_ROWS=1,460,279`, `FIELD_NONEMPTY_ROWS=287,227`. Эти даты НЕ являются надёжным green proof без анализа writers и текущего EMAIL. При source inventory 217 approved files найдено **ровно 7 упоминаний**, не truncated:
+- `local/components/eurasia/account/component.php:32` SHA `bb32a461d3fb77cc099c90df24d24a28091e2e4c471764d1a348b4a1f45f163a`;
+- `local/components/eurasia/signup/class.php:193` SHA `1389951029525c046a00206397c2bc45ec14a0b5acaccbe75686b63fb2b83b84`;
+- `local/components/eurasia/signup/component.php:122` SHA `b448973a336150a6db2703a0c43fbf3686343320255480dc05fcc20d0c14dd50`;
+- `local/php_interface/Controllers/V4/Profile.php:210` SHA `fa82a243315bb14189b91421e0abc8a7841f4c8fb373124bccb6c2358639b603`;
+- `local/php_interface/Controllers/V4/Auth.php:358` SHA `72476ff60d7c14242cf93b191e41e50aa160f42ad85bb6395348686e32ae9362`;
+- `local/php_interface/Controllers/UserController.php:601,632` SHA `dcb25e73c75e4ae602faed609040895030fe115262a107d79d78c8c23f53d8a5`.
+
+**Осторожное наблюдение:** предыдущий signup audit показывал строку 193 как `[STRING] => date(...)`, а новый field scanner однозначно связал 193 с `UF_CHECK_EMAIL_DATE`: поле может заполняться уже в регистрации, в которой `email_confirmation` option = N. Это **серьёзный сигнал, что дата не является proof владения**. Для итогового вывода создан **один финальный targeted** `deployment/website-mfa-email-writer-logic-readonly.php`: только exact lines ± 11/12 всех 7 упоминаний, PHP literal/comments masked, а также bounded HTML-tag shapes для account email. Не повторять DB root/socket и полный search.
+
+**Фактические шаблоны ЛК:** `account/main/template.php` SHA `42e4ae2bae706f5c63b37d1029621d2a6a9c924fef2a34560be0a369f5e23b24` (installed release manifest confirms), `account/cached/template.php` SHA `6c9c92bc9ea2b4653a2882909137fa6f0007874232e0bee5414ed54a0ba35ecd`. Exact UI lines: main ~113–130, 626–652, 708–753; cached ~48–65, 264–290, 342–343. Никаких UI изменений ещё нет. `VerifiedEmailStatus` и `EmailVerificationBadge` подготовлены, green только при надёжном proof current email.
+
+**Оператор просит `printf '\033[3J\033[2J\033[H'` сразу после `set -Eeuo pipefail` и `umask 077` во всех новых SSH wrappers.** Если новый source audit подтверждает, что дата ставится до подтверждения почты, использовать отдельный email ownership proof; 287k legacy дат **не мигрировать автоматически**. Затем безопасно подготовить patch для индикатора и email-first + SMS fallback с rollback, без synthetic accounts.
+
 ### Следующее проверяемое действие — field provenance, минимальный email-бейдж
 
 **GitHub CI VERIFIED:** [#40073794915](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40073794915) `completed/success` для field provenance audit, `VerifiedEmailStatus`, `EmailVerificationBadge` и offline suites; pinned source commit `9f0124c89ee98028223db1a01afe66dfcb9e2183` Git blob `105b6cbdcd6a64f4bd9d6347bc576dc266cd7958`. Production inspection **ещё не выполнена**. Один следующий wrapper обязан очищать экран первой командой и не изменять сайт.
