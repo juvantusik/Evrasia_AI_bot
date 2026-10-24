@@ -20,7 +20,10 @@ final class VerifiedEmailStatus
 
     /**
      * @param array<string,mixed>|null $proof Trusted, DB-backed ownership record
-     *   user_id, current_email_mac, verified_at, email_changed_at, source, revoked
+     *   user_id, current_email_mac, verified_at, email_changed_at, source, revoked,
+     *   profile_updated_at: exact last Bitrix profile update timestamp of
+     *   b_user.TIMESTAMP_X captured at the completion of verified OTP.
+     *   Any subsequent profile change invalidates this proof conservatively.
      * @return array{verified:bool,login_email_allowed:bool,icon:string,label:string,css_class:string}
      */
     public static function evaluate(
@@ -28,7 +31,8 @@ final class VerifiedEmailStatus
         string $currentEmail,
         ?array $proof,
         string $siteSecret,
-        ?int $now = null
+        ?int $now = null,
+        ?int $currentProfileUpdatedAt = null
     ): array {
         $unverified = [
             'verified' => false,
@@ -46,6 +50,9 @@ final class VerifiedEmailStatus
             || filter_var($canonical, FILTER_VALIDATE_EMAIL) === false
             || strlen($siteSecret) < 32
             || $clock <= 0
+            || !is_int($currentProfileUpdatedAt)
+            || $currentProfileUpdatedAt <= 0
+            || $currentProfileUpdatedAt > $clock
             || !is_array($proof)) {
             return $unverified;
         }
@@ -55,6 +62,9 @@ final class VerifiedEmailStatus
             || ($proof['revoked'] ?? null) !== false
             || !is_int($proof['verified_at'] ?? null)
             || !is_int($proof['email_changed_at'] ?? null)
+            || !is_int($proof['profile_updated_at'] ?? null)
+            || $proof['profile_updated_at'] !== $currentProfileUpdatedAt
+            || $proof['email_changed_at'] !== $currentProfileUpdatedAt
             || $proof['verified_at'] <= 0
             || $proof['verified_at'] > $clock
             || $proof['email_changed_at'] > $proof['verified_at']
