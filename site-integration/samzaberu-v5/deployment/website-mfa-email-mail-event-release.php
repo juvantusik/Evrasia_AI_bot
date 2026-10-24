@@ -333,8 +333,11 @@ EMAIL;
             'native_Bitrix_mail_registry_classes_available');
     }
 
-    private static function install(\PDO $pdo):void
+    private static function install(\PDO $pdo,bool $resume=false):void
     {
+        if($resume) {
+            $site=self::prepared($pdo);
+        } else {
         $counts=self::currentCounts($pdo);
         if($counts['type']>0||$counts['template']>0
             || file_exists(self::CHECKPOINT)) {
@@ -358,7 +361,12 @@ EMAIL;
             && chmod($manifest,0600),
             'initial_no_secret_checkpoint_manifest');
 
+        }
         self::guardedBitrix();
+        // Recheck immediately before the first event registry write.
+        $unchanged=self::currentCounts($pdo);
+        self::ok($unchanged['type']===0&&$unchanged['template']===0,
+            'event_and_template_still_absent_before_native_add');
         // No other CEventType / CEventMessage mutation in this script.
         $event=new \CEventType;
         $res=$event->Add([
