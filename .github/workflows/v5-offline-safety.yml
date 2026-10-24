@@ -431,6 +431,17 @@ jobs:
               grep -Fq "FINAL_STATUS=FAIL" /tmp/web-mfa-runtime-wrong-host.log
               grep -Fq "SITE_CODE_WRITE=NO" /tmp/web-mfa-runtime-wrong-host.log
               echo "PASS: restricted Redis quota runtime probe rejects wrong host"
+              echo "=== WEBSITE MFA EXTERNAL BROWSER CLIENT-IP EVIDENCE PROBE ==="
+              bash -n "$ROOT/deployment/website-mfa-external-client-ip-browser-probe.sh"
+              bash "$ROOT/deployment/website-mfa-external-client-ip-browser-probe.sh" --self-test
+              if bash "$ROOT/deployment/website-mfa-external-client-ip-browser-probe.sh" --probe > /tmp/website-mfa-external-ip-wronghost.log 2>&1; then
+                echo "FAIL: external browser proof accepted GitHub CI instead of production"
+                exit 1
+              fi
+              grep -Fxq 'TEMPORARY_SITE_PHP_CREATED=NO' /tmp/website-mfa-external-ip-wronghost.log
+              grep -Fxq 'SITE_EXISTING_FILES_CHANGED=NO' /tmp/website-mfa-external-ip-wronghost.log
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/website-mfa-external-ip-wronghost.log
+              echo "PASS: external browser client-IP probe PHP fixture, Bash lint and wrong-host guard"
               echo "=== WEBSITE MFA CANONICAL PHP REMOTE IP SPOOF PROBE ==="
               bash -n "$ROOT/deployment/website-mfa-remote-addr-probe.sh"
               bash "$ROOT/deployment/website-mfa-remote-addr-probe.sh" --self-test
