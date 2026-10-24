@@ -318,6 +318,7 @@ final class EvEmailConfirmSiteRelease
                 throw new \RuntimeException('target_owner_mode_mismatch');
             if(!rename($temp,$target))
                 throw new \RuntimeException('atomic_install_rename_failed');
+            self::$write=true;
         } finally {
             if(is_file($temp))@unlink($temp);
         }
