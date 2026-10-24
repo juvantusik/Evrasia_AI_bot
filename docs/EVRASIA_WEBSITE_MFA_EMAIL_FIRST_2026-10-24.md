@@ -1,5 +1,26 @@
 # Evrasia AI Bot — email-first website login challenge с SMS fallback
 
+## 24 октября 2026 — окончательный вывод по UF_CHECK_EMAIL_DATE: НЕ ПРИЗНАК ПОДТВЕРЖДЕНИЯ
+
+**Фактический runtime operator result:** `EV_EMAIL_WRITER_CONTEXT` (immutable source `79617e7f7fcf1dba4a34b894798005911d0c4daf`) — `--self-test` 5/5 PASS, `--inspect` 12/12 PASS; wrapper `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`. `DATABASE_CONNECTION=NO`, `SITE_WRITE=NO`, `V4/V5_WRITE=NO`, никаких писем/SMS.
+
+По **конкретным проверенным участкам кода**:
+- `local/components/eurasia/signup/class.php:193`: `'UF_CHECK_EMAIL_DATE' => date(...)` **при самой регистрации**, без подтверждения адреса.
+- `local/components/eurasia/signup/component.php:122`: аналогично при регистрации.
+- `local/php_interface/Controllers/V4/Auth.php:358`: аналогично при создании пользователя через V4.
+- `local/php_interface/Controllers/UserController.php:632`: метод `hitEmail()` присваивает `new DateTime()` сразу после `checkAuth()`, **без проверки кода из почты**.
+- `local/php_interface/Controllers/V4/Profile.php:210` и `local/php_interface/Controllers/UserController.php:601`: имеются отдельные пути обновления `EMAIL` вместе с датой **после EmailConfirmationTable**, это не меняет вывод о недостоверности поля в целом.
+- `account/component.php:32` только переносит его в `$arResult` для UI.
+
+**Решение:** `UF_CHECK_EMAIL_DATE` (287 227 заполненных строк) не мигрировать, не переиспользовать для `verified`, email login OTP или зелёной галочки. Native registration `new_user_registration_email_confirmation=N`; даже `ACTIVE=Y`/`CONFIRM_CODE=''` недостаточно. Истинный status email требует отдельного доказательства одноразового кода, привязанного к **текущему** адресу и USER_ID.
+
+**UI:** main `local/templates/eurasia/components/eurasia/account/main/template.php` SHA `42e4ae2bae706f5c63b37d1029621d2a6a9c924fef2a34560be0a369f5e23b24`: email-отображение около line 130; cached `.../account/cached/template.php` SHA `6c9c92bc9ea2b4653a2882909137fa6f0007874232e0bee5414ed54a0ba35ecd`: line 65. Зелёный check/красный cross оформлены через `EmailVerificationBadge.php`, **но пока не установлены в Bitrix**.
+
+**Новая реализация в feature-only:** `EmailOwnershipEnrollment.php` разрешает регистрацию подтверждения email ТОЛЬКО после **недавнего (до 10 минут)** server-verified login с SMS, native TOTP или TrustedDevice; генерирует 6-значный код, хранит `password_hash` в PHP session, TTL 5 минут, максимум 3 попытки, одноразовость и exact binding USER_ID + HMAC(current email) + PHP session + Bitrix `b_user.TIMESTAMP_X` + assurance method/timestamp. `EmailOwnershipProofStore.php` содержит будущий отдельный ledger `ev_web_email_ownership_proof`: без сырого адреса, только HMAC и time/stamp, root-only secret HMAC; запись после подтверждения с lock `SELECT b_user FOR UPDATE` и проверкой email/profile stamp в одной транзакции, при несовпадении откат. `VerifiedEmailStatus.php` теперь требует **точный CURRENT Bitrix profile TIMESTAMP_X**, fail-closed при недоступности или изменениях (строгое поведение, может потребовать повторного подтверждения при изменениях других полей профиля). `EmailLoginChallenge.php` используется только для аккаунтов с новым проверенным proof; остальные продолжают действующий SMS challenge.
+
+**Важное:** storage table, HMAC secret, web actions, mail event and account/signin templates **НЕ установлены**. `EMAIL_FIRST_PRODUCTION=OFF`, `EMAIL_BADGE_PRODUCTION=OFF`; `MASS_WEBSITE_MFA=INSTALLED` и работает по прежней схеме. Следующий этап — source-pinned integration / backup / миграция с проверкой схемы и rollback, затем браузерное E2E на реальном входе без синтетических аккаунтов. Не включать новую auth ветку только из-за offline CI.
+
+
 **Дата:** 24 октября 2026. **Статус:** одобрено пользователем («делаем»), базовый security code и unit tests подготовлены **в GitHub feature**, но **НЕ установлены** на production. WEBSITE MFA ALL-USERS уже физически установлен ранее и остаётся без изменений (оператор `--apply` и `--status` PASS, release `/root/ev-web-mfa-release-packages/all-users-website-mfa-20261024-064446-b03bafa5`). Не повторять rollout и не заменять действующую авторизацию до готовности email интеграции.
 
 ## Согласованная бизнес-логика
