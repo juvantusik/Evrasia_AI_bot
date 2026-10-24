@@ -1,0 +1,15 @@
+Продолжаем Evrasia AI Bot, сервер Bitrix evrasia, публичный сайт https://evrasia.rest, репозиторий juvantusik/Evrasia_AI_bot, ветка feature/samzaberu-api-v5-auth-contract.
+
+СНАЧАЛА прочитай docs/EVRASIA_WEBSITE_EMAIL_FIRST_SMS_PRODUCTION_ACCEPTANCE_2026-10-24.md и docs/EVRASIA_WEBSITE_MFA_EMAIL_FIRST_2026-10-24.md, проверь актуальный HEAD GitHub.
+
+ФАКТ 24.10.2026: работающий email-first login с кодом из письма подтверждён мной. После R7L исправлены шрифты/стили. Ручной fallback SMS выдавал SMS_SEND_ERROR. Проанализировано: GlobalSmsBudget::reserve заблокировал отправку до CSms::send(); дневной Redis бюджет достиг 500/500, Redis и Lua работали. По моему решению общие искусственные caps 100/час, 500/сутки и 100/IP/час сняты из signin/class.php и totp.enrollment/class.php одним guarded R7S production patch; operator FINAL_STATUS=PASS FINAL_RC=0, PHP lint PASS, индивидуальные лимиты, SMS challenge и все MFA сохраняются. После этого я проверил реальный SMS-вход и подтвердил «даааа все работает!».
+
+ВАЖНО: НЕ ВОЗВРАЩАТЬ ОБЩИЕ БЛОКИРУЮЩИЕ SMS ЛИМИТЫ и не сбрасывать Redis счётчики. Позже изучим фактический средний/пиковый объём отправок за 30–60 дней и примем отдельное решение о лимитах. Не трогать работающий email login, PIN, trusted device, TOTP, API V4; API V5 mobile остается отдельным проектом.
+
+Последний rollback двух PHP на production:
+ /root/ev-email-first-integration.Q6e5qTqC/sms-global-caps-remove.0y6WFlnN/rollback.sh
+ НЕ ЗАПУСКАТЬ его без критической причины — он восстановит блокирующий глобальный бюджет. R7O diagnostic UI callback остался в script.js.
+
+GitHub публичный: документация сохранена, но полный live R7K/R7L/R7O/R7S код ещё НЕ доказан синхронизированным в GitHub. Следующий технический шаг при необходимости — без записи снять live SHA256 и сравнить source/manifest, подготовить безопасный reviewed source-only PR без secrets. Никогда не делать git add -A из корня production и не публиковать HMAC секреты/токены/конфиги/базу. Для root@evrasia давай только полные готовые к вставке Bash heredoc со сбросом терминала в начале, чётким PASS/FAIL, backup/rollback, минимальным числом диагностик.
+
+Текущая задача по моему запросу: сохранить этот подтверждённый production checkpoint в GitHub и документации; не возвращаться к старым шагам, в которых email-first был OFF и SMS fallback не работал.
