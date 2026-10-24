@@ -367,6 +367,17 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-website-wronghost.log
               grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/v5-website-wronghost.log
               echo "PASS: new rollout preparer is denied on GitHub Actions and has no install mode"
+              echo "=== WEBSITE MFA CONFIRMED EMAIL DB AUDIT (FEATURE-ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa-email-proof-live-readonly.php"
+              php "$ROOT/deployment/website-mfa-email-proof-live-readonly.php" --self-test
+              if php "$ROOT/deployment/website-mfa-email-proof-live-readonly.php" --inspect > /tmp/web-mfa-email-db-guard.log 2>&1; then
+                echo "FAIL: email proof mapper accepted CI host as production"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/web-mfa-email-db-guard.log
+              grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/web-mfa-email-db-guard.log
+              grep -Fxq 'PRODUCTION_SITE_CODE_WRITE=NO' /tmp/web-mfa-email-db-guard.log
+              echo "PASS: configured Bitrix app-DB read-only mapper fails closed outside production"
               echo "=== WEBSITE MFA EMAIL-FIRST LIVE SOURCE MAPPER (OFFLINE GUARDS) ==="
               php -l "$ROOT/deployment/website-mfa-email-first-source-audit.php"
               php "$ROOT/deployment/website-mfa-email-first-source-audit.php" --self-test
