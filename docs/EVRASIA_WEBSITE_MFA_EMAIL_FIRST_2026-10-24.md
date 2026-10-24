@@ -1,4 +1,10 @@
 # Evrasia AI Bot — email-first website login challenge с SMS fallback
+## 24.10.2026 — PRODUCTION EMPTY-LEDGER PREFLIGHT CONFIRMED PASS
+
+Оператор повторил ТОЛЬКО corrected source bootstrap из immutable commit `f126f583654e0b03ef26e90d00cd4945be97e975`, Git blob `bcd29ed3876a160ebcf0fe1c93683e9d2a74daeb`: `--self-test PASS_COUNT=8 FINAL_RC=0` (ON UPDATE timestamp разрешён, отдельные UPDATE/DROP, wrong table/engine запрещены), **live `--preflight PASS_COUNT=21 FINAL_RC=0`**, wrapper `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`. Подтверждены native `b_user.ID/EMAIL/TIMESTAMP_X`, точный Bitrix DB `eurasia_new`, source-pinned equal staging DDL, **отсутствует `ev_web_email_ownership_proof` и `email-ownership-secret.php`, отсутствует bootstrap checkpoint**. `DATABASE_WRITE=NO`, `SECRET_FILE_WRITE=NO`, `SOURCE_CODE_WRITE=NO`, email/SMS=NO. **Не повторять старые audit/DDL fix; текущий следующий этап — защищённый --apply с проверкой после установки**.
+
+Future bootstrap writes only: new EMPTY `ev_web_email_ownership_proof` InnoDB table and site-owner-only HMAC `email-ownership-secret.php` (mode `0600`) under existing website-mfa directory, root-only release manifest. Existing `main` SHA `cc0bb0e2754704feb29d7c7db6f9064c340b274ada21852e18ed1a99db7723bb`, signin SHA `e1fc59637bfd46c3cd0a9e56c3736121b97ca8cd993b9776d46c86988e10233a`, V4/V5/PIN/trust untouched. Since a new key will be visible to passive account badge bridge, account view will start querying the separate empty ledger, still showing RED (there is no verified proof yet). This must be monitored in real browser, cannot call button installed. Production email ownership OTP send action, security challenge, Bitrix mail template, and email-first login are still OFF. No existing email/date migration.
+
 
 ## 24.10.2026 — DB proof bootstrap PRE-FLIGHT failed safely: SQL guard false-positive FIXED feature-only
 
