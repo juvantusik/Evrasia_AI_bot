@@ -2,6 +2,10 @@
 
 ## 24.10.2026 — functional «Подтвердить почту»: assurance gate + isolated proof bootstrap FEATURE-ONLY
 
+**Offline CI completed SUCCESS:** [#40077358990](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40077358990) auth assurance live-source inspector PHP lint, self-test and wrong-host refusal. Immutable inspector commit `f4247aa709587c8df1cd99905227ce0336cf632f`, Git blob `eb1c25babd87421f74a34a1623bbf0d6663a595e`. [#40077481518](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40077481518) SUCCESS for isolated verified email proof bootstrap PHP lint, self-test and wrong-host refusal; immutable bootstrap commit `65a345ac9799eca2ce0867de6f682322665650e9`, Git blob `786a0fcd4dcc6b67e5d2b5d8b16b7ac29e944450`. These tests performed **NO production DB/secret/migration/app writes**. Need one next root@evrasia wrapper with a **combined** targeted gate `--inspect` and bootstrap `--preflight` only, both pinned exact commits + Git blobs, BEFORE deciding on actual `--apply` schema write. No historical email migration.
+
+
+
 After operator's **successful** production warning relocation (`--apply 34/34 PASS`, independent `--status 19/19 PASS`), new feature-only work has been committed:
 
 - `site-integration/samzaberu-v5/deployment/website-mfa-email-ownership-assurance-gate.php`: exact source SHA-pinned read-only last required contract check of `AuthAssuranceService.php` (`e2d4b8f8351977f694738098b5655794b897f8cd1dcbdaeb580660db05dda1f9`), `TrustedDeviceWebService.php` (`28a28d7e92cd54512a45a477069735af182e5ce9b2142343fa881eb236a92b45`), account component and main JS, live main account template **new SHA `cc0bb0e2754704feb29d7c7db6f9064c340b274ada21852e18ed1a99db7723bb`** and unchanged signin. Shows sanitized methods/snapshot/timestamp markers only, never secret/PII, DB access or real sessions; host fails closed outside `root@evrasia`.
