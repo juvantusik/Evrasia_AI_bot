@@ -438,6 +438,15 @@ EMAIL;
                 self::rootGuards();
                 $pdo=self::pdo();
                 if($mode==='--preflight')self::preflight($pdo);
+                elseif($mode==='--prepared')self::prepared($pdo);
+                elseif($mode==='--probe') {
+                    self::prepared($pdo);
+                    self::guardedBitrix();
+                    echo "BITRIX_NATIVE_MAIL_API=AVAILABLE_WITH_BUFFERED_OUTPUT\n";
+                    echo "EVENT_TYPE_ADD_CALLED=NO\n";
+                    echo "MAIL_TEMPLATE_ADD_CALLED=NO\n";
+                }
+                elseif($mode==='--resume')self::install($pdo,true);
                 elseif($mode==='--install')self::install($pdo);
                 elseif($mode==='--status') {
                     self::siteAndMailTables($pdo);
@@ -452,7 +461,7 @@ EMAIL;
             }
             echo "FAIL: ".$tag."\n";
             $rc=1;
-            if($mode==='--install'&&self::$dbWrite)
+            if(($mode==='--install'||$mode==='--resume')&&self::$dbWrite)
                 echo "PARTIAL_MAIL_REGISTRY=PRESERVE_CHECKPOINT_MANUAL_REVIEW\n";
         }
         echo "\n=== 5. RESULT ===\n";
