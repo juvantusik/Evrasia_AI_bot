@@ -301,6 +301,7 @@ EMAIL;
                 && chmod($temp,0600)
                 && hash_equals($final,(string)file_get_contents($temp)),
                 'exact_new_manifest_staged_private');
+            clearstatcache(true,$temp);
             self::ok(fileowner($temp)===0&&(fileperms($temp)&0777)===0600,
                 'temporary_manifest_root_0600');
             self::ok(rename($temp,self::MANIFEST),
