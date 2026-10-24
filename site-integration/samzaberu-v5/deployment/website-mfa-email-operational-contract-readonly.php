@@ -145,6 +145,15 @@ final class EvEmailOperationalContractReadonly
         return $pdo;
     }
 
+    private static function siteRowsSql():string
+    {
+        // Native Bitrix SiteTable reads b_lang. No dynamic SQL identifiers.
+        return "SELECT LID,ACTIVE,DEF,SERVER_NAME
+                FROM b_lang
+                WHERE ACTIVE='Y' AND (SERVER_NAME='evrasia.rest' OR DEF='Y')
+                ORDER BY DEF DESC,LID";
+    }
+
     private static function mailAndSite(PDO $pdo):void
     {
         echo "=== 3. SITE AND MAIL REGISTRATION READ ONLY ===\n";
@@ -156,12 +165,7 @@ final class EvEmailOperationalContractReadonly
             $q->execute([$table]);
             self::check((int)$q->fetchColumn()===1,'table_exists_'.$table);
         }
-        $rows=$pdo->query(
-            "SELECT LID,ACTIVE,DEF,SERVER_NAME
-             FROM b_lang
-             WHERE ACTIVE='Y' AND (SERVER_NAME='evrasia.rest' OR DEF='Y')
-             ORDER BY DEF DESC,LID"
-        )->fetchAll();
+        $rows=$pdo->query(self::siteRowsSql())->fetchAll();
         self::check(is_array($rows)&&count($rows)>=1&&count($rows)<=15,
             'bounded_active_site_records');
         foreach($rows as $site) {
@@ -248,11 +252,12 @@ final class EvEmailOperationalContractReadonly
         self::check(self::SITE_TABLE==='b_lang'
             && !str_contains(self::SITE_TABLE,'b_site'),
             'Bitrix_SiteTable_maps_to_b_lang_not_b_site');
-        $source=file_get_contents(__FILE__);
-        self::check(is_string($source)
-            && str_contains($source,"FROM b_lang")
-            && str_contains($source,"$"."tables=[self::SITE_TABLE")
-            && !str_contains($source,"FROM b_site"),
+        $sql=self::siteRowsSql();
+        self::check(str_contains($sql, "FROM ".self::SITE_TABLE)
+            && !str_contains($sql, "FROM "."b_site")
+            && str_contains($sql,"SERVER_NAME='evrasia.rest'")
+            && str_contains($sql,"DEF='Y'")
+            && !str_contains($sql,';'),
             'production_mail_site_query_pinned_to_b_lang');
 
         // Regression fixture must execute the same method displaying code
