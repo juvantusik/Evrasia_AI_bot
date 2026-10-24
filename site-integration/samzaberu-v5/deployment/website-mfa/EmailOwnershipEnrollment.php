@@ -10,6 +10,9 @@ namespace Evrasia\WebMfa;
  * server-verified SMS, native TOTP, or current Trusted Device and have RECENT
  * server assurance; otherwise never enroll a new second-factor email.
  *
+ * The 'persistent' method is accepted only if the real Bitrix server adapter
+ * proved that the CURRENT stored-auth ID has an active trusted/SMS assurance;
+ * the caller must additionally bind it to its own recent stored-auth time.
  * This pure service never bootstraps Bitrix, writes SQL, sends SMS or authorizes.
  * The caller MUST source all assurance values from trusted server state, read
  * the current user's live Bitrix EMAIL and TIMESTAMP_X on BOTH actions, use
@@ -35,7 +38,7 @@ final class EmailOwnershipEnrollment
     private static function assuranceValid(
         string $kind, int $proofAt, int $now
     ): bool {
-        return in_array($kind, ['sms','totp','trusted'], true)
+        return in_array($kind, ['sms','totp','trusted','persistent'], true)
             && $proofAt > 0 && $proofAt <= $now
             && $now - $proofAt <= self::MAX_ASSURANCE_AGE_SECONDS;
     }
