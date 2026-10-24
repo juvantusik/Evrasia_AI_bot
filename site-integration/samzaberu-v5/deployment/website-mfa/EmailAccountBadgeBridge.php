@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 namespace Evrasia\WebMfa;
 
+require_once __DIR__ . '/VerifiedEmailStatus.php';
+require_once __DIR__ . '/EmailVerificationBadge.php';
+require_once __DIR__ . '/EmailOwnershipProofStore.php';
+
 /**
  * Website account email icon bridge, connected only AFTER reviewed template
  * source patch. Fail-closed: inability to verify current email = red cross.
