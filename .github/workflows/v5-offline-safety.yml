@@ -496,6 +496,17 @@ jobs:
               echo "=== WEBSITE MFA ACCOUNT BADGE BITRIX CONNECTION BRIDGE (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailAccountBadgeBridge.php"
               echo "PASS: website account badge bridge source syntax; production integration still disabled"
+              echo "=== WEBSITE OWNERSHIP NATIVE BITRIX MAIL EVENT REGISTRY (FEATURE ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa-email-mail-event-release.php"
+              php "$ROOT/deployment/website-mfa-email-mail-event-release.php" --self-test
+              if php "$ROOT/deployment/website-mfa-email-mail-event-release.php" --preflight > /tmp/ev-mail-event-wronghost.log 2>&1; then
+                echo "FAIL: mail event installer accepted GitHub Actions host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/ev-mail-event-wronghost.log
+              grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-mail-event-wronghost.log
+              grep -Fxq 'EMAIL_SENT=NO' /tmp/ev-mail-event-wronghost.log
+              echo "PASS: source-pinned new Bitrix email event/template release never runs outside evrasia"
               echo "=== WEBSITE EMAIL OPERATIONAL SOURCE / MAIL SITE / REDIS READONLY GATE ==="
               php -l "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php"
               php "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php" --self-test
