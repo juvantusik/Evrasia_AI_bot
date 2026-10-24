@@ -10,7 +10,9 @@ declare(strict_types=1);
  * and target endpoint directory. NO user queries, no individual identities,
  * sessions, cookies, mail/SMS sends or code/DB writes.
  *
- * --self-test: offline; --inspect: root@evrasia only.
+ * --self-test: offline; --mail-only: exact mail/site/Redis checks, no
+ * repeated auth code dump; --inspect: full source + mail checks.
+ * Both live modes root@evrasia only.
  */
 final class EvEmailOperationalContractReadonly
 {
@@ -25,6 +27,8 @@ final class EvEmailOperationalContractReadonly
     private const EVENT='EVRASIA_WEB_EMAIL_OWNERSHIP';
     private const DB='eurasia_new';
     private const HOST='evrasia.rest';
+    // Bitrix Main\SiteTable::getTableName(): 'b_lang', NOT 'b_site'.
+    private const SITE_TABLE='b_lang';
     private static int $pass=0;
     private static bool $db=false;
     private static bool $redis=false;
@@ -144,7 +148,7 @@ final class EvEmailOperationalContractReadonly
     private static function mailAndSite(PDO $pdo):void
     {
         echo "=== 3. SITE AND MAIL REGISTRATION READ ONLY ===\n";
-        $tables=['b_site','b_event_type','b_event_message'];
+        $tables=[self::SITE_TABLE,'b_event_type','b_event_message'];
         foreach($tables as $table) {
             $q=$pdo->prepare(
                 'SELECT COUNT(*) FROM information_schema.TABLES
@@ -154,7 +158,7 @@ final class EvEmailOperationalContractReadonly
         }
         $rows=$pdo->query(
             "SELECT LID,ACTIVE,DEF,SERVER_NAME
-             FROM b_site
+             FROM b_lang
              WHERE ACTIVE='Y' AND (SERVER_NAME='evrasia.rest' OR DEF='Y')
              ORDER BY DEF DESC,LID"
         )->fetchAll();
@@ -241,6 +245,15 @@ final class EvEmailOperationalContractReadonly
             && str_contains($out,"'select'"),'safe_schema_column_names_visible');
         self::check(substr_count($src,"\n")===substr_count($out,"\n"),
             'line_numbers_preserved');
+        self::check(self::SITE_TABLE==='b_lang'
+            && !str_contains(self::SITE_TABLE,'b_site'),
+            'Bitrix_SiteTable_maps_to_b_lang_not_b_site');
+        $source=file_get_contents(__FILE__);
+        self::check(is_string($source)
+            && str_contains($source,"FROM b_lang")
+            && str_contains($source,"$"."tables=[self::SITE_TABLE")
+            && !str_contains($source,"FROM b_site"),
+            'production_mail_site_query_pinned_to_b_lang');
 
         // Regression fixture must execute the same method displaying code
         // as --inspect, not just the masking helper. The previous audit
@@ -272,7 +285,7 @@ final class EvEmailOperationalContractReadonly
         try {
             if(count($args)!==2)throw new RuntimeException('exact_mode_required');
             if($mode==='--self-test') self::selfTest();
-            elseif($mode==='--inspect') {
+            elseif($mode==='--inspect'||$mode==='--mail-only') {
                 echo "=== 1. HOST AND SOURCE GUARDS ===\n";
                 self::check(PHP_SAPI==='cli' && function_exists('posix_geteuid')
                     && posix_geteuid()===0
@@ -287,7 +300,14 @@ final class EvEmailOperationalContractReadonly
                 self::source(self::ACCOUNT,self::ACCOUNT_SHA,'live_account_exact_SHA');
                 self::source(self::SIGNIN,self::SIGNIN_SHA,'live_signin_exact_SHA');
                 $auth=self::source(self::AUTH,self::AUTH_SHA,'live_auth_assurance_exact_SHA');
-                self::showAssurance($auth);
+                if($mode==='--inspect') {
+                    self::showAssurance($auth);
+                } else {
+                    self::check(str_contains($auth,
+                        'function hasPersistentCurrentAssurance'),
+                        'previously_checked_assurance_source_still_exact');
+                    echo "ASSURANCE_SOURCE_FULL_DUMP=SKIPPED_PREVIOUSLY_CONFIRMED\n";
+                }
                 $pdo=self::configuredPdo();
                 try {
                     self::mailAndSite($pdo);
@@ -308,8 +328,9 @@ final class EvEmailOperationalContractReadonly
             $rc=1;
         }
         echo "=== 6. RESULT ===\n";
-        echo 'MODE='.($mode==='--inspect'?'READ_ONLY_SITE_MAIL_ASSURANCE':
-            'OFFLINE_SELFTEST')."\n";
+        echo 'MODE='.($mode==='--mail-only'?'READ_ONLY_MAIL_SITE_REDIS':
+            ($mode==='--inspect'?'READ_ONLY_SITE_MAIL_ASSURANCE':
+            'OFFLINE_SELFTEST'))."\n";
         echo 'PASS_COUNT='.self::$pass."\n";
         echo 'DATABASE_CONNECTION='.(self::$db?'YES':'NO')."\n";
         echo "DATABASE_WRITE=NO\nPRODUCTION_SITE_WRITE=NO\n";
