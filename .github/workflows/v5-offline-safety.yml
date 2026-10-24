@@ -563,6 +563,25 @@ jobs:
               grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-email-mail-only-wronghost.log
               grep -Fxq 'PRODUCTION_SITE_WRITE=NO' /tmp/ev-email-mail-only-wronghost.log
               echo "PASS: Bitrix b_lang mail-only gate and full inspector deny wrong host"
+              echo "=== VERIFIED EMAIL ENDPOINT GUARDED INSTALL AND ROLLBACK (FEATURE ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa-email-confirm-site-release.php"
+              php "$ROOT/deployment/website-mfa-email-confirm-site-release.php" --self-test
+              for mode in --preflight --apply --status --rollback; do
+                if [[ "$mode" == --preflight || "$mode" == --apply ]]; then
+                  args=("$mode" "/tmp/no-email-staging-in-ci")
+                else
+                  args=("$mode")
+                fi
+                if php "$ROOT/deployment/website-mfa-email-confirm-site-release.php" "${args[@]}" > "/tmp/ev-web-email-install-$mode.log" 2>&1; then
+                  echo "FAIL: endpoint installer $mode accepted CI host"
+                  exit 1
+                fi
+                grep -Fxq 'FINAL_STATUS=FAIL' "/tmp/ev-web-email-install-$mode.log"
+                grep -Fxq 'DATABASE_WRITE=NO' "/tmp/ev-web-email-install-$mode.log"
+                grep -Fxq 'WEBSITE_PHP_FILES_WRITE=NO' "/tmp/ev-web-email-install-$mode.log"
+                grep -Fxq 'MAIL_REGISTRY_WRITE=NO' "/tmp/ev-web-email-install-$mode.log"
+              done
+              echo "PASS: protected public email endpoint installer, unchanged signin and rollback refuse wrong host"
               echo "=== VERIFIED EMAIL CURRENT STORED AUTH ASSURANCE AND HTTPS-ONLY ENDPOINT ==="
               php -l "$ROOT/deployment/website-mfa/EmailOwnershipSessionAssurance.php"
               php -l "$ROOT/tests/WebsiteEmailOwnershipSessionAssuranceTest.php"
