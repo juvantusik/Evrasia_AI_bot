@@ -25,6 +25,14 @@
 - `site-integration/samzaberu-v5/tests/WebsiteEmailLoginChallengeTest.php`, `WebsiteEmailSendBudgetTest.php`: source-only тесты позитивных/негативных сценариев, cross-user, cross-session, email change, expiry, replay, attempt limit, SMS transition, SMTP failure, Redis error, quota namespace isolation.
 - `site-integration/samzaberu-v5/deployment/website-mfa-email-first-source-audit.php`: source-only read-only mapper **уже установленного** signin/PIN SHA, frontend signin JS/template, signup confirmation/email transport markers. Режим `--inspect` только root@evrasia; без Bitrix bootstrap/DB/SMTP/Redis/web writes, выводит только PHP-token-masked фрагменты и SHA. `--self-test` offline.
 
+### Следующее проверяемое действие — field provenance, минимальный email-бейдж
+
+Для source-only проверки создан `deployment/website-mfa-email-field-provenance-readonly.php`, который **НЕ заменяет старый уже выполненный full DB audit**. `--inspect` использует установленный all-users source SHA, точное root-only release и штатную `.settings.php` + PDO `START TRANSACTION READ ONLY`; спрашивает `b_user_field` о типе и кратности `UF_CHECK_EMAIL_DATE`, aggregate наличия значения в существующей (предварительно проверенной через schema) таблице, выводит только ограниченный перечень `file:line` ссылок на поле в scoped account/signup/php_interface файлах, SHA исходников и email-line anchors обоих account templates. **Не читает индивидуальные значения почты/токенов и не выводит source literals, сохраняет SECRET_PRINTED=NO.** Наличие значения поля не является подтверждением текущего адреса, пока не выяснен источник writer и привязка к email.
+
+Добавлены `deployment/website-mfa/EmailVerificationBadge.php` и `tests/WebsiteEmailVerificationBadgeTest.php`: server-side isolated маленькая SVG галочка зелёная + крестик красный, `role=img`/`aria-label`, справа от email после точного anchor; status приходит из `VerifiedEmailStatus::evaluate()`, не из `ACTIVE`, `CONFIRM_CODE`, строки email или JS. **Feature-only, не установлен в ЛК**; до выяснения доказательства подтверждения почты ни old account ни new signup не переходят на почтовый фактор.
+
+**Предпочтение пользователя:** каждый СЛЕДУЮЩИЙ SSH copy-paste wrapper начинает с `set -Eeuo pipefail; umask 077; printf '\033[3J\033[2J\033[H'`, сохраняя сессию открытой, и показывает только текущее структурированное выполнение.
+
 ## 24.10.2026 ~07:18 — operator production Bitrix app-DB audit PASS, email verification source uncovered
 
 Оператор выполнил SHA-pinned `website-mfa-email-proof-live-readonly.php` с `--self-test` 3 PASS и `--inspect` 21 PASS, `DATABASE_CONNECTION=YES`, `DATABASE_WRITE=NO`, `FINAL_RC=0`, outer wrapper PASS; никаких site/Redis/SMS/mail/V4/V5 writes. Обычная DB связь **через конфиг `bitrix/.settings.php`** работает; старый root-socket FAIL устранён без изменения прав или credentials. В вывод не попадали адреса/email/секреты.
