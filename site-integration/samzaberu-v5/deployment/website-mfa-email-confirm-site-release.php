@@ -425,9 +425,26 @@ final class EvEmailConfirmSiteRelease
         echo "NO_TEST_EMAIL_SENT_BY_INSTALLER=YES\n";
     }
 
-    private static function rollback(\PDO $pdo):void
+    private static function rollback():void
     {
-        self::status($pdo);
+        // Rollback MUST NOT depend on the broken feature's Redis, DB, mail
+        // queue or a functional web endpoint. Only exact source hashes and
+        // private backup are required. DB/secret/mail registry remain intact.
+        echo "=== 4. SOURCE-PINNED ROLLBACK GUARDS (NO DB REQUIRED) ===\n";
+        self::pass(is_dir(self::RELEASE)&&!is_link(self::RELEASE)
+            && fileowner(self::RELEASE)===0
+            && (fileperms(self::RELEASE)&0777)===0700,
+            'existing_root_only_endpoint_release');
+        self::knownBlob(self::RELEASE.'/bridge.original.php',
+            self::LEGACY_BRIDGE_BLOB,
+            'original_bridge_private_backup_exact');
+        self::pass(is_file(self::RELEASE.'/manifest.txt')
+            && !is_link(self::RELEASE.'/manifest.txt')
+            && (fileperms(self::RELEASE.'/manifest.txt')&0777)===0600,
+            'private_release_manifest_exact');
+        foreach(self::CANDIDATES as $name=>$blob)
+            self::knownBlob(self::target($name),$blob,
+                'installed_file_pinned_before_rollback_'.$name);
         echo "=== 5. DISABLE PUBLIC ENDPOINT / RESTORE EXISTING BADGE ===\n";
         $manifest=(string)file_get_contents(self::RELEASE.'/manifest.txt');
         self::pass(preg_match('/^BRIDGE_OWNER=1005$/m',$manifest)===1,
@@ -489,15 +506,19 @@ final class EvEmailConfirmSiteRelease
                 if(!in_array($mode,['--preflight','--apply','--status','--rollback'],true))
                     throw new \RuntimeException('unsupported_mode');
                 self::rootGuards();
-                $pdo=self::pdo();
-                if(in_array($mode,['--preflight','--apply'],true)) {
-                    if(count($args)!==3)throw new \RuntimeException('candidate_directory_required');
-                    if($mode==='--preflight')self::preflight($pdo,$args[2]);
-                    else self::apply($pdo,$args[2]);
-                } else {
+                if($mode==='--rollback') {
                     if(count($args)!==2)throw new \RuntimeException('unexpected_extra_args');
-                    if($mode==='--status')self::status($pdo);
-                    else self::rollback($pdo);
+                    self::rollback();
+                } else {
+                    $pdo=self::pdo();
+                    if(in_array($mode,['--preflight','--apply'],true)) {
+                        if(count($args)!==3)throw new \RuntimeException('candidate_directory_required');
+                        if($mode==='--preflight')self::preflight($pdo,$args[2]);
+                        else self::apply($pdo,$args[2]);
+                    } else {
+                        if(count($args)!==2)throw new \RuntimeException('unexpected_extra_args');
+                        self::status($pdo);
+                    }
                 }
             }
         } catch(\Throwable $err) {
