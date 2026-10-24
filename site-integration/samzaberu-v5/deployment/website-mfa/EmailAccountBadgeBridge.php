@@ -72,6 +72,32 @@ final class EmailAccountBadgeBridge
         ]);
     }
 
+    /**
+     * The verification button stays ABSENT until BOTH the authenticated
+     * web endpoint and widget code have been installed. This module never
+     * decides that an address is verified; only dedicated ledger status does.
+     */
+    private static function badgeWithOptionalConfirmation(array $status):string
+    {
+        $badge=EmailVerificationBadge::render($status);
+        $widget=__DIR__.'/EmailAccountConfirmWidget.php';
+        $endpoint=self::SITE.'/local/ajax/ev-email-ownership.php';
+        if (($status['verified']??false)===true
+            || !is_file($widget) || is_link($widget)
+            || !is_file($endpoint)||is_link($endpoint)
+            || !is_readable($widget)||!is_readable($endpoint)) {
+            return $badge;
+        }
+        try {
+            require_once $widget;
+            if(!class_exists(EmailAccountConfirmWidget::class))
+                return $badge;
+            return $badge . EmailAccountConfirmWidget::render(false,true);
+        } catch(\Throwable) {
+            return $badge;
+        }
+    }
+
     /** Render only after authenticated ID verified from the server session. */
     public static function renderForCurrentUser(int $expectedUserId): string
     {
@@ -98,7 +124,7 @@ final class EmailAccountBadgeBridge
                 return self::denied();
             }
             $store = new EmailOwnershipProofStore($db, $secret);
-            return EmailVerificationBadge::render(
+            return self::badgeWithOptionalConfirmation(
                 $store->status($expectedUserId)
             );
         } catch (\Throwable) {
