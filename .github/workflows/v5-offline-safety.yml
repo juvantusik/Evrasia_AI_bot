@@ -496,6 +496,21 @@ jobs:
               echo "=== WEBSITE MFA ACCOUNT BADGE BITRIX CONNECTION BRIDGE (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailAccountBadgeBridge.php"
               echo "PASS: website account badge bridge source syntax; production integration still disabled"
+              echo "=== WEBSITE EMAIL MAIL CHECKPOINT RECONCILIATION: MANIFEST-ONLY, NO DB WRITE ==="
+              php -l "$ROOT/deployment/website-mfa-email-mail-checkpoint-reconcile.php"
+              php "$ROOT/deployment/website-mfa-email-mail-checkpoint-reconcile.php" --self-test
+              for mode in --preflight --apply --status; do
+                if php "$ROOT/deployment/website-mfa-email-mail-checkpoint-reconcile.php" "$mode" > "/tmp/ev-email-manifest-$mode.log" 2>&1; then
+                  echo "FAIL: manifest-only recovery accepted wrong CI host: $mode"
+                  exit 1
+                fi
+                grep -Fxq 'FINAL_STATUS=FAIL' "/tmp/ev-email-manifest-$mode.log"
+                grep -Fxq 'DATABASE_WRITE=NO' "/tmp/ev-email-manifest-$mode.log"
+                grep -Fxq 'BITRIX_MAIL_EVENT_ADD_CALLED=NO' "/tmp/ev-email-manifest-$mode.log"
+                grep -Fxq 'BITRIX_MAIL_TEMPLATE_ADD_CALLED=NO' "/tmp/ev-email-manifest-$mode.log"
+                grep -Fxq 'MANIFEST_FILE_WRITE=NO' "/tmp/ev-email-manifest-$mode.log"
+              done
+              echo "PASS: recovery may only reconcile exact original mail checkpoint after production guards"
               echo "=== WEBSITE EMAIL MAIL FAILED RELEASE ROOT/WORKER SAFE DIAGNOSTIC ==="
               php -l "$ROOT/deployment/website-mfa-email-mail-failed-release-diagnostic.php"
               php "$ROOT/deployment/website-mfa-email-mail-failed-release-diagnostic.php" --self-test
