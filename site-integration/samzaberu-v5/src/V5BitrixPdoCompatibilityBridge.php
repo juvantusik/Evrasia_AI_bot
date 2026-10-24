@@ -312,9 +312,10 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         if ($sql === self::CART_OWNER_SQL) {
             return;
         }
-        // Only the two known transaction-continuity guard pairs issued by
-        // V5MySqlStrongSessionStore::transaction() and
-        // V5MySqlChallengeConsumption::verifyAndConsume().
+        // Only the three known transaction-continuity guard pairs issued by
+        // V5MySqlStrongSessionStore::transaction(),
+        // V5MySqlChallengeConsumption::verifyAndConsume() and
+        // V5MySqlPasswordBoundTotpIssuer::beginBound().
         // runStatement() separately demands an owned native transaction for
         // ALL these write-shaped statements. No arbitrary names/rollback/batch.
         if (in_array($sql, [
@@ -322,6 +323,8 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             'RELEASE SAVEPOINT v5_strong_session_guard',
             'SAVEPOINT v5_native_factor_guard',
             'RELEASE SAVEPOINT v5_native_factor_guard',
+            'SAVEPOINT v5_totp_issue_guard',
+            'RELEASE SAVEPOINT v5_totp_issue_guard',
         ], true)) {
             return;
         }

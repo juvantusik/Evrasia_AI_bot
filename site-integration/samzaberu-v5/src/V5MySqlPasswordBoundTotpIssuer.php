@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5MySqlSmsOutbox.php';
+require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -93,6 +94,8 @@ final readonly class V5MySqlPasswordBoundTotpIssuer
 
         $this->assertReady();
         $started=false;
+        $nativeGuardOpen=false;
+        $nativeGuardReleaseStarted=false;
         try {
             if(!$this->db->beginTransaction())
                 throw new RuntimeException('v5_challenge_tx_unavailable');
@@ -121,11 +124,21 @@ final readonly class V5MySqlPasswordBoundTotpIssuer
             if($epoch===null || $epoch<1)
                 throw new AuthenticationRejected('authentication_failed');
 
-            // A fresh password recheck UNDER THIS LOCK is mandatory. No
-            // password-proof snapshots, client claims or legacy trust accepted.
+            // The native Bitrix callback can implicitly COMMIT and BEGIN a
+            // different transaction while inTransaction() remains true.
+            // An ORIGINAL savepoint proves that the b_user/AUTH_EPOCH locks
+            // survived until the password proof returned. Without this, an
+            // earlier password proof could issue a challenge in a new epoch.
+            $this->query('SAVEPOINT v5_totp_issue_guard',[]);
+            $nativeGuardOpen=true;
             $stamp=$this->native->reverifyCurrentPasswordAndTotpWithUserLock(
                 $this->db,$account,$login,$password,$epoch
             );
+            $nativeGuardReleaseStarted=true;
+            $this->query('RELEASE SAVEPOINT v5_totp_issue_guard',[]);
+            $nativeGuardOpen=false;
+            if(!$this->db->inTransaction())
+                throw new RuntimeException('v5_challenge_transaction_lost');
             if(!is_string($stamp)
                 || preg_match('/\A[a-f0-9]{64}\z/D',$stamp)!==1)
                 throw new AuthenticationRejected('authentication_failed');
@@ -157,6 +170,8 @@ final readonly class V5MySqlPasswordBoundTotpIssuer
             if($q->rowCount()!==1)
                 throw new RuntimeException('v5_challenge_insert_failed');
 
+            if(!$this->db->inTransaction())
+                throw new RuntimeException('v5_challenge_transaction_lost');
             if(!$this->db->commit())
                 throw new RuntimeException('v5_challenge_commit_uncertain');
             $started=false;
@@ -166,6 +181,27 @@ final readonly class V5MySqlPasswordBoundTotpIssuer
                 $challengeId,ChallengeKind::TOTP,$this->ttlSeconds
             );
         }catch(Throwable $e){
+            if($started && $nativeGuardOpen){
+                // If the callback threw before we attempted RELEASE, verify
+                // the original savepoint once. A successful RELEASE allows
+                // our own transaction to be safely rolled back.
+                if(!$nativeGuardReleaseStarted){
+                    $nativeGuardReleaseStarted=true;
+                    try{
+                        $this->query('RELEASE SAVEPOINT v5_totp_issue_guard',[]);
+                        $nativeGuardOpen=false;
+                    }catch(Throwable){}
+                }
+                if($nativeGuardOpen){
+                    // COMMIT+BEGIN destroyed the original guard. Never
+                    // roll back what might now be another Bitrix component's
+                    // transaction. Poison our compatibility bridge and force
+                    // the caller to discard the uncertain connection.
+                    if($this->db instanceof V5BitrixPdoCompatibilityBridge)
+                        $this->db->abandonUncertainNativeTransaction();
+                    $started=false;
+                }
+            }
             if($started && $this->db->inTransaction()){
                 try{$this->db->rollBack();}catch(Throwable){}
             }

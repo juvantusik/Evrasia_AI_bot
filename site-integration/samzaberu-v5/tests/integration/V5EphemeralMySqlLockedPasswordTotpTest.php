@@ -22,6 +22,7 @@ use Evrasia\Samzaberu\V5\{
     V5PasswordHashComparatorPort,V5NativeBitrixPasswordComparator,
     V5NativeSecurityHookCoveragePort,V5SecurityEventVersions,
     V5MySqlPasswordBoundTotpIssuer,V5PdoUserRowSource,
+    V5LockedPasswordTotpChallengeProofPort,
     PasswordVerifiedAccount,PendingLoginChallenge,ChallengeKind
 };
 
@@ -115,6 +116,54 @@ smsCheck(count($rows->findAtMostTwo('LOGIN','synthetic-81'))===1,'existing login
 $ticket=lockedBegin($f);
 smsCheck($ticket instanceof PendingLoginChallenge && !$f['real']->inTransaction(),
     'existing issuer commits TOTP challenge using real locked table proof adapter');
+
+// A native password callback could implicitly COMMIT and re-BEGIN on the same
+// physical Bitrix connection. inTransaction() would still be true, but the
+// original b_user/AUTH_EPOCH locks no longer protect the challenge. Fail
+// closed before INSERT; never roll back a possibly foreign restarted scope.
+final class LockedCiHiddenCommitProof implements V5LockedPasswordTotpChallengeProofPort {
+    public int $calls=0;
+    public function __construct(private bool $rebegin) {}
+    public function reverifyCurrentPasswordAndTotpWithUserLock(
+        PDO $db, PasswordVerifiedAccount $account, string $login,
+        string $password, int $lockedAuthEpoch
+    ): ?string {
+        $this->calls++;
+        $db->commit();
+        if($this->rebegin) $db->beginTransaction();
+        return str_repeat('a',64);
+    }
+}
+foreach([false,true] as $rebegin){
+    $scope=lockedAuthFixture();
+    $previous=lockedCount($scope['real']);
+    $callback=new LockedCiHiddenCommitProof($rebegin);
+    $issuer=new V5MySqlPasswordBoundTotpIssuer(
+        $scope['bridge'],$callback,BIND_KEY
+    );
+    smsDeny(fn()=>$issuer->beginBound(
+        new PasswordVerifiedAccount(81,true,true),
+        'locked81@example.invalid','synthetic-current-81',
+        DEVICE_ID,'ios',ChallengeKind::TOTP
+    ),$rebegin?'hidden COMMIT+BEGIN must deny TOTP challenge':
+        'hidden COMMIT must deny TOTP challenge');
+    smsCheck($callback->calls===1,'native callback reached exactly once');
+    smsCheck(lockedCount($scope['real'])===$previous,
+        'no challenge minted after lost original TOTP issuer transaction');
+    smsCheck(!$scope['bridge']->inTransaction(),
+        'lost original native scope is poisoned, cannot be reused');
+    smsDeny(fn()=>$scope['bridge']->prepare('SELECT UNIX_TIMESTAMP()'),
+        'poisoned native bridge denies subsequent SQL');
+    if($rebegin){
+        smsCheck($scope['real']->inTransaction(),
+            'foreign restarted transaction not rolled back by V5');
+        $scope['real']->rollBack(); // CI-only cleanup
+    }else{
+        smsCheck(!$scope['real']->inTransaction(),
+            'early native COMMIT leaves no owned transaction');
+    }
+}
+
 $q=$setup->prepare('SELECT challenge_id,kind,password_proven,auth_epoch,sms_sent_count FROM ev_v5_auth_challenges WHERE user_id=81');
 $q->execute(); $issued=$q->fetch(PDO::FETCH_ASSOC);
 $expectedStamp=hash_hmac('sha256',"evrasia:v5:auth-epoch-stamp:v1\0"."81\0"."11\0"
