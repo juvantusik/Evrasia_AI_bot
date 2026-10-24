@@ -24,7 +24,7 @@ final class EvEmailConfirmWidgetClickFix
     private const RELEASE=self::STAGE.'/email-confirm-widget-click-release';
     private const OLD_WIDGET_BLOB='58fa49a8e09eb872c45b90ef3b6d88ab3469885b';
     private const NEW_WIDGET_BLOB='b73eb7d3529aebacb32af47e3c6f225ee0124d94';
-    private const JS_BLOB='29ea74ac061cbe10cc0248f5d5d4c7cec98921b2';
+    private const JS_BLOB='eb669c7ccfa173ffc7655035a4629716f9bb53a9';
     private const WIDGET=self::ROOT.'/local/php_interface/website-mfa/EmailAccountConfirmWidget.php';
     private const JS=self::ROOT.'/local/ajax/ev-email-confirm-widget.js';
     private const PUBLIC_ENDPOINT=self::ROOT.'/local/ajax/ev-email-ownership.php';
