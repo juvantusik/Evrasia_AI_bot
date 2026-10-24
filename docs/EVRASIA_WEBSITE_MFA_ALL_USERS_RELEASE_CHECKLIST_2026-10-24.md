@@ -2,6 +2,8 @@
 
 **Состояние на 24.10.2026:** пилот успешно подтверждён пользователем; запуск для всех **одобрен как задача**, но **не развёрнут**. Главный контекст: [WEBSITE MFA all-users handoff](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md).
 
+**Новейшая запись 24.10.2026:** production SHA и helper presence уже проверены, PRIVATE all-user release package уже создан и PHP-linted. Не тратить время на повторный первичный build; следующий gate — внешний IP/proxy, численные SMS caps, безопасность кандидатов, rollback и cohort acceptance. [Конкретный checkpoint](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md).
+
 ## A. До написания нового кода — live proof (READ_ONLY)
 
 - [x] Пилотный логин с действующим Trusted Device без TOTP, когда TOTP включён — user browser accepted после исправления `PASSWORD_ORIGINAL`.
@@ -11,15 +13,15 @@
 - [x] Оба шаблона предупреждения PIN обновлены, PHP lint и текст `NEW_EXACT`.
 - [x] Старый приватный V3 (четыре файла+бюджет SMS) собран, PHP lint и SHA/manifest PASS, не установлен.
 - [x] Redis Lua atomic quota на временных probe keys протестирован.
-- [ ] Повторно подтвердить **текущие**, а не устаревшие SHA реальных installed enrollment, signin, account UI, PIN, native OTP, Trusted Device, assurance, V4 controller и 5-file V3 manifest. Одна guarded read-only команда.
+- [x] Текущие production SHA enrollment, signin, account, PIN, native User/Otp, Trusted Device, assurance и V4 Auth повторно подтверждены оператором: READ_ONLY PASS_COUNT=13, FINAL_RC=0. Приватный V3 SMS budget SHA и план SHA проверены, четыре живых PHP lint PASS.
 - [ ] Проверить фактический текущий namespace/proxy/REMOTE_ADDR после независимого внешнего клиента; origin-local поддельные заголовки уже были отклонены, но внешний IP не доказан.
-- [ ] Реально подтверждённое отсутствие установленного `GlobalSmsBudget.php` либо установленное состояние — проверить exact path на production, не угадывать.
+- [x] Прямое отсутствие установленного `local/php_interface/website-mfa/GlobalSmsBudget.php` подтверждено на production: `GLOBAL_SMS_HELPER=ABSENT`.
 
 ## B. Rebase к актуальному production, не устанавливать старый V3
 
-- [ ] От current live SHA собрать новые кандидаты `totp.enrollment/class.php`, `signin/class.php`, `account/main/template.php`, `local/php_interface/pincode.php`, `GlobalSmsBudget.php`.
-- [ ] **Сохранить** исправленную ветку trust-first login и точный нативный параметр `PASSWORD_ORIGINAL='Y'` в `CUser::LoginInternal`. Старый V3 содержал ошибочный `APPLICATION_ID`; код нельзя переносить без исправления.
-- [ ] **Сохранить** новую прямую выдачу PIN по серверно подтверждённому трасту и все исходные условия авторизации/CSRF. Не терять пилотную прошедшую acceptance логику.
+- [x] Приватный пакет текущего live пилота уже создан: `/root/ev-web-mfa-release-packages/all-user-mfa-prepared-20261023-235710-4b06db78` — five-file candidate PHP lint PASS, PASS_COUNT=118, WRAPPER_RC=0, **INSTALL_ALLOWED=NO**. Это не production installation.
+- [x] В приватном all-user package операторский builder подтвердил `PASSWORD_ORIGINAL` и parity с работающим pilot trusted login. Новый signin candidate SHA `e1fc59637bfd46c3cd0a9e56c3736121b97ca8cd993b9776d46c86988e10233a`; **ещё нет массового browser E2E**.
+- [x] Приватный PIN-кандидат сравнен с заранее верифицированным global parity SHA `0b12ed47cd74bfa03c91bdcab2c4bfd07c7ccac7b67852e9540ed9a71390c94c`, builder PASS; **нужна независимая candidate-specific security/E2E проверка**.
 - [ ] Расширить pilot-only enrollment/UI/signin/PIN только на действительного текущего пользователя, а не `USER_ID>0` без проверки принадлежности сессии, телефона и challenge.
 - [ ] Не снимать защиту native Bitrix для SMS/TOTP enroll/disable, logout, revocation, session epoch, replay.
 - [ ] Исходники и candidate version хешировать; php TOKEN_PARSE, `php -l`, точный source-diff/proof, выверенный rollback manifest, CI + negative fixtures.
