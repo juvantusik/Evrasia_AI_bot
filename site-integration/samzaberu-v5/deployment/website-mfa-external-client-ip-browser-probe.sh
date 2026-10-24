@@ -138,8 +138,8 @@ PHP
 echo '=== 1. HOST / ENVIRONMENT ==='
 [[ "$#" -eq 1 && ( "$MODE" == --self-test || "$MODE" == --probe ) ]] ||
     fail 'supported modes --self-test and --probe'
-for utility in php bash curl sha256sum stat realpath mktemp ip awk sort; do
-    command -v "$utility" >/dev/null 2>&1 || fail "required utility $utility absent"
+for utility in php bash stat mktemp grep; do
+    command -v "$utility" >/dev/null 2>&1 || fail "offline utility $utility absent"
 done
 if [[ "$MODE" == --self-test ]]; then
     PROBE="$(mktemp /tmp/ev-mfa-ext-ip.XXXXXXXX.php)"
@@ -157,6 +157,9 @@ if [[ "$MODE" == --self-test ]]; then
 fi
 [[ "$(hostname -s)" == evrasia && "$(id -u)" -eq 0 ]] ||
     fail 'exact production hostname/root required'
+for utility in curl sha256sum realpath ip awk sort; do
+    command -v "$utility" >/dev/null 2>&1 || fail "production utility $utility absent"
+done
 [[ -d "$SITE" && ! -L "$SITE" && "$(realpath -e "$SITE")" == "$SITE" ]] ||
     fail 'site directory realpath guard'
 [[ -d "$PACKAGE" && ! -L "$PACKAGE" &&
