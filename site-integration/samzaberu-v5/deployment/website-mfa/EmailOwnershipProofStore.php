@@ -103,7 +103,7 @@ SQL;
                 'email_changed_at' => (int)($row['proof_stamp'] ?? 0),
                 'verified_at' => (int)($row['proof_time'] ?? 0),
                 'source' => (string)($row['proof_source'] ?? ''),
-                'revoked' => (int)($row['proof_revoked'] ?? 1) === 0,
+                'revoked' => (int)($row['proof_revoked'] ?? 1) !== 0,
             ];
 
             return VerifiedEmailStatus::evaluate(
