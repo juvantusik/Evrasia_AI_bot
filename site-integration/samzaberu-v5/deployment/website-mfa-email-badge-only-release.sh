@@ -391,6 +391,15 @@ install_core(){
   done
   pass 'four passive source-only badge helpers atomically installed'
 
+  php -d auto_prepend_file= -d auto_append_file= -r '
+    require $argv[1];
+    $b=\Evrasia\WebMfa\EmailVerificationBadge::render(["verified"=>false]);
+    if(!str_contains($b,"ev-email-proof--unverified")) exit(2);
+    if(\Evrasia\WebMfa\EmailAccountBadgeBridge::renderForCurrentUser(0)!=="") exit(3);
+  ' "$HELPER_DIR/EmailAccountBadgeBridge.php" ||
+    { fatal 'PHP runtime bridge/red badge smoke failed'; return 1; }
+  pass 'badge PHP class runtime and unauthenticated-user fail-close smoke'
+
   safe_temp_copy "$STAGE/account-main.candidate.php" \
     "$SITE/$MAIN_REL" "$RELEASE/account-main.backup.php" || return 1
   safe_temp_copy "$STAGE/account-cached.candidate.php" \
