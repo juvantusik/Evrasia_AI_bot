@@ -37,7 +37,7 @@ HTML;
         // for regular first-load HTML. The JS itself binds a once-per-page
         // document-level delegated click listener; duplicates are harmless.
         // No user PII/secret/OTP is serialized into JS or an HTML attribute.
-        $scriptUrl='/local/ajax/ev-email-confirm-widget.js?v=20261024b';
+        $scriptUrl='/local/ajax/ev-email-confirm-widget.js?v=20261024c';
         try {
             if (class_exists(\Bitrix\Main\Page\Asset::class)) {
                 \Bitrix\Main\Page\Asset::getInstance()->addJs($scriptUrl);
