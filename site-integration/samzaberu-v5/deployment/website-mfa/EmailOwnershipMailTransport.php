@@ -9,7 +9,8 @@ namespace Evrasia\WebMfa;
  *
  * The event contains only the intended recipient and the six-digit one-time
  * verification code. No phone, login password, session ID, HMAC secret,
- * or raw code in logs / DB proof ledger.
+ * or raw code in logs / DB proof ledger. Force DUPLICATE=N to prevent
+ * site-wide all_bcc copies of account security codes.
  */
 final class EmailOwnershipMailTransport
 {
@@ -38,6 +39,9 @@ final class EmailOwnershipMailTransport
             'EVENT_NAME' => self::EVENT,
             'MESSAGE_ID' => $messageId,
             'LID' => $siteId,
+            // A Bitrix default duplicate can send the OTP to the site's
+            // administrative all_bcc address. Never duplicate security OTP.
+            'DUPLICATE' => 'N',
             'C_FIELDS' => [
                 'EMAIL_TO' => $to,
                 'VERIFY_CODE' => $verificationCode,
