@@ -567,12 +567,11 @@ jobs:
               php -l "$ROOT/deployment/website-mfa-email-confirm-site-release.php"
               php "$ROOT/deployment/website-mfa-email-confirm-site-release.php" --self-test
               for mode in --preflight --apply --status --rollback; do
-                if [[ "$mode" == --preflight || "$mode" == --apply ]]; then
-                  args=("$mode" "/tmp/no-email-staging-in-ci")
-                else
-                  args=("$mode")
-                fi
-                if php "$ROOT/deployment/website-mfa-email-confirm-site-release.php" "${args[@]}" > "/tmp/ev-web-email-install-$mode.log" 2>&1; then
+                case "$mode" in
+                  --preflight|--apply) set -- "$mode" "/tmp/no-email-staging-in-ci" ;;
+                  *) set -- "$mode" ;;
+                esac
+                if php "$ROOT/deployment/website-mfa-email-confirm-site-release.php" "$@" > "/tmp/ev-web-email-install-$mode.log" 2>&1; then
                   echo "FAIL: endpoint installer $mode accepted CI host"
                   exit 1
                 fi
