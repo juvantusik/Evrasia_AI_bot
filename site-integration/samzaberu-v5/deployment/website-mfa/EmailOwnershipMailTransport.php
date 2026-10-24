@@ -75,7 +75,7 @@ final class EmailOwnershipMailTransport
      */
     public static function bitrixSend(array $payload): bool
     {
-        if ($payload['EVENT_NAME'] ?? null !== self::EVENT
+        if (($payload['EVENT_NAME'] ?? null) !== self::EVENT
             || !class_exists(\Bitrix\Main\Mail\Event::class)) {
             return false;
         }
