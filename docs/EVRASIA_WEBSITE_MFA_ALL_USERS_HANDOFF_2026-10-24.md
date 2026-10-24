@@ -1,5 +1,21 @@
 # Evrasia AI Bot — WEBSITE MFA: переход от успешного пилота к запуску для всех
 
+## 24.10.2026 — НАИВЫСШИЙ ПРИОРИТЕТ: WEBSITE MFA ALL-USERS УСТАНОВЛЕН В PRODUCTION
+
+**Подтверждено фактическим выводом оператора `root@evrasia`, а не только GitHub/CI.** В 06:44 UTC согласно имени пакета от 24.10.2026 оператор выполнил immutable all-users installer `f9f194eea550bcecc1dcebd0914ec6533c3dd4d9`, blob `c1460244efe598bb23e2addeca8fb430655c7008` (GitHub offline CI [#40071228006](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40071228006) SUCCESS). Полный wrapper source verification и Bash lint PASS, `--self-test` PASS, `--preflight` 17/17 PASS, `--apply` 20/20 PASS с `INSTALL_VERIFIED=YES`, отдельная проверка `--status` 6/6 PASS, `RELEASE_STATE=INSTALLED_ALL_USERS`; итог оболочки `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`.
+
+**Путь к фактически установленному release и локальному rollback:**
+
+`/root/ev-web-mfa-release-packages/all-users-website-mfa-20261024-064446-b03bafa5`
+
+`bash /root/ev-web-mfa-release-packages/all-users-website-mfa-20261024-064446-b03bafa5/restore.sh --rollback /root/ev-web-mfa-release-packages/all-users-website-mfa-20261024-064446-b03bafa5`
+
+**Установлено (не путать с browser E2E):** exact PHP source SHA проверены после атомарной замены для `totp.enrollment/class.php`, `signin/class.php`, `account/main/template.php`, `local/php_interface/pincode.php` и нового `local/php_interface/website-mfa/GlobalSmsBudget.php`; в `--status` все четыре `*_installed pinned SHA` PASS и общий SMS helper SHA PASS. Из зафиксированных source SHA: signin `e1fc59637bfd46c3cd0a9e56c3736121b97ca8cd993b9776d46c86988e10233a`, PIN `0b12ed47cd74bfa03c91bdcab2c4bfd07c7ccac7b67852e9540ed9a71390c94c`; account warning и budget dynamic SHA хранятся в root-private `manifest.txt`, **не угадывать их**. Native Bitrix core, API V4, API V5 AUTH и существующие Trusted Devices этим инсталлятором не изменялись; DB/Redis не записывались в ходе команды; SMS команда не отправляла. Начальные лимиты helper `100/час`, `500/сутки`, per-REMOTE_ADDR `100/час` (временно не строже общего глобального лимита).
+
+**Важно: `BROWSER_ACCEPTANCE=PENDING`, `BROWSER_E2E=REQUIRED`.** Пользователь ещё не подтвердил четыре реальные ветки входа, enrollment и прямой PIN после массового развёртывания. `ROLLBACK_NOT_TESTED_ON_LIVE=YES`: rollback файл и резервные копии присутствуют, но сам restore на живом сайте не выполнялся. **Не откатывать без фактически обнаруженной проблемы; не переустанавливать!** Следующий этап — user-facing smoke check / агрегированное мониторирование ошибок и платных SMS, без повторной установки и без ручных JSON/IP тестов с телефона. Подтверждение оператора относится к exact source install, а не к гарантированной реальной работоспособности всех пользователей.
+
+Оставшийся текст ниже — **история подготовки до массовой установки**. Его утверждения `NOT_INSTALLED` / `GLOBAL_SMS_HELPER=ABSENT` устарели после этого operator PASS.
+
 **Дата фиксации:** 24 октября 2026. **Проект продолжается**, это не новое проектирование.  
 **Решение пользователя (последнее):** «да все ок, можем делать для всех». Это подтверждение успешного **пилотного браузерного сценария** и поручение подготовить общедоступный веб-MFA. **Не означает, что массовый rollout уже включён.**
 
