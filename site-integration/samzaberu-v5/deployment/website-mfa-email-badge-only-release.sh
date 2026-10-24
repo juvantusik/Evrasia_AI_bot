@@ -77,11 +77,12 @@ mode_result(){
   echo 'EMAIL_FIRST_LOGIN_ACTIVATED=NO'
   echo 'EMAIL_CONFIRMATION_ACTIVATED=NO'
   echo 'VERIFIED_EMAIL_DATABASE_MIGRATED=NO'
-  echo 'EMAIL_BADGE_ACTIVE='
-  if [[ "$MODE" == '--install' && "$rc" -eq 0 || "$MODE" == '--status' && "$rc" -eq 0 ]]; then
-    echo 'YES'
+  if [[ ( "$MODE" == '--install' || "$MODE" == '--status' ) && "$rc" -eq 0 ]]; then
+    echo 'EMAIL_BADGE_ACTIVE=YES'
+  elif [[ "$MODE" == '--rollback' && "$rc" -eq 0 ]]; then
+    echo 'EMAIL_BADGE_ACTIVE=NO'
   else
-    echo 'NOT_CONFIRMED'
+    echo 'EMAIL_BADGE_ACTIVE=NOT_CONFIRMED'
   fi
   if ((rc==0)); then echo 'FINAL_STATUS=PASS'; else echo 'FINAL_STATUS=FAIL'; fi
   echo "FINAL_RC=$rc"
@@ -187,6 +188,11 @@ lock_release(){
   pass 'exclusive badge release lock'
 }
 guard_staged(){
+  local live
+  for live in "$SITE/$MAIN_REL" "$SITE/$CACHED_REL"; do
+    [[ -f "$live" && ! -L "$live" && "$(realpath -e "$live")" == "$live" ]] ||
+      { fatal 'live template symlink or invalid path'; return 1; }
+  done
   assert_file "$STAGE/account-main.rollback.php" "$MAIN_OLD" 'main rollback snapshot'
   assert_file "$STAGE/account-cached.rollback.php" "$CACHED_OLD" 'cached rollback snapshot'
   assert_file "$STAGE/account-main.candidate.php" "$MAIN_NEW" 'main badge candidate'
@@ -242,6 +248,11 @@ guard_fresh(){
   state="$(current_state)"
   [[ "$state" == UNINSTALLED ]] ||
     { fatal "expected untouched account UI, got $state"; return 1; }
+  local live
+  for live in "$SITE/$MAIN_REL" "$SITE/$CACHED_REL"; do
+    [[ -f "$live" && ! -L "$live" && "$(realpath -e "$live")" == "$live" ]] ||
+      { fatal 'live account templates not regular'; return 1; }
+  done
   local name
   for name in "${HELPERS[@]}"; do
     [[ ! -e "$HELPER_DIR/$name" && ! -L "$HELPER_DIR/$name" ]] ||
@@ -319,7 +330,11 @@ status_core(){
 }
 rollback_internal(){
   release_guard || return 1
-  local actual source target name i
+  local actual source target name i live
+  for live in "$SITE/$MAIN_REL" "$SITE/$CACHED_REL"; do
+    [[ -f "$live" && ! -L "$live" && "$(realpath -e "$live")" == "$live" ]] ||
+      { fatal 'unsafe live template at rollback'; return 1; }
+  done
   # Check EVERYTHING before the first mutation, allow partial install state.
   actual="$(sha "$SITE/$MAIN_REL")" || return 1
   [[ "$actual" == "$MAIN_OLD" || "$actual" == "$MAIN_NEW" ]] ||
