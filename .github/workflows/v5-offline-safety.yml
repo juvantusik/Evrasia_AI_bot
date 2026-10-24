@@ -472,6 +472,20 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/web-mfa-package-wronghost.log
               grep -Fxq "SITE_CODE_WRITE=NO" /tmp/web-mfa-package-wronghost.log
               echo "PASS: private MFA release package source syntax/fixtures and foreign-host refusal"
+              echo "=== WEBSITE MFA ALL USERS GUARDED DEPLOY AND RESTORE ==="
+              bash -n "$ROOT/deployment/website-mfa-all-users-deploy.sh"
+              bash "$ROOT/deployment/website-mfa-all-users-deploy.sh" --self-test
+              for mode in --preflight --apply; do
+                if bash "$ROOT/deployment/website-mfa-all-users-deploy.sh" "$mode" > /tmp/website-mfa-direct-all-users-denial.log 2>&1; then
+                  echo "FAIL: all-users deployment $mode accepted non-production CI host"
+                  exit 1
+                fi
+                grep -Fxq 'FINAL_STATUS=FAIL' /tmp/website-mfa-direct-all-users-denial.log
+                grep -Fxq 'DATABASE_WRITE=NO' /tmp/website-mfa-direct-all-users-denial.log
+                grep -Fxq 'API_WRITE=NO' /tmp/website-mfa-direct-all-users-denial.log
+                grep -Fxq 'LIVE_SITE_FILES_TOUCHED=NO' /tmp/website-mfa-direct-all-users-denial.log
+              done
+              echo "PASS: guarded all-user installer Bash syntax, offline fixture and foreign-host refusal"
               echo "=== WEBSITE MFA EXISTING PILOT-ONLY TRUSTED TOTP CANARY ==="
               php -l "$ROOT/deployment/website-mfa-pilot-trust-canary.php"
               php "$ROOT/deployment/website-mfa-pilot-trust-canary.php" --self-test
