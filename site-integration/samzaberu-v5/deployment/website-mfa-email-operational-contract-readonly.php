@@ -77,7 +77,7 @@ final class EvEmailOperationalContractReadonly
     private static function showAssurance(string $src):void
     {
         echo "=== 2. EXACT AUTH ASSURANCE CONTRACT ===\n";
-        $lines=explode("\n",sanitizedPhp($src));
+        $lines=explode("\n",self::sanitizedPhp($src));
         $methods=['hasPersistentCurrentAssurance','persistFromSnapshot',
             'resolveCurrentStoredAuthId'];
         foreach($methods as $method) {
@@ -241,6 +241,27 @@ final class EvEmailOperationalContractReadonly
             && str_contains($out,"'select'"),'safe_schema_column_names_visible');
         self::check(substr_count($src,"\n")===substr_count($out,"\n"),
             'line_numbers_preserved');
+
+        // Regression fixture must execute the same method displaying code
+        // as --inspect, not just the masking helper. The previous audit
+        // failed on a missing self:: scope and never reached DB/Mail/Redis.
+        $fixture="<?php class AuthAssuranceService {\n"
+            ."public static function hasPersistentCurrentAssurance(int \$user): bool {"
+            ." \$private='hidden@example.test'; return true; }\n"
+            ."public static function persistFromSnapshot(int \$user): int { return 1; }\n"
+            ."private static function resolveCurrentStoredAuthId(int \$user): int"
+            ." { return 1; }\n}\n";
+        ob_start();
+        try {
+            self::showAssurance($fixture);
+            $rendered=(string)ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        self::check(substr_count($rendered,'SOURCE_METHOD=')===3,
+            'all_three_assurance_method_sources_rendered');
+        self::check(!str_contains($rendered,'hidden@example.test'),
+            'assurance_source_redaction_at_callsite');
         echo "NO_PRODUCTION_CONNECTIONS=YES\n";
     }
 
