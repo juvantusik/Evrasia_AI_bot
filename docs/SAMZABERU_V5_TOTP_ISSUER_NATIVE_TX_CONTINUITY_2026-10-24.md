@@ -16,3 +16,7 @@
 Эти изменения feature-only; они **не делают native TOTP в мобильном V5 готовым к запуску**. Реальные Bitrix staging tests нативного Otp replay ledger, auth epoch hook coverage, доверенных устройств, current site veto, SMS lifecycle, provider receipts и mobile token issuing остаются отдельными prereqs. Публичный V5 AUTH OFF. V4 и работающий сайт с email/SMS login не изменены, реальные SMS не отправлялись. Не загружать production website PHP/JS в репозиторий.
 
 CI: [GitHub Actions ephemeral MariaDB](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40115770592) (проверить конкретный результат; до PASS не объявлять accepted). Общий offline safety JS regression может оставаться FAIL независимо от TOTP SQL. Следующий шаг после green CI: нативный proof V5 factory и SMS/TOTP lifecycle acceptance, без дефолтных permissive ports.
+
+## Результат фактического CI
+
+[GitHub Actions #40115770592](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40115770592): `completed/success`, `FINAL_STATUS=PASS`. Журнал изолированного GitHub runner подтвердил `PASS: real MariaDB locked password/TOTP proof (73 additional assertions)` и `PASS: combined SMS/bridge/password/composition/epoch/native suites (483 assertions, separate 43-session suite excluded)`. Сценарии hidden COMMIT и COMMIT+BEGIN внутри callback проходят без выпуска challenge и без несанкционированного rollback чужого scope. Тесты использовали только **synthetic callbacks и ephemeral MariaDB**, а не установленный production Bitrix. `REAL_NATIVE_TOTP_VERIFIER_TESTED=NO`; V5 public AUTH OFF.
