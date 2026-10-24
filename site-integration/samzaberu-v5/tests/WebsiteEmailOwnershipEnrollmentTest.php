@@ -98,7 +98,7 @@ try {
     $bad('future_profile_stamp',static fn(array &$s,callable $b)=>$b($s,77,
         'current@example.com',1800000050));
 
-    foreach (['totp','trusted'] as $assurance) {
+    foreach (['totp','trusted','persistent'] as $assurance) {
         $st=[];$res=$begin($st,77,$email,$stamp,$sid,$assurance,$assuredAt);
         $check($res['status']==='email_ownership_challenge',
             'recent_' . $assurance . '_may_verify_email');
