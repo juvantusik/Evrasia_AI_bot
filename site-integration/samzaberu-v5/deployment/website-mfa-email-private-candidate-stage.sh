@@ -202,7 +202,7 @@ function patch(string $src, string $dst, string $sha,
     }
     $parts[$lineNo-1] = $changed;
     $after = implode('', $parts);
-    if (substr_count($after, 'evrasiaEmailBadgeBridge') !== 3
+    if (substr_count($after, 'evrasiaEmailBadgeBridge') !== 4
         || str_replace($snippet, '', $after) !== $before) {
         throw new RuntimeException('badge_reversal_invariant_failed');
     }
