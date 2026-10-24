@@ -563,6 +563,16 @@ jobs:
               grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-email-mail-only-wronghost.log
               grep -Fxq 'PRODUCTION_SITE_WRITE=NO' /tmp/ev-email-mail-only-wronghost.log
               echo "PASS: Bitrix b_lang mail-only gate and full inspector deny wrong host"
+              echo "=== VERIFIED EMAIL CURRENT STORED AUTH ASSURANCE AND HTTPS-ONLY ENDPOINT ==="
+              php -l "$ROOT/deployment/website-mfa/EmailOwnershipSessionAssurance.php"
+              php -l "$ROOT/tests/WebsiteEmailOwnershipSessionAssuranceTest.php"
+              php "$ROOT/tests/WebsiteEmailOwnershipSessionAssuranceTest.php"
+              php -l "$ROOT/deployment/website-mfa/EmailOwnershipWebEndpoint.php"
+              php -l "$ROOT/deployment/website-mfa/ev-email-ownership.php"
+              php -l "$ROOT/tests/WebsiteEmailOwnershipWebEndpointTest.php"
+              php "$ROOT/tests/WebsiteEmailOwnershipWebEndpointTest.php"
+              php -l "$ROOT/deployment/website-mfa/EmailAccountBadgeBridge.php"
+              echo "PASS: server-persistent assurance, JSON/CSRF/HTTPS boundary and account badge button"
               echo "=== WEBSITE ACCOUNT REAL EMAIL CONFIRMATION WIDGET AND OTP ACTIONS (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailAccountConfirmWidget.php"
               php -l "$ROOT/tests/WebsiteEmailAccountConfirmWidgetTest.php"
