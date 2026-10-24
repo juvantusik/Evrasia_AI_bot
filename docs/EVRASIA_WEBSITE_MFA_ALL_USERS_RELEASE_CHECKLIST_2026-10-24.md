@@ -1,5 +1,7 @@
 # Evrasia website MFA / all users — release checklist
 
+**НОВЕЙШИЙ ФАКТ PRODUCTION, 24.10.2026: ALL-USERS WEBSITE MFA УСТАНОВЛЕН.** Операторский `--apply` 20 PASS / FINAL_RC=0, последующий независимый `--status` 6 PASS / FINAL_RC=0, `RELEASE_STATE=INSTALLED_ALL_USERS`; outer WRAPPER_RC=0. Релиз `/root/ev-web-mfa-release-packages/all-users-website-mfa-20261024-064446-b03bafa5`, локальный `restore.sh` в нём. **BROWSER_ACCEPTANCE=PENDING; rollback не запускался.** Сведения ниже о `NOT_DEPLOYED`, отсутствие SMS helper и необходимости отдельной когорты — исторические состояния до установки. Применять повторно `--apply` не требуется. Следующий этап: реальные входы, PIN, SMS ошибки и обратная связь; откат только при проблеме.
+
 **Состояние на 24.10.2026:** пилот успешно подтверждён пользователем; запуск для всех **одобрен как задача**, но **не развёрнут**. Главный контекст: [WEBSITE MFA all-users handoff](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md).
 
 **Новейшая запись 24.10.2026:** production SHA и helper presence уже проверены, PRIVATE all-user release package уже создан и PHP-linted. Не тратить время на повторный первичный build; следующий gate — внешний IP/proxy, численные SMS caps, безопасность кандидатов, rollback и cohort acceptance. [Конкретный checkpoint](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md).
@@ -51,12 +53,12 @@
 
 ## E. Safe production rollout
 
-- [ ] Текущие installed SHA/metadata/file names и backup **по каждому live файлу** захвачены непосредственно перед релизом; rollback проверен. Текущие пилотные файлы не заменяются старыми до-пилотными версиями.
-- [ ] Комплект с безопасным install/verify/rollback (только одобренные website targets), с lock, idempotency, fail-closed guard по exact host/source/UID, atomic rename + owner/gid/mode, sha/lint, no partial install.
-- [ ] Подготовлен rollback для всего согласованного сайта и отдельно для платного SMS helper; test rollback на безопасных источниках, без удаления доверенных устройств.
+- [x] Непосредственно перед `--apply` проверены installed SHA, metadata и оригинальный пилот, созданы четыре root-only `*.rollback.php` и `*.metadata`; candidate source SHA и оригинальные source SHA postcheck PASS. **Фактический rollback на live НЕ запускался**.
+- [x] Installer с exact host/root SHA, flock, fresh backup, staged PHP lint, атомарным переименованием, отдельной `--status` и offline `--rollback` установлен для четырёх website targets + SMS helper. `--apply` 20 PASS; `--status` 6 PASS.
+- [x] Точный root-only rollback package и `restore.sh` подготовлены, source/script/manifest SHA и права проверены installer и status. **Сам restore live пока не тестировался**, удаление trusted devices не предусмотрено.
 - [x] **Обновлённое решение владельца 24.10.2026:** отдельный canary-сегмент отменён, разрешено контролируемое **direct all-users** включение с уже принятым пилотом как baseline. При этом source SHA, PHP lint, глобальная SMS-защита, полный root-only backup, независимый offline rollback и post-deploy browser E2E не отменены; INSTALL до этих guards запрещён.
-- [ ] Production canary E2E и наблюдаемость SMS/ошибок/логина подтверждены, только затем полный WEBSITE opt-in и тесты на реальных пользователях.
-- [ ] После действия обновить [общий handoff](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md) и [Project Context](AI_PROJECT_CONTEXT.md) — конкретные SHA/CI/операторские результаты, статус `STAGED/INSTALLED/VERIFIED`.
+- [ ] **ПОСЛЕ фактического массового source rollout:** подтвердить E2E на реальном браузере и агрегированно наблюдать ошибки и SMS-бюджет. Отдельная cohort/canary отменена владельцем, но проверки безопасности продолжаются.
+- [x] После фактической установки обновлён [общий handoff](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md) и [Project Context](AI_PROJECT_CONTEXT.md); статус `PRODUCTION_SOURCE_INSTALLED=YES`, `BROWSER_ACCEPTANCE=PENDING`.
 
 ## F. Workstream separation
 
@@ -64,6 +66,6 @@
 - **Mobile SamZaberu V5:** публичный домен `https://evrasia.rest/api/v5`, public legal GET работают, **V5 AUTH OFF**. Рабочая ветка в том же GitHub, отдельные native adapter/transaction gates. Не включать V5 AUTH автоматически в ходе WEBSITE rollout.
 - **Legacy mobile V4:** оставить работоспособным до отдельного задокументированного cutover. Никаких произвольных переписываний.
 
-**Следующий конкретный этап:** `REBASE_WEBSITE_V3_ONTOP_OF_LIVE_PILOT_AND_CLOSE_SMS_RELEASE_GATES`.
+**Следующий конкретный этап (после установленного all-users source rollout):** `POST_RELEASE_REAL_BROWSER_E2E_AND_SMS_ERROR_OBSERVATION`. **Не запускать повторную установку и не возвращаться к старой сборке пакета.**
 
 **Порядок итерации:** READ_ONLY exact current sources → feature generator/candidate & CI → runtime/security gates → rollback-ready controlled install → real browser verification → expand all-users. Если диагностический шаг FAIL — разбирать его вывод, не ослаблять guards вслепую. Для оператора всегда один paste-ready Bash-block с `bash -n`, понятными `===` разделами и `FINAL_STATUS`/`FINAL_RC`.
