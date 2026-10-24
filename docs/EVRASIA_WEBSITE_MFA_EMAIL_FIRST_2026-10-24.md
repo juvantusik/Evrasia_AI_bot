@@ -1,4 +1,14 @@
 # Evrasia AI Bot — email-first website login challenge с SMS fallback
+## 24.10.2026 — MAIL REGISTRY + MANIFEST FULLY INSTALLED: operator PASS, template ID 94 (LATEST)
+
+Operator ran immutable `EV_EMAIL_MAIL_MANIFEST_RECOVERY` script `website-mfa-email-mail-checkpoint-reconcile.php` commit `ffe9c489e20da51a8e1f5aceea06630ae6552e88`, blob `9481bdaca00a2030d43a9a5513955a588ecb6301`, plus independently verified prior mail release immutable `597fcfff79ac048d23c0a349e8df15db55699bae`. **ALL PHASES PASS:**
+- `--self-test PASS_COUNT=7 FINAL_RC=0`, `--preflight PASS_COUNT=18 FINAL_RC=0`: **exactly ONE new native `EVRASIA_WEB_EMAIL_OWNERSHIP` event**, **ONE corresponding active text-only Bitrix mail template**, **MESSAGE_ID=94**, site `s1` (`evrasia.rest`), language `ru`, recipient macro `#EMAIL_TO#`, `#VERIFY_CODE#` (no raw credentials, mail/SMS not sent).
+- `--apply PASS_COUNT=29 FINAL_RC=0`: **MANIFEST_FILE_WRITE=YES ONLY**, `DATABASE_WRITE=NO`, source PHP untouched; root-only original PREPARED manifest backup `manifest.before-checkpoint-reconcile.txt` created and verified, final `manifest.txt` recorded actual `TEMPLATE_ID=94` and `PHASE=CREATED_PENDING_STATUS` via atomic rename.
+- `--status PASS_COUNT=19 FINAL_RC=0`: private manifest FINAL, DB rows exact and backup preserved. Independent ORIGINAL buffered mail installer `--status PASS_COUNT=43 FINAL_RC=0`: `EMAIL_OWNERSHIP_EVENT_TYPE=INSTALLED`, `EMAIL_OWNERSHIP_TEMPLATE=INSTALLED`, `EMAIL_MAIL_TEMPLATE_ID=94`.
+- Wrapper `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`. **No need to re-run mail event install/resume/manifest reconciliation**, no mail queued/sent. Website V4 MFA, PIN, trust, V4/V5, red email badge, empty `ev_web_email_ownership_proof` and HMAC-only secret are preserved.
+
+**NEXT PROJECT WORK (not yet in production):** final website-only email OTP AJAX POST endpoint `/local/ajax/ev-email-ownership.php`, standard Bitrix `check_bitrix_sessid()`, authenticated/current user, verified server assurance (IMPORTANT: existing `AuthAssuranceService::hasPersistentCurrentAssurance` accepts only current trusted+SMS methods, not TOTP—do not falsely call it proof of recent TOTP), exact live b_user EMAIL+TIMESTAMP_X, site s1/template 94, Redis rate-budget, PHPSession-bound OTP, HMAC ledger persistence, and existing badge bridge inline button+modal. Release must be gated on endpoint readiness with root-only backup/rollback, test on real account (no synthetic) and keep email-first login OFF. `UF_CHECK_EMAIL_DATE` never used as proof. Avoid modifying any existing signin/TOTP trust/PIN, API V4 or V5.
+
 
 ## 24.10.2026 — native Bitrix mail event+template created, checkpoint manifest-only repair pending
 
