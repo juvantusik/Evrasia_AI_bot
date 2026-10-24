@@ -26,6 +26,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Browser DOM event regression (host Node, no network)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ROOT=site-integration/samzaberu-v5
+          node --check "$ROOT/deployment/website-mfa/ev-email-confirm-widget.js"
+          node --check "$ROOT/tests/WebsiteEmailAccountConfirmWidgetClickTest.cjs"
+          node "$ROOT/tests/WebsiteEmailAccountConfirmWidgetClickTest.cjs"
+
       - name: Execute isolated PHP checks (no network or writable source)
         shell: bash
         run: |
@@ -613,9 +622,6 @@ jobs:
               php -l "$ROOT/deployment/website-mfa/EmailAccountConfirmWidget.php"
               php -l "$ROOT/tests/WebsiteEmailAccountConfirmWidgetTest.php"
               php "$ROOT/tests/WebsiteEmailAccountConfirmWidgetTest.php"
-              node --check "$ROOT/deployment/website-mfa/ev-email-confirm-widget.js"
-              node --check "$ROOT/tests/WebsiteEmailAccountConfirmWidgetClickTest.cjs"
-              node "$ROOT/tests/WebsiteEmailAccountConfirmWidgetClickTest.cjs"
               php -l "$ROOT/deployment/website-mfa/EmailOwnershipActionHandler.php"
               php -l "$ROOT/tests/WebsiteEmailOwnershipActionHandlerTest.php"
               php "$ROOT/tests/WebsiteEmailOwnershipActionHandlerTest.php"
