@@ -17,6 +17,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php'
   workflow_dispatch:
 
 permissions:
@@ -66,6 +67,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php \
             site-integration/samzaberu-v5/src/V5SmsDispatchBudget.php \
             site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php \
+            site-integration/samzaberu-v5/src/V5SeparatedFactorLifecycle.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php \
@@ -75,7 +77,8 @@ jobs:
             site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php \
-            site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php; do
+            site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php \
+            site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php; do
             php -l "$file"
           done
           echo 'PHP_LINT=PASS'
@@ -95,6 +98,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5FirstFactorAttemptGateTest.php
           php site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php
           php site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php
+          php site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php
           echo 'FIRST_FACTOR_PUBLIC_GATES=PASS'
 
       - name: Final no-production attestation
