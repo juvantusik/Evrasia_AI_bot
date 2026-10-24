@@ -496,6 +496,17 @@ jobs:
               echo "=== WEBSITE MFA ACCOUNT BADGE BITRIX CONNECTION BRIDGE (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailAccountBadgeBridge.php"
               echo "PASS: website account badge bridge source syntax; production integration still disabled"
+              echo "=== WEBSITE EMAIL OPERATIONAL SOURCE / MAIL SITE / REDIS READONLY GATE ==="
+              php -l "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php"
+              php "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php" --self-test
+              if php "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php" --inspect > /tmp/ev-email-operational-wronghost.log 2>&1; then
+                echo "FAIL: operation contract accepted CI host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/ev-email-operational-wronghost.log
+              grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-email-operational-wronghost.log
+              grep -Fxq 'PRODUCTION_SITE_WRITE=NO' /tmp/ev-email-operational-wronghost.log
+              echo "PASS: final verified-login, Bitrix mail and Redis source gate is read-only and production-only"
               echo "=== WEBSITE ACCOUNT REAL EMAIL CONFIRMATION WIDGET AND OTP ACTIONS (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailAccountConfirmWidget.php"
               php -l "$ROOT/tests/WebsiteEmailAccountConfirmWidgetTest.php"
