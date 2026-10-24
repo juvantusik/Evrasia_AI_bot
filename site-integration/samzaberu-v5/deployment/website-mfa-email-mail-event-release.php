@@ -320,6 +320,9 @@ EMAIL;
         $_SERVER['SERVER_PORT']='443';
         $_SERVER['HTTPS']='on';
         $_SERVER['REQUEST_METHOD']='GET';
+        $_SERVER['REQUEST_URI']='/';
+        $_SERVER['SCRIPT_NAME']='/index.php';
+        if(!defined('NO_AGENT_STATISTIC'))define('NO_AGENT_STATISTIC',true);
         self::ok(!headers_sent(),'buffered_CLI_headers_not_sent');
         $oldLevel=ob_get_level();
         ob_start();
@@ -465,6 +468,14 @@ EMAIL;
                 $tag='guarded_email_mail_release_failed';
             }
             echo "FAIL: ".$tag."\n";
+            $parts=explode('\\',get_class($e));
+            $type=end($parts);
+            $file=basename($e->getFile());
+            if(preg_match('/^[A-Za-z][A-Za-z0-9_]{0,79}$/D',(string)$type)===1)
+                echo "FAIL_EXCEPTION_CLASS=".$type."\n";
+            if(preg_match('/^[A-Za-z0-9_.-]{1,100}$/D',$file)===1)
+                echo "FAIL_EXCEPTION_FILE_BASENAME=".$file."\n";
+            echo "FAIL_EXCEPTION_LINE=".(int)$e->getLine()."\n";
             $rc=1;
             if(($mode==='--install'||$mode==='--resume')&&self::$dbWrite)
                 echo "PARTIAL_MAIL_REGISTRY=PRESERVE_CHECKPOINT_MANUAL_REVIEW\n";
