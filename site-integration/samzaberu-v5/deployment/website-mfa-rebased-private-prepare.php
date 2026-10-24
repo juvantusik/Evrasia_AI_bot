@@ -285,12 +285,12 @@ final class EvrasiaWebsiteMfaRebasedCandidate
 
     private static function rewriteSignin(string $s): string
     {
-        self::require(substr_count($s, 'self::PILOT_USER_ID') === 9,
+        self::require(substr_count($s, 'self::PILOT_USER_ID') === 10,
             'signin_accepted_pilot_references_changed');
         $s = self::changeMethod($s, 'processAction', static function (string $m) {
             $m = self::regex($m,
                 '/\$userId\s*===\s*self::PILOT_USER_ID\b/',
-                '$userId > 0', 5, 'signin_process_dynamic_user');
+                '$userId > 0', 6, 'signin_process_dynamic_user');
             self::require(str_contains($m, 'startPilotSmsChallenge')
                 && str_contains($m, 'hasValidPilotTrust')
                 && str_contains($m, 'isPilotTotpActivated')
