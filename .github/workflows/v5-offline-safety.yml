@@ -416,6 +416,17 @@ jobs:
               php -l "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               php "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               echo "PASS: compact accessible green/red account email indicator with a single server-owned proof"
+              echo "=== WEBSITE MFA BADGE-ONLY REVERSIBLE PRODUCTION INSTALLER (FEATURE ONLY) ==="
+              bash -n "$ROOT/deployment/website-mfa-email-badge-only-release.sh"
+              bash "$ROOT/deployment/website-mfa-email-badge-only-release.sh" --self-test
+              if bash "$ROOT/deployment/website-mfa-email-badge-only-release.sh" --preflight > /tmp/web-mfa-badge-installer-wronghost.log 2>&1; then
+                echo "FAIL: badge installer accepted non-production host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/web-mfa-badge-installer-wronghost.log
+              grep -Fxq 'DATABASE_WRITE=NO' /tmp/web-mfa-badge-installer-wronghost.log
+              grep -Fxq 'SIGNIN_WRITE=NO' /tmp/web-mfa-badge-installer-wronghost.log
+              echo "PASS: reversible badge-only release script self-tests, lint and wrong-host refusal"
               echo "=== WEBSITE MFA PRIVATE BADGE CANDIDATE PREPARATION (FEATURE ONLY) ==="
               bash -n "$ROOT/deployment/website-mfa-email-private-candidate-stage.sh"
               bash "$ROOT/deployment/website-mfa-email-private-candidate-stage.sh" --self-test
