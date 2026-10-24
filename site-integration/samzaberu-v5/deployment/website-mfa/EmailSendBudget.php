@@ -23,13 +23,19 @@ local limits = {
     tonumber(ARGV[2]),
     tonumber(ARGV[3])
 }
-for i = 1, 3 do
+-- A fixed minute bucket would allow two emails one second apart when
+-- the minute changes. Hold a true per-account 60-second cooldown key.
+if redis.call('GET', KEYS[1]) then
+    return 0
+end
+for i = 2, 3 do
     local n = tonumber(redis.call('GET', KEYS[i]) or '0')
     if not n or n >= limits[i] then
         return 0
     end
 end
-for i = 1, 3 do
+redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[4]))
+for i = 2, 3 do
     local n = redis.call('INCR', KEYS[i])
     if n == 1 then
         redis.call('EXPIRE', KEYS[i], tonumber(ARGV[i + 3]))
@@ -47,11 +53,10 @@ LUA;
 
         // No raw address, phone number, user ID, PHP session ID or IP in keys.
         $accountHash = hash('sha256', (string) $userId);
-        $minute = intdiv($time, self::PER_USER_COOLDOWN_SECONDS);
         $hour = intdiv($time, 3600);
         $prefix = 'evrasia:{web_mfa_email_login}:v1:';
         $keys = [
-            $prefix . 'user:minute:' . $minute . ':' . $accountHash,
+            $prefix . 'user:cooldown:' . $accountHash,
             $prefix . 'user:hour:' . $hour . ':' . $accountHash,
             $prefix . 'global:hour:' . $hour,
         ];
@@ -62,7 +67,7 @@ LUA;
                 1,
                 self::PER_USER_PER_HOUR,
                 self::GLOBAL_PER_HOUR,
-                120,
+                self::PER_USER_COOLDOWN_SECONDS,
                 7200,
                 7200,
             ], 3);
