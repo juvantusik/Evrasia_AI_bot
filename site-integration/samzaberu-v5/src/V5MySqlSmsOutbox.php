@@ -350,7 +350,12 @@ final readonly class V5MySqlSmsOutbox implements V5AtomicSmsOutboxPort
     private function assertWindows(V5SmsQueueReservation $reservation): void
     {
         // The coordinator is the sole source of these trusted windows.
-        if (count($reservation->windows) !== count(V5SmsBudgetPolicy::SCOPES)) {
+        // Seven per-account/phone/IP/device quotas always remain mandatory.
+        // The three shared caps are optional until calibrated against real
+        // guest traffic; accepting their absence must not disable the store.
+        $count = count($reservation->windows);
+        if ($count < count(V5SmsBudgetPolicy::REQUIRED_SCOPES)
+            || $count > count(V5SmsBudgetPolicy::SCOPES)) {
             throw new RuntimeException('sms_budget_count_invalid');
         }
         $last = '';
@@ -370,7 +375,10 @@ final readonly class V5MySqlSmsOutbox implements V5AtomicSmsOutboxPort
                 }
             }
         }
-        if ($expensive !== ($reservation->price->maxMinorUnits === 1 ? 0 : 1)) {
+        // An explicit global_cost_day charge may appear once, but must
+        // never be required in an otherwise fully protected local-only plan.
+        if ($expensive > 1
+            || ($reservation->price->maxMinorUnits === 1 && $expensive !== 0)) {
             throw new RuntimeException('sms_budget_cost_invalid');
         }
     }

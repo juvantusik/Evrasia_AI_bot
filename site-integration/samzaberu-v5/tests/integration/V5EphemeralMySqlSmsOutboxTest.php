@@ -1234,6 +1234,33 @@ smsCheck((new V5MySqlSmsDispatchClaims($db,new CiSmsDispatchSafety()))
     ->claimQueuedOnce($raceDeliveryId)===null,
     'claimed after crash stays claimed and cannot auto-retry uncertain send');
 
+// Confirm the actual InnoDB implementation also accepts the production
+// owner's seven mandatory local quotas without a shared global daily/spend cap.
+// This fixture has no paid gateway, Bitrix session, or production connection.
+$localOnlyId=hash('sha256','v5 ci local-only SMS budget 2026-10-24');
+smsChallenge($db,$localOnlyId);
+$localOnlyWindows=array_slice(smsWindows(240,3600),0,7);
+$localBeforeOutbox=smsCount($db,'ev_v5_sms_outbox');
+$localBeforeBudget=smsCount($db,'ev_v5_sms_budget_windows');
+$localQueued=smsStore($db)->reserveAndQueue(
+    smsRequest($localOnlyId,$localOnlyWindows)
+);
+smsCheck($localQueued instanceof V5SmsQueuedDelivery && !$db->inTransaction(),
+    'seven-scope local-only quota commits real InnoDB SMS queue');
+smsCheck(smsCount($db,'ev_v5_sms_outbox')===$localBeforeOutbox+1
+    && smsCount($db,'ev_v5_sms_budget_windows')===$localBeforeBudget+7,
+    'real InnoDB reserves exactly seven local quotas, no global caps');
+$q=$db->prepare('SELECT status FROM ev_v5_sms_outbox WHERE delivery_id=?');
+$q->execute([$localQueued->deliveryId]);
+smsCheck($q->fetchColumn()==='queued',
+    'seven-scope SMS is queued and never falsely reported sent');
+$localBeforeOutbox=smsCount($db,'ev_v5_sms_outbox');
+smsDeny(fn()=>smsStore($db)->reserveAndQueue(
+    smsRequest($localOnlyId,$localOnlyWindows)),
+    'same local-only initial challenge cannot queue a second paid SMS');
+smsCheck(smsCount($db,'ev_v5_sms_outbox')===$localBeforeOutbox,
+    'duplicate local-only challenge leaves durable queue unchanged');
+
 echo "PASS: real ephemeral MariaDB SMS quota/outbox ($checks assertions)\n";
 echo "MODE=GITHUB_EPHEMERAL_CI_ONLY\nREAL_MARIADB_INNODB=YES\n";
 echo "TWO_PROCESS_SMS_FIRST_SEND_RACE=YES\n";

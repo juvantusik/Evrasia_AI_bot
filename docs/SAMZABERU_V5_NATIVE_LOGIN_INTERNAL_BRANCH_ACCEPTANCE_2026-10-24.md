@@ -61,3 +61,9 @@
 - Older general V5 offline safety workflow #40115016840 FAIL was at website email confirmation JS regression (`WebsiteEmailAccountConfirmWidgetClickTest.cjs`), **before SMS PHP tests**; it is an independent existing issue, not evidence that V5 SMS budget test failed. Do not claim full offline suite green. Actual Bitrix native V5 SMS issuance and real provider delivery still OFF and unverified.
 
 **Remaining V5 AUTH prerequisites:** real site-current timed lock/security/dynamic login-veto attestation, native per-user event/epoch/strong device/TOTP consume under same physical locked transaction, real verified-phone SMS gateway/receipt, real Bitrix E2E. Preserve V4; do not enable V5 public AUTH on the basis of feature-only PHP test.
+
+## 24.10.2026 — V5 SMS durable outbox must honor optional global caps
+
+В feature-only SQL очереди `V5MySqlSmsOutbox::assertWindows` обнаружен настоящий контрактный разрыв: после разрешения 7 обязательных индивидуальных окон в `V5SmsDispatchBudget` SQL-адаптер продолжал отклонять всё, кроме ровно 10 окон и обязательного денежного глобального окна. Это сделал бы публичную V5 SMS выдачу недоступной при согласованной политике без общих cap.
+
+Реализация исправлена для **7–10 канонически отсортированных HMAC-окон**: допускается отсутствие общего денежного окна, но всё ещё блокируются дубли, переполненные/просроченные квоты, неподтверждённый account/phone/epoch, повторная отправка без cooldown и несоответствующая цена. Встроены два типа регрессии: fake-PDO атомарность и реальный InnoDB в GitHub ephemeral MariaDB с отдельной 7-window фикстурой. Это исключительно **неактивный GitHub feature source**: `V5_AUTH=OFF`, `SMS_SENT=NO`, `V4_CHANGED=NO`, `WEBSITE_CHANGED=NO`. После выполнения Actions документировать их реальные статусы; без green CI не заявлять acceptance.

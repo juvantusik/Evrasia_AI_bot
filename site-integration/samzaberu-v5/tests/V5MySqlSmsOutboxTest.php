@@ -209,6 +209,39 @@ $db->now+=60;
 expectFail(fn()=>$store->reserveAndQueue(reservation(true)),'fourth SMS blocked');
 ok([$db->challenge,$db->budget,$db->outbox]===$state,'fourth SMS no writes');
 
+// Regression: real SQL outbox must support all SEVEN mandatory local scopes
+// without silently reintroducing rejected shared/global SMS caps.
+[$store,$db,$site,$factory]=fixture();
+$localOnly=array_slice(windows(),0,7);
+$localQueued=$store->reserveAndQueue(reservation(false,$localOnly));
+ok($localQueued instanceof V5SmsQueuedDelivery,
+    'seven individual quotas permit first password-proven SMS queue');
+ok($db->commits===1 && !$db->inTransaction(),
+    'seven-scope local-only queue commits one SQL transaction');
+ok(count($db->budget)===7 && sumBudget($db)===7,
+    'seven local quota windows are charged without global SMS spend cap');
+ok(count($db->outbox)===1 && $db->challenge['sms_sent_count']===1,
+    'one encrypted SMS envelope queued, not a claimed paid send');
+$localCommitted=[$db->challenge,$db->budget,$db->outbox];
+expectFail(fn()=>$store->reserveAndQueue(reservation(false,$localOnly)),
+    'local-only quota mode still rejects duplicate first SMS');
+ok([$db->challenge,$db->budget,$db->outbox]===$localCommitted,
+    'duplicate local-only SMS does not incur any extra quota charge');
+[$store,$db,$site,$factory]=fixture();
+$localTight=array_slice(windows(max:0+1),0,7);
+$localQueued=$store->reserveAndQueue(reservation(false,$localTight));
+ok($localQueued instanceof V5SmsQueuedDelivery,'local one-message quota initial send allowed');
+$db->now+=60;
+$localCommitted=[$db->challenge,$db->budget,$db->outbox];
+expectFail(fn()=>$store->reserveAndQueue(reservation(true,$localTight)),
+    'local-only quota exhaustion rejects paid resend');
+ok([$db->challenge,$db->budget,$db->outbox]===$localCommitted,
+    'local-only exhausted resend preserves atomic rollback');
+[$store,$db,$site,$factory]=fixture();
+$invalidLocal=array_slice(windows(),0,6);
+expectFail(fn()=>$store->reserveAndQueue(reservation(false,$invalidLocal)),
+    'six-quota underconfigured payload cannot reach the SQL queue');
+
 // Exhaust only the LAST HMAC quota; earlier nine increments must rollback.
 [$store,$db,$site,$factory]=fixture();
 $last=windows(priceCap:2500);
