@@ -378,6 +378,11 @@ jobs:
               grep -Fxq 'SITE_CODE_WRITE=NO' /tmp/web-mfa-email-first-audit-wronghost.log
               grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/web-mfa-email-first-audit-wronghost.log
               echo "PASS: source-only email integration mapper rejects wrong host"
+              echo "=== WEBSITE MFA EMAIL FIRST SEND BUDGET (FEATURE ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa/EmailSendBudget.php"
+              php -l "$ROOT/tests/WebsiteEmailSendBudgetTest.php"
+              php "$ROOT/tests/WebsiteEmailSendBudgetTest.php"
+              echo "PASS: email-only Redis reservation limits, privacy and fail-closed errors"
               echo "=== WEBSITE MFA EMAIL-FIRST STATE MACHINE (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailLoginChallenge.php"
               php -l "$ROOT/tests/WebsiteEmailLoginChallengeTest.php"
