@@ -296,7 +296,8 @@ final class EvEmailConfirmSiteRelease
     }
 
     private static function atomicInstall(
-        string $source,string $target,int $uid,int $gid,int $mode
+        string $source,string $target,int $uid,int $gid,int $mode,
+        ?string $expectedOldBlob=null
     ):void {
         if(!is_file($source)||is_link($source)||is_link($target))
             throw new \RuntimeException('exact_regular_file_install_required');
@@ -316,6 +317,16 @@ final class EvEmailConfirmSiteRelease
             if(fileowner($temp)!==$uid||filegroup($temp)!==$gid
                 ||(fileperms($temp)&0777)!==$mode)
                 throw new \RuntimeException('target_owner_mode_mismatch');
+            // Recheck the destination immediately before atomic rename.
+            // New helpers must still be absent; for bridge replacement the
+            // exact expected old blob must still own this destination.
+            if($expectedOldBlob===null) {
+                if(file_exists($target)||is_link($target))
+                    throw new \RuntimeException('unexpected_new_target_race');
+            } elseif(is_link($target)
+                ||self::gitBlob($target)!==$expectedOldBlob) {
+                throw new \RuntimeException('old_bridge_changed_before_atomic_rename');
+            }
             if(!rename($temp,$target))
                 throw new \RuntimeException('atomic_install_rename_failed');
             self::$write=true;
@@ -374,7 +385,7 @@ final class EvEmailConfirmSiteRelease
         }
         // 2. Bridge can render only RED until the endpoint exists.
         self::atomicInstall($dir.'/EmailAccountBadgeBridge.php',$existing,
-            $owner,$group,$mode);
+            $owner,$group,$mode,self::LEGACY_BRIDGE_BLOB);
         self::knownBlob($existing,self::CANDIDATES['EmailAccountBadgeBridge.php'],
             'new_bridge_installed_without_template_rewrite');
         // 3. Endpoint is installed LAST; activates the button automatically.
@@ -430,7 +441,8 @@ final class EvEmailConfirmSiteRelease
         $endpoint=self::target('ev-email-ownership.php');
         self::pass(unlink($endpoint),'public_endpoint_disabled_first');
         self::atomicInstall(self::RELEASE.'/bridge.original.php',
-            self::target('EmailAccountBadgeBridge.php'),1005,$group,$mode);
+            self::target('EmailAccountBadgeBridge.php'),1005,$group,$mode,
+            self::CANDIDATES['EmailAccountBadgeBridge.php']);
         self::knownBlob(self::target('EmailAccountBadgeBridge.php'),
             self::LEGACY_BRIDGE_BLOB,'restored_original_passive_email_badge');
         foreach(self::CANDIDATES as $name=>$blob) {
