@@ -367,6 +367,17 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-website-wronghost.log
               grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/v5-website-wronghost.log
               echo "PASS: new rollout preparer is denied on GitHub Actions and has no install mode"
+              echo "=== WEBSITE MFA EXACT EMAIL FIELD WRITER CONTEXT (OFFLINE) ==="
+              php -l "$ROOT/deployment/website-mfa-email-writer-logic-readonly.php"
+              php "$ROOT/deployment/website-mfa-email-writer-logic-readonly.php" --self-test
+              if php "$ROOT/deployment/website-mfa-email-writer-logic-readonly.php" --inspect > /tmp/web-mfa-email-writer-wronghost.log 2>&1; then
+                echo "FAIL: exact email field source inspector accepted non-production CI host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/web-mfa-email-writer-wronghost.log
+              grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/web-mfa-email-writer-wronghost.log
+              grep -Fxq 'PRODUCTION_SITE_WRITE=NO' /tmp/web-mfa-email-writer-wronghost.log
+              echo "PASS: email writer source SHA-pinned inspection redaction and CI host denial"
               echo "=== WEBSITE MFA VERIFIED EMAIL FIELD SOURCE/SCHEMA (FEATURE-ONLY) ==="
               php -l "$ROOT/deployment/website-mfa-email-field-provenance-readonly.php"
               php "$ROOT/deployment/website-mfa-email-field-provenance-readonly.php" --self-test
