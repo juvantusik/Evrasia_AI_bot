@@ -58,7 +58,11 @@ cleanup() {
     echo '=== 5. RESULT ==='
     echo "MODE=$MODE"
     echo "PASS_COUNT=$PASS_COUNT"
-    echo "TEMPORARY_SITE_PHP_CREATED=$PROBE_CREATED"
+    if [[ "$MODE" == --self-test ]]; then
+        echo 'TEMPORARY_SITE_PHP_CREATED=NO'
+    else
+        echo "TEMPORARY_SITE_PHP_CREATED=$PROBE_CREATED"
+    fi
     echo "TEMPORARY_SITE_PHP_REMOVED=$PROBE_REMOVED"
     echo "ORIGIN_ROUTE_VERIFIED=$VERIFIED"
     echo "EXTERNAL_EVIDENCE=$EXTERNAL_EVIDENCE"
