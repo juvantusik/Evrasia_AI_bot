@@ -47,12 +47,14 @@
 - [ ] Desktop/mobile browser, повторный вход, другие пользователи без установленного TOTP.
 - [ ] Отсутствие необычного роста расходов SMS и ошибок; логи без PIN, SMS-кодов, OTP secrets, cookie/токенов.
 
+**Порядок релиза изменён по явному решению пользователя:** целевой охват — сразу все пользователи, без отдельного cohort. Если проверка installer fails — сайт не меняется либо выполняется guarded rollback. Исходная source-only проверка пакета от 24.10: PASS_COUNT=17, FINAL_RC=0, что **не является web E2E**. Feature-only installer: `deployment/website-mfa-all-users-deploy.sh`, конфигурация Redis защитных потолков 100/h и 500/day, per-REMOTE_ADDR потолок 100/h временно дублирует глобальный до независимой проверки внешнего IP. Exact release SHA и механика rollback обязательно проверяются перед применением.
+
 ## E. Safe production rollout
 
 - [ ] Текущие installed SHA/metadata/file names и backup **по каждому live файлу** захвачены непосредственно перед релизом; rollback проверен. Текущие пилотные файлы не заменяются старыми до-пилотными версиями.
 - [ ] Комплект с безопасным install/verify/rollback (только одобренные website targets), с lock, idempotency, fail-closed guard по exact host/source/UID, atomic rename + owner/gid/mode, sha/lint, no partial install.
 - [ ] Подготовлен rollback для всего согласованного сайта и отдельно для платного SMS helper; test rollback на безопасных источниках, без удаления доверенных устройств.
-- [ ] Сначала допустимый ограниченный сегмент / canary, не все пользователи мгновенно. Завершённый pilot не считать доказательством новых массовых сценариев.
+- [x] **Обновлённое решение владельца 24.10.2026:** отдельный canary-сегмент отменён, разрешено контролируемое **direct all-users** включение с уже принятым пилотом как baseline. При этом source SHA, PHP lint, глобальная SMS-защита, полный root-only backup, независимый offline rollback и post-deploy browser E2E не отменены; INSTALL до этих guards запрещён.
 - [ ] Production canary E2E и наблюдаемость SMS/ошибок/логина подтверждены, только затем полный WEBSITE opt-in и тесты на реальных пользователях.
 - [ ] После действия обновить [общий handoff](EVRASIA_WEBSITE_MFA_ALL_USERS_HANDOFF_2026-10-24.md) и [Project Context](AI_PROJECT_CONTEXT.md) — конкретные SHA/CI/операторские результаты, статус `STAGED/INSTALLED/VERIFIED`.
 
