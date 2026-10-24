@@ -416,6 +416,17 @@ jobs:
               php -l "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               php "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               echo "PASS: compact accessible green/red account email indicator with a single server-owned proof"
+              echo "=== WEBSITE WARNING FAILED-PREFLIGHT SAFE RESUME (OFFLINE) ==="
+              php -l "$ROOT/deployment/website-mfa-security-warning-resume.php"
+              php -d short_open_tag=1 "$ROOT/deployment/website-mfa-security-warning-resume.php" --self-test
+              if php -d short_open_tag=1 "$ROOT/deployment/website-mfa-security-warning-resume.php" --preflight > /tmp/ev-warning-resume-wronghost.log 2>&1; then
+                echo "FAIL: warning safe-resume accepted GitHub CI host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/ev-warning-resume-wronghost.log
+              grep -Fxq 'SOURCE_FILE_WRITE=NO' /tmp/ev-warning-resume-wronghost.log
+              grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-warning-resume-wronghost.log
+              echo "PASS: safe-resume no-shell-exec PHP parser, metadata guard, wrong-host denial"
               echo "=== WEBSITE ACCOUNT READABLE SAMZABERU SECURITY WARNING RELOCATION ==="
               php -l "$ROOT/deployment/website-mfa-security-warning-relocate.php"
               php "$ROOT/deployment/website-mfa-security-warning-relocate.php" --self-test
