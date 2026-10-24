@@ -3,6 +3,16 @@
 **Дата фиксации:** 24 октября 2026. **Проект продолжается**, это не новое проектирование.  
 **Решение пользователя (последнее):** «да все ок, можем делать для всех». Это подтверждение успешного **пилотного браузерного сценария** и поручение подготовить общедоступный веб-MFA. **Не означает, что массовый rollout уже включён.**
 
+## 24.10.2026 — новый чат: source-only PASS и приватный массовый пакет уже подготовлен
+
+**Операторский факт, не предположение:** в новом чате получены ДВА отчёта `root@evrasia`. (1) Source-only production: `FINAL_STATUS=PASS FINAL_RC=0 PASS_COUNT=13`; живые enrollment `27de8a0d74b1613672740b2899afcc7a333b2f8e40557f5095fd98ad9ee6608e`, signin `b63094e5d45ad74f28f9594b605944526adbfad9fd0dd507ccabf11f843ed174`, account `022991446ef70634fc6175e2e4b96cc9d318ac2dc51ff2112ecb73ff1e73a823`, PIN `dee875d300403f11ad13fdfafc760fabd52daf39e03f31ee89f847d4dd427510`, native User/Otp, Trusted/Assurance services и V4 Auth полностью совпали с закреплёнными pins; все четыре живых website PHP lints PASS. GlobalSmsBudget.php на сайте **ABSENT**. Существующий приватный V3 SMS budget файл SHA `ef0ed60aafceea3d82dd65f239c01dfe9f708bddfdb68fb5a64f8078b3d38b2f`, план SHA `725c61b432c4dea5121ab9336bd0e46ea5f53495e28fcd6216a38ec49caefe09`.
+
+(2) Уже проведена отдельная безопасная **PRIVATE_ALL_USER_MFA_PREPARATION** (не повторять): `PASS_COUNT=118`, `FINAL_STATUS=PASS FINAL_RC=0`, outer `WRAPPER_FINAL_STATUS=PASS WRAPPER_RC=0`; PHP lint всех пяти кандидатов PASS; source/rollback SHA, исправленный `PASSWORD_ORIGINAL` и parity с принятым pilot trusted helper и PIN положительно подтверждены операторским инструментом. **Актуальный root-private комплект**: `/root/ev-web-mfa-release-packages/all-user-mfa-prepared-20261023-235710-4b06db78`. Исправленный all-users signin SHA256 `e1fc59637bfd46c3cd0a9e56c3736121b97ca8cd993b9776d46c86988e10233a`; all-users PIN SHA256 `0b12ed47cd74bfa03c91bdcab2c4bfd07c7ccac7b67852e9540ed9a71390c94c`. SMS budget кандидат включён **только приватно**. Пакет **не содержит разрешённого общего installer**, `GLOBAL_RELEASE_INSTALL_ALLOWED=NO`, `SITE_CODE_WRITE=NO`, `PUBLIC_MFA_ROLLOUT=NOT_PERFORMED`.
+
+**Действия по GitHub:** в новом чате был создан дублирующий неподтверждённый feature-only rebaser `website-mfa-rebased-private-prepare.php`, затем **удалён** из feature branch как ненужный: приоритет у фактически успешно собранного пакета `all-user-mfa-prepared`, а не у конкурирующей непроверенной реализации. Её коммиты в истории GitHub не означают развертывание.
+
+**NEXT:** не пересоздавать приватный комплект и не повторять базовые SHA или Redis Lua/Bitrix исследования. Закрыть **независимый внешний client-IP / trusted-proxy proof**, согласовать числовую политику SMS и предупредить о возможном повторном login V4 после добровольной TOTP, выполнить новые candidate-specific security/rollback checks и ограниченный реальный website E2E, только затем guarded rollout. Действующие trusted устройства сохранить; V4 без записей, V5 AUTH OFF.
+
 ## 0. С чего начинать в новом чате
 
 1. Сверить *живую* ветку GitHub `juvantusik/Evrasia_AI_bot`, `feature/samzaberu-api-v5-auth-contract`, последние коммиты/CI; не полагаться на старый HEAD.
