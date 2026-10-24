@@ -25,9 +25,10 @@ try {
         'revoked' => false,
         'verified_at' => $now - 20,
         'email_changed_at' => $now - 300,
+        'profile_updated_at' => $now - 300,
         'current_email_mac' => Status::emailMac(77, $email, $secret),
     ];
-    $verified = Status::evaluate(77, $email, $good, $secret, $now);
+    $verified = Status::evaluate(77, $email, $good, $secret, $now, $now - 300);
     $html = Badge::render($verified);
     $assert(str_contains($html, 'ev-email-proof--verified'),
         'green_variant_from_verified_proof');
@@ -38,7 +39,7 @@ try {
     $assert(str_contains($html, 'M5 12.5l4.1 4.1L19 7'),
         'static_check_icon');
 
-    $unverified = Status::evaluate(77, $email, null, $secret, $now);
+    $unverified = Status::evaluate(77, $email, null, $secret, $now, $now - 300);
     $badHtml = Badge::render($unverified);
     $assert(str_contains($badHtml, 'ev-email-proof--unverified'),
         'red_variant_when_unknown');
