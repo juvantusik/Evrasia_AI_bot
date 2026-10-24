@@ -13,6 +13,12 @@
 
 **NEXT:** не пересоздавать приватный комплект и не повторять базовые SHA или Redis Lua/Bitrix исследования. Закрыть **независимый внешний client-IP / trusted-proxy proof**, согласовать числовую политику SMS и предупредить о возможном повторном login V4 после добровольной TOTP, выполнить новые candidate-specific security/rollback checks и ограниченный реальный website E2E, только затем guarded rollout. Действующие trusted устройства сохранить; V4 без записей, V5 AUTH OFF.
 
+### 24.10.2026 — read-only security-marker review of current all-user package
+
+Оператор прислал независимый read-only отчет `root@evrasia` для `/root/ev-web-mfa-release-packages/all-user-mfa-prepared-20261023-235710-4b06db78`: `PASS_COUNT=17`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`. Все четыре live PHP SHA, четыре rollback SHA и пять private candidate SHA подтверждены; глобальный SMS helper **по-прежнему ABSENT на сайте**. Source-only scanner: 15/15 строк `*_SECURITY_*=PASS`, включая `PASSWORD_ORIGINAL`, двойную серверную проверку trust, отсутствие пилотных user-ID guards, нативный Bitrix `LoginByOtp`, обе `GlobalSmsBudget::reserve`, account session bindings, PIN CSRF/USER/TrustedDevice и Redis fail closed. **Это только наличие статических маркеров, НЕ доказательство полного control-flow/cross-user E2E.** Отчет `PRIVATE_JSON_MANIFEST_COUNT=1` и запрет на установку сохраняются.
+
+Обнаружен конкретный UI gap: `V4_TOTP_WARNING_VISIBLE_IN_ACCOUNT_CANDIDATE=NOT_FOUND_IN_THIS_TEMPLATE` (эвристический поиск, требуется точный просмотр текста для уверенного утверждения). Внешний PHP client IP за прокси `NOT_YET_VERIFIED`; численные SMS caps `STILL_PENDING`; ограниченная cohort policy `NOT_YET_ATTESTED`; реальные website E2E `NOT_YET_ACCEPTED`. Нет production writes. **Дальше нужны внешняя client-IP аттестация и целевой opt-in warning/closed cohort, не повторное исследование старых SHA или Redis Lua.**
+
 ## 0. С чего начинать в новом чате
 
 1. Сверить *живую* ветку GitHub `juvantusik/Evrasia_AI_bot`, `feature/samzaberu-api-v5-auth-contract`, последние коммиты/CI; не полагаться на старый HEAD.
