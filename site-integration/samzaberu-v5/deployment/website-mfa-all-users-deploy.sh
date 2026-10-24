@@ -117,7 +117,7 @@ host_guard() {
 # PHP code is never evaluated from Bitrix. Only source text is transformed.
 # The previously verified private candidates are immutable.
 derive_account() {
-  php -d auto_prepend_file= -d auto_append_file= -r '
+  php -d short_open_tag=1 -d auto_prepend_file= -d auto_append_file= -r '
 $source=file_get_contents($argv[1]);
 if (!is_string($source) || strlen($source)<200) exit(2);
 $anchor="&& (int)\$GLOBALS[\x27USER\x27]->GetID() === (int)";
@@ -283,30 +283,37 @@ preflight() {
 }
 
 release_sources_guard() {
-  local d="$1" i
+  local d="$1" i a q
   release_guard "$d"
+  a="$(grep -E '^ACCOUNT_AFTER_SHA=[a-f0-9]{64}$' "$d/manifest.txt")" ||
+    fail 'private release account candidate SHA missing'
+  q="$(grep -E '^BUDGET_AFTER_SHA=[a-f0-9]{64}$' "$d/manifest.txt")" ||
+    fail 'private release helper candidate SHA missing'
+  [[ "$(grep -Ec '^ACCOUNT_AFTER_SHA=' "$d/manifest.txt")" == 1 &&
+      "$(grep -Ec '^BUDGET_AFTER_SHA=' "$d/manifest.txt")" == 1 ]] ||
+    fail 'private release candidate SHA manifest not unique'
+  AFTER[2]="${a#ACCOUNT_AFTER_SHA=}"
+  BUDGET_AFTER="${q#BUDGET_AFTER_SHA=}"
   for i in 0 1 2 3; do
     file_guard "$d/${NAMES[$i]}.rollback.php"
     [[ "$(stat -c '%u:%a' "$d/${NAMES[$i]}.rollback.php")" == '0:600' &&
        "$(sha "$d/${NAMES[$i]}.rollback.php")" == "${BEFORE[$i]}" ]] ||
       fail 'release backup altered'
     file_guard "$d/${NAMES[$i]}.candidate.php"
-    if (( i == 2 )); then
-      AFTER[2]="$(derive_account hash -)" || fail 'account release source derivation failed'
-    fi
-    [[ "$(sha "$d/${NAMES[$i]}.candidate.php")" == "${AFTER[$i]}" ]] ||
+    [[ "$(stat -c '%u:%a' "$d/${NAMES[$i]}.candidate.php")" == '0:600' &&
+       "$(sha "$d/${NAMES[$i]}.candidate.php")" == "${AFTER[$i]}" ]] ||
       fail 'release candidate SHA altered'
     file_guard "$d/${NAMES[$i]}.metadata"
     metadata_guard "$(cat "$d/${NAMES[$i]}.metadata")"
   done
-  BUDGET_AFTER="$(derive_budget hash -)" || fail 'quota release source derivation failed'
   file_guard "$d/budget.candidate.php"
-  [[ "$(sha "$d/budget.candidate.php")" == "$BUDGET_AFTER" ]] ||
-    fail 'release quota candidate SHA altered'
-  grep -Fxq "GLOBAL_SMS_HOUR=100" "$d/manifest.txt" ||
-    fail 'release global hourly cap altered'
-  grep -Fxq "GLOBAL_SMS_DAY=500" "$d/manifest.txt" ||
-    fail 'release global daily cap altered'
+  [[ "$(stat -c '%u:%a' "$d/budget.candidate.php")" == '0:600' &&
+     "$(sha "$d/budget.candidate.php")" == "$BUDGET_AFTER" ]] ||
+    fail 'release SMS quota candidate SHA altered'
+  grep -Fxq 'GLOBAL_SMS_HOUR=100' "$d/manifest.txt" ||
+    fail 'release global hourly SMS limit altered'
+  grep -Fxq 'GLOBAL_SMS_DAY=500' "$d/manifest.txt" ||
+    fail 'release global daily SMS limit altered'
 }
 
 # Fail closed when any site's current bytes are neither old pilot nor this
@@ -367,9 +374,11 @@ finish() {
   if [[ "$MODE" == '--apply' && "$LIVE_TOUCHED" == YES &&
         "$VERIFIED" != YES ]]; then
     echo '=== EMERGENCY AUTO ROLLBACK AFTER FAILED INSTALL ==='
-    if (rollback_core "$RELEASE"); then
+    if ( rollback_core "$RELEASE" ); then
+      ROLLBACK_OUTCOME=PASS
       echo 'AUTOMATIC_ROLLBACK=PASS'
     else
+      ROLLBACK_OUTCOME=FAIL_MANUAL_RECOVERY_REQUIRED
       echo 'AUTOMATIC_ROLLBACK=FAIL_MANUAL_RECOVERY_REQUIRED'
       rc=1
     fi
@@ -459,6 +468,8 @@ case "$MODE" in
       echo 'GLOBAL_SMS_DAY=500'
       echo 'PER_IP_HOUR=REDUNDANT_100'
       echo 'USER_V4_TOTP_WARNING=ENABLED_IN_ACCOUNT_VIEW'
+      echo "ACCOUNT_AFTER_SHA=${AFTER[2]}"
+      echo "BUDGET_AFTER_SHA=$BUDGET_AFTER"
       echo 'PUBLIC_DOMAIN=evrasia.rest'
     } > "$RELEASE/manifest.txt"
     chmod 600 "$RELEASE/manifest.txt"
