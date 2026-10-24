@@ -77,8 +77,10 @@ final class EvWebsiteEmailProofBootstrap
                 self::STAGED_PROOF_BLOB)
             && hash_equals($bytes,$stage),
             'installed_and_staged_proof_store_byte_identical');
-        self::requireGood(is_file(self::ROOT
-            .'/local/php_interface/website-mfa/EmailAccountBadgeBridge.php'),
+        $bridge=self::ROOT
+            .'/local/php_interface/website-mfa/EmailAccountBadgeBridge.php';
+        self::requireGood(is_file($bridge)&&!is_link($bridge)
+            && realpath($bridge)===$bridge,
             'verified_email_badge_bridge_installed');
     }
 
@@ -146,7 +148,18 @@ final class EvWebsiteEmailProofBootstrap
         $want=['user_id:bigint','current_email_mac:char',
             'profile_updated_at:bigint','verified_at:bigint','source:varchar',
             'revoked:tinyint','updated_at:timestamp'];
-        return $got===$want;
+        if ($got!==$want) return false;
+        $q=$pdo->prepare(
+            'SELECT ENGINE FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
+        $q->execute([self::TABLE]);
+        if ($q->fetchColumn()!=='InnoDB') return false;
+        $q=$pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?
+               AND INDEX_NAME=? AND COLUMN_NAME=? AND NON_UNIQUE=0');
+        $q->execute([self::TABLE,'PRIMARY','user_id']);
+        return (int)$q->fetchColumn()===1;
     }
 
     private static function secretPresent():bool
@@ -180,9 +193,9 @@ final class EvWebsiteEmailProofBootstrap
         echo 'DEDICATED_TABLE_EXISTS='.($found?'YES':'NO')."\n";
         echo 'SECRET_FILE_EXISTS='.($secret?'YES':'NO')."\n";
         if(!$found||!$secret) {
-            if($found!==$secret)throw new RuntimeException('partial_bootstrap_manual_reconciliation');
-            echo "EMAIL_PROOF_BOOTSTRAP=NOT_YET_INSTALLED\n";
-            return;
+            if($found!==$secret)
+                throw new RuntimeException('partial_bootstrap_manual_reconciliation');
+            throw new RuntimeException('email_proof_bootstrap_not_installed');
         }
         self::requireGood(self::schemaLooksRight($pdo),'exact_seven_ledger_columns');
         $mode=fileperms(self::SECRET)&0777;
