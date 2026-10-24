@@ -416,6 +416,17 @@ jobs:
               php -l "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               php "$ROOT/tests/WebsiteEmailVerificationBadgeTest.php"
               echo "PASS: compact accessible green/red account email indicator with a single server-owned proof"
+              echo "=== WEBSITE MFA ACCOUNT CONFIRM EMAIL UI / WARNING LAYOUT SOURCE CONTRACT ==="
+              php -l "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php"
+              php "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php" --self-test
+              if php "$ROOT/deployment/website-mfa-account-ui-confirm-email-audit.php" --inspect > /tmp/web-mfa-confirm-email-ui-wronghost.log 2>&1; then
+                echo "FAIL: email confirmation UI inspector accepted non-production host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/web-mfa-confirm-email-ui-wronghost.log
+              grep -Fxq 'SITE_CODE_WRITE=NO' /tmp/web-mfa-confirm-email-ui-wronghost.log
+              grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/web-mfa-confirm-email-ui-wronghost.log
+              echo "PASS: account warning layout source reader sanitization and host denial"
               echo "=== WEBSITE MFA BADGE-ONLY REVERSIBLE PRODUCTION INSTALLER (FEATURE ONLY) ==="
               bash -n "$ROOT/deployment/website-mfa-email-badge-only-release.sh"
               bash "$ROOT/deployment/website-mfa-email-badge-only-release.sh" --self-test
