@@ -591,6 +591,24 @@ jobs:
               php "$ROOT/tests/WebsiteEmailOwnershipWebEndpointTest.php"
               php -l "$ROOT/deployment/website-mfa/EmailAccountBadgeBridge.php"
               echo "PASS: server-persistent assurance, JSON/CSRF/HTTPS boundary and account badge button"
+              echo "=== WEBSITE EMAIL CONFIRM INERT BUTTON TWO-FILE CLICK HOTFIX (OFFLINE) ==="
+              php -l "$ROOT/deployment/website-mfa-email-widget-click-fix.php"
+              php "$ROOT/deployment/website-mfa-email-widget-click-fix.php" --self-test
+              for mode in --preflight --apply --status --rollback; do
+                case "$mode" in
+                  --preflight|--apply) set -- "$mode" "/tmp/no-live-widget-stage" ;;
+                  *) set -- "$mode" ;;
+                esac
+                if php "$ROOT/deployment/website-mfa-email-widget-click-fix.php" "$@" > "/tmp/ev-email-click-$mode.log" 2>&1; then
+                  echo "FAIL: widget click fix accepted GitHub CI host $mode"
+                  exit 1
+                fi
+                grep -Fxq 'FINAL_STATUS=FAIL' "/tmp/ev-email-click-$mode.log"
+                grep -Fxq 'SITE_PHP_JS_WRITE=NO' "/tmp/ev-email-click-$mode.log"
+                grep -Fxq 'DATABASE_WRITE=NO' "/tmp/ev-email-click-$mode.log"
+                grep -Fxq 'MAIL_EVENT_TEMPLATE_WRITE=NO' "/tmp/ev-email-click-$mode.log"
+              done
+              echo "PASS: exact two-file delegated button JS + widget fix cannot change wrong host"
               echo "=== WEBSITE ACCOUNT REAL EMAIL CONFIRMATION WIDGET AND OTP ACTIONS (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailAccountConfirmWidget.php"
               php -l "$ROOT/tests/WebsiteEmailAccountConfirmWidgetTest.php"
