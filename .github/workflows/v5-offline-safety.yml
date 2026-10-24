@@ -389,6 +389,11 @@ jobs:
               grep -Fxq 'SITE_CODE_WRITE=NO' /tmp/web-mfa-email-first-audit-wronghost.log
               grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/web-mfa-email-first-audit-wronghost.log
               echo "PASS: source-only email integration mapper rejects wrong host"
+              echo "=== WEBSITE MFA CONFIRMED EMAIL BADGE AND LOGIN POLICY (FEATURE ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa/VerifiedEmailStatus.php"
+              php -l "$ROOT/tests/WebsiteVerifiedEmailStatusTest.php"
+              php "$ROOT/tests/WebsiteVerifiedEmailStatusTest.php"
+              echo "PASS: current email ownership proof determines BOTH badge and email login eligibility"
               echo "=== WEBSITE MFA EMAIL FIRST SEND BUDGET (FEATURE ONLY) ==="
               php -l "$ROOT/deployment/website-mfa/EmailSendBudget.php"
               php -l "$ROOT/tests/WebsiteEmailSendBudgetTest.php"
