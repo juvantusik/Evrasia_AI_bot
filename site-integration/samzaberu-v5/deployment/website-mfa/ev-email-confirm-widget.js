@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   // Load once, but listen on document to handle Bitrix AJAX/re-rendered
-  // account content. No reliance on document.currentScript or sibling order.
+  // account content. No reliance on inline script positions or sibling order.
   if (window.__evEmailConfirmWidgetListenerV2 === true) return;
   window.__evEmailConfirmWidgetListenerV2 = true;
   const endpoint = "/local/ajax/ev-email-ownership.php";
