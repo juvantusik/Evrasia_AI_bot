@@ -168,6 +168,25 @@ final class EvWebsiteEmailProofBootstrap
             && is_readable(self::SECRET);
     }
 
+    /**
+     * Validate only a single dedicated CREATE TABLE statement.
+     * MariaDB's "ON UPDATE CURRENT_TIMESTAMP" is a column definition,
+     * not a data-changing UPDATE statement. Never blanket-block that word.
+     * Exact bytes must also match the source-pinned private-stage DDL.
+     */
+    private static function isolatedDdlSafe(string $sql):bool
+    {
+        return preg_match(
+            '/\ACREATE TABLE ev_web_email_ownership_proof \(\n[\s\S]+\n\) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\z/D',
+            $sql
+        )===1
+            && substr_count($sql,'ON UPDATE CURRENT_TIMESTAMP')===1
+            && preg_match_all('/\bUPDATE\b/i',$sql)===1
+            && !str_contains($sql,';')
+            && !str_contains($sql,'IF NOT EXISTS')
+            && !preg_match('/\b(DROP|TRUNCATE|DELETE|INSERT|REPLACE|ALTER|RENAME|GRANT|REVOKE|CALL)\b/i',$sql);
+    }
+
     private static function expectedSql():string
     {
         // Safe: exact pre-deployed PHP helper already code-reviewed and pinned.
@@ -177,10 +196,7 @@ final class EvWebsiteEmailProofBootstrap
         }
         $sql=\Evrasia\WebMfa\EmailOwnershipProofStore::expectedTableDdl();
         self::requireGood(is_string($sql)
-            && preg_match('/^CREATE TABLE ev_web_email_ownership_proof \(/',$sql)===1
-            && str_contains($sql,'ENGINE=InnoDB')
-            && !str_contains($sql,'IF NOT EXISTS')
-            && !preg_match('/\b(DROP|TRUNCATE|DELETE|UPDATE)\b/i',$sql),
+            && self::isolatedDdlSafe($sql),
             'safe_isolated_empty_table_DDL');
         return $sql;
     }
@@ -313,6 +329,24 @@ final class EvWebsiteEmailProofBootstrap
         self::requireGood(preg_match('/^[0-9a-f]{64}$/D',self::ACCOUNT_SHA)===1
             && preg_match('/^[0-9a-f]{40}$/D',self::STAGED_PROOF_BLOB)===1,
             'immutable_installed_source_pins');
+        $ddl="CREATE TABLE ev_web_email_ownership_proof (\n"
+            ."    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n"
+            .") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        self::requireGood(self::isolatedDdlSafe($ddl),
+            'ON_UPDATE_timestamp_allowed_in_single_CREATE');
+        self::requireGood(!self::isolatedDdlSafe($ddl.'; DROP TABLE b_user'),
+            'multiple_statements_and_DROP_denied');
+        self::requireGood(!self::isolatedDdlSafe(str_replace(
+            'ON UPDATE CURRENT_TIMESTAMP',
+            'ON UPDATE CURRENT_TIMESTAMP UPDATE b_user SET EMAIL=NULL',
+            $ddl)),
+            'standalone_UPDATE_statement_denied');
+        self::requireGood(!self::isolatedDdlSafe(str_replace(
+            'ev_web_email_ownership_proof','b_user',$ddl)),
+            'wrong_target_table_denied');
+        self::requireGood(!self::isolatedDdlSafe(str_replace(
+            'ENGINE=InnoDB','ENGINE=MyISAM',$ddl)),
+            'wrong_storage_engine_denied');
         echo "NO_DB_CONNECTION_IN_SELFTEST=YES\n";
     }
 
