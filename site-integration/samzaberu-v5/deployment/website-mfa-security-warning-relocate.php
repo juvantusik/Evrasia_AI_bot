@@ -83,7 +83,16 @@ final class EvSecurityWarningRelocation
             throw new RuntimeException('warning_is_not_outside_expected_card');
         }
 
-        $notice = '<div class="' . self::MARKER . '" role="note"'
+        // Preserve the prior current-user security boundary. The original
+        // paragraph was wrapped in a server-side CUser session identity
+        // guard; moving its markup must not broaden visibility.
+        $authOpen = <<<'GUARD'
+<?php if ((int)$arResult['USER']['ID'] > 0
+    && ($GLOBALS['USER'] ?? null) instanceof \CUser
+    && $GLOBALS['USER']->IsAuthorized()
+    && (int)$GLOBALS['USER']->GetID() === (int)$arResult['USER']['ID']) : ?>
+GUARD;
+        $notice = $authOpen . "\n" . '<div class="' . self::MARKER . '" role="note"'
             . ' style="font-family:inherit;font-size:16px;line-height:1.5;'
             . 'font-weight:400;color:#425960;'
             . 'background:rgba(255,255,255,.62);'
@@ -91,7 +100,7 @@ final class EvSecurityWarningRelocation
             . 'padding:12px 16px;margin:14px 0 20px;'
             . 'border-radius:3px;box-sizing:border-box;'
             . 'overflow-wrap:anywhere;text-align:left;">'
-            . $text . '</div>' . "\n";
+            . $text . '</div>' . "\n<?php endif; ?>\n";
 
         $withoutOld = str_replace($matches[0][0], '', $before, $removed);
         if ($removed !== 1) {
