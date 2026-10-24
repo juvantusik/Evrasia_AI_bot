@@ -35,20 +35,21 @@ try {
     [$lua, $args, $keyCount] = $redis->calls[0];
     $check($keyCount === 3 && count($args) === 9, 'three_keys_six_args');
     $check(str_contains($lua, "redis.call('INCR', KEYS[i])")
-        && str_contains($lua, "redis.call('EXPIRE', KEYS[i]"),
-        'atomic_lua_with_ttl');
+        && str_contains($lua, "redis.call('EXPIRE', KEYS[i]")
+        && str_contains($lua, "redis.call('SET', KEYS[1]"),
+        'atomic_lua_with_continuous_cooldown_and_ttl');
     $check(str_contains($lua, "redis.call('GET', KEYS[i])")
         && str_contains($lua, 'return 0'), 'precheck_all_quotas');
     $check($args[3] === 1 && $args[4] === 5 && $args[5] === 1000,
         'provisional_limits');
-    $check($args[6] === 120 && $args[7] === 7200 && $args[8] === 7200,
+    $check($args[6] === 60 && $args[7] === 7200 && $args[8] === 7200,
         'quota_key_ttl');
     $check(!str_contains(json_encode($args, JSON_THROW_ON_ERROR), 'secret@example.com'),
         'no_plaintext_email');
     $check(!str_contains(implode('|', array_slice($args, 0, 3)), '42'),
         'hashed_user_id_not_raw');
-    $check(str_starts_with($args[0], 'evrasia:{web_mfa_email_login}:v1:'),
-        'isolated_email_prefix');
+    $check(str_starts_with($args[0], 'evrasia:{web_mfa_email_login}:v1:user:cooldown:'),
+        'isolated_email_cooldown_key_without_time_bucket');
     $check(!str_contains(implode('|', array_slice($args, 0, 3)), 'paid_sms'),
         'not_using_paid_sms_namespace');
 
