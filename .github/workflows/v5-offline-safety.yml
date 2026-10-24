@@ -367,6 +367,17 @@ jobs:
               grep -Fxq "FINAL_STATUS=FAIL" /tmp/v5-website-wronghost.log
               grep -Fxq "PRODUCTION_CODE_WRITE=NO" /tmp/v5-website-wronghost.log
               echo "PASS: new rollout preparer is denied on GitHub Actions and has no install mode"
+              echo "=== WEBSITE MFA VERIFIED EMAIL FIELD SOURCE/SCHEMA (FEATURE-ONLY) ==="
+              php -l "$ROOT/deployment/website-mfa-email-field-provenance-readonly.php"
+              php "$ROOT/deployment/website-mfa-email-field-provenance-readonly.php" --self-test
+              if php "$ROOT/deployment/website-mfa-email-field-provenance-readonly.php" --inspect > /tmp/web-mfa-email-field-wronghost.log 2>&1; then
+                echo "FAIL: production field audit accepted GitHub runner host"
+                exit 1
+              fi
+              grep -Fxq 'FINAL_STATUS=FAIL' /tmp/web-mfa-email-field-wronghost.log
+              grep -Fxq 'DATABASE_CONNECTION=NO' /tmp/web-mfa-email-field-wronghost.log
+              grep -Fxq 'PRODUCTION_CODE_WRITE=NO' /tmp/web-mfa-email-field-wronghost.log
+              echo "PASS: bounded email field provenance audit is read-only and rejects CI host"
               echo "=== WEBSITE MFA CONFIRMED EMAIL DB AUDIT (FEATURE-ONLY) ==="
               php -l "$ROOT/deployment/website-mfa-email-proof-live-readonly.php"
               php "$ROOT/deployment/website-mfa-email-proof-live-readonly.php" --self-test
