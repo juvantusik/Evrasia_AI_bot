@@ -15,6 +15,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php'
       - 'site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php'
   workflow_dispatch:
 
 permissions:
@@ -62,6 +63,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5BitrixPasswordProofPort.php \
             site-integration/samzaberu-v5/src/V5PublicTrafficPreflight.php \
             site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php \
+            site-integration/samzaberu-v5/src/V5SmsDispatchBudget.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php \
@@ -69,7 +71,8 @@ jobs:
             site-integration/samzaberu-v5/tests/V5BitrixPasswordProofPortTest.php \
             site-integration/samzaberu-v5/tests/V5FirstFactorAttemptGateTest.php \
             site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php \
-            site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php; do
+            site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php \
+            site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php; do
             php -l "$file"
           done
           echo 'PHP_LINT=PASS'
@@ -87,6 +90,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5BitrixNativePasswordLoginAdmissionTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixPasswordProofPortTest.php
           php site-integration/samzaberu-v5/tests/V5FirstFactorAttemptGateTest.php
+          php site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php
           echo 'FIRST_FACTOR_PUBLIC_GATES=PASS'
 
       - name: Final no-production attestation
