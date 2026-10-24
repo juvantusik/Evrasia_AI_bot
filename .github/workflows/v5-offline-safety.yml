@@ -520,7 +520,16 @@ jobs:
               grep -Fxq 'FINAL_STATUS=FAIL' /tmp/ev-mail-event-wronghost.log
               grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-mail-event-wronghost.log
               grep -Fxq 'EMAIL_SENT=NO' /tmp/ev-mail-event-wronghost.log
-              echo "PASS: source-pinned new Bitrix email event/template release never runs outside evrasia"
+              for mode in --prepared --probe --resume; do
+                if php "$ROOT/deployment/website-mfa-email-mail-event-release.php" "$mode" > "/tmp/ev-mail-event-$mode.log" 2>&1; then
+                  echo "FAIL: mail release recovery mode accepted GitHub CI host"
+                  exit 1
+                fi
+                grep -Fxq 'FINAL_STATUS=FAIL' "/tmp/ev-mail-event-$mode.log"
+                grep -Fxq 'DATABASE_WRITE=NO' "/tmp/ev-mail-event-$mode.log"
+                grep -Fxq 'EMAIL_SENT=NO' "/tmp/ev-mail-event-$mode.log"
+              done
+              echo "PASS: buffered Bitrix mail release resumed from exact prepared stage, all write modes host-guarded"
               echo "=== WEBSITE EMAIL OPERATIONAL SOURCE / MAIL SITE / REDIS READONLY GATE ==="
               php -l "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php"
               php "$ROOT/deployment/website-mfa-email-operational-contract-readonly.php" --self-test
