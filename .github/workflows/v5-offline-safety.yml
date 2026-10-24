@@ -600,6 +600,16 @@ jobs:
               php "$ROOT/tests/WebsiteEmailOwnershipWebEndpointTest.php"
               php -l "$ROOT/deployment/website-mfa/EmailAccountBadgeBridge.php"
               echo "PASS: server-persistent assurance, JSON/CSRF/HTTPS boundary and account badge button"
+              echo "=== WEBSITE EMAIL CLICK FIX OPERATOR RUNNER STATIC AND WRONG-HOST TEST ==="
+              bash -n "$ROOT/deployment/website-mfa-email-widget-click-fix-run.sh"
+              if bash "$ROOT/deployment/website-mfa-email-widget-click-fix-run.sh" > /tmp/ev-email-click-runner-wronghost.log 2>&1; then
+                echo "FAIL: website email click runner accepted GitHub CI host"
+                exit 1
+              fi
+              grep -Fxq 'WRAPPER_FINAL_STATUS=FAIL' /tmp/ev-email-click-runner-wronghost.log
+              grep -Fxq 'DATABASE_WRITE=NO' /tmp/ev-email-click-runner-wronghost.log
+              grep -Fxq 'EMAIL_SENT=NO' /tmp/ev-email-click-runner-wronghost.log
+              echo "PASS: one-shot email click runner Bash syntax and root@evrasia-only guard"
               echo "=== WEBSITE EMAIL CONFIRM INERT BUTTON TWO-FILE CLICK HOTFIX (OFFLINE) ==="
               php -l "$ROOT/deployment/website-mfa-email-widget-click-fix.php"
               php "$ROOT/deployment/website-mfa-email-widget-click-fix.php" --self-test
