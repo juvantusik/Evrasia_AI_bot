@@ -39,37 +39,81 @@ HTTPS, Content-Type: application/json для POST, максимум 8192 бай�
 
 Ответы no-store, JSON. Не подставлять примеры из ТЗ как реальные guest/product/restaurant ID.
 
-## 3. Авторизация, TOTP, trusted device, SMS
+## 3. Авторизация V5: доверенное устройство, TOTP, email и SMS
 
-POST /auth/signin:
+**Контракт для реализации мобильного клиента и mock-тестов, НЕ live API.** На сайте работают свои сценарии 2FA; мобильный V5 создаёт отдельную сильную сессию, а его публичная авторизация на production пока OFF.
 
-    {"login":"guest@example.com","password":"<password>","device_id":"<installation id>","platform":"android","trust_token":null}
+### 3.1. POST /auth/signin
 
-При необходимости challenge: HTTP 202, например:
+    {"login":"guest@example.com","password":"<password>","device_id":"sz_<64 lowercase hex>","platform":"android","trust_token":null}
 
-    {"status":"challenge_required","challenge_id":"<opaque>","challenge_type":"totp","expires_in":300}
+- device_id: ровно sz_ + 64 строчных hex символа (серверная проверка формата); platform — ios или android. Устройство привязано к установке приложения; код нельзя проверять с другой установки.
+- trust_token: только ранее выданное сервером действительное сильное доверие; одного device_id недостаточно.
+- Первый фактор проверяет пароль по Bitrix без браузерной авторизации. Сервер проверяет блокировки, лимиты попыток и AUTH_EPOCH.
 
-При сильном доверии текущего устройства либо успешно пройденном challenge: HTTP 200:
+| Состояние после подтверждения пароля | Ответ и UI |
+|---|---|
+| Действительное сильное доверенное устройство | HTTP 200, сразу токены V5, без повторного TOTP/email/SMS |
+| Доверия нет, нативный Bitrix TOTP включён | HTTP 202, challenge_type=totp, экран кода аутентификатора |
+| Доверия нет, TOTP не включён | HTTP 202, challenge_type=email, экран кода из письма |
+| Нет подтверждённого email или email-провайдер недоступен | Отказ, НЕ автоматическая отправка SMS |
+
+HTTP 202:
+
+    {"status":"challenge_required","challenge_id":"<64 lowercase hex>","challenge_type":"email","expires_in":300}
+
+challenge_type выбирает сервер (totp / email / только отдельно разрешённый sms). expires_in — значение сервера, максимум 300 секунд, не фиксировать 300 в UI.
+
+HTTP 200:
 
     {"status":"authenticated","access_token":"<V5 JWT>","refresh_token":"<V5 refresh>"}
 
-В ответе может также присутствовать trusted_device. Значения challenge_type, expires_in и token opaque — только с сервера; демонстрационные числа не являются установленной конфигурацией.
+Опционально trusted_device, если сервер выдал подтверждённые данные доверия.
 
-POST /auth/challenge/verify:
+### 3.2. POST /auth/challenge/verify
 
-    {"challenge_id":"<opaque>","code":"123456","device_id":"<same installation>","platform":"android"}
+Один маршрут для TOTP, email OTP и отдельно разрешённого SMS OTP:
 
-POST /auth/challenge/use-sms или /auth/challenge/resend:
+    {"challenge_id":"<64 lowercase hex>","code":"123456","device_id":"sz_<те же 64 hex>","platform":"android"}
 
-    {"challenge_id":"<opaque>","device_id":"<same installation>","platform":"android"}
+Код: ровно 6 цифр. Device_id/platform строго те же, что при первом шаге. При успехе HTTP 200 и access_token + refresh_token. Челлендж одноразовый, с TTL и ограничением попыток.
+
+**TOTP:** проверяется на сервере через штатную Bitrix MFA и защиту от повторного использования, не в приложении. Используется существующий фактор сайта, но мобильный V5 всё равно должен создать собственную сильную сессию. Код нативной серверной проверки подготовлен, production E2E для V5 ещё не подтверждён.
+
+**Email:** пароль и владение текущим email перепроверяются сервером под блокировками; email нельзя задать в теле запроса. Есть отдельный ledger email challenge, HMAC кода, контроль устройства, лимиты и AUTH_EPOCH. В составе email-first предусмотрены существующие Bitrix D7 mail event EVRASIA_WEB_EMAIL_LOGIN, шаблон 95, сайт s1 и существующий Redis budget. Принятие письма в очередь Bitrix не гарантирует фактическую доставку во входящие.
+
+### 3.3. SMS fallback
+
+SMS не запускается автоматически и не подменяет включённый TOTP. Только при наличии текущего email challenge приложение может запросить осознанный fallback:
+
+POST /auth/challenge/use-sms:
+
+    {"challenge_id":"<ID исходного email challenge>","device_id":"sz_<те же 64 hex>","platform":"android"}
+
+При положительном подтверждении сервера выдаётся НОВЫЙ challenge_type=sms с другим challenge_id; затем вызов обычного POST /auth/challenge/verify с кодом из SMS. Телефон берётся из проверенного аккаунта, не передаётся приложением. Сервер обязан проверить email challenge, пароль, отсутствие нативного TOTP, устройство, AUTH_EPOCH, подтверждённый телефон, SMS-квоты и фактически принятую отправку.
+
+**Реальное состояние:** V5ExistingWebsiteSmsRecoveryAdapter и защитные интерфейсы есть, но обязательная site-native реализация положительного SMS-перехода/подтверждения отправки ещё не подключена. В email-first составе используется V5UnavailableSmsLifecycle вместо обычного автоматического SMS. POST /auth/challenge/resend присутствует в маршрутах, но сейчас не является работающим универсальным повтором email/SMS. Не делать автоматических повторных отправок и не обещать пользователю SMS до серверного разрешения.
+
+### 3.4. Сессия и бонусный PIN
 
 POST /auth/refresh:
 
     {"refresh_token":"<V5 refresh>"}
 
-Ответ refresh — новая пара access_token и refresh_token, предыдущую нельзя использовать повторно. POST /auth/logout, POST /auth/token/validate и POST /loyalty/pin принимают JSON {"access_token":"<V5 JWT>"}.
+Сервер выдаёт новую пару; после успешной ротации хранить только актуальную. POST /auth/logout, POST /auth/token/validate и POST /loyalty/pin получают:
 
-PIN возвращается как {"status":"revealed","pin":"<PIN>"} после подтверждённой сильной V5-сессии без повторного SMS. Бизнес-правило: действительное доверенное устройство может проходить без регулярного повторного TOTP; без доверия нужен предусмотренный сервером challenge. Не спрашивать телефон пользователя в форме SMS challenge: сервер уже знает его из профиля.
+    {"access_token":"<V5 JWT>"}
+
+Показ PIN: {"status":"revealed","pin":"<PIN>"} — при уже подтверждённой сильной V5-сессии, без повторного SMS. Отзыв доверия, истечение сессии или изменение AUTH_EPOCH требуют нового подтверждения. V4 JWT не разрешён.
+
+### 3.5. UI и безопасность
+
+- Экран фактора выбирать только по challenge_type, а не по собственному решению приложения.
+- Сохранять устройство/trust только из серверного подтверждения, не принимать device_id за доказательство доверия.
+- Не передавать email, телефон, цену, USER_ID/FUSER_ID вместе с challenge.
+- Не логировать пароль, TOTP, SMS, email OTP, PIN и токены.
+- Обрабатывать недоступность email/SMS, истечение challenge, отказ сервера, повтор и отзыв сессии.
+- Не считать эти ручки production-ready до отдельного подтверждения native TOTP + email/Redis transport + site SMS recovery и включения V5 AUTH.
 
 ## 4. Юридические документы при регистрации
 
