@@ -115,6 +115,19 @@ Further production READ_ONLY static inspection found **two** `eurasia:account.bo
 
 Next: inspect the real cache flag keys/values and exact control-flow conditions around both component invocations; inspect the current JS network and DOM injection path without exposing cookies, tokens, phone or other sensitive literals. Preserve production unchanged while tracing the stale 200 display.
 
+## Confirmed active bonus-cache gate and scoped fix proposal (2026-10-25)
+
+Production static inspection resolved the previously masked `USE_CACHE` chain:
+
+- `account/index.php` passes `"USE_CACHE"=>"Y"` to `eurasia:account`.
+- `local/templates/eurasia/components/eurasia/account/main/template.php` passes `"USE_CACHE"=>$arParams["USE_CACHE"]` and `"CACHE_TIME"=>"7200"` to both `eurasia:account.bonus` invocations (around lines 610-619 and 631-639).
+- `local/components/eurasia/account.bonus/component.php` reads the cached component result when `$arParams["USE_CACHE"] === "Y"`; that result contains `$arResult["BONUS"]` copied from the prior `UF_BONUS` database value.
+- AJAX `case "bonus_balance"` in `local/php_interface/account.php` retrieves `/api/Balance`, writes `UF_BONUS` and explicitly includes the same component with `"USE_CACHE"=>"N"`.
+
+The active page therefore **allows a two-hour user-scoped cached balance**, whereas the AJAX refresh bypasses that cache. This is a technically confirmed **mechanism consistent with** transient higher balance then correct balance after page reload. The particular cache hit at the screenshot time was not logged and remains an inference.
+
+**Scoped proposed fix (not yet deployed at documentation time):** change only the two `eurasia:account.bonus` main-template invocations to literal `"USE_CACHE"=>"N"`, keeping the parent `eurasia:account`, unrelated components, AJAX handler, RestIS, V4, and V5 unchanged. Require host/root/source guards, backup, syntax verification, idempotence, and post-change browser verification. This removes stale component-cache reads but **does not automatically make the persisted Bitrix `UF_BONUS` synchronous with RestIS**; that lag is a separate potential follow-up.
+
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
 ```sql
