@@ -11,6 +11,7 @@ require_once __DIR__ . '/V5MySqlSessionLogout.php';
 require_once __DIR__ . '/V5MySqlCartRead.php';
 require_once __DIR__ . '/V5MySqlProfileRead.php';
 require_once __DIR__ . '/V5BitrixLockedProfileReader.php';
+require_once __DIR__ . '/V5BitrixLockedCartReader.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 
@@ -79,7 +80,9 @@ final class V5MySqlPilotComposition
             new V5MySqlTokenValidation($sessions),
             null,
             new V5MySqlSessionLogout($sessions),
-            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
+            ($cartReader !== null || PHP_SAPI === 'fpm-fcgi')
+                ? new V5MySqlCartRead($sessions, $cartReader ?? new V5BitrixLockedCartReader())
+                : null,
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader())
         ));
     }
