@@ -108,7 +108,7 @@ final class V5EmailToSmsAtomicStage
                 throw new RuntimeException('v5_sms_stage_begin');
             }
             $started=true;
-            $user=$this->q('SELECT ID,ACTIVE,BLOCKED,PASSWORD_EXPIRED,PASSWORD '
+            $user=$this->q('SELECT ID,ACTIVE,BLOCKED,PASSWORD_EXPIRED,PASSWORD,LOGIN_ATTEMPTS '
                 .'FROM b_user WHERE ID = ? FOR UPDATE',[$uid])
                 ->fetch(PDO::FETCH_ASSOC);
             if (!is_array($user)
@@ -117,7 +117,8 @@ final class V5EmailToSmsAtomicStage
                 || ($user['BLOCKED']??null)!=='N'
                 || ($user['PASSWORD_EXPIRED']??null)!=='N'
                 || !is_string($user['PASSWORD']??null)
-                || $user['PASSWORD']==='') {
+                || $user['PASSWORD']===''
+                || !isset($user['LOGIN_ATTEMPTS'])) {
                 throw new RuntimeException('v5_sms_stage_account_denied');
             }
 
