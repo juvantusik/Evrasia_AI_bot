@@ -18,6 +18,8 @@ namespace Bitrix\Main\DB {
         public array $sql=[];
         public array $budgets=[];
         public array $outbox=[];
+        public array $deletedCart=[];
+        public array $deletedGifts=[];
         public array $user=['ID'=>'41','ACTIVE'=>'Y','BLOCKED'=>'N'];
         public array $phone=['USER_ID'=>'41','PHONE_NUMBER'=>'+79120000000','CONFIRMED'=>'Y'];
         public array $challenge=['user_id'=>'41','status'=>'pending','sms_sent_count'=>'0'];
@@ -43,7 +45,7 @@ namespace Bitrix\Main\DB {
             $this->beginCalls++;
             if($this->silentBeginFailure)return false;
             if($this->active || $this->throwBegin)throw new \RuntimeException('native begin fault');
-            $this->snapshot=[$this->budgets,$this->outbox,$this->challenge];
+            $this->snapshot=[$this->budgets,$this->outbox,$this->challenge,$this->deletedCart,$this->deletedGifts];
             $this->active=true;
             $this->sessionGuardOpen=false;
             $this->nativeFactorGuardOpen=false;
@@ -65,7 +67,7 @@ namespace Bitrix\Main\DB {
             if($this->silentRollbackFailure)return false;
             if($this->throwRollback)throw new \RuntimeException('native rollback fault');
             if(!$this->active)throw new \RuntimeException('no active tx');
-            [$this->budgets,$this->outbox,$this->challenge]=$this->snapshot;
+            [$this->budgets,$this->outbox,$this->challenge,$this->deletedCart,$this->deletedGifts]=$this->snapshot;
             $this->active=false;
             $this->sessionGuardOpen=false;
             $this->nativeFactorGuardOpen=false;
@@ -111,7 +113,11 @@ namespace Bitrix\Main\DB {
                 $this->nativeFactorGuardOpen=false;
                 return null;
             }
-            if(str_starts_with($sql,'INSERT INTO ev_v5_sms_budget_windows')) {
+            if(preg_match('/\ADELETE FROM B_API_BASKET WHERE FUSER_ID = ([0-9]+)\z/D',$sql,$m)===1) {
+                $this->deletedCart[]=(int)$m[1];$this->affected=1;
+            } elseif(preg_match('/\ADELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ([0-9]+)\z/D',$sql,$m)===1) {
+                $this->deletedGifts[]=(int)$m[1];$this->affected=1;
+            } elseif(str_starts_with($sql,'INSERT INTO ev_v5_sms_budget_windows')) {
                 if(!preg_match("/VALUES \\('([a-f0-9]{64})', 0, ([0-9]+)\\)/",$sql,$m))throw new \RuntimeException('budget insert shape');
                 $this->budgets[$m[1]]??=['used_units'=>0,'expires_at'=>(int)$m[2]];
                 $this->affected=1;
@@ -387,6 +393,57 @@ namespace {
     rejects(fn()=>$escaped->execute(["evil\0string"]),'NUL parameter forbidden');
     rejects(fn()=>$escaped->execute([str_repeat('x',1048577)]),'oversized parameter forbidden');
 
+
+    // Production cleanup must use exactly the two V4-pinned SQL templates,
+    // never a broad or separately connected DB write.
+    [$db,$native]=fixture();
+    rejects(fn()=>$db->assertOwnedCheckoutTransactionContinuity(),
+        'checkout continuity refuses non-strict CLI native bridge');
+    rejects(fn()=>$db->prepare('DELETE FROM B_API_BASKET'),
+        'unscoped API basket wipe forbidden');
+    rejects(fn()=>$db->prepare('DELETE FROM B_API_BASKET WHERE USER_ID = ?'),
+        'client-supplied USER_ID basket deletion forbidden');
+    rejects(fn()=>$db->prepare('DELETE FROM BASKET_CUSTOM_GIFTS WHERE FUSER_ID = ?'),
+        'gift cleanup requires exact UF_FUSER_ID column');
+    rejects(fn()=>$db->prepare('DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ? OR 1=1'),
+        'gift cleanup cannot widen predicate');
+    rejects(fn()=>$db->prepare('DELETE FROM B_API_BASKET WHERE FUSER_ID = ? LIMIT 100'),
+        'unreviewed cart DELETE shape forbidden');
+    $cartDelete=$db->prepare('DELETE FROM B_API_BASKET WHERE FUSER_ID = ?');
+    $giftDelete=$db->prepare('DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?');
+    ok($cartDelete instanceof PDOStatement && $giftDelete instanceof PDOStatement,
+        'two exact V4 cleanup templates permitted');
+    rejects(fn()=>$cartDelete->execute([51]),
+        'cart DELETE prohibited without V5-owned transaction');
+    ok($db->beginTransaction(),'native mock checkout transaction starts');
+    rejects(fn()=>$db->assertOwnedCheckoutTransactionContinuity(),
+        'checkout requires strict HTTP native continuity proof even after begin');
+    ok($cartDelete->execute([51]) && $giftDelete->execute([51]),
+        'both exact cleanup DML use same native mock transaction');
+    ok($native->deletedCart===[51] && $native->deletedGifts===[51],
+        'both deletes share the locked FUSER identifier');
+    ok($db->rollBack(),'native mock cleanup rollback completes');
+    ok($native->deletedCart===[] && $native->deletedGifts===[],
+        'rollback atomically restores both basket and gift table state');
+    foreach([
+        'INSERT INTO ev_v5_pickup_checkout_requests (USER_ID, REQUEST_ID, INPUT_SHA256, STATE, CREATED_AT) '
+            . "VALUES (?, UNHEX(?), UNHEX(?), 'pending', UTC_TIMESTAMP()) "
+            . 'ON DUPLICATE KEY UPDATE USER_ID=USER_ID',
+        'SELECT HEX(INPUT_SHA256) AS HASH_HEX, STATE, ORDER_ID, '
+            . 'ORDER_NUMBER, ORDER_STATUS FROM ev_v5_pickup_checkout_requests '
+            . 'WHERE USER_ID = ? AND REQUEST_ID = UNHEX(?) FOR UPDATE',
+        'UPDATE ev_v5_pickup_checkout_requests SET '
+            . "STATE='saved', ORDER_ID=?, ORDER_NUMBER=?, ORDER_STATUS=?, "
+            . 'COMPLETED_AT=UTC_TIMESTAMP() '
+            . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'
+    ] as $ledgerSql) {
+        ok($db->prepare($ledgerSql) instanceof PDOStatement,
+            'only pinned checkout idempotency ledger SQL template allowed');
+    }
+    rejects(fn()=>$db->prepare('DELETE FROM ev_v5_pickup_checkout_requests WHERE USER_ID = ?'),
+        'checkout request identity cannot be deleted');
+    // Actual positive class intentionally unavailable under CLI/unstable
+    // native scope; all positive SQL above is FAKE-only.
     echo "PASS: V5 Bitrix PDO compatibility bridge ($passed assertions)\n";
     echo "BITRIX_NATIVE_RUNTIME=FAKE\nDATABASE_CONNECTION=NO\nDATABASE_WRITE=NO\n";
     echo "PRODUCTION_WRITE=NO\nSHARED_ORM_TRANSACTION_E2E=NOT_TESTED\n";
