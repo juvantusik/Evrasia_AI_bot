@@ -341,3 +341,19 @@ One exact next source-only operator step (not broad audit):
 - Pinned production read-only runner `site-integration/samzaberu-v5/tests/diagnostics/run_v5_restis_event_boundary_readonly.sh` at commit `2f0e5a62aa92d098da16251cf259e08fe788fbad`, blob `4213a86b1ea5c95aabfaffc627baa0ff5c580dd4`. Validates source-only exact SHA: V4 Cart `739890...`, COrder `ae70...`, CartApiService `61671c...`, V4 router `5af13...`, V5 OFF private config before/after; never executes any installed PHP, no DB/REST calls/production writes.
 - GitHub CI `40209668103` SUCCESS for parser and wrapper PHP/Bash syntax and redaction self-test. This **does not** run on live Bitrix.
 - Return stdout with `=== CART API SERVICE EVENT BOUNDARY ===` and method statements, decide whether checkout's RestIS dispatch is synchronous, queued or just a basket cleanup. Then adapt V5 save/dispatch with idempotency and transaction/commit ordering as established by real site code. Keep V4 unchanged, V5 AUTH OFF, no synthetic production accounts.
+
+
+## 18. Operator proved orderCreatedEvent only runs two SQL queries (2026-10-25)
+
+Received exact output from pinned real-production read-only script `run_v5_restis_event_boundary_readonly.sh`, `V5_RESTIS_ORDER_EVENT_BOUNDARY=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, V4 source pinned/unchanged, V5 AUTH OFF.
+
+Observed V4 checkout call chain:
+- `Cart::order()` line 324 sets `IGNORE_RESTIS='Y'`, then `$this->cartService->orderCreatedEvent()` at line 346, then accesses `REST_ID` at line 354.
+- `COrder::orderSaveHook()` at line 346 checks `$propIgnoreRestis === 'Y' || !$phone` before the standard `RESTIS=='Y'` / `generateXML()` branch. Therefore ordinary save-hook RestIS submission is bypassed when `IGNORE_RESTIS=Y`; this is verified source structure, not verified real dispatch.
+- `CartApiService::orderCreatedEvent()` contained `global $DB;` then **exactly two** `$DB->Query('MASKED' . $this->id)` at real source lines 523/525. **No direct RestIS call** in that method. Original SQL literals were masked; unknown whether SQL deletes/updates cart or other tables. IMPORTANT: do not claim `orderCreatedEvent()` sends the order to RestIS, nor implement speculative V5 outbound RestIS requests or a checkout post-save call before mapping SQL effects.
+
+Follow-on single-purpose source-only inventory:
+- `tests/diagnostics/V5CheckoutPostSaveSqlScope.php` at commit `e2fbd660f81a14f5dd185a4f04e42dcfcd9821c8`, git blob `cf61b53f2f3ccfe31cddb160f74721b5da4affec`. Uses PHP tokenizer on only installed `CartApiService::orderCreatedEvent`, requires exactly 2 `$DB->Query()`, reports SQL operation and allowlisted affected Bitrix table/field identifiers. **No SQL literal contents output.** No site code execution or DB access.
+- Pinned runner `tests/diagnostics/run_v5_checkout_postsave_sql_scope_readonly.sh` at commit `f9331312dbd952f5e15048ae0378209dd9848113`, git blob `86708ced300c5db2c913d8f2449314936ad346b3`. Checks real CartApiService SHA `61671c764f23a82ce66a990d5c9122ebf25fdac800ab51828c0805c8c9db18e0`, V4 router SHA `5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d`, V5 private OFF JSON, parser hash and self-test; no data read/write; no auth enable.
+- GitHub Actions `40209857194` **SUCCESS**, verifies parser syntax+selftest and wrapper Bash syntax; this does **not** attest live SQL details. Await operator stdout of exactly this runner to decide cart cleanup/RestIS boundary.
+- Next step after interpreting two SQL operations: implement V5-only post-checkout behavior using existing trusted site service semantics only if transaction and idempotency boundaries permit, and separately establish where **actual restaurant dispatch** occurs. Do not enable V5 production checkout or send SMS/payments/orders. All earlier 133/133 offline checkout tests remain accepted.
