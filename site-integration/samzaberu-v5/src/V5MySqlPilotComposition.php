@@ -89,9 +89,10 @@ final class V5MySqlPilotComposition
             new V5MySqlTokenValidation($sessions),
             null,
             new V5MySqlSessionLogout($sessions),
-            ($cartReader !== null || PHP_SAPI === 'fpm-fcgi')
-                ? new V5MySqlCartRead($sessions, $cartReader ?? new V5BitrixLockedCartReader())
-                : null,
+            // Checkout uses the existing CartApiService / B_API_BASKET.
+            // No implicit D7 b_sale_basket fallback: site must supply the
+            // verified reader for the SAME custom cart before HTTP is live.
+            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
