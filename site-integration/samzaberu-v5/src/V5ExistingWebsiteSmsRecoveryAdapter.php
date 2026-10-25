@@ -92,7 +92,7 @@ interface V5ExistingWebsiteSmsNativeTransitionPort
      * Independently confirm this exact new challenge is the current
      * password-proven SMS challenge for the original locked/consumed email
      * and device, with server-side OTP HMAC and provider-accepted send state.
-     * Site CSms::send() returning NULL/false/unknown is NEVER success;
+     * Site transport returning NULL/false/unknown is NEVER success;
      * local queued, claimed or unknown states are NEVER success.
      * Missing provider acceptance/authoritative receipt => NULL/FALSE.
      */
