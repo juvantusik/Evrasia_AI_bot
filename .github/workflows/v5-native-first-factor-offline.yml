@@ -21,6 +21,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/AuthDecisionTest.php'
       - 'site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php'
       - 'site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5ManualSmsFallbackHttpTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php'
       - 'site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php'
       - 'site-integration/samzaberu-v5/tests/V5EmailLedgerSchemaContractTest.php'
@@ -106,6 +107,7 @@ jobs:
             site-integration/samzaberu-v5/tests/AuthDecisionTest.php \
             site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php \
             site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php \
+            site-integration/samzaberu-v5/tests/V5ManualSmsFallbackHttpTest.php \
             site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php \
             site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php \
             site-integration/samzaberu-v5/tests/V5EmailLedgerSchemaContractTest.php \
@@ -136,6 +138,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/AuthDecisionTest.php
           php site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
           php site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php
+          php site-integration/samzaberu-v5/tests/V5ManualSmsFallbackHttpTest.php
           php site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php
           php site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php
           php site-integration/samzaberu-v5/tests/V5EmailLedgerSchemaContractTest.php
