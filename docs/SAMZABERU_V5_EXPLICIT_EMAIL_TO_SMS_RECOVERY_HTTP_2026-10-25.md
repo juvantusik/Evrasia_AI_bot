@@ -1,5 +1,19 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — дополнительная обязательная проверка принадлежности challenge к email ledger
+
+После security review source-only V5 HTTP bridge `V5MySqlChallengeHttpPort::requestSmsInsteadOfEmail` больше не пересылает в native SMS provider **любой** 64-hex `challenge_id`. Сначала он проверяет:
+1. Установлен отдельно аттестованный `V5ExplicitSmsRecoveryPort` (иначе fail closed).
+2. Присутствует именно `V5EmailChallengeVerificationPort` (иначе fail closed).
+3. Формат ID; затем `ownsEmailChallenge(id) === true` по primary-key email ledger (без оплачиваемых побочных действий).
+4. Лишь после этого native SMS provider получает запрос; **наличие email ID — только preflight, НЕ доказательство авторизации**. Privately installed provider обязан под row locks подтвердить `status=accepted`, текущий `AUTH_EPOCH`, владельца, устройство, отсутствие TOTP, verified phone, антифрод, атомарную смену двух challenge и фактическую доставку.
+
+Нет ledger или произошла SQL-ошибка — ни один SMS provider не вызывается; HTTP boundary скрывает внутреннюю ошибку. Строгий offline тест `V5EmailToSmsLedgerOwnershipTest.php` проверяет отсутствие вызовов paid SMS при malformed/unowned ID, отсутствие SMS после ошибки ledger, positive delegation only after ownership и fail-closed при отсутствии private provider. Source-only [CI #40183917685](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40183917685) — **SUCCESS** для коммита `c5616a72`. Это не подтверждает реальную production SQL/Bitrix интеграцию, доставку и JWT.
+
+**Зафиксировать технический blocker:** предложенная `ev_v5_email_auth_challenges` не хранит самостоятельную связь `email_challenge_id → sms_challenge_id`. Реальный native transition обязан обеспечить атомарное одноразовое переключение через уже существующую надёжную схему/идемпотентное состояние, либо согласовать минимальное дополнительное поле/ledger перед включением; нельзя просто вызвать `CSms::send`, а затем пометить email как `cancelled`. Нельзя держать InnoDB транзакцию во время внешнего платного SMS-вызова или повторять отправку при неизвестном результате; использовать durable outbox/receipt lifecycle, как принято в V5. **Не выполнять DDL без разрешения.** Website fallback 24.10 работает независимо, не менялся.
+
+
+
 ## 25.10.2026 — source-only V5-адаптер к существующему website SMS
 
 **Что подтверждено live выводом оператора:** `issuePilotSmsCode(int $userId)` является `private` методом `signin/class.php` и вызывает `CSms::send` (один вызов), `enforcePilotSmsRateLimit(int $userId)`, `getPilotProfilePhone(int $userId)`. Сессионная обвязка `emailUseSmsAction` и `evEmailIssueSmsFromVerifiedContextNative` для мобильного API непригодна без изменений. `EmailFirstSmsRatePolicy::begin/check/reserve` и `EmailFirstSmsResendGuard::canIssue/markReserved` принимают `array $session` или `array &$session` и реальный `sessionId` — нельзя строить фиктивные веб-сессии или объявлять их мобильными лимитами.
