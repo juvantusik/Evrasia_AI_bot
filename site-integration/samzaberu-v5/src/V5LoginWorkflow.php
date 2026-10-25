@@ -183,6 +183,30 @@ interface V5PasswordBoundChallengePort
 }
 
 /**
+ * Optional, explicitly requested recovery from an EXISTING email challenge.
+ * This is NOT an SMS issuing algorithm or a phone selection API.
+ *
+ * A real private Bitrix provider MUST atomically prove: the supplied
+ * email challenge was password-bound, accepted, current, unexpired and
+ * bound to this installation; native TOTP is absent; website recovery is
+ * permitted; current AUTH_EPOCH and verified phone still match; the
+ * existing SMS issuer, account budgets and resend protections approve.
+ * It must invalidate/supersede the email challenge and produce a fresh
+ * separately bound SMS challenge. Never send SMS merely because normal
+ * email delivery failed or a client claims recovery is allowed.
+ *
+ * Missing provider is a CLOSED denial. No production provider is shipped.
+ */
+interface V5ExplicitSmsRecoveryPort
+{
+    public function requestSmsInsteadOfEmail(
+        string $emailChallengeId,
+        string $deviceId,
+        string $platform,
+    ): PendingLoginChallenge;
+}
+
+/**
  * Issue V5-only JWTs and server-verifiable assurance after rechecking the
  * account's current allowed status, auth epoch, and prior proof source.
  * A V4 access/refresh token MUST NEVER be accepted here. On any failure do
@@ -300,6 +324,32 @@ final readonly class V5LoginWorkflow
 
         // A consumed grant is the ONLY valid second-factor proof accepted here.
         return $this->sessions->afterConsumedChallenge($grant);
+    }
+
+    /**
+     * Manual email-to-SMS recovery only. No regular signin, email outage,
+     * or SMS resend may call this method automatically.
+     */
+    public function requestSmsFallback(
+        string $emailChallengeId,
+        string $deviceId,
+        string $platform,
+    ): PendingLoginChallenge {
+        self::requireInstallation($deviceId, $platform);
+        if (!self::validChallengeId($emailChallengeId)
+            || !$this->challenges instanceof V5ExplicitSmsRecoveryPort) {
+            throw new AuthenticationRejected('challenge_unavailable');
+        }
+        $ticket = $this->challenges->requestSmsInsteadOfEmail(
+            $emailChallengeId, $deviceId, $platform
+        );
+        // The SMS ledger is DISTINCT from the email ledger; reusing the ID
+        // would cause the email verifier to intercept SMS code consumption.
+        if ($ticket->kind !== ChallengeKind::SMS
+            || hash_equals($emailChallengeId, $ticket->challengeId)) {
+            throw new AuthenticationRejected('challenge_unavailable');
+        }
+        return $ticket;
     }
 
     public function resendSms(
