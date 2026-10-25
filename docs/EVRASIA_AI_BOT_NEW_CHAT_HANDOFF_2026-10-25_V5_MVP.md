@@ -251,3 +251,16 @@ Confirmed production SOURCE-ONLY read, `FINAL_RC=0`, `WRAPPER_RC=0`:
 - Additional V5-only Bitrix D7 order builder guard commit `047913479de525792bf6e32283de9b0598133aa9`: after `Order::save()`, require `PAYED=N`, `Order::isPaid()===false`, `Payment::isPaid()===false`, and initial `STATUS_ID` in `N/P` (never `F`). Added negative mock checks for order/payment unexpectedly marked paid; GitHub Actions success must be verified separately before calling guard tests PASS.
 - **Still unimplemented real site dependency:** `V5NativePickupOrderMaterializerPort` production provider to create a fresh **server-priced** basket, including existing discounts/gifts, and exact native Bitrix order properties from V4; site-configured unpaid pickup pay-system ID must be confirmed. Without that provider and transaction continuity, do NOT wire the writer into production V5; V5 AUTH OFF, no real orders.
 - Next focused development: inspect only live `V4/Cart::order` basketFields, payment-mode mapping to Sale pay system and getPropertyByCode property codes (not broad audits), then write concrete V5 materializer. This avoids inventing checkout pricing and accidentally paying the customer online.
+
+
+### Latest V5 pickup writer accepted CI + exact next production source dependency
+
+- `V5BitrixLockedPickupOrderWriter.php` + proposed-only ledger DDL, commit `39a1978510cc0c1dc9cf0386bf15dbb12d3d873d`; CI run `40207565518` SUCCESS `V5_PICKUP_ORDER_WRITER_MVP=PASS`, `PICKUP_WRITER_ASSERTIONS=16`, MOCK_ONLY. Cannot operate live without the currently absent site business basket/property materializer and proposed ledger schema.
+
+- `V5BitrixSaleD7OrderBuilder.php` now rejects unexpectedly paid payment/order and non-new status after D7 save, commit `047913479de525792bf6e32283de9b0598133aa9`. GitHub Actions run `40207640721` SUCCESS, source-only. The guest pays upon pickup; never mark PAID=Y or F when placing the order.
+
+- Checkout CI still covers HTTP **16/16**, builder tests now **20/20** (including paid-on-create guards; check exact CI logs for count), business rules **18/18**, locked writer **16/16**. **All offline mocks**; no Bitrix production/customer/SQL writes.
+
+- A single narrow *verified* `Cart::order` source-only basket field/property/pay-system mapping extractor: `site-integration/samzaberu-v5/tests/diagnostics/V5PickupBasketPropertyShape.php`, source commit `7bfc27e9da4c5e32ed9ec7765fa930383812cf86`, blob `8463851978c33c89c4aee6775d0f20edd9fc09cc`. GitHub Actions `40207764221` SUCCESS (PHP lint + self-test). Earlier initial extractor CI FAILED due colliding PHP builtin `extract()`, corrected and retested in the pinned version; only use corrected commit. No source execution, no arbitrary literals printed.
+
+- **Next only necessary operator action:** one pinned SHA, source-only invocation of that extractor on `/home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/Controllers/V4/Cart.php`, hash `73989036542321bbac5ee76a1b104713ff932621ffaa0f4e2aa08ed28949a039`; V5 OFF enforced; send output `BASKET_FIELDS`, `MODE ... SALE_ID`, `PROPERTY_CODE`. Then write REAL V5 basket/property materializer and attach writer in protected V5 composition only after native D7 transaction/ledger/real-account approval. No need to rerun previously accepted tests or wide audits.
