@@ -605,3 +605,16 @@ Owner: "нужна реализация, давай сегодня законч�
 **Gates to ACTUAL launch are unresolved; do not misrepresent:** prove a SINGLE server basket backing / stable basket-line id for GET/add/quantity/remove/checkout (custom B_API_BASKET vs D7), implement exact native custom cart write; validate/enable shared Bitrix Sale native transaction with events; prove existing LOCAL Bitrix handoff to call center without accessing call-center servers; install ledger schema; site-owned NOTES/source/happytime/payment/dispatch values; native signup/accept legal; approved live pilot. V4 entirely independent, V5 AUTH OFF, production not touched, no synthetic users/real orders/SMS/payment.
 
 The developer can implement app UI/network client against the CURRENT DOCUMENTED CONTRACT and mock fixtures today; **cannot point it at live production V5 yet**. Priority next is the precise custom-cart site write and single cart identity plus native release checks, not more generic source-only audits.
+
+
+## 33. V5 mobile auth TOTP / email-first / SMS fallback verified for developer handoff (2026-10-25)
+
+The owner asked explicitly about TOTP, email and SMS integration for mobile SamZaberu V5, all part of the feature-only V5 auth contract. Website MFA acceptance and production V5 auth readiness are NOT the same.
+
+- AuthDecision: currently strong, verified, server-revocable device trust skips repeated factor prompt even when website native TOTP exists; without strong trust, native Bitrix TOTP => totp challenge, otherwise email challenge (email-FIRST), not automatic SMS.
+- V5LoginWorkflow: device ID exact sz_ + 64 lowercase hex, platform ios/android; challenge ID 64 lowercase hex; OTP code exactly six digits; server-driven challenge_type, exp <=300s.
+- TOTP: staging-only V5BitrixLockedTotpFactor executes native Bitrix MFA verify with replay proof, but its live public FPM lifecycle requires independent positive site evidence. Not a standalone production-ready mobile verifier.
+- Email: V5MySqlEmailOtp issues password-bound, verified-account-email challenges, HMAC and lifetime/attempt/epoch/device controls; public email-first composition uses existing website D7 mail event EVRASIA_WEB_EMAIL_LOGIN, template 95 site s1, Redis budget. Queued does not imply received in mailbox. Requires real live attestation and email ledger.
+- SMS: manual email-to-SMS fallback, no automatic SMS and no TOTP downgrade. Adapter V5ExistingWebsiteSmsRecoveryAdapter exists, but site-native V5ExistingWebsiteSmsNativeTransitionPort send/transition positive implementation and proof remain missing. In email-first build ordinary SMS lifecycle is V5UnavailableSmsLifecycle, thus /auth/challenge/resend is not a working universal resend route.
+- Full handoff section 3 in docs/SAMZABERU_API_V5_DEVELOPER_HANDOFF_2026-10-25.md corrected and expanded in commit 3b9a7f7815b06449305d89b1f6e72936221da146, including exact Android/iOS device ID, request/response JSON, trusted/TOTP/email policy, manual SMS and not-live status. Developer may implement client against mocks now; cannot test against live V5 until release conditions pass.
+- No changes to V4 or production. V5 AUTH remains OFF. No SMS, mail or OTP was sent by the documentation update.
