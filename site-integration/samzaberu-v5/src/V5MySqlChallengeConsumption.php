@@ -53,6 +53,7 @@ final readonly class V5MySqlChallengeConsumption
         private V5LockedChallengeNativeFactorPort $native,
         #[\SensitiveParameter] private string $deviceBindingKey,
         #[\SensitiveParameter] private string $smsCodeHmacKey,
+        private bool $smsVerificationEnabled = true,
     ) {
         if (strlen($deviceBindingKey) < 32
             || strlen($smsCodeHmacKey) < 32
@@ -100,6 +101,13 @@ final readonly class V5MySqlChallengeConsumption
                 return null;
             }
             $kind=ChallengeKind::from($record['kind']);
+            // A TOTP/email-only V5 entrypoint MUST NOT consume an SMS
+            // challenge created by another client, even if an SMS code
+            // happens to be valid in the shared V5 ledger.
+            if ($kind === ChallengeKind::SMS && !$this->smsVerificationEnabled) {
+                $this->db->rollBack(); $started=false;
+                return null;
+            }
             $this->execute('SAVEPOINT v5_native_factor_guard', []);
             $nativeGuardOpen=true;
             if($this->native->currentFactorEligibleWithLocks(
