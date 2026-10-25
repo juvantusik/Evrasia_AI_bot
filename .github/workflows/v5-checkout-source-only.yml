@@ -7,6 +7,8 @@ on:
       - .github/workflows/v5-checkout-source-only.yml
       - site-integration/samzaberu-v5/src/V5BitrixSaleD7OrderBuilder.php
       - site-integration/samzaberu-v5/tests/V5BitrixSaleD7OrderBuilderTest.php
+      - site-integration/samzaberu-v5/src/V5BitrixCheckoutBusinessRules.php
+      - site-integration/samzaberu-v5/tests/V5BitrixCheckoutBusinessRulesTest.php
       - site-integration/samzaberu-v5/src/V5CheckoutRequest.php
       - site-integration/samzaberu-v5/src/V5MySqlOrderPlace.php
       - site-integration/samzaberu-v5/src/V5RouteMap.php
@@ -28,6 +30,7 @@ jobs:
           php -v | head -n 2
           for file in \
             src/V5BitrixSaleD7OrderBuilder.php \
+            src/V5BitrixCheckoutBusinessRules.php \
             src/V5CheckoutRequest.php \
             src/V5MySqlOrderPlace.php \
             src/V5RouteMap.php \
@@ -37,10 +40,13 @@ jobs:
             src/V5MySqlPublicComposition.php \
             src/V5MySqlPilotComposition.php \
             tests/V5IndependentCheckoutHttpTest.php \
-            tests/V5BitrixSaleD7OrderBuilderTest.php; do
+            tests/V5BitrixSaleD7OrderBuilderTest.php \
+            tests/V5BitrixCheckoutBusinessRulesTest.php; do
             php -l "$BASE/$file"
           done
       - name: Independent V5 checkout request and HTTP admission
         run: php site-integration/samzaberu-v5/tests/V5IndependentCheckoutHttpTest.php
       - name: V5 native Sale D7 order builder mock-only
         run: php site-integration/samzaberu-v5/tests/V5BitrixSaleD7OrderBuilderTest.php
+      - name: V5 on-site pickup checkout business rules (mock-only)
+        run: php site-integration/samzaberu-v5/tests/V5BitrixCheckoutBusinessRulesTest.php
