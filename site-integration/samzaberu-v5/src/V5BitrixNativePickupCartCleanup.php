@@ -45,6 +45,24 @@ final readonly class V5BitrixNativePickupCartCleanup implements V5NativePickupCa
         }
         $this->assertNativeTransactionContinuity($db);
 
+        // All three writes (Sale order, API cart, custom gifts) must be
+        // atomically reversible. Refuse non-transactional/missing tables.
+        // This is a point-read of table ENGINE only, not any guest data.
+        $engineSql = 'SELECT ENGINE FROM information_schema.TABLES '
+            . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1';
+        foreach (['B_API_BASKET', 'BASKET_CUSTOM_GIFTS'] as $table) {
+            $q = $db->prepare($engineSql);
+            if ($q === false || !$q->execute([$table])) {
+                throw new RuntimeException('checkout_cleanup_engine_unavailable');
+            }
+            $row = $q->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($row) || ($row['ENGINE'] ?? null) !== 'InnoDB'
+                || $q->fetch(PDO::FETCH_ASSOC) !== false) {
+                throw new RuntimeException('checkout_cleanup_table_not_transactional');
+            }
+            $this->assertNativeTransactionContinuity($db);
+        }
+
         // The FUSER row has already been proven to belong to the strongly
         // authenticated user and locked FOR UPDATE by the checkout writer.
         // Never use a FUSER from a mobile request, Bitrix browser cookie, or
