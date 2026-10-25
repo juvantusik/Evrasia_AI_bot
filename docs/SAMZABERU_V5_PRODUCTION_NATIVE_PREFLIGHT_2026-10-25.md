@@ -70,3 +70,18 @@
 - В `tests/diagnostics/v5_native_continuity_readonly.php` добавлены прямые strict `commit/rollBack` и отказ при скрытом перезапуске через прямой `commit`.
 
 **Состояние:** код находится ТОЛЬКО в GitHub feature-ветке, PHP lint и реальный native SQL smoke для новой версии ожидают запуска. Ранее успешно проверенный компонент `V5ProductionNativeTransactionContinuity` не переписан. Production AUTH V5 OFF; production exclusive permit и родной security-writer coverage НЕ АТТЕСТОВАНЫ. Строгий режим сам по себе не выдаёт permission на `BEGIN`; ему по-прежнему требуется отдельно подтверждённый `V5NativeBitrixExclusiveTransactionPermitPort`.
+
+## Дополнение: строгая проверка до КАЖДОГО SQL (2026-10-25)
+
+После успешного `STRICT_LIFECYCLE_TEST=PASS` на реальном Bitrix подтверждены `STRICT_DIRECT_COMMIT_GUARDED=PASS`, `STRICT_DIRECT_ROLLBACK_GUARDED=PASS`, `STRICT_HIDDEN_RESTART_DETECTED=PASS`, `FOREIGN_RESTART_PRESERVED=YES`, `FINAL_RC=0`. Это работа со штатной SQL-сессией `READ ONLY`; production-код, V4 и публичный V5 не менялись.
+
+**Обнаружена дополнительная граница:** проверка только перед терминальным `COMMIT` не предотвращает возможный `INSERT/UPDATE` в подменённую native транзакцию, если native callback сначала сделал `COMMIT + BEGIN`. Поэтому на отдельной GitHub-ветке:
+
+- `V5ProductionNativeTransactionContinuity::confirmBeforeStatement()` проверяет ту же физическую MariaDB-сессию, native depth и исходный savepoint и переустанавливает savepoint перед следующей операцией.
+- `V5BitrixPdoCompatibilityBridge::runStatement()` при opt-in `requireNativeContinuity=true` проводит контроль до и после каждого разрешённого SQL. При разрыве помечает транзакцию недостоверной, отказывается выполнять последующие SQL или завершить потенциально чужой scope. SQL allowlist и старый двухаргументный конструктор не меняются.
+- `tests/diagnostics/v5_native_continuity_readonly.php` проверяет обычный `SELECT UNIX_TIMESTAMP()` и отказ SQL после прямого скрытого `COMMIT + START TRANSACTION READ ONLY`. Данные пользователей не читаются и не меняются.
+- Создан единый серверный запуск `tests/diagnostics/run_v5_strict_sql_continuity_readonly.sh`, проверяющий production host, неизменность V4/V5, кандидата, pinned Git blobs, PHP lint и post-check. Пин исходников `75a00c6cc4fe374ba3e872ae93ed5337aa9f1214`.
+
+**СТАТУС НОВОЙ ВЕРСИИ:** код доступен в GitHub; реальный Bitrix smoke с проверкой **перед SQL** ещё ожидает серверный stdout. Не выдавать за PASS до выполнения. Строгий режим не устанавливается в production и не открывает AUTH V5.
+
+**Открытые release blockers:** отсутствует независимо подтверждённый production exclusive permit/request lifecycle, нативные OTP/password/phone/trust/security writer coverage, интеграция с real provider и аттестованный isolated staging. Успешный preflight/continuity не снимает эти ограничения.
