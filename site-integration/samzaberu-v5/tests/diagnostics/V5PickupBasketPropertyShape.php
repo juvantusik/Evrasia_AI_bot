@@ -62,7 +62,7 @@ function unquote(array|string $token):?string {
 function safeCode(?string $v):bool {
     return $v!==null&&preg_match('/\A[A-Za-z_][A-Za-z0-9_]{0,63}\z/D',$v)===1;
 }
-function extract(string $source):void {
+function pickupShapeExtract(string $source):void {
     $t=methodTokens($source);$n=count($t);
     $fields=[];$modes=[];$props=[];
     for($i=0;$i<$n;$i++){
@@ -134,7 +134,7 @@ function order() {
   $this->getPropertyByCode($properties, 'REST_ID')->setValue('private');
 }}
 PHP;
-    ob_start();extract($fixture);$s=ob_get_clean();
+    ob_start();pickupShapeExtract($fixture);$s=ob_get_clean();
     if(!str_contains($s,"MODE=cash SALE_ID=2")
         || !str_contains($s,"PROPERTY_CODE=REST_ID")
         || !str_contains($s,"'PRICE'")
@@ -147,4 +147,4 @@ $file=$argv[2];
 if(!is_file($file)||is_link($file)||filesize($file)>1500000)dieSafe('SOURCE_PATH');
 $src=file_get_contents($file);
 if(!is_string($src))dieSafe('SOURCE_READ');
-extract($src);
+pickupShapeExtract($src);
