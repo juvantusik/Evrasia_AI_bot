@@ -2,11 +2,11 @@
 
 ## Scope and source of evidence
 
-Source: operator-run **read-only** queries in SQL Server Management Studio (SQL Server 12.0.2269, SQL Server 2014) on **EUR-CRM**, with results visually reviewed during the Evrasia AI Bot project discussion on 2026-10-25. The actual trigger bodies, account update path and loyalty API implementation were **not** examined. This document records **schema and observed read-only behavior**, not an approved implementation or a deployed fix.
+Source: operator-run SQL Server Management Studio (SQL Server 12.0.2269, SQL Server 2014) checks on **EUR-CRM**, reviewed during the Evrasia AI Bot discussion on 2026-10-25. Initial schema checks were read-only; later the operator supplied full trigger definitions and successfully committed **one direct, guarded UPDATE of a single intended account balance**. Live site/API source and the authorized Restis adjustment workflow were not verified. This is evidence, **not** an approved repeatable balance-adjustment procedure or deployed API fix.
 
 **Privacy:** This public GitHub document deliberately excludes guest name, phone, card numbers, PIN, date of birth, account identifiers, and individual balance/transaction values. Example diagnostic SQL must use an operator-supplied, privately held card identifier. Do not copy screenshots of live accounts into public GitHub.
 
-**Production safety:** All observed SQL statements were SELECT / metadata inspection. **No production DB write, no trigger enable/disable, no bonus adjustment, no API or site code change** was made in this investigation. Do not execute a direct production balance UPDATE based solely on this document.
+**Production safety:** Metadata checks were SELECT-only; **one production bonus balance UPDATE was subsequently committed by the operator**, under an exact-row and original-value guard. The operator observed successful SQL status and post-update balance plus DATE_CORR timestamp. No trigger enabled/disabled, API/site code change, or history write via the disabled BonusUpdate trigger was performed. The UPDATE was a direct DB correction, not a confirmed audited Restis business adjustment. **Do not repeat or generalize the direct UPDATE from this document.**
 
 ## Confirmed databases and tables
 
@@ -48,7 +48,13 @@ The operator executed read-only `sys.triggers` / `sys.trigger_events` / `sys.sql
 
 **Safety conclusion:** The full shown trigger definitions narrow the known database-side effects but are not proof that a direct `CardTotalSum` change is an authorized/audited Restis balance-adjustment mechanism. Check live application writers, dedicated audit/ledger processes, recursive trigger setting, and reconciliation before production mutation. Do not enable `BonusUpdate` as a workaround.
 
-An operator-proposed change of a single test owner's balance to a round positive value was **requested but NOT executed** at this checkpoint. The original observed row was still unchanged after the trigger metadata read.
+The operator subsequently ran a single guarded transactional correction for their own identified card and supplied an SSMS result: `FINAL_STATUS=PASS`, old and target value confirmed, `COMMIT` completed and `DATE_CORR` refreshed. This was a **real production write**; no external/API freshness, journal reconciliation, or rollback proof was provided. Immediately afterward, a screenshot of the user's authenticated website account displayed **twice the newly written card balance**. The account/card identity and read path responsible for this discrepancy remain unknown; do not infer that Bitrix literally doubled the value. It could be selecting/aggregating different cards, reading another provider/endpoint, or caching a different state.
+
+## New website mismatch finding and existing code context
+
+- A live personal-account screenshot on `evrasia.rest` displayed a balance larger than the committed balance in `RESTISBONUS.dbo.Cards` for the operator's known card (a 2:1 observed ratio); **it was not verified that the site had read the same row at the same instant**. First reconfirm the exact card balance and all other cards linked to the account; then trace the website's actual HTTP/Bitrix Restis balance implementation.
+- Existing repository service `artifacts/api-server/src/services/bitrix-antifraud-loyalty-gateway.ts` calls the protected `https://evrasia.rest/api/internal/anti-fraud/loyalty`. The multicard test indicates the **site-side `/api/Balance` by Phone can report an account-level `TotalSum` when multiple active cards exist**. This is a lead to investigate, **not proof** of the website widget's own data path or why it showed the larger value.
+- Preserve `RESTIS_STATE=113` account/card resolution semantics, source precision and negative balances. Never “fix” a mismatch by multiplying/dividing by 2 without a verified source path.
 
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
@@ -77,11 +83,11 @@ ORDER BY t.name, te.type_desc;
 
 ## Follow-up before any mutation or API change
 
-1. Full definitions for `UpdateRecord` and `BonusUpdate` were obtained from SSMS and reviewed; now verify trigger recursion/nesting settings, external writers and stored-procedure dependencies before any mutation.
+1. Full definitions for `UpdateRecord` and `BonusUpdate` were reviewed; verify recursion/nesting settings, external writers, reconciliation and transaction dependencies before **any further mutation**.
 2. Read real `RESTISBONUS.dbo.RB_CARD_LOG` schema and scoped row history to establish reconciliation and audit semantics; read `BonusUpdatedHistory` as needed. No journal row manipulation.
 3. Inspect actual deployed Bitrix V4 / Restis bridge readers and their mapping from the current user to the Restis card; verify API current-response vs the same row and refresh/cache timing. Do **not** alter working V4 blindly.
-4. Any eventually approved balance change must establish authoritative writer, backups, exact-row preconditions, rollback limitations, audit trail, idempotency and post-check across DB/API/site. An `UPDATE` to `CardTotalSum` alone is **not yet approved**.
-5. Continue investigation with a strict production READ_ONLY posture until explicit evidence of trigger / journal / writer semantics. Do not publish user details, PIN or credentials.
+4. The operator's one successful direct UPDATE is **not evidence** that updating `CardTotalSum` alone is safe as a production procedure. Establish authoritative Restis writer, backup, audit trail, reconciliation, idempotency and DB/API/site post-check before any further change.
+5. Continue the **next diagnostic step** in READ_ONLY mode. The previous transaction is already committed. Do not publish user details, PIN or credentials.
 
 ## Project continuity
 
