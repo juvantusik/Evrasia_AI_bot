@@ -58,6 +58,24 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             throw new RuntimeException('v5_bitrix_sql_helper_unavailable');
         }
         $this->assertCurrentApplicationConnection();
+
+        // The legacy non-strict constructor is kept for CLI diagnostics
+        // only. Every real V5 HTTP request must arrive through its own
+        // canonical protected route and use the guarded transaction mode.
+        // This does NOT grant a production permit: the separately injected
+        // permit must still prove safeToBeginOn() before any BEGIN.
+        if (PHP_SAPI !== 'cli') {
+            if (PHP_SAPI !== 'fpm-fcgi' || !$this->requireNativeContinuity) {
+                throw new RuntimeException('v5_bitrix_http_continuity_required');
+            }
+            require_once __DIR__ . '/V5ProductionNativeRequestBoundaryGuard.php';
+            $boundary = new V5ProductionNativeRequestBoundaryGuard(
+                new V5ProductionNativeTransactionPreflight()
+            );
+            if (!$boundary->isEligible($this->native)) {
+                throw new RuntimeException('v5_bitrix_http_scope_unverified');
+            }
+        }
     }
 
     public function getAttribute(int $attribute): mixed
