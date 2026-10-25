@@ -2,6 +2,9 @@
 
 ## Новое решение владельца 25.10.2026 — общий email cap ОТМЕНЁН в исходниках
 
+**Подтверждение установки на production (вывод оператора, 25.10.2026):** guarded single-file deployment на `evrasia` завершился `FINAL_STATUS=PASS`, `FINAL_RC=0`. Установленный `EmailSendBudget.php` теперь точно соответствует Git blob `cc6c1b775f584eb84b7811c7fb5ba204ba3be2aa` (до установки `b20486bf4b99318cfd0ad22a6fe2db2e0cc09f01`), PHP lint и сохранение metadata PASS, приватная резервная копия проверена. `GLOBAL_EMAIL_BLOCKING_CAP=REMOVED_FROM_SOURCE`, `PER_USER_EMAIL_PROTECTION=PRESERVED`, `GLOBAL_REDIS_COUNTER=NONBLOCKING_TELEMETRY`. **PHP-FPM OPcache runtime НЕ проверен** (`PHP_FPM_OPCACHE_RUNTIME_VERIFIED=NO`): не приписывать исполнение новым FPM-процессам без дополнительного read-only evidence. Ни одна БД, Redis key, API V4, SMS, website login business flow и V5 AUTH не менялись в ходе этой установки. Исторические фразы ниже о том, что production ещё не обновлён, отменены этим результатом.
+
+
 После предыдущего checkpoint владелец подтвердил: **убрать общий блокирующий лимит 1000 email/час**. Общие блокирующие ограничения email/SMS не возвращать до накопления реальной статистики и отдельного решения. Сохраняются индивидуальные защиты email: cooldown **60 секунд на пользователя**, **5 писем/час на пользователя**, верификация факторов, TTL OTP и защита от повторной отправки. Не путать отсутствие общего cap с отсутствием антиспам-защит.
 
 В feature-исходнике `deployment/website-mfa/EmailSendBudget.php` больше **нет сравнения общего счётчика Redis с квотой**. Существующий hourly global key оставлен **только для неблокирующего учёта успешных резервирований** (не означает SMTP delivery); ошибка агрегирующего счётчика не должна приводить к запрету отправки. В `V5ExistingWebsiteEmailBudget` сохранено переиспользование **того же** website budget/Redis, без новой таблицы или системы лимитов. Source-only тесты проверяют отсутствие глобального блокирующего условия.
