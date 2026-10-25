@@ -150,6 +150,12 @@ $denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
     'native readiness withdrawn: fail closed at request time');
 $check($native->requestCalls===$before,
     'native readiness loss prevents paid SMS calls');
+$pins=(new ReflectionClass(V5PinnedWebsiteSmsSourceProof::class))
+    ->getReflectionConstant('HASHES')->getValue();
+$check(is_array($pins) && count($pins)===5
+    && ($pins['local/php_interface/lib/CSms.php']??null)
+        ==='94a05ecbfad09340f2c07f432ebb047d0b5f928ed8a51198873ac43eb2f7c455',
+    'installed CSms transport SHA is a mandatory drift guard');
 $check((new V5PinnedWebsiteSmsSourceProof())->exactPinnedSiteSourcesAvailable()!==true,
     'production-only SHA pin does not grant SMS in CI without installed website');
 
