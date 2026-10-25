@@ -18,6 +18,10 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php'
+      - 'site-integration/samzaberu-v5/tests/AuthDecisionTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php'
   workflow_dispatch:
 
 permissions:
@@ -78,7 +82,11 @@ jobs:
             site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php \
-            site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php; do
+            site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php \
+            site-integration/samzaberu-v5/tests/AuthDecisionTest.php \
+            site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php \
+            site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php \
+            site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php; do
             php -l "$file"
           done
           echo 'PHP_LINT=PASS'
@@ -99,6 +107,10 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php
           php site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php
           php site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php
+          php site-integration/samzaberu-v5/tests/AuthDecisionTest.php
+          php site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
+          php site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php
+          php site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php
           echo 'FIRST_FACTOR_PUBLIC_GATES=PASS'
 
       - name: Final no-production attestation
