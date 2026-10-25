@@ -19,3 +19,20 @@ Do not delete existing functioning MFA/authorization safeguards or expose custom
 4. Test actual V5 responses using existing real user journeys and rollout with an explicit rollback plan. Keep V4 untouched during migration.
 
 For every terminal wrapper: clear screen/scrollback immediately at start with `printf '\\033[3J\\033[2J\\033[H'`, print concise statuses, preserve terminal prompt and `FINAL_STATUS/FINAL_RC/WRAPPER_RC`, no credentials/customer data.
+
+## Implemented: independent V5 GET /profile (feature source only)
+
+Latest user-approved direction: V5 must be independently removable from V4; copying V4 logic as a reference is allowed, runtime V4 controller/JWT/API calls are NOT. Production operator created immutable root-only V4 reference snapshot `/root/ev-v5-mvp.2eCDIApS` (11 controllers, checksum verified, V4 unchanged) and supplied routes/method names. This is a development reference only.
+
+The V5 feature branch now implements `GET /api/v5/profile` end-to-end at source level:
+
+1. `V5RouteMap`: canonical profile GET.
+2. `V5ParallelHttpEntry`, `V5HttpTransportBoundary`: V5 bearer pre-check and GET dispatch, no cookies or JSON body.
+3. `V5AuthHttpHandler`: separate `V5ProfileHttpReaderPort`, returns `{ "profile": {...} }`; absent provider is 503.
+4. `V5MySqlStrongSessionStore`: `readProfileForAccess` checks V5 access JWT, current Bitrix user, epoch and locked V5 strong session, then reads with the same Bitrix transaction.
+5. `V5BitrixLockedProfileReader`: V5-only read-only native `b_user` projection `ID,LOGIN,NAME,LAST_NAME,SECOND_NAME,EMAIL,PERSONAL_PHONE`, with exact current-user ID bound by the V5 token. No Controllers/V4 dependency.
+6. `V5MySqlProfileRead`: adapter installed in existing V5 public/pilot compositions; no new auth/token service.
+7. `V5ProductionNativeRequestBoundaryGuard` recognizes exact protected GET profile, not anonymous legal.
+8. `tests/V5IndependentProfileHttpTest.php`: in-memory HTTP contract test without creating any synthetic guest, database, or JWT. SOURCE ONLY; runtime Bitrix read/real mobile JWT not yet accepted.
+
+**NOT LIVE:** public V5 AUTH still OFF, feature only. Profile DTO minimal, not claimed full V4 field parity yet; current V4 source reference can be used to add any required V4 fields without V4 runtime dependency. Next functional tasks: private independent V5 cart ownership/read adapter and V5 orders adapter using native Bitrix business services, then signup and live app acceptance. Do not open a fresh security investigation.
