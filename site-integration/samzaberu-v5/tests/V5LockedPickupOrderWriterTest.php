@@ -229,7 +229,7 @@ namespace {
     $yes($cleanup->cleanupCalls===1,'ONE_POST_SAVE_CART_CLEANUP');
     $yes($handoff->proofCalls===1,'LOCAL_BITRIX_HANDOFF_PROOF_REQUIRED');
     $yes($savedProof->checks===1,'PERSISTED_ORDER_ROW_PROOF_REQUIRED');
-    $yes($cleanup->continuityChecks===6,
+    $yes($cleanup->continuityChecks===8,
         'BEFORE_SAVE_HANDOFF_CLEANUP_AND_AFTER_LEDGER_TRANSACTION_VERIFIED');
     $ownerBeforeReplay=$owner->calls;
     // After the first checkout, the original basket or even its FUSER row
@@ -241,7 +241,7 @@ namespace {
     $owner->deny=false;
     $yes($replay===$first,'DURABLE_REPLAY_IDENTITY');
     $yes($save->calls===1 && $mat->calls===1,'REPLAY_DOES_NOT_SAVE');
-    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===6,
+    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===8,
         'REPLAY_DOES_NOT_CLEAN_CART');
     $yes($handoff->proofCalls===1,'REPLAY_DOES_NOT_TRIGGER_HANDOFF_PROOF');
     $yes($savedProof->checks===1,'REPLAY_DOES_NOT_READ_SAVED_SALE_ROW');
@@ -318,7 +318,7 @@ namespace {
     // a failed checkout. Require guard proof AFTER the ledger UPDATE.
     $lateDb=new FakeLedgerPDO();
     $lateCleanup=new Cleanup();
-    $lateCleanup->denyOnCheckNumber=6;
+    $lateCleanup->denyOnCheckNumber=8;
     $lateOwner=new Owner();
     $lateMaterializer=new Materializer();
     $lateSave=new Saver();
@@ -333,7 +333,7 @@ namespace {
     $yes($throws(fn()=>$lateWriter->placeLockedOrder(
         $lateDb,27,$lateId,$input
     )),'LEDGER_FINAL_CONTINUITY_LOSS_DENIES_RECEIPT');
-    $yes($lateCleanup->continuityChecks===6,
+    $yes($lateCleanup->continuityChecks===8,
         'FINAL_LEDGER_WRITE_HAS_SEPARATE_NATIVE_CONTINUITY_CHECK');
     $yes($lateSave->calls===1 && $lateCleanup->cleanupCalls===1,
         'FINAL_GUARD_ONLY_AFTER_SAVED_ORDER_AND_CLEANUP');
