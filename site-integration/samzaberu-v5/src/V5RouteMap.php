@@ -22,6 +22,7 @@ final class V5RouteMap
         'POST /auth/token/validate' => 'validateToken',
         'POST /loyalty/pin' => 'showBonusPin',
         'GET /cart' => 'readCart',
+        'POST /cart/items/add' => 'addCartItem',
         'POST /cart/items/quantity' => 'setCartItemQuantity',
         'POST /cart/items/remove' => 'removeCartItem',
         'GET /profile' => 'readProfile',
