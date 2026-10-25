@@ -87,6 +87,8 @@ final readonly class V5MySqlConsumedChallengeProof implements V5LockedStrongSess
                 || preg_match('/\A[a-f0-9]{64}\z/D',$epoch)!==1
                 || ($row['sms_code_hmac']??null)!==null) return false;
 
+            if (!in_array($grant->kind,[ChallengeKind::TOTP,ChallengeKind::SMS],true))
+                return false; // Email ledger/receipt is not implemented here.
             if($grant->kind===ChallengeKind::SMS){
                 $delivery=$row['current_delivery_id']??null;
                 if($sent<1 || $sent>ChallengeRules::MAX_SMS_SENDS_PER_CHALLENGE

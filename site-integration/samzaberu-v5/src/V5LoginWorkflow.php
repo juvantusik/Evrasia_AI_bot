@@ -43,6 +43,7 @@ enum ChallengeKind: string
 {
     case TOTP = 'totp';
     case SMS = 'sms';
+    case EMAIL = 'email';
 }
 
 /** A pending challenge NEVER contains access/refresh credentials. */
@@ -124,7 +125,8 @@ interface V5TrustProofPort
 
 /**
  * Production implementation MUST:
- * - atomically create password-proven challenges and reserve SMS quotas;
+ * - atomically create password-proven challenges and enforce email OTP limits;
+ * - SMS is an optional explicitly selected recovery factor, never automatic;
  * - send SMS ONLY to the existing verified account phone after quotas pass;
  * - increment attempts on every code check, enforce TTL/lockouts, and ensure
  *   at most ONE successful code verification under concurrent requests;
@@ -258,6 +260,11 @@ final readonly class V5LoginWorkflow
         if ($decision === NextFactor::TOTP) {
             return $this->requireChallenge(
                 $account, $login, $password, $deviceId, $platform, ChallengeKind::TOTP
+            );
+        }
+        if ($decision === NextFactor::EMAIL) {
+            return $this->requireChallenge(
+                $account, $login, $password, $deviceId, $platform, ChallengeKind::EMAIL
             );
         }
         if ($decision === NextFactor::SMS) {

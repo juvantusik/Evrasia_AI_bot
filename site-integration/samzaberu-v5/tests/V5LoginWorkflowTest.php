@@ -81,7 +81,7 @@ final class FakeChallenges implements V5AtomicChallengePort
             11,
             $this->mismatchDeviceGrant ? 'sz_' . str_repeat('b', 64) : $deviceId,
             $platform,
-            $this->lastKind ?? ChallengeKind::SMS,
+            $this->lastKind ?? ChallengeKind::EMAIL,
             GID,
         );
     }
@@ -195,7 +195,7 @@ check($result instanceof PendingLoginChallenge && $result->kind === ChallengeKin
 check($t->calls === 0 && $c->begins === 1 && $s->trustCalls === 0,
     'missing trust never accesses trust port or issues JWT');
 
-// Valid cryptographic token + strong-enrollment proof can skip SMS.
+// Valid cryptographic token + strong-enrollment proof skips repeat email OTP.
 [$f, $p, $t, $c, $s] = fixture($user);
 $t->result = new MobileTrustAssessment(true, true);
 $result = $f->signIn('test', 'secret', DID, 'android', 'trusted_token');
@@ -203,13 +203,13 @@ check($result instanceof AuthenticatedV5Session, 'verified trusted device issued
 check($s->trustCalls === 1 && $c->begins === 0, 'strong trust no SMS challenge');
 check($t->calls === 1, 'trust proof evaluated');
 
-// Legacy V4 password-only trust must never bypass SMS.
+// Legacy V4 password-only trust must never bypass the email OTP.
 foreach ([[false,false],[false,true],[true,false]] as [$tokenValid, $strong]) {
     [$f, $p, $t, $c, $s] = fixture($user);
     $t->result = new MobileTrustAssessment($tokenValid, $strong);
     $result = $f->signIn('test', 'secret', DID, 'ios', 'any_token');
     check($result instanceof PendingLoginChallenge, 'not-strong trust gives pending');
-    check($result->kind === ChallengeKind::SMS, 'not-strong trust requires SMS');
+    check($result->kind === ChallengeKind::EMAIL, 'not-strong trust requires email');
     check($s->trustCalls === 0, 'not-strong trust cannot issue JWT');
 }
 
@@ -218,7 +218,7 @@ foreach ([null, '', str_repeat('t', 1025)] as $token) {
     [$f, $p, $t, $c, $s] = fixture($user);
     $t->result = new MobileTrustAssessment(true, true);
     $result = $f->signIn('test', 'secret', DID, 'ios', $token);
-    check($result instanceof PendingLoginChallenge && $result->kind === ChallengeKind::SMS, 'absent trust SMS');
+    check($result instanceof PendingLoginChallenge && $result->kind === ChallengeKind::EMAIL, 'absent trust email');
     check($t->calls === 0 && $s->trustCalls === 0, 'invalid trust never evaluated');
 }
 
@@ -240,20 +240,20 @@ foreach ([['', 'secret'], ['test', ''], [str_repeat('L', 321), 'secret'], ['test
     check($p->calls === 0, 'bad login/password never forwarded');
 }
 
-// SMS unavailability/rate-limit must fail, not return any JWT.
+// Email provider unavailability/rate-limit must fail, not return any JWT.
 [$f,$p,$t,$c,$s] = fixture($user);
 $c->unavailable = true;
 try {
     $f->signIn('test','secret',DID,'ios');
-    check(false,'SMS backend unavailable should throw');
+    check(false,'email backend unavailable should throw');
 } catch (RuntimeException $e) {
-    check($s->trustCalls === 0 && $s->grantCalls === 0,'SMS backend fail closed');
+    check($s->trustCalls === 0 && $s->grantCalls === 0,'email backend fail closed');
 }
 
-// Normal SMS challenge does not carry access/refresh credentials.
+// Normal email challenge does not carry access/refresh credentials.
 [$f,$p,$t,$c,$s] = fixture($user);
 $ticket=$f->signIn('test','secret',DID,'ios');
-check($ticket instanceof PendingLoginChallenge && $ticket->kind === ChallengeKind::SMS,'SMS pending');
+check($ticket instanceof PendingLoginChallenge && $ticket->kind === ChallengeKind::EMAIL,'email pending');
 check(!property_exists($ticket,'accessToken') && !property_exists($ticket,'refreshToken'),'pending has no tokens');
 check($s->trustCalls===0 && $s->grantCalls===0,'SMS pending no issuance');
 
@@ -271,8 +271,8 @@ foreach (['', 'short', 'A' . str_repeat('b', 63)] as $invalidId) {
 
 // Code mismatch or consumed challenge never issues credentials.
 [$f,$p,$t,$c,$s] = fixture($user);
-reject(fn() => $f->verifyChallenge(CID,'111111',DID,'ios'),'wrong SMS code');
-check($c->verifications===1 && $s->grantCalls===0,'wrong SMS no JWT');
+reject(fn() => $f->verifyChallenge(CID,'111111',DID,'ios'),'wrong email code');
+check($c->verifications===1 && $s->grantCalls===0,'wrong email no JWT');
 $result=$f->verifyChallenge(CID,'123456',DID,'ios');
 check($result instanceof AuthenticatedV5Session,'valid one-time challenge can issue V5 session');
 check($s->grantCalls===1,'valid challenge issued once');

@@ -86,10 +86,13 @@ $sms = new CiFactorIssuer(ChallengeKind::SMS);
 $router = new V5SeparatedFactorLifecycle($totp,$sms);
 $tAccount = new PasswordVerifiedAccount(41,true,true);
 $sAccount = new PasswordVerifiedAccount(41,true,false);
+rejectFactor(fn()=>$router->beginBound($sAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL),
+    'email cannot silently use the SMS fallback provider');
 okFactor($router instanceof V5PasswordBoundChallengeLifecyclePort,'typed bound lifecycle');
 okFactor(!($router instanceof Evrasia\Samzaberu\V5\V5PublicVerifiedFactorLifecyclePort),
     'staged router never attests public native factor readiness');
 rejectFactor(fn()=>$router->begin(41,DEVICE,'ios',ChallengeKind::SMS),'unbound SMS start denied');
+rejectFactor(fn()=>$router->begin(41,DEVICE,'ios',ChallengeKind::EMAIL),'unbound email start denied');
 rejectFactor(fn()=>$router->begin(41,DEVICE,'ios',ChallengeKind::TOTP),'unbound TOTP start denied');
 
 $t=$router->beginBound($tAccount,'login','password',DEVICE,'ios',ChallengeKind::TOTP);
@@ -160,9 +163,11 @@ $ticket=$workflow->signIn('login','password',DEVICE,'ios');
 okFactor($ticket instanceof PendingLoginChallenge && $ticket->kind===ChallengeKind::TOTP,
     'existing V5 login workflow chooses native TOTP path');
 $proof->totp=false;
-$ticket=$workflow->signIn('login','password',DEVICE,'ios');
-okFactor($ticket instanceof PendingLoginChallenge && $ticket->kind===ChallengeKind::SMS,
-    'existing V5 login workflow chooses SMS only without TOTP');
+$priorSmsCalls=$sms->bound;
+rejectFactor(fn()=>$workflow->signIn('login','password',DEVICE,'ios'),
+    'email-first branch fails closed without installed mobile email lifecycle');
+okFactor($sms->bound===$priorSmsCalls,
+    'missing email issuer never silently calls paid SMS provider');
 okFactor($session->calls===0,'no bearer tokens or strong session issued by routing');
 try {
     new V5SeparatedFactorLifecycle($sms,$sms);
@@ -171,6 +176,6 @@ try {
     okFactor(true,'factor providers must be distinct objects');
 }
 
-printf("PASS: V5 separated TOTP/SMS lifecycle routing (%d assertions)\n",$passed);
+printf("PASS: V5 separated TOTP/SMS routing with email-first fail-closed (%d assertions)\n",$passed);
 echo "MODE=CI_OFFLINE_ONLY\nREAL_SMS_SENT=NO\nREAL_BITRIX_BOOTSTRAP=NO\n";
 echo "PRODUCTION_CODE_WRITE=NO\nAPI_V4_CHANGED=NO\nV5_PUBLIC_AUTH_ENABLED=NO\n";

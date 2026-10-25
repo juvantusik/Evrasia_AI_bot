@@ -7,6 +7,7 @@ enum NextFactor: string
 {
     case DENY = 'deny';
     case TOTP = 'totp_challenge';
+    case EMAIL = 'email_challenge';
     case SMS = 'sms_challenge';
     case COMPLETE = 'complete';
 }
@@ -42,6 +43,9 @@ final class AuthDecision
             return NextFactor::TOTP;
         }
 
-        return NextFactor::SMS;
+        // Email-first policy confirmed on website. A missing/unverified email
+        // transport must DENY, never auto-send paid SMS or return a session.
+        // SMS remains an explicit user-requested recovery path only.
+        return NextFactor::EMAIL;
     }
 }

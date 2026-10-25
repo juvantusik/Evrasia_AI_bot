@@ -63,7 +63,7 @@ final class ChallengePortStub implements V5AtomicChallengePort
             return null;
         }
         $this->consumed = true;
-        return new ConsumedLoginChallenge(11,$deviceId,$platform,ChallengeKind::SMS,GID);
+        return new ConsumedLoginChallenge(11,$deviceId,$platform,ChallengeKind::EMAIL,GID);
     }
     public function resendSms(string $id,string $deviceId,string $platform): PendingLoginChallenge
     {
@@ -153,7 +153,7 @@ $verify=['challenge_id'=>CID,'code'=>'123456','device_id'=>DID,'platform'=>'ios'
 $resend=['challenge_id'=>CID,'device_id'=>DID,'platform'=>'ios'];
 
 $r=$handler->handleJson('signin',j($signin));
-check($r->status===202 && $r->body['challenge_type']==='sms','signin requires SMS');
+check($r->status===202 && $r->body['challenge_type']==='email','signin requires email OTP');
 check($r->body['challenge_id']===CID && $r->body['expires_in']===150,'pending contract');
 check(!isset($r->body['access_token']) && !isset($r->body['refresh_token']),'pending contains no JWT');
 check($s->issued===0,'no JWT issued before challenge');
@@ -172,7 +172,7 @@ check(isset($r->body['trusted_device']),'trust rotation metadata response');
 check($s->issued===1,'trust session issued exactly once');
 $t->assessment = new MobileTrustAssessment(true,false);
 $r=$handler->handleJson('signin',j($signin+['trust_token'=>'password-only-legacy']));
-check($r->status===202 && $r->body['challenge_type']==='sms','weak legacy trust requires SMS');
+check($r->status===202 && $r->body['challenge_type']==='email','weak legacy trust requires email OTP');
 check($s->issued===1,'weak trust cannot issue session');
 
 $r=$handler->handleJson('verifyChallenge',j($verify));

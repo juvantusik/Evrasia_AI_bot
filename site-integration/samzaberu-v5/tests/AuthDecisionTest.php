@@ -27,7 +27,7 @@ foreach ([false, true] as $passwordVerified) {
                     } elseif ($nativeTotpActive) {
                         $expected = NextFactor::TOTP;
                     } else {
-                        $expected = NextFactor::SMS;
+                        $expected = NextFactor::EMAIL;
                     }
 
                     if ($actual !== $expected) {
@@ -65,4 +65,4 @@ if ($tested !== 32) {
 }
 
 echo "PASS: V5 decision matrix ($tested cases)\n";
-echo "NO_JWT_ISSUED=YES\nNO_SMS_SENT=YES\nNO_DB_READ_OR_WRITE=YES\n";
+echo "NO_JWT_ISSUED=YES\nNO_SMS_SENT=YES\nNO_EMAIL_SENT=YES\nNO_DB_READ_OR_WRITE=YES\n";

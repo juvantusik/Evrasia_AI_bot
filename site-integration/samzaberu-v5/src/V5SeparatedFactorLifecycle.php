@@ -53,6 +53,13 @@ final readonly class V5SeparatedFactorLifecycle implements V5PasswordBoundChalle
             throw new AuthenticationRejected('challenge_unavailable');
         }
 
+        // This feature router has no authenticated MOBILE email issuer.
+        // Never misroute an EMAIL challenge to the existing SMS provider.
+        // Public V5 remains OFF until an attested email lifecycle is injected.
+        if ($kind === ChallengeKind::EMAIL) {
+            throw new AuthenticationRejected('challenge_unavailable');
+        }
+
         // A current native TOTP factor forbids SMS downgrade. A valid strong
         // trusted device has already been handled by V5LoginWorkflow.
         if ($kind === ChallengeKind::TOTP && !$account->nativeTotpActive

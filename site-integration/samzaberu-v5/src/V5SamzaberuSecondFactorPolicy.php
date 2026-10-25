@@ -14,7 +14,8 @@ final class V5SamzaberuSecondFactorPolicy
 {
     public const DENY = 'deny';
     public const REQUIRE_TOTP = 'require_totp';
-    public const REQUIRE_SMS = 'require_sms';
+    public const REQUIRE_SMS = 'require_sms'; // explicit recovery only
+    public const REQUIRE_EMAIL = 'require_email';
     public const VERIFIED_TRUST = 'verified_trust';
 
     public static function decide(
@@ -28,15 +29,20 @@ final class V5SamzaberuSecondFactorPolicy
             || $totpEnabledServerSide === null) {
             return self::DENY;
         }
-        // TOTP takes precedence over any trusted-device cookie or SMS path.
+        // Trust is a SERVER-verified strong enrollment, not a cookie-only
+        // assertion. Unknown trust status is rejected, never used as proof.
+        if ($trustedDeviceVerifiedServerSide === true) {
+            return self::VERIFIED_TRUST;
+        }
         if ($totpEnabledServerSide) {
             return self::REQUIRE_TOTP;
         }
         if ($trustedDeviceVerifiedServerSide === null) {
             return self::DENY;
         }
-        return $trustedDeviceVerifiedServerSide
-            ? self::VERIFIED_TRUST : self::REQUIRE_SMS;
+        // Normal second factor for accounts without TOTP is email OTP.
+        // SMS is available only by a separately verified recovery action.
+        return self::REQUIRE_EMAIL;
     }
 
     /**
@@ -47,10 +53,12 @@ final class V5SamzaberuSecondFactorPolicy
         string $decision,
         bool $totpProofVerifiedForAttempt,
         bool $smsProofVerifiedForAttempt,
+        bool $emailProofVerifiedForAttempt = false,
     ): bool {
         return match ($decision) {
             self::REQUIRE_TOTP => $totpProofVerifiedForAttempt,
             self::REQUIRE_SMS => $smsProofVerifiedForAttempt,
+            self::REQUIRE_EMAIL => $emailProofVerifiedForAttempt,
             self::VERIFIED_TRUST => true,
             default => false,
         };
