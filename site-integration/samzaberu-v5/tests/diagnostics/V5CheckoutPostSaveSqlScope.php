@@ -71,6 +71,14 @@ function queryScope(array $tokens):array {
         $upper=strtoupper($sql);
         $operation=preg_match('/^\s*(UPDATE|DELETE|INSERT|REPLACE|SELECT)\b/',$upper,$m)===1
             ? $m[1] : 'OTHER';
+        // Read only the SQL table IDENTIFIER after DELETE FROM.
+        // Never return SQL, values, quoted arbitrary strings or expressions.
+        $tableName='UNRECOGNIZED';
+        if($operation==='DELETE'
+            && preg_match('/\bDELETE\s+FROM\s+`?([A-Z][A-Z0-9_]{0,62})`?/i',
+                $upper,$tableMatch)===1) {
+            $tableName=strtoupper($tableMatch[1]);
+        }
         $targets=[];
         foreach(['B_SALE_BASKET','B_SALE_FUSER','B_SALE_ORDER',
             'B_SALE_ORDER_PROPS_VALUE','B_SALE_BASKET_PROPS'] as $name) {
@@ -86,6 +94,7 @@ function queryScope(array $tokens):array {
         }
         $results[]=[
             'operation'=>$operation,
+            'table_identifier'=>$tableName,
             'tables'=>$targets?:['UNRECOGNIZED'],
             'keywords'=>$where,
             'literal_segments'=>$segments,
@@ -103,6 +112,7 @@ function printQueryScope(string $source):void {
     foreach($queries as $i=>$q){
         $prefix='QUERY_'.($i+1).'_';
         echo $prefix,'OP=', $q['operation'],PHP_EOL;
+        echo $prefix,'TARGET_IDENTIFIER=', $q['table_identifier'],PHP_EOL;
         echo $prefix,'WHITELIST_TABLES=',implode(',',$q['tables']),PHP_EOL;
         echo $prefix,'KNOWN_SQL_KEYWORDS=',implode(',',$q['keywords']),PHP_EOL;
         echo $prefix,'SQL_LITERAL_SEGMENTS=',$q['literal_segments'],PHP_EOL;
@@ -127,12 +137,14 @@ PHP;
     ob_start();printQueryScope($sample);$out=(string)ob_get_clean();
     if(!str_contains($out,'QUERY_1_OP=UPDATE')
         ||!str_contains($out,'QUERY_2_OP=DELETE')
+        ||!str_contains($out,'QUERY_1_TARGET_IDENTIFIER=B_SALE_BASKET')
+        ||!str_contains($out,'QUERY_2_TARGET_IDENTIFIER=B_SALE_BASKET_PROPS')
         ||!str_contains($out,'QUERY_1_WHITELIST_TABLES=B_SALE_BASKET')
         ||!str_contains($out,'QUERY_2_WHITELIST_TABLES=B_SALE_BASKET_PROPS')
         ||!str_contains($out,'QUERY_1_USES_SERVICE_ID=YES')
         ||str_contains($out,'customer-hidden-text')
         ||str_contains($out,'UPDATE b_sale_basket'))failPostSaveTrace('SELFTEST');
-    echo "PASS: exact query classifier and no-SQL-output redaction\n";
+    echo "PASS: exact SQL identifier classifier and no-SQL-output redaction\n";
     exit(0);
 }
 if($argc!==3||$argv[1]!=='--source-only')failPostSaveTrace('ARGUMENTS');
