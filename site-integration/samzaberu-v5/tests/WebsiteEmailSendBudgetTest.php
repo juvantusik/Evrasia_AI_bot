@@ -33,17 +33,20 @@ try {
         'valid_email_budget_reservation');
     $check(count($redis->calls) === 1, 'single_atomic_call');
     [$lua, $args, $keyCount] = $redis->calls[0];
-    $check($keyCount === 3 && count($args) === 9, 'three_keys_six_args');
-    $check(str_contains($lua, "redis.call('INCR', KEYS[i])")
-        && str_contains($lua, "redis.call('EXPIRE', KEYS[i]")
+    $check($keyCount === 3 && count($args) === 6, 'three_keys_three_args');
+    $check(str_contains($lua, "redis.call('INCR', KEYS[2])")
+        && str_contains($lua, "redis.call('EXPIRE', KEYS[2]")
         && str_contains($lua, "redis.call('SET', KEYS[1]"),
-        'atomic_lua_with_continuous_cooldown_and_ttl');
-    $check(str_contains($lua, "redis.call('GET', KEYS[i])")
-        && str_contains($lua, 'return 0'), 'precheck_all_quotas');
-    $check($args[3] === 1 && $args[4] === 5 && $args[5] === 1000,
-        'provisional_limits');
-    $check($args[6] === 60 && $args[7] === 7200 && $args[8] === 7200,
-        'quota_key_ttl');
+        'atomic_per_user_cooldown_and_hourly_ttl');
+    $check(str_contains($lua, "redis.call('GET', KEYS[2])")
+        && !str_contains($lua, "redis.call('GET', KEYS[3])")
+        && str_contains($lua, 'return 0'), 'only_per_user_quota_can_deny');
+    $check($args[3] === 5 && $args[4] === 60 && $args[5] === 7200,
+        'per_user_hourly_cooldown_and_ttl');
+    $check(str_contains($lua, "redis.pcall('INCR', KEYS[3])")
+        && str_contains($lua, "redis.pcall('EXPIRE', KEYS[3]")
+        && !str_contains($lua, 'global_hourly_limit'),
+        'global_aggregate_observation_only_and_nonblocking');
     $check(!str_contains(json_encode($args, JSON_THROW_ON_ERROR), 'secret@example.com'),
         'no_plaintext_email');
     $check(!str_contains(implode('|', array_slice($args, 0, 3)), '42'),
@@ -78,12 +81,12 @@ try {
         'another_user_isolated');
     $last = $redis->calls[array_key_last($redis->calls)][1];
     $check($last[0] !== $args[0] && $last[1] !== $args[1]
-        && $last[2] === $args[2], 'per_user_keys_separate_global_shared');
+        && $last[2] === $args[2], 'per_user_keys_separate_global_telemetry_shared');
 
     $check(EmailSendBudget::PER_USER_COOLDOWN_SECONDS === 60
         && EmailSendBudget::PER_USER_PER_HOUR === 5
-        && EmailSendBudget::GLOBAL_PER_HOUR === 1000,
-        'limit_constants');
+        && !defined(EmailSendBudget::class . '::GLOBAL_PER_HOUR'),
+        'per_user_controls_preserved_global_blocking_constant_removed');
 
     echo "PASS: email-only budget quota, privacy, Redis errors and isolation ($checks assertions)\n";
     echo "MODE=OFFLINE_UNIT_TEST\nREDIS_CONNECTION=NO\nREDIS_WRITE=NO\n";
