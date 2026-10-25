@@ -26,6 +26,11 @@ final readonly class V5PinnedWebsiteSmsSourceProof implements V5WebsiteSmsSource
 {
     private const SITE = '/home/site_evrasia/web/evrasia.spb.ru/public_html';
     private const HASHES = [
+        // Confirmed read-only on the installed website, 25.10.2026.
+        // CSms::send uses cURL, has one explicit return true and no
+        // explicit return false. Positive TRUE alone is not final receipt.
+        'local/php_interface/lib/CSms.php'
+            => '94a05ecbfad09340f2c07f432ebb047d0b5f928ed8a51198873ac43eb2f7c455',
         'local/components/eurasia/signin/class.php'
             => '3df2c4d31ecf765a2d0bfcb4d5181aa9f51734d901872bf4ed93a07a6601817f',
         'local/php_interface/website-mfa/EmailFirstSmsRatePolicy.php'
