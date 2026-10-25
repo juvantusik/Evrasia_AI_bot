@@ -171,3 +171,12 @@ After operator-confirmed 19/19 order-detail PASS, the feature-only V5 checkout s
 - New `V5CheckoutRequest.php`, `V5MySqlOrderPlace.php`, route guard and handler/composition opt-in. Without explicit native writer checkout remains **503**, V5 AUTH stays OFF. No site/DB writes.
 - `tests/V5IndependentCheckoutHttpTest.php` is source-only and uses in-memory port, not Bitrix D7 or real orders. Do not call checkout production-ready until actual native D7 checkout, restaurant/delivery/payment/discount/gift rules and real-account E2E have been verified.
 - Latest operator's read-only V4 method-name report proves calls to `validateOrderData`, `getProductsForOrder`, Sale D7 `Order::create`, `createItem`, `setBasket`, `doFinalAction`, `save` plus payment/restaurant/shipment/property operations. It does **not** reveal method arguments, required input shape or monetary semantics. Next: one narrow masked source trace of V4 `Cart::order` business call argument structure, then implement site-owned D7 writer from verified native rules. No additional security audit.
+
+### Checkout HTTP validation + source-shape verification (PENDING operator stdout)
+
+- Independent V5 checkout source commit: `bc009edb46d72e2d1f38b16cec765c0d0a12f034`.
+- Targeted HTTP-contract test / regex correction: `fe5387a901a1bdfc9ecf8f866f3b29080d3504cd`, `tests/V5IndependentCheckoutHttpTest.php`.
+- Scoped CI workflow added: `121e230a057f3e6e2aa0c9ba947591f7882a66d5`. Its successful run has NOT been verified, so `CI_NOT_CONFIRMED` as of this handoff update.
+- Narrow V4 checkout call-argument-shape extractor: `tests/diagnostics/V5CheckoutBusinessCallTrace.php`; masks all PHP string literals and does not execute source.
+- **NEXT one-time operator runner**: `site-integration/samzaberu-v5/tests/diagnostics/run_v5_checkout_contract_readonly.sh` at commit `8f087a4f631e940b77eacb484033992f21bd3610`, Git blob `675843de0e2642e5a47adcdeb3e633cf86cb39d4`. It pins the new HTTP source SHA, runs **only new** source-only checkout contract test, then emits limited call-shape hints for current pinned `Cart::order`. V4/site/DB stay unchanged, V5 AUTH stays OFF, no order placed. Requires actual operator stdout before declaring its test PASS.
+- Use the exact pinned business hints from the result to implement the **real native D7 V5 checkout writer**, preserving existing `CartApiService`, restaurant, timing, delivery, coupons, gifts, and payment; never create a fake persistence/PAY success claim or a V4 runtime dependency.
