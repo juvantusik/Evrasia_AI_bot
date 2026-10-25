@@ -139,7 +139,16 @@ try {
     // Strict bridge mode: a direct commit or rollback must pass the same
     // one-shot continuity check, not bypass it.
     $strict = new Bridge($db, $permit, true);
-    if (!$strict->beginTransaction() || !$strict->commit()
+    if (!$strict->beginTransaction()) {
+        throw new RuntimeException('STRICT_DIRECT_COMMIT_BEGIN');
+    }
+    $read = $strict->prepare('SELECT UNIX_TIMESTAMP()');
+    if (!$read instanceof PDOStatement || !$read->execute()
+        || !ctype_digit((string)$read->fetchColumn())) {
+        throw new RuntimeException('STRICT_NORMAL_STATEMENT');
+    }
+    echo "STRICT_NORMAL_SQL_CONTINUITY=PASS\n";
+    if (!$strict->commit()
         || $strict->inTransaction()
         || Depth::read($db) !== 0
         || (string)$state()['tx'] !== '0') {
@@ -171,6 +180,24 @@ try {
         throw new RuntimeException('RESTART_STATE');
     }
     echo "HIDDEN_COMMIT_BEGIN_REPRODUCED=PASS\n";
+
+    // The next SQL statement MUST be denied before it reaches the foreign
+    // native transaction. This test intentionally performs no DB writes.
+    $strictSqlRejected = false;
+    try {
+        $read = $bridge->prepare('SELECT UNIX_TIMESTAMP()');
+        if ($read instanceof PDOStatement) {
+            $read->execute();
+        }
+    } catch (RuntimeException) {
+        $strictSqlRejected = true;
+    }
+    if (!$strictSqlRejected
+        || $bridge->ownsCurrentNativeTransaction($db)
+        || (string)$state()['tx'] !== '1') {
+        throw new RuntimeException('STRICT_FOREIGN_SQL_NOT_DENIED');
+    }
+    echo "STRICT_FOREIGN_SQL_BLOCKED_BEFORE_EXECUTION=PASS\n";
 
     $strictCommitRejected = false;
     try {
@@ -206,6 +233,8 @@ try {
         'OWNED_ROLLBACK', 'COMMIT_BEGIN', 'OWNED_COMMIT', 'RESTART_BEGIN',
         'STRICT_RESTART_BEGIN', 'RESTART_STATE', 'STRICT_HIDDEN_RESTART_ADOPTED',
         'STRICT_DIRECT_COMMIT', 'STRICT_DIRECT_ROLLBACK',
+        'STRICT_DIRECT_COMMIT_BEGIN', 'STRICT_NORMAL_STATEMENT',
+        'STRICT_FOREIGN_SQL_NOT_DENIED',
         'RAW_CLEANUP',
     ];
     echo 'ERROR_CODE=' . (in_array($e->getMessage(), $codes, true)
