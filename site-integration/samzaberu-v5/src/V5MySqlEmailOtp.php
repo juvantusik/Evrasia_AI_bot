@@ -55,7 +55,9 @@ interface V5LockedEmailOtpProofPort
  */
 interface V5EmailOtpRatePort
 {
-    public function reserveWithLocks(PDO $db, int $userId, string $deviceId): bool;
+    public function reserveWithLocks(
+        PDO $db,int $userId,string $deviceId,string $emailStamp
+    ):bool;
 }
 
 /** Existing website mail transport can be adapted without copying it. */
@@ -156,7 +158,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             $this->q('SAVEPOINT v5_email_rate_guard',[]);
             $guard=true; $releaseAttempted=false;
             $rateAllowed=$this->rates->reserveWithLocks(
-                $this->db,$account->userId,$deviceId
+                $this->db,$account->userId,$deviceId,$identity->stamp
             ) === true;
             $releaseAttempted=true;
             $this->q('RELEASE SAVEPOINT v5_email_rate_guard',[]);
