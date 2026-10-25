@@ -357,24 +357,6 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             .'WHERE EVENT_MESSAGE_ID = ? ORDER BY SITE_ID LIMIT 2',
     ];
 
-    /**
-     * Three and ONLY three atomic rate-window SQL shapes. These operate
-     * on a proposed table in the existing eurasia_new (never a parallel DB)
-     * exclusively inside the V5-auth-owned native transaction.
-     * @var list<string>
-     */
-    private const EMAIL_RATE_SQL = [
-        'INSERT INTO ev_v5_email_rate_windows '
-            .'(bucket_key,used_units,expires_at) VALUES (?,0,?) '
-            .'ON DUPLICATE KEY UPDATE '
-            .'used_units=IF(expires_at <= ?,0,used_units), '
-            .'expires_at=IF(expires_at <= ?,VALUES(expires_at),expires_at)',
-        'SELECT used_units,expires_at FROM ev_v5_email_rate_windows '
-            .'WHERE bucket_key = ? FOR UPDATE',
-        'UPDATE ev_v5_email_rate_windows SET used_units = used_units + 1 '
-            .'WHERE bucket_key = ? AND used_units = ? AND expires_at = ?',
-    ];
-
     // Exact native sale FUSER ownership point read for protected V5 cart.
     // b_sale_fuser ownership must remain locked until the cart read completes;
     // NO generic allowlisting of sale/basket tables or arbitrary SQL shapes.
@@ -435,9 +417,8 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             || str_contains($sql, 'ev_web_email_ownership_proof')) {
             throw new RuntimeException('v5_bitrix_email_sql_forbidden');
         }
-        if (in_array($sql, self::EMAIL_RATE_SQL, true)) {
-            return;
-        }
+        // The site already owns the Redis email-send quota. No parallel
+        // V5 SQL rate-window access may be added to the native bridge.
         if (str_contains($sql, 'ev_v5_email_rate_windows')) {
             throw new RuntimeException('v5_bitrix_email_rate_sql_forbidden');
         }
