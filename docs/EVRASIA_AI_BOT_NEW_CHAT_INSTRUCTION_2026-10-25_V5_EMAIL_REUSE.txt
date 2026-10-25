@@ -1,0 +1,27 @@
+Продолжаем Evrasia AI Bot / СамЗаберу API V5 из предыдущего чата. НЕ начинай с нуля.
+
+GitHub: juvantusik/Evrasia_AI_bot
+Ветка: feature/samzaberu-api-v5-auth-contract
+
+СНАЧАЛА открой и полностью прочитай:
+1. docs/EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-25_V5_EMAIL_REUSE.md
+2. docs/SAMZABERU_V5_REUSE_WEBSITE_EMAIL_BUDGET_2026-10-25.md
+3. docs/SAMZABERU_V5_REAL_SCHEMA_EMAIL_PROOF_CHECKPOINT_2026-10-25.md
+4. docs/SAMZABERU_V5_EMAIL_FIRST_AUTH_DECISION_2026-10-25.md
+5. docs/EVRASIA_WEBSITE_EMAIL_FIRST_SMS_PRODUCTION_ACCEPTANCE_2026-10-24.md
+
+Восстанови КОНКРЕТНОЕ текущее состояние исходников и HEAD GitHub; параллельно в этой же ветке бывают коммиты Restis, ничего не потеряй. Последний HEAD ДО handoff: 9a242d3ae1b5b9aaecde479e4506e741d37f0658; после handoff HEAD будет новее.
+
+ПРАВИЛА: НИКАКИХ изолированных БД, MariaDB CI, отдельных Redis, синтетических аккаунтов, переписывания рабочего website login, копирования приватных production PHP/JS в публичный GitHub. API V4 и работающий сайт не менять; V5 AUTH production держать OFF до отдельного допуска. Продуктивные SQL/DDL/OTP send/site edits — только после моего отдельного согласования.
+
+Вчера для сайта УЖЕ СДЕЛАНЫ и работают доверенные устройства, TOTP, email OTP, ручной SMS fallback и их защиты. Основная логика V5: проверенное сильное доверенное устройство -> иначе нативный TOTP -> иначе код на подтверждённый EMAIL. SMS только явный резервный способ, не автоматически. Не создавай новый алгоритм SMS/email OTP и не создавай новый rate limiter.
+
+В GitHub уже ЕСТЬ src/V5ExistingWebsiteEmailBudget.php — тонкий вызов deployment/website-mfa/EmailSendBudget.php на существующем сайт-Redis. Параллельная SQL-rate-система удалена. В ИСХОДНИКЕ budget 60 сек/user, 5 писем/user/час и GLOBAL 1000 email/час. Живой лимит на сервере не подтверждён, общий cap может блокировать одновременно сайт и приложение — без моего решения новый/общий потолок не вводить и не распространять. Redis Lua atomic НЕ значит общая транзакция с SQL.
+
+Реальные read-only проверки УЖЕ PASS: eurasia_new InnoDB таблицы; b_user.LOGIN_ATTEMPTS int(18) NULLABLE=YES; действующий шаблон писем входа EVRASIA_WEB_EMAIL_LOGIN, ID=95, ACTIVE=Y, site=s1, поля #EMAIL_TO# и #VERIFY_CODE# MATCH, #CODE_TTL_MINUTES# отсутствует и НЕ нужен для серверного TTL. Отдельная ev_v5_email_auth_challenges пока ОТСУТСТВУЕТ; не создавать без моего решения и backup/rollback. Не проси эти же проверки повторно.
+
+Целевой GitHub CI #40177880562 SUCCESS: сайт Redis budget reuse 17 assertions PASS, без БД/пользователей/писем. Это НЕ real Bitrix E2E. Другой общий V5 safety workflow иногда FAIL по отдельному website JS тесту; не говори «всё CI зелёное».
+
+СЕЙЧАС ЗАДАЧА: быстро доводить API V5 до реальной работы, переиспользуя имеющиеся сайт-сервисы. Проверь текущую V5-only composition/HTTP endpoints, подключи существующие native email proof, шаблон 95/s1, существующий email Redis budget, OTP challenge/consume и сильную V5-сессию без дублирования бизнес-логики и без изменения V4/website. Делай маленькие commits и source-only CI. Если нужна фактическая проверка installed Redis/Bitrix, дай ОДНУ строго read-only команду без вывода секретов. Отдельно обозначь недостающие реальные approvals/гейты. Не трать время на повторную диагностику уже установленных фактов.
+
+Ожидаю: сразу конкретные действия в GitHub и следующую готовую точку интеграции. ОСТАВАЙСЯ в V5; бонусы Restis — отдельный параллельный проект.
