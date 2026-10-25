@@ -128,9 +128,13 @@ namespace {
         public int $cleanupCalls = 0;
         public bool $denyContinuity = false;
         public bool $failCleanup = false;
+        public int $denyOnCheckNumber = 0;
         public function assertNativeTransactionContinuity(\PDO $db): void {
             ++$this->continuityChecks;
-            if ($this->denyContinuity || !($db instanceof FakeLedgerPDO)
+            if ($this->denyContinuity
+                || ($this->denyOnCheckNumber > 0
+                    && $this->continuityChecks === $this->denyOnCheckNumber)
+                || !($db instanceof FakeLedgerPDO)
                 || !$db->inTransaction()) {
                 throw new \RuntimeException('unverified_native_transaction');
             }
@@ -208,11 +212,19 @@ namespace {
     $yes($mat->calls===1 && $save->calls===1,'SINGLE_NATIVE_SAVE');
     $yes($cleanup->cleanupCalls===1,'ONE_POST_SAVE_CART_CLEANUP');
     $yes($handoff->proofCalls===1,'LOCAL_BITRIX_HANDOFF_PROOF_REQUIRED');
-    $yes($cleanup->continuityChecks===5,'BEFORE_SAVE_AND_HANDOFF_AND_CLEANUP_TRANSACTION_VERIFIED');
+    $yes($cleanup->continuityChecks===6,
+        'BEFORE_SAVE_HANDOFF_CLEANUP_AND_AFTER_LEDGER_TRANSACTION_VERIFIED');
+    $ownerBeforeReplay=$owner->calls;
+    // After the first checkout, the original basket or even its FUSER row
+    // can be gone. A durable receipt retry must not require cart lookup.
+    $owner->deny=true;
     $replay=$writer->placeLockedOrder($db,27,$rid,array_reverse($input,true));
+    $yes($owner->calls===$ownerBeforeReplay,
+        'REPLAY_DOES_NOT_RESELECT_DELETED_FUSER');
+    $owner->deny=false;
     $yes($replay===$first,'DURABLE_REPLAY_IDENTITY');
     $yes($save->calls===1 && $mat->calls===1,'REPLAY_DOES_NOT_SAVE');
-    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===5,
+    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===6,
         'REPLAY_DOES_NOT_CLEAN_CART');
     $yes($handoff->proofCalls===1,'REPLAY_DOES_NOT_TRIGGER_HANDOFF_PROOF');
     $yes($throws(fn()=>$writer->placeLockedOrder(
@@ -274,6 +286,31 @@ namespace {
         'CART_CLEANUP_ONLY_AFTER_NATIVE_SAVE');
     $yes($db->ledger['27:22222222222222222222222222222222']['STATE']==='pending',
         'FAILED_CLEANUP_REQUIRES_NATIVE_ROLLBACK');
+
+    // A native COMMIT+BEGIN after completing the request ledger is still
+    // a failed checkout. Require guard proof AFTER the ledger UPDATE.
+    $lateDb=new FakeLedgerPDO();
+    $lateCleanup=new Cleanup();
+    $lateCleanup->denyOnCheckNumber=6;
+    $lateOwner=new Owner();
+    $lateMaterializer=new Materializer();
+    $lateSave=new Saver();
+    $lateHandoff=new LocalHandoff();
+    $lateWriter=new V5BitrixLockedPickupOrderWriter(
+        $lateOwner,$lateMaterializer,
+        new V5BitrixCheckoutBusinessRules(2,['pickup','other'],'error'),
+        $lateSave,$lateCleanup,$lateHandoff
+    );
+    $lateId='44444444444444444444444444444444';
+    $yes($throws(fn()=>$lateWriter->placeLockedOrder(
+        $lateDb,27,$lateId,$input
+    )),'LEDGER_FINAL_CONTINUITY_LOSS_DENIES_RECEIPT');
+    $yes($lateCleanup->continuityChecks===6,
+        'FINAL_LEDGER_WRITE_HAS_SEPARATE_NATIVE_CONTINUITY_CHECK');
+    $yes($lateSave->calls===1 && $lateCleanup->cleanupCalls===1,
+        'FINAL_GUARD_ONLY_AFTER_SAVED_ORDER_AND_CLEANUP');
+    $yes($lateDb->ledger['27:'.$lateId]['STATE']==='saved',
+        'CALLER_MUST_ROLL_BACK_UNCOMMITTED_FINAL_LEDGER_ON_GUARD_FAILURE');
 
     echo 'V5_PICKUP_ORDER_WRITER_MVP=PASS',PHP_EOL;
     echo 'PICKUP_WRITER_ASSERTIONS=',$checks,PHP_EOL;
