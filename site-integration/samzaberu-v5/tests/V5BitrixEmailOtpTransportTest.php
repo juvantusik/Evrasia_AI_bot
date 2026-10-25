@@ -39,17 +39,23 @@ function no(callable $cb,string $title):void {
 $proof=new EmailLoginTemplateProofFixture();
 $queue=new EmailD7QueueFixture();
 no(fn()=>new V5BitrixEmailOtpTransport(
+    'EVRASIA_WEB_EMAIL_LOGIN','s1',94,$proof,$queue),
+    'ownership template 94 cannot be used for email login');
+no(fn()=>new V5BitrixEmailOtpTransport(
+    'EVRASIA_V5_LOGIN_OTP','s1',95,$proof,$queue),
+    'imaginary V5 event cannot be substituted for real login event');
+no(fn()=>new V5BitrixEmailOtpTransport(
     'EVRASIA_WEB_EMAIL_OWNERSHIP','s1',41,$proof,$queue),
     'ownership email event must never serve login');
 no(fn()=>new V5BitrixEmailOtpTransport(
     'invalid event','s1',41,$proof,$queue),
     'unknown event spelling forbidden');
 no(fn()=>new V5BitrixEmailOtpTransport(
-    'EVRASIA_V5_LOGIN_OTP','s1',0,$proof,$queue),
+    'EVRASIA_WEB_EMAIL_LOGIN','s1',0,$proof,$queue),
     'missing live template ID forbidden');
 
 $transport=new V5BitrixEmailOtpTransport(
-    'EVRASIA_V5_LOGIN_OTP','s1',41,$proof,$queue
+    'EVRASIA_WEB_EMAIL_LOGIN','s1',95,$proof,$queue
 );
 eq(!$transport->acceptedForDelivery('recipient@example.invalid','123456'),
     'no template verification denies by default');
@@ -67,8 +73,8 @@ eq($queue->calls===0,'invalid request avoids queue call');
 eq($transport->acceptedForDelivery(' RECIPIENT@example.invalid ','123456'),
     'verified login template may queue a valid challenge');
 eq($queue->calls===1,'one queue call on success');
-eq($queue->last['EVENT_NAME']==='EVRASIA_V5_LOGIN_OTP'
-    && $queue->last['MESSAGE_ID']===41 && $queue->last['LID']==='s1',
+eq($queue->last['EVENT_NAME']==='EVRASIA_WEB_EMAIL_LOGIN'
+    && $queue->last['MESSAGE_ID']===95 && $queue->last['LID']==='s1',
     'payload binds specific live template and site');
 eq($queue->last['DUPLICATE']==='N',
     'login code is never copied to site admin BCC');
