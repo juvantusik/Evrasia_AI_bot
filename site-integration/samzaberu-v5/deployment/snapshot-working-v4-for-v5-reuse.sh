@@ -22,7 +22,7 @@ for rel in "${SOURCES[@]}"; do
   if [[ -d "$src" ]]; then
     [[ -z "$(find "$src" -type l -print -quit)" ]] || exit 2
     while IFS= read -r f; do
-      case "$f" in *.php|*/.htaccess) ;; *) echo 'FAIL: unexpected file type'; exit 2;; esac
+      case "$f" in *.php|*/.htaccess) ;; *) continue;; esac
       [[ -f "$f" && -r "$f" && ! -L "$f" ]] || exit 2
     done < <(find "$src" -type f)
   fi
@@ -30,12 +30,41 @@ done
 mkdir -p -m 700 "$BASE"
 [[ -d "$BASE" && ! -L "$BASE" ]] || exit 2
 TARGET="$(mktemp -d "$BASE/v4.XXXXXXXX")"
+COPIED_FILES=0
+SKIPPED_FILES=0
 mkdir -p "$TARGET/source"
 for rel in "${SOURCES[@]}"; do
   src="$SITE/$rel"
   dst="$TARGET/source/$rel"
   mkdir -p "$(dirname "$dst")"
-  cp -a -- "$src" "$dst"
+  if [[ -d "$src" ]]; then
+    # A directory may contain README, configs, media or other data.
+    # Copy ONLY reviewed source file types, never whole directory trees.
+    mkdir -p -- "$dst"
+    while IFS= read -r -d '' file; do
+      case "$file" in
+        *.php|*/.htaccess) ;;
+        *) ((SKIPPED_FILES+=1)); continue ;;
+      esac
+      [[ -f "$file" && -r "$file" && ! -L "$file" ]] ||
+        { echo 'FAIL: selected source unavailable'; exit 2; }
+      [[ "$(stat -c %s -- "$file")" -le 1000000 ]] ||
+        { echo 'FAIL: unexpected PHP source size'; exit 2; }
+      relative="$(realpath --relative-to="$src" -- "$file")"
+      mkdir -p -- "$(dirname "$dst/$relative")"
+      cp -p -- "$file" "$dst/$relative"
+      cmp -s -- "$file" "$dst/$relative" ||
+        { echo 'FAIL: source changed during copy'; exit 2; }
+      ((COPIED_FILES+=1))
+    done < <(find "$src" -type f -print0)
+  else
+    [[ "$src" == *.php && -f "$src" && ! -L "$src" ]] ||
+      { echo 'FAIL: unexpected direct source'; exit 2; }
+    cp -p -- "$src" "$dst"
+    cmp -s -- "$src" "$dst" ||
+      { echo 'FAIL: direct source changed during copy'; exit 2; }
+    ((COPIED_FILES+=1))
+  fi
 done
 printf '%s  %s\n' "$ROUTER_SHA" "$ROUTER" "$CART_SHA" "$CART" | sha256sum -c --status
 cmp -s "$ROUTER" "$TARGET/source/api/v4/router.php"
@@ -51,6 +80,8 @@ tar -czf "$TARGET/v4-source.tar.gz" -C "$TARGET" source
 chmod 0600 "$TARGET/v4-source.tar.gz"
 chmod -R go-rwx "$TARGET"
 echo 'V4_SNAPSHOT=PASS'
+echo "SOURCE_FILES_COPIED=$COPIED_FILES"
+echo "UNRELATED_FILES_SKIPPED=$SKIPPED_FILES"
 echo "PRIVATE_ARCHIVE=$TARGET/v4-source.tar.gz"
 echo "SOURCE_PATH=$TARGET/source"
 echo "SOURCE_FILE_COUNT=$(find "$TARGET/source" -type f | wc -l)"
