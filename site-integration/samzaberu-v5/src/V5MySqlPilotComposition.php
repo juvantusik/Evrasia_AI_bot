@@ -16,6 +16,7 @@ require_once __DIR__ . '/V5MySqlOrdersRead.php';
 require_once __DIR__ . '/V5BitrixLockedOrdersReader.php';
 require_once __DIR__ . '/V5MySqlOrderDetailRead.php';
 require_once __DIR__ . '/V5MySqlOrderPlace.php';
+require_once __DIR__ . '/V5MySqlCartMutation.php';
 require_once __DIR__ . '/V5BitrixLockedOrderDetailReader.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
@@ -52,6 +53,7 @@ final class V5MySqlPilotComposition
         #[\SensitiveParameter] string $smsCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
+        ?V5LockedCartMutatorPort $cartMutator = null,
     ): V5HttpTransportBoundary {
         // A pilot key admits the request, not a generic PDO to native V5
         // transactions. The real HTTP path MUST pass the same strict Bitrix
@@ -92,7 +94,8 @@ final class V5MySqlPilotComposition
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
-            $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter)
+            $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
+            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator)
         ));
     }
 }
