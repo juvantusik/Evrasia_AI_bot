@@ -1,5 +1,7 @@
 # Evrasia AI Bot / СамЗаберу API V5 — HANDOFF 25.10.2026
 
+> **LATEST AUTHORITATIVE STATUS (25.10.2026):** Read `docs/EVRASIA_V5_STANDALONE_LIVE_HANDOFF_2026-10-25.md` first. V5 HAS BEEN physically copied from V4 into independent live server directories, namespace/40 route references converted, direct PIN installed, password-only new-trust registration removed, old JWT not yet replaced, V5 HTTP BLOCKED. The latest 8-file runtime archive has been CREATED on the server `/home/tech/evrasia-v5-runtime.DhwrZNst.tar.gz` (PASS) but NOT uploaded to this chat. The user clarified the mobile app generates trust_token locally; server must not return it. The new-chat text instruction is `docs/EVRASIA_V5_NEW_CHAT_INSTRUCTION_2026-10-25.txt`. Old statements below that contradict this checkpoint are superseded.
+
 Purpose: authoritative continuation checkpoint for the next chat. This is ONE ongoing Project. Do not redo completed tests, re-investigate old architecture, or replace a working business implementation with another security abstraction.
 
 ## 1. User-approved decision / architectural invariants
