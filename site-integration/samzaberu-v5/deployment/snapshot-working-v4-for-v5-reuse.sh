@@ -45,8 +45,13 @@ find "$TARGET/source" -type f -name '*.php' -print0 | xargs -0 -r -n 1 php -l >/
   cd "$TARGET/source"
   find . -type f -print0 | sort -z | xargs -0 -r sha256sum > ../source.sha256
 )
+# An owner-reviewed private source archive can be supplied to a trusted
+# development environment. Never auto-upload it to GitHub or public URLs.
+tar -czf "$TARGET/v4-source.tar.gz" -C "$TARGET" source
+chmod 0600 "$TARGET/v4-source.tar.gz"
 chmod -R go-rwx "$TARGET"
 echo 'V4_SNAPSHOT=PASS'
+echo "PRIVATE_ARCHIVE=$TARGET/v4-source.tar.gz"
 echo "SOURCE_PATH=$TARGET/source"
 echo "SOURCE_FILE_COUNT=$(find "$TARGET/source" -type f | wc -l)"
 echo 'API_V4_CHANGED=NO'
