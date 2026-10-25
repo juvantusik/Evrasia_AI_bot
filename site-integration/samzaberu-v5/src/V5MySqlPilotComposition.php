@@ -54,6 +54,7 @@ final class V5MySqlPilotComposition
         ?V5LockedCartReaderPort $cartReader = null,
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
         ?V5LockedCartMutatorPort $cartMutator = null,
+        ?V5LockedCartAddPort $cartAdder = null,
     ): V5HttpTransportBoundary {
         // A pilot key admits the request, not a generic PDO to native V5
         // transactions. The real HTTP path MUST pass the same strict Bitrix
@@ -95,7 +96,8 @@ final class V5MySqlPilotComposition
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
             $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
-            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator)
+            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator),
+            $cartAdder === null ? null : new V5MySqlCartAdd($sessions, $cartAdder)
         ));
     }
 }
