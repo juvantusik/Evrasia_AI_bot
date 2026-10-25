@@ -1,5 +1,22 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — source-only V5-адаптер к существующему website SMS
+
+**Что подтверждено live выводом оператора:** `issuePilotSmsCode(int $userId)` является `private` методом `signin/class.php` и вызывает `CSms::send` (один вызов), `enforcePilotSmsRateLimit(int $userId)`, `getPilotProfilePhone(int $userId)`. Сессионная обвязка `emailUseSmsAction` и `evEmailIssueSmsFromVerifiedContextNative` для мобильного API непригодна без изменений. `EmailFirstSmsRatePolicy::begin/check/reserve` и `EmailFirstSmsResendGuard::canIssue/markReserved` принимают `array $session` или `array &$session` и реальный `sessionId` — нельзя строить фиктивные веб-сессии или объявлять их мобильными лимитами.
+
+**Результат в GitHub:** `src/V5ExistingWebsiteSmsRecoveryAdapter.php` реализует ранее утверждённый интерфейс `V5AttestedExplicitSmsRecoveryPort`. Безопасно подключаемый к `V5MySqlPublicComposition::buildEmailFirst()` source-only слой состоит из:
+- `V5PinnedWebsiteSmsSourceProof`: по приватным files **только сравнивает SHA256** с четырьмя публично зафиксированными на 25.10.2026 fingerprint; исключает явные symlink; не выводит содержимое и не меняет production. При любом изменении сайта fail closed.
+- Строгая проверка **того же физического PDO** при `verifiedExistingSiteRecovery()`.
+- `V5ExistingWebsiteSmsNativeTransitionPort` как **обязательная приватная зависимость**, реализуемая владельцем production Bitrix: проверка исходного accepted email challenge, актуального `AUTH_EPOCH`, same device binding, verified phone, TOTP-off, idempotency/replay, уже действующих site anti-abuse и подтверждённого paid delivery; инвалидирует email OTP и выдаёт **новый** мобильный SMS challenge с отдельным ID.
+- Повторная проверка всех трёх условий перед каждым `requestSmsInsteadOfEmail()`, не только при старте. Возврат не-SMS challenge, тот же ID, ошибка PHP/Bitrix или изменённый SHA => `AuthenticationRejected('challenge_unavailable')`, без JWT и сообщений об аккаунте.
+- **НЕТ новой генерации SMS-кода, собственного транспорта, Redis quota или rate limiter.** Адаптер также НЕ вызывает private методы через Reflection или web PHP-session.
+
+**Граница готовности:** `V5ExistingWebsiteSmsNativeTransitionPort` пока **только интерфейс**: рабочий приватный провайдер ещё НЕ установлен и НЕ E2E-проверен; поэтому реальная отправка мобильного SMS пока не происходит. Pinned SHA **не равен security attestation** и не заменяет проверок native provider. После отдельного разрешения на production change нужно извлечь общий site-native SMS sender/OTP receipt как защищённый серверный сервис, сохранив работу сайта, и реализовать native transition **без копирования приватного исходника в публичный GitHub**. Создание mobile email ledger `eurasia_new.ev_v5_email_auth_challenges` — отдельный DDL approval, которого пока нет.
+
+**CI:** [#40183077325](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40183077325) `first-factor-offline` **SUCCESS**, проверены PHP syntax, source-only отказ/выдача билета только при injected attested native provider, строгий same PDO/файловый SHA/новый SMS ID; нет реального MySQL, веб-сессии, SMS, почты, Bitrix bootstrap или новых пользователей. Общий workflow с известной JS DOM-регрессией отдельно FAIL.
+
+
+
 ## Update 25.10.2026 — основной V5 email-first НЕ блокируется отсутствием мобильного SMS
 
 Source-only изменения `06b267de`, `5e40a41b`, `60079f13`, `9ad7a13f`, `ca6d46e1`, `40eb6c74`:
