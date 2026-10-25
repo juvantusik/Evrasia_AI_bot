@@ -111,7 +111,7 @@ final readonly class V5HttpTransportBoundary
             if ($action === 'publicRegistrationDocuments') {
                 return self::serialize($this->handler->handlePublicRegistrationDocuments(), 131072);
             }
-            if ($action === 'readCart' || $action === 'readProfile') {
+            if (in_array($action, ['readCart','readProfile','readOrders'], true)) {
                 $header = $request->authorizationHeader;
                 if (!is_string($header) || strlen($header) < 117
                     || strlen($header) > 4103
@@ -119,9 +119,11 @@ final readonly class V5HttpTransportBoundary
                     return self::fail(401, 'authentication_failed');
                 }
                 return self::serialize(
-                    $action === 'readCart'
-                        ? $this->handler->handleProtectedCartGet(substr($header, 7))
-                        : $this->handler->handleProtectedProfileGet(substr($header, 7)),
+                    match ($action) {
+                        'readCart' => $this->handler->handleProtectedCartGet(substr($header, 7)),
+                        'readProfile' => $this->handler->handleProtectedProfileGet(substr($header, 7)),
+                        'readOrders' => $this->handler->handleProtectedOrdersGet(substr($header, 7)),
+                    },
                     131072
                 );
             }
