@@ -23,3 +23,20 @@ final readonly class V5MySqlCartMutation implements V5CartHttpMutationPort
         );
     }
 }
+
+/** Existing V5 store; only the new catalog product's server identity is accepted. */
+final readonly class V5MySqlCartAdd implements V5CartHttpAddPort
+{
+    public function __construct(
+        private V5MySqlStrongSessionStore $sessions,
+        private V5LockedCartAddPort $adder,
+    ) {}
+
+    public function addVerifiedCartProduct(
+        #[\SensitiveParameter] string $accessJwt, int $productId, int $quantity
+    ): ?int {
+        return $this->sessions->addCartItemForAccess(
+            $accessJwt,$productId,$quantity,$this->adder
+        );
+    }
+}
