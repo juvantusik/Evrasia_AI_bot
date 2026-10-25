@@ -95,6 +95,11 @@ $email->wrongKind=ChallengeKind::SMS;
 rejectFactor(fn()=>$withEmail->beginBound($sAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL),
     'email issuer cannot relabel challenge as paid SMS');
 $email->wrongKind=null;
+$beforeEmailCalls=$email->bound;
+rejectFactor(fn()=>$withEmail->beginBound($tAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL),
+    'current TOTP cannot downgrade to email even if email provider would accept');
+okFactor($email->bound===$beforeEmailCalls,
+    'current TOTP downgrade rejected before email issuer or delivery');
 rejectFactor(fn()=>$router->beginBound($sAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL),
     'email cannot silently use the SMS fallback provider');
 okFactor($router instanceof V5PasswordBoundChallengeLifecyclePort,'typed bound lifecycle');

@@ -64,7 +64,8 @@ final readonly class V5SeparatedFactorLifecycle implements V5PasswordBoundChalle
         // A current native TOTP factor forbids SMS downgrade. A valid strong
         // trusted device has already been handled by V5LoginWorkflow.
         if ($kind === ChallengeKind::TOTP && !$account->nativeTotpActive
-            || $kind === ChallengeKind::SMS && $account->nativeTotpActive) {
+            || ($kind === ChallengeKind::SMS || $kind === ChallengeKind::EMAIL)
+                && $account->nativeTotpActive) {
             throw new AuthenticationRejected('challenge_unavailable');
         }
 

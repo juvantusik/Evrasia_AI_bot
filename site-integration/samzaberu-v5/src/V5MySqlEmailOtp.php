@@ -149,7 +149,19 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             if (!$this->db->inTransaction() || !$identity instanceof V5LockedVerifiedEmail) {
                 throw new RuntimeException('email_identity_or_scope_invalid');
             }
-            if ($this->rates->reserveWithLocks($this->db,$account->userId,$deviceId) !== true) {
+            // Rate callbacks are site-specific, and may use native Bitrix.
+            // An implicit COMMIT+BEGIN would lose the original b_user/epoch
+            // locks while PDO could still report inTransaction()===true.
+            $activeGuard='v5_email_rate_guard';
+            $this->q('SAVEPOINT v5_email_rate_guard',[]);
+            $guard=true; $releaseAttempted=false;
+            $rateAllowed=$this->rates->reserveWithLocks(
+                $this->db,$account->userId,$deviceId
+            ) === true;
+            $releaseAttempted=true;
+            $this->q('RELEASE SAVEPOINT v5_email_rate_guard',[]);
+            $guard=false;
+            if (!$this->db->inTransaction() || !$rateAllowed) {
                 throw new RuntimeException('email_rate_denied');
             }
             // The locked account row serializes all competing issuances.
