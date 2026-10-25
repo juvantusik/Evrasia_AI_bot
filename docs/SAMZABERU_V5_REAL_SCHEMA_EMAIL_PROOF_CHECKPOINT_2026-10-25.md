@@ -42,3 +42,17 @@
 ## Дополнительная схема transport
 
 Проверенный `deployment/website-mfa/EmailOwnershipMailTransport.php` использует event `EVRASIA_WEB_EMAIL_OWNERSHIP`, который предназначен для **подтверждения владения почтой**, а не обязательно для одноразового кода *входа*. В website `EmailLoginChallenge.php` mail sender подаётся сервером через callback. Нельзя автоматически использовать ownership event для mobile login без подтверждения действующего email-login mail transport/template на живом Bitrix. Не копировать сайт-код в публичный репозиторий.
+
+## 25.10.2026 — exact b_user.LOGIN_ATTEMPTS evidence
+
+Оператор на **той же реальной `eurasia_new`** выполнил read-only `information_schema.COLUMNS` запрос: `LOGIN_ATTEMPTS_COLUMN_COUNT=1`, `COLUMN=LOGIN_ATTEMPTS TYPE=int(18) NULLABLE=YES`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `USER_RECORDS_READ=NO`, `DATABASE_WRITE=NO`. Это **только схематический факт**: он не доказывает наличие `NULL` у конкретного пользователя. Текущий `V5BitrixLockedEmailOtpProof::user()` проверяет `LOGIN_ATTEMPTS` строгим `nat()`; отсутствие или NULL вызывает DENY (никогда не конвертируется в «0 попыток»). Существующая `V5SiteAccountReader` также отказывает на NULL.
+
+## 25.10.2026 — exact native EMAIL SQL allowlist
+
+[`8cfbfc381378dbbb3aa713c645cfabf522bf7cae`](https://github.com/juvantusik/Evrasia_AI_bot/commit/8cfbfc381378dbbb3aa713c645cfabf522bf7cae): в `V5BitrixPdoCompatibilityBridge` добавлены **ровно 18** известных подготовленных SQL форм от V5 email issuer, locked-native identity/ownership proof и consumed-email grant verifier, включая чтение исключительно указанной `ev_web_email_ownership_proof` строки. Разрешены 4 жёстко названных пары `SAVEPOINT/RELEASE` (`issue/rate/ack/verify`). Оставшиеся SELECT/INSERT/UPDATE с `ev_v5_email_auth_challenges` или `ev_web_email_ownership_proof` запрещены явно. **Никакого общего SQL wildcard, DDL, email-массчтения**.
+
+[`44943a322cd68080a8295632669ff19b65b0de44`](https://github.com/juvantusik/Evrasia_AI_bot/commit/44943a322cd68080a8295632669ff19b65b0de44) — чистый PHP тест `V5EmailNativeSqlAllowlistTest.php`, ни одной подключённой БД и ни одного пользовательского объекта; проверяет все 18 разрешённых форм, 8 fixed savepoints, 12 отвергаемых подстановок/расширений и DDL. [`3a5e055e3230dab257385e186af2226b39882842`](https://github.com/juvantusik/Evrasia_AI_bot/commit/3a5e055e3230dab257385e186af2226b39882842) — тест привязан к `V5 first-factor and public admission offline`.
+
+[GitHub Actions #40176109710](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40176109710): **COMPLETED/SUCCESS**, `PASS: V5 native email exact SQL only (38 assertions)`, `PASS: V5 separate TOTP/email/SMS routing with optional email and fail-closed (33 assertions)`, `EMAIL_NATIVE_CLASS_GRAPH=PASS`, `PHP_LINT=PASS`, `FIRST_FACTOR_PUBLIC_GATES=PASS`. **NO DB**, NO Bitrix production writes, NO emails or SMS. Это тест SQL-шаблонов, НЕ реальная execution attestation / email delivery.
+
+**Оставшиеся обязательные действия**: подтвердить существующий email-login mail event/template в установленном Bitrix (не подменять событием `EVRASIA_WEB_EMAIL_OWNERSHIP`); подключить server-side account/email/IP/device rate reservation с текущей транзакцией; решить миграцию недостающей `ev_v5_email_auth_challenges` **в уже существующей** `eurasia_new` отдельно от запрета владельца на isolated DB и synthetic accounts; native password+OTP+AUTH_EPOCH E2E для реального пользователя, strong session proof. До этого `V5_AUTH_PRODUCTION=OFF`.
