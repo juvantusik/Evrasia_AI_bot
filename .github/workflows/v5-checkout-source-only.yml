@@ -9,6 +9,8 @@ on:
       - site-integration/samzaberu-v5/tests/V5BitrixSaleD7OrderBuilderTest.php
       - site-integration/samzaberu-v5/src/V5BitrixCheckoutBusinessRules.php
       - site-integration/samzaberu-v5/src/V5BitrixLockedPickupOrderWriter.php
+      - site-integration/samzaberu-v5/src/V5BitrixNativePickupMaterializer.php
+      - site-integration/samzaberu-v5/tests/V5BitrixNativePickupMaterializerTest.php
       - site-integration/samzaberu-v5/tests/V5LockedPickupOrderWriterTest.php
       - site-integration/samzaberu-v5/tests/V5BitrixCheckoutBusinessRulesTest.php
       - site-integration/samzaberu-v5/src/V5CheckoutRequest.php
@@ -34,6 +36,7 @@ jobs:
             src/V5BitrixSaleD7OrderBuilder.php \
             src/V5BitrixCheckoutBusinessRules.php \
             src/V5BitrixLockedPickupOrderWriter.php \
+            src/V5BitrixNativePickupMaterializer.php \
             src/V5CheckoutRequest.php \
             src/V5MySqlOrderPlace.php \
             src/V5RouteMap.php \
@@ -45,7 +48,8 @@ jobs:
             tests/V5IndependentCheckoutHttpTest.php \
             tests/V5BitrixSaleD7OrderBuilderTest.php \
             tests/V5BitrixCheckoutBusinessRulesTest.php \
-            tests/V5LockedPickupOrderWriterTest.php; do
+            tests/V5LockedPickupOrderWriterTest.php \
+            tests/V5BitrixNativePickupMaterializerTest.php; do
             php -l "$BASE/$file"
           done
       - name: Independent V5 checkout request and HTTP admission
@@ -56,3 +60,5 @@ jobs:
         run: php site-integration/samzaberu-v5/tests/V5BitrixCheckoutBusinessRulesTest.php
       - name: V5 checkout locked native writer idempotency (mock-only)
         run: php site-integration/samzaberu-v5/tests/V5LockedPickupOrderWriterTest.php
+      - name: V5 native pickup materializer (mock-only)
+        run: php site-integration/samzaberu-v5/tests/V5BitrixNativePickupMaterializerTest.php
