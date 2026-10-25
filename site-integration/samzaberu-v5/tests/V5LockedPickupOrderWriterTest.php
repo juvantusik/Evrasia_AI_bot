@@ -20,6 +20,7 @@ namespace {
     use Evrasia\Samzaberu\V5\V5NativePickupOrderSaverPort;
     use Evrasia\Samzaberu\V5\V5NativePickupCartCleanupPort;
     use Evrasia\Samzaberu\V5\V5PickupLocalCallCenterHandoffProofPort;
+    use Evrasia\Samzaberu\V5\V5PickupSavedNativeOrderProofPort;
     use Evrasia\Samzaberu\V5\V5VerifiedLockedCartOwnerPort;
 
     final class FakeStatement extends \PDOStatement {
@@ -149,6 +150,20 @@ namespace {
             }
         }
     }
+    final class SavedOrderProof implements V5PickupSavedNativeOrderProofPort {
+        public int $checks = 0;
+        public bool $reject = false;
+        public function assertSavedNativeOrderUnpaid(
+            \PDO $db, int $userId, array $saved
+        ): void {
+            ++$this->checks;
+            if ($this->reject || !$db->inTransaction() || $userId!==27
+                || !is_int($saved['id'] ?? null)
+                || !in_array($saved['status'] ?? null, ['N','P'], true)) {
+                throw new \RuntimeException('persisted_native_sale_order_not_confirmed');
+            }
+        }
+    }
     final class LocalHandoff implements V5PickupLocalCallCenterHandoffProofPort {
         public int $proofCalls = 0;
         public bool $failProof = false;
@@ -195,11 +210,12 @@ namespace {
     $mat=new Materializer();
     $save=new Saver();
     $cleanup=new Cleanup();
+    $savedProof=new SavedOrderProof();
     $handoff=new LocalHandoff();
     $writer=new V5BitrixLockedPickupOrderWriter(
         $owner,$mat,new V5BitrixCheckoutBusinessRules(
             2,['pickup','other'],'error'
-        ),$save,$cleanup,$handoff
+        ),$save,$savedProof,$cleanup,$handoff
     );
     $input=[
         'rid'=>12,'phone'=>'000000','name'=>'Masked',
@@ -212,6 +228,7 @@ namespace {
     $yes($mat->calls===1 && $save->calls===1,'SINGLE_NATIVE_SAVE');
     $yes($cleanup->cleanupCalls===1,'ONE_POST_SAVE_CART_CLEANUP');
     $yes($handoff->proofCalls===1,'LOCAL_BITRIX_HANDOFF_PROOF_REQUIRED');
+    $yes($savedProof->checks===1,'PERSISTED_ORDER_ROW_PROOF_REQUIRED');
     $yes($cleanup->continuityChecks===6,
         'BEFORE_SAVE_HANDOFF_CLEANUP_AND_AFTER_LEDGER_TRANSACTION_VERIFIED');
     $ownerBeforeReplay=$owner->calls;
@@ -227,6 +244,7 @@ namespace {
     $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===6,
         'REPLAY_DOES_NOT_CLEAN_CART');
     $yes($handoff->proofCalls===1,'REPLAY_DOES_NOT_TRIGGER_HANDOFF_PROOF');
+    $yes($savedProof->checks===1,'REPLAY_DOES_NOT_READ_SAVED_SALE_ROW');
     $yes($throws(fn()=>$writer->placeLockedOrder(
         $db,27,$rid,[...$input,'comment'=>'changed']
     )),'RETRY_DIFFERENT_BODY_DENIED');
@@ -268,11 +286,20 @@ namespace {
         'NO_NATIVE_SAVE_BEFORE_TRANSACTION_PROOF');
     $cleanup->denyContinuity=false;
 
+    $savedProof->reject=true;
+    $yes($throws(fn()=>$writer->placeLockedOrder(
+        $db,27,'55555555555555555555555555555555',$input
+    )),'PERSISTED_ORDER_NOT_UNPAID_DENIES_RECEIPT');
+    $yes($cleanup->cleanupCalls===1 && $handoff->proofCalls===1,
+        'UNVERIFIED_PERSISTENCE_PREVENTS_CART_CLEAN_AND_HANDOFF');
+    $yes($db->ledger['27:55555555555555555555555555555555']['STATE']==='pending',
+        'PERSISTED_ORDER_FAILURE_REQUIRES_OUTER_ROLLBACK');
+    $savedProof->reject=false;
     $handoff->failProof=true;
     $yes($throws(fn()=>$writer->placeLockedOrder(
         $db,27,'33333333333333333333333333333333',$input
     )),'LOCAL_HANDOFF_NOT_CONFIRMED_DENIES_RECEIPT');
-    $yes($save->calls===2 && $cleanup->cleanupCalls===1,
+    $yes($save->calls===3 && $cleanup->cleanupCalls===1,
         'NO_CART_CLEAR_ON_UNCONFIRMED_HANDOFF');
     $yes($db->ledger['27:33333333333333333333333333333333']['STATE']==='pending',
         'HANDOFF_FAILURE_REQUIRES_NATIVE_ROLLBACK');
@@ -282,7 +309,7 @@ namespace {
     $yes($throws(fn()=>$writer->placeLockedOrder(
         $db,27,'22222222222222222222222222222222',$input
     )),'FAILED_CART_CLEANUP_DENIES_RECEIPT');
-    $yes($save->calls===3 && $cleanup->cleanupCalls===2,
+    $yes($save->calls===4 && $cleanup->cleanupCalls===2,
         'CART_CLEANUP_ONLY_AFTER_NATIVE_SAVE');
     $yes($db->ledger['27:22222222222222222222222222222222']['STATE']==='pending',
         'FAILED_CLEANUP_REQUIRES_NATIVE_ROLLBACK');
@@ -296,10 +323,11 @@ namespace {
     $lateMaterializer=new Materializer();
     $lateSave=new Saver();
     $lateHandoff=new LocalHandoff();
+    $lateSavedProof=new SavedOrderProof();
     $lateWriter=new V5BitrixLockedPickupOrderWriter(
         $lateOwner,$lateMaterializer,
         new V5BitrixCheckoutBusinessRules(2,['pickup','other'],'error'),
-        $lateSave,$lateCleanup,$lateHandoff
+        $lateSave,$lateSavedProof,$lateCleanup,$lateHandoff
     );
     $lateId='44444444444444444444444444444444';
     $yes($throws(fn()=>$lateWriter->placeLockedOrder(
