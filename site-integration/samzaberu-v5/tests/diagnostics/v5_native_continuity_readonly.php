@@ -156,15 +156,11 @@ try {
     }
     echo "STRICT_DIRECT_ROLLBACK_GUARDED=PASS\n";
 
-    // C. Hidden raw COMMIT+BEGIN: SQL and Bitrix counters can both look
-    // active, but the V5 savepoint MUST have vanished. Never COMMIT it.
-    $bridge = new Bridge($db, $permit);
+    // C. Hidden raw COMMIT+BEGIN with strict mode. Direct bridge commit
+    // MUST detect the vanished savepoint and refuse to commit foreign work.
+    $bridge = new Bridge($db, $permit, true);
     if ($bridge->beginTransaction() !== true) {
-        throw new RuntimeException('RESTART_BEGIN');
-    }
-    $guard = Continuity::arm($db, $bridge);
-    if (!$guard instanceof Continuity || !$guard->isArmed()) {
-        throw new RuntimeException('RESTART_ARM');
+        throw new RuntimeException('STRICT_RESTART_BEGIN');
     }
 
     $db->queryExecute('COMMIT');
@@ -176,13 +172,18 @@ try {
     }
     echo "HIDDEN_COMMIT_BEGIN_REPRODUCED=PASS\n";
 
-    if ($guard->finishCommit()
-        || $bridge->inTransaction()
+    $strictCommitRejected = false;
+    try {
+        $bridge->commit();
+    } catch (RuntimeException) {
+        $strictCommitRejected = true;
+    }
+    if (!$strictCommitRejected
         || $bridge->ownsCurrentNativeTransaction($db)
         || (string)$state()['tx'] !== '1') {
-        throw new RuntimeException('HIDDEN_RESTART_ADOPTED');
+        throw new RuntimeException('STRICT_HIDDEN_RESTART_ADOPTED');
     }
-    echo "HIDDEN_RESTART_DETECTED=PASS\n";
+    echo "STRICT_HIDDEN_RESTART_DETECTED=PASS\n";
     echo "FOREIGN_RESTART_PRESERVED=YES\n";
     echo "UNCERTAIN_BRIDGE_POISONED=PASS\n";
 
@@ -203,7 +204,8 @@ try {
         'SITE_GUARD', 'MASTER_POOL_GUARD', 'CONNECTION_IDENTITY',
         'NOT_READ_ONLY', 'INITIAL_STATE', 'ROLLBACK_BEGIN', 'ROLLBACK_ARM',
         'OWNED_ROLLBACK', 'COMMIT_BEGIN', 'OWNED_COMMIT', 'RESTART_BEGIN',
-        'RESTART_ARM', 'RESTART_STATE', 'HIDDEN_RESTART_ADOPTED',
+        'STRICT_RESTART_BEGIN', 'RESTART_STATE', 'STRICT_HIDDEN_RESTART_ADOPTED',
+        'STRICT_DIRECT_COMMIT', 'STRICT_DIRECT_ROLLBACK',
         'RAW_CLEANUP',
     ];
     echo 'ERROR_CODE=' . (in_array($e->getMessage(), $codes, true)
