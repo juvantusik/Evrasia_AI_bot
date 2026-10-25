@@ -27,6 +27,9 @@ final class SiteSmsNativeNoRuntime implements V5ExistingWebsiteSmsNativeTransiti
     public bool $throw = false;
     public bool $sameId = false;
     public bool $wrongFactor = false;
+    public ?bool $confirmed = null;
+    public bool $receiptThrows = false;
+    public int $receiptReads = 0;
     public ?PDO $expectedDb = null;
     public function verifiedSameBitrixMobileRecovery(PDO $db): ?bool {
         $this->attestCalls++;
@@ -44,6 +47,19 @@ final class SiteSmsNativeNoRuntime implements V5ExistingWebsiteSmsNativeTransiti
             $this->wrongFactor ? ChallengeKind::EMAIL : ChallengeKind::SMS,
             90
         );
+    }
+    public function confirmedCurrentSmsSend(
+        PDO $db, string $emailChallengeId, string $smsChallengeId,
+        string $deviceId, string $platform
+    ): ?bool {
+        $this->receiptReads++;
+        if ($this->receiptThrows) throw new RuntimeException('no_receipt_authority');
+        if ($db !== $this->expectedDb
+            || $emailChallengeId !== str_repeat('a',64)
+            || $smsChallengeId !== str_repeat('b',64)
+            || $deviceId !== 'sz_'.str_repeat('c',64)
+            || $platform !== 'ios') return false;
+        return $this->confirmed;
     }
 }
 $checks=0;
@@ -79,17 +95,30 @@ $check($adapter->verifiedExistingSiteRecovery($db)===false,
 $native->ready=true;
 $check($adapter->verifiedExistingSiteRecovery($db)===true,
     'same PDO, current sources and native proof are all required');
+$denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
+    'provider returning a ticket is NOT proof of SMS send');
+$check($native->requestCalls===1 && $native->receiptReads===1,
+    'missing send attestation denies before public SMS ticket');
+$native->confirmed=false;
+$denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
+    'explicitly unconfirmed SMS provider receipt denies');
+$native->receiptThrows=true;
+$denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
+    'unknown provider receipt failure is never accepted');
+$native->receiptThrows=false;
+$native->confirmed=true;
 $ticket=$adapter->requestSmsInsteadOfEmail($cid,$device,'ios');
 $check($ticket->kind===ChallengeKind::SMS
-    && $ticket->challengeId!==$cid && $native->requestCalls===1,
-    'recovery delegates to site provider only after full evidence');
+    && $ticket->challengeId!==$cid && $native->requestCalls===4
+    && $native->receiptReads===4,
+    'only independently confirmed CURRENT SMS challenge returns a ticket');
 $denied(fn()=>$adapter->requestSmsInsteadOfEmail('wrong',$device,'ios'),
     'malformed email challenge denied');
 $denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,'cookie','ios'),
     'malformed device denied');
 $denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'web'),
     'wrong platform denied');
-$check($native->requestCalls===1,'invalid inputs never reach site-native SMS');
+$check($native->requestCalls===4,'invalid inputs never reach site-native SMS');
 $native->sameId=true;
 $denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
     'new mobile SMS ID cannot be same as email ID');
@@ -98,6 +127,13 @@ $native->wrongFactor=true;
 $denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
     'cannot relabel an email pending challenge as SMS');
 $native->wrongFactor=false;
+$receiptBefore=$native->receiptReads;
+$native->sameId=true;
+$denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
+    'same-id ticket still denied without receipt lookup');
+$native->sameId=false;
+$check($native->receiptReads===$receiptBefore,
+    'non-SMS or reused IDs do not invoke receipt authority');
 $native->throw=true;
 $denied(fn()=>$adapter->requestSmsInsteadOfEmail($cid,$device,'ios'),
     'private SMS provider errors never reach caller');
