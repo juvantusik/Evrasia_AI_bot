@@ -23,6 +23,8 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php'
       - 'site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5EmailLedgerSchemaContractTest.php'
+      - 'site-integration/samzaberu-v5/schema/PROPOSED_ev_v5_email_auth_challenges.sql'
       - 'site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php'
       - 'site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php'
       - 'site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php'
@@ -106,6 +108,7 @@ jobs:
             site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php \
             site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php \
             site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php \
+            site-integration/samzaberu-v5/tests/V5EmailLedgerSchemaContractTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php \
             site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php \
@@ -135,6 +138,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php
           php site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php
           php site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php
+          php site-integration/samzaberu-v5/tests/V5EmailLedgerSchemaContractTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php
           php site-integration/samzaberu-v5/tests/WebsiteEmailSendBudgetTest.php
