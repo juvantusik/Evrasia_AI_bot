@@ -79,6 +79,12 @@ final class V5MySqlPublicComposition
         #[\SensitiveParameter] string $emailCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
     ): V5HttpTransportBoundary {
+        // Validate native proof ownership before any release callback can run.
+        // A different PDO may represent another physical Bitrix transaction,
+        // even when both connections point to the same schema.
+        if (!$emailProof->boundTo($db)) {
+            throw new InvalidArgumentException('V5 native email connection mismatch');
+        }
         if (!(new V5PublicTrafficPreflight($nativeEvidence, $dependencyEvidence))
             ->mayDispatch($db, $server)) {
             throw new InvalidArgumentException('V5 public native release unavailable');
