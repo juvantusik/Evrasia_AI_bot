@@ -60,6 +60,25 @@ interface V5NativePickupCartCleanupPort
     ): void;
 }
 
+/**
+ * Local Bitrix-to-existing-call-center boundary. The call center subsequently
+ * routes orders to restaurants; V5 MUST NOT inspect, call or reproduce its
+ * infrastructure. The proof port is read-only and must confirm that the NEW
+ * native Bitrix Sale order is already accepted by the installed LOCAL handoff
+ * mechanism (a durable Bitrix order record or existing local integration
+ * marker, as verified against the installed site).
+ *
+ * Never send an HTTP call, queue duplicate messages, or trigger a new RestIS
+ * writer from this port. There is intentionally NO production implementation
+ * until the local Bitrix acceptance condition is independently confirmed.
+ */
+interface V5PickupLocalCallCenterHandoffProofPort
+{
+    public function assertExistingBitrixHandoffAccepted(
+        PDO $db, int $userId, int $orderId
+    ): void;
+}
+
 /** Testable seam for the already-written V5 native Sale D7 builder. */
 interface V5NativePickupOrderSaverPort
 {
@@ -112,6 +131,7 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
         private V5BitrixCheckoutBusinessRules $rules,
         private V5NativePickupOrderSaverPort $saver,
         private V5NativePickupCartCleanupPort $cleanup,
+        private V5PickupLocalCallCenterHandoffProofPort $localHandoff,
     ) {}
 
     /** @return array{id:int,user_id:int,request_id:string,number:string,status:string,saved:bool} */
@@ -191,6 +211,16 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             || !in_array($saved['status'], ['N','P'], true)) {
             throw new RuntimeException('checkout_order_not_new');
         }
+        // Order::save() alone does NOT prove acceptance by the existing
+        // Bitrix -> call-center handoff. Confirm the LOCAL existing channel
+        // before clearing the guest basket or acknowledging checkout.
+        // This is a read-only proof, never an outbound call or queue writer.
+        $this->cleanup->assertNativeTransactionContinuity($db);
+        $this->localHandoff->assertExistingBitrixHandoffAccepted(
+            $db, $userId, $saved['id']
+        );
+        $this->cleanup->assertNativeTransactionContinuity($db);
+
         // The saved (unpaid) order must be in the still-owned transaction.
         // Mirror the exact V4 two-table cart cleanup once, only for a NEW
         // saved request_id. Replayed receipts return above without clearing.
