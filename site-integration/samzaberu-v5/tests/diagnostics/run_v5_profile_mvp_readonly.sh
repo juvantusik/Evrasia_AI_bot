@@ -6,7 +6,7 @@ printf '\033[3J\033[2J\033[H'
 SITE='/home/site_evrasia/web/evrasia.spb.ru/public_html'
 CAND='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/candidates/6fa8773746e9a40e22008d67636c896eefeec3ed'
 OFF='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90/site-config.json'
-SRC_COMMIT='36fe4740721fe43b76aca9eaea73ad2c34e1b63f'
+SRC_COMMIT='b7e426c1aa2d63d24c018fdca5e98ecac7fd9b72'
 BASE="https://raw.githubusercontent.com/juvantusik/Evrasia_AI_bot/$SRC_COMMIT/site-integration/samzaberu-v5"
 WORK=''
 TEST='NOT_RUN'
@@ -85,7 +85,7 @@ src/V5MySqlPublicComposition.php e7dc7d176b83029fbbc599a9c2cd17bf101addf6
 src/V5MySqlPilotComposition.php 98b95e89fe9255cc495cd7e1f6b7dc19f2abf1db
 src/V5MySqlProfileRead.php cacc66ea043c652f62d837657ce26543191daa93
 src/V5BitrixLockedProfileReader.php fdc41da315c358df0f992d5efb3d260f9501b92c
-tests/V5IndependentProfileHttpTest.php 3fdcdfe82565296a4ede574129724fb6ee18953e
+tests/V5IndependentProfileHttpTest.php 3b958607a8281a666faa31b0d4ea785178a774fb
 FILES
 chown -R root:site_evrasia "$WORK"
 chmod 750 "$WORK" "$WORK/src" "$WORK/tests"
