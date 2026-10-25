@@ -111,3 +111,14 @@ Repo: `juvantusik/Evrasia_AI_bot`. Feature branch: `feature/v5-production-native
 Не отвлекаться на отдельный проект BonusBalance/Restis trigger/outbox и его выводы, случайно вставляемые в общий терминал: это отдельная задача, она не влияет на прогресс V5.
 
 **Последний вывод оператора:** новый архив `/home/tech/evrasia-v5-runtime.DhwrZNst.tar.gz` создан и проверен, `FINAL_STATUS=PASS`, `WRAPPER_RC=0`. Именно его содержимое ожидается следующим.
+
+## 8. 2026-10-26 LIVE V5 SESSION DEPLOY CHECKPOINT
+
+Operator-reported production results (V5-only; public HTTP remains 503 + deny):
+
+- V5 Auth Boundary installed in 6 V5 files; copied V4 JWT issuance paths blocked. Backup: `backups/v5-auth-boundary.by91xpwa`. V4 unchanged.
+- Session schema `eurasia_new.ev_v5_strong_sessions` was adjusted to `assurance enum('totp','sms','trusted','email')`, with backup and postcheck; installation of 12 V5 store dependency files subsequently PASS.
+- Installed five V5 runtime core files (decision, login workflow, JWT, policy, mobile trust proof); `V5MySqlStrongSessionStore` installed; `Auth::verifiedStrongUserId()` now calls `V5StrongSessionGate`, which is unbound/fail-closed until native factory is implemented. Gate backup: `backups/v5-strong-gate.OsJvVyFn`.
+- Final accepted V5 native read-only check: `FINAL_STATUS=PASS`; Bitrix `b_user` 5/5 relevant columns; `AUTH_STATE_ROWS=1`, `INVALID_EPOCH_ROWS=0` (previous check); `V5_SESSION_ROWS=0`; 2 triggers on b_user/OTP tables, 6 registered user event handlers. Three `AUTH_EPOCH` references in V5 Runtime libraries, not a confirmed live writer. Only `local/php_interface/init.php` found for user hook source. **No evidence yet that the actual triggers/handlers increment `AUTH_EPOCH` on all password/MFA/block/revocation paths.**
+- `V5_HTTP_SESSION_FACTORY_CONNECTED=NO`, `V5_ACCESS_REFRESH_ENABLED=NO`, V5 publicly blocked, no synthetic guests / SMS / email. This means live V5 login and direct PIN are NOT yet functioning.
+- **Immediate next implementation blocker:** verify exact existing trigger targets and Bitrix handler bindings (no raw secrets), then implement and verify native auth-state mutation coverage and the V5-only strong-session factory/locked trust proof. Never infer coverage merely from trigger or handler counts; do not allow password-only sessions or V4 JWT. Avoid new cart/orders rewrites and keep V4 untouched.
