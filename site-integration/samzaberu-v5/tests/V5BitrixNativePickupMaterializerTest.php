@@ -81,6 +81,9 @@ namespace {
     $policy->data=['source'=>'x','IGNORE_RESTIS'=>'wrong'];
     $check($rejects(fn()=> $materializer->orderProperties($db,27,$business)),
         'RESTIS_POLICY_MANDATORY');
+    $policy->data=['source'=>'x','IGNORE_RESTIS'=>'N'];
+    $check($rejects(fn()=> $materializer->orderProperties($db,27,$business)),
+        'VERIFIED_V4_RESTIS_FLAG_Y_ONLY');
     $policy->data=['source'=>'x','IGNORE_RESTIS'=>'Y','REST_ID'=>'12'];
     $check($rejects(fn()=> $materializer->orderProperties($db,27,$business)),
         'RESTIS_EXTERNAL_ID_FORBIDDEN');
