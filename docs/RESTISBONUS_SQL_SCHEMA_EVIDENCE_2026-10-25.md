@@ -105,6 +105,16 @@ A subsequent production **static read-only** inspection confirmed these concrete
 
 No cache cleared and no DB, RestIS or application write was performed during this investigation.
 
+## Live cache parameters and AJAX refresh evidence (2026-10-25)
+
+Further production READ_ONLY static inspection found **two** `eurasia:account.bonus` component invocations in `local/templates/eurasia/components/eurasia/account/main/template.php` (around lines 610-619 and 631-639), each with `"CACHE_TIME" => "7200"` (**2 hours**). A separate nearby component invocation has `CACHE_TIME=21600` (6 hours), **not evidence that the bonus component uses six hours**. The cache read itself is conditional on an additional parameter equaling `"Y"`, but that **parameter name and its actual value** were redacted in this scan. Effective cache activation is still UNCONFIRMED; do not claim that 2h caching definitively caused the website's transient higher value.
+
+`local/php_interface/account.php`, `case "bonus_balance"`, invokes `CRestis::requestJson("/api/Balance", ["Phone"=>$phone])`, floors `TotalSum`, writes `UF_BONUS` via `CUser::Update`, then includes `eurasia:account.bonus` with a parameter value `"N"` whose key is masked. `local/templates/eurasia/js/account.js` contains a call to `account.php` with `bonus_balance` near lines 91-103. The actual caller timing, effective cache flag and whether this request bypasses the cache require inspection.
+
+`local/php_interface/update_bonus.php` checks `UF_LASTCRON` against `time()-3600` before RestIS refresh, but direct references to it were found only in **older** JS forms implementations in the scanned frontend; this route is a possible legacy writer, not established as the current account refresh path. No scheduling conclusions from the prior limited cron inventory.
+
+Next: inspect the real cache flag keys/values and exact control-flow conditions around both component invocations; inspect the current JS network and DOM injection path without exposing cookies, tokens, phone or other sensitive literals. Preserve production unchanged while tracing the stale 200 display.
+
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
 ```sql
