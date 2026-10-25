@@ -55,7 +55,7 @@ $check(str_contains($source['smsEligibility'],'V5SmsLockedAuthEpochPort')
         '$this->epoch->stillCurrent($db, $userId, $user, $challengeAuthEpoch)'),
     'SMS locked native eligibility uses existing epoch authority');
 $check(str_contains($source['smsVerifier'],
-    "preg_match('/\\A[a-f0-9]{64}\\z/D',$epoch)"),
+    "preg_match('/\\A[a-f0-9]{64}\\z/D'," . '$epoch' . ")"),
     'SMS grant format requires native keyed epoch stamp');
 $check(str_contains($source['privateAdapter'],
     'verifiedSameBitrixMobileRecovery(PDO $db)')
