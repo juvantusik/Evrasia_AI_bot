@@ -1,0 +1,40 @@
+name: V5 checkout source-only admission
+on:
+  push:
+    branches:
+      - feature/v5-production-native-preflight-20261025
+    paths:
+      - .github/workflows/v5-checkout-source-only.yml
+      - site-integration/samzaberu-v5/src/V5CheckoutRequest.php
+      - site-integration/samzaberu-v5/src/V5MySqlOrderPlace.php
+      - site-integration/samzaberu-v5/src/V5RouteMap.php
+      - site-integration/samzaberu-v5/src/V5AuthHttpHandler.php
+      - site-integration/samzaberu-v5/src/V5MySqlStrongSessionStore.php
+      - site-integration/samzaberu-v5/tests/V5IndependentCheckoutHttpTest.php
+  workflow_dispatch:
+
+jobs:
+  http-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax, source only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          BASE=site-integration/samzaberu-v5
+          php -v | head -n 2
+          for file in \
+            src/V5CheckoutRequest.php \
+            src/V5MySqlOrderPlace.php \
+            src/V5RouteMap.php \
+            src/V5ProductionNativeRequestBoundaryGuard.php \
+            src/V5AuthHttpHandler.php \
+            src/V5MySqlStrongSessionStore.php \
+            src/V5MySqlPublicComposition.php \
+            src/V5MySqlPilotComposition.php \
+            tests/V5IndependentCheckoutHttpTest.php; do
+            php -l "$BASE/$file"
+          done
+      - name: Independent V5 checkout request and HTTP admission
+        run: php site-integration/samzaberu-v5/tests/V5IndependentCheckoutHttpTest.php
