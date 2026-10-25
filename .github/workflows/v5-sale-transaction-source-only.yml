@@ -1,0 +1,23 @@
+name: V5 native Sale save transaction static trace
+on:
+  push:
+    branches:
+      - feature/v5-production-native-preflight-20261025
+    paths:
+      - .github/workflows/v5-sale-transaction-source-only.yml
+      - site-integration/samzaberu-v5/tests/diagnostics/V5SaleSaveTransactionSourceTrace.php
+      - site-integration/samzaberu-v5/tests/diagnostics/run_v5_sale_save_transaction_readonly.sh
+  workflow_dispatch:
+jobs:
+  source-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static parser syntax and redaction test only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base=site-integration/samzaberu-v5/tests/diagnostics
+          php -l "$base/V5SaleSaveTransactionSourceTrace.php"
+          php "$base/V5SaleSaveTransactionSourceTrace.php" --self-test
+          bash -n "$base/run_v5_sale_save_transaction_readonly.sh"
