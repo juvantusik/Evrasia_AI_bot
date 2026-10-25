@@ -7,6 +7,7 @@ on:
       - .github/workflows/v5-sale-save-delegation-source-only.yml
       - site-integration/samzaberu-v5/tests/diagnostics/V5SaleSaveDelegationTrace.php
       - site-integration/samzaberu-v5/tests/diagnostics/V5SaleSaveReceiverSourceTrace.php
+      - site-integration/samzaberu-v5/tests/diagnostics/run_v5_sale_save_receiver_readonly.sh
       - site-integration/samzaberu-v5/tests/diagnostics/run_v5_sale_save_delegation_readonly.sh
   workflow_dispatch:
 jobs:
@@ -23,4 +24,5 @@ jobs:
           php -d auto_prepend_file= -d auto_append_file= "$BASE/V5SaleSaveDelegationTrace.php" --self-test
           php -l "$BASE/V5SaleSaveReceiverSourceTrace.php"
           php "$BASE/V5SaleSaveReceiverSourceTrace.php" --self-test
+          bash -n "$BASE/run_v5_sale_save_receiver_readonly.sh"
           bash -n "$BASE/run_v5_sale_save_delegation_readonly.sh"
