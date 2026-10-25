@@ -120,6 +120,7 @@ final class V5MySqlPublicComposition
         ?V5AttestedExplicitSmsRecoveryPort $manualSmsRecovery = null,
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
         ?V5LockedCartMutatorPort $cartMutator = null,
+        ?V5LockedCartAddPort $cartAdder = null,
     ): V5HttpTransportBoundary {
         self::assertNativeHttpBoundary($db);
         // Validate native proof ownership before any release callback can run.
@@ -209,7 +210,8 @@ final class V5MySqlPublicComposition
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
             $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
-            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator)
+            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator),
+            $cartAdder === null ? null : new V5MySqlCartAdd($sessions, $cartAdder)
         ));
     }
 
@@ -233,6 +235,7 @@ final class V5MySqlPublicComposition
         ?V5LockedCartReaderPort $cartReader = null,
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
         ?V5LockedCartMutatorPort $cartMutator = null,
+        ?V5LockedCartAddPort $cartAdder = null,
     ): V5HttpTransportBoundary {
         self::assertNativeHttpBoundary($db);
         // No secret, request header or client-provided assertion can bypass
@@ -276,6 +279,7 @@ final class V5MySqlPublicComposition
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
             $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
             $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator),
+            $cartAdder === null ? null : new V5MySqlCartAdd($sessions, $cartAdder),
         ));
     }
     /**
