@@ -175,6 +175,23 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             // after a denied/uncertain begin attempt.
             throw new RuntimeException('v5_bitrix_rollback_not_owned');
         }
+        if ($this->requireNativeContinuity && !$this->guardedTerminalInProgress) {
+            $guard = $this->continuityGuard;
+            $this->continuityGuard = null;
+            if ($guard === null || !$guard->isArmed()) {
+                $this->abandonUncertainNativeTransaction();
+                throw new RuntimeException('v5_bitrix_rollback_continuity_unavailable');
+            }
+            $this->guardedTerminalInProgress = true;
+            try {
+                if (!$guard->finishRollback()) {
+                    throw new RuntimeException('v5_bitrix_rollback_continuity_lost');
+                }
+                return true;
+            } finally {
+                $this->guardedTerminalInProgress = false;
+            }
+        }
         try {
             $this->assertCurrentApplicationConnection();
             if ($this->native->rollbackTransaction() === false) {
