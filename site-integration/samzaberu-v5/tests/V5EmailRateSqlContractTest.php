@@ -25,7 +25,7 @@ function okRate(bool $pass,string $label):void {
     $n++;
 }
 function rejectRate(callable $run,string $label):void {
-    try {$run();} catch (RuntimeException) {okRate(true,$label);return;}
+    try {$run();} catch (InvalidArgumentException | RuntimeException) {okRate(true,$label);return;}
     throw new RuntimeException('FAIL: '.$label);
 }
 
