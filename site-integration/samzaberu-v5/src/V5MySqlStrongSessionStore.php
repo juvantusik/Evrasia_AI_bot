@@ -60,6 +60,18 @@ interface V5LockedBonusPinReaderPort
  * The implementation MUST independently verify native FUSER ownership
  * and read-side-effect safety; no permissive default is provided.
  */
+/**
+ * Existing-item mutation only. Adapter resolves the locked user's FUSER,
+ * verifies basket-line ownership and saves on the same guarded Bitrix
+ * physical transaction. No V4 controller, browser cookie or new FUSER.
+ */
+interface V5LockedCartMutatorPort
+{
+    public function changeLockedCartItem(
+        PDO $db, int $userId, int $itemId, ?int $quantity
+    ): bool;
+}
+
 interface V5LockedCartReaderPort
 {
     /** @return array{items:list<array<string,mixed>>,total:array<string,mixed>}|null */
@@ -373,6 +385,53 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             });
         } catch (Throwable) {
             return null;
+        }
+    }
+
+    /**
+     * Mutate an existing cart line after strong V5 user/session/epoch proof.
+     * quantity=null removes it. true is returned only AFTER transaction
+     * COMMIT; null denotes denied auth, false native write failure.
+     */
+    public function changeCartForAccess(
+        #[\SensitiveParameter] string $accessJwt,
+        int $itemId, ?int $quantity,
+        V5LockedCartMutatorPort $mutator,
+    ): ?bool {
+        if ($itemId < 1 || $itemId > 2147483647
+            || ($quantity !== null && ($quantity < 1 || $quantity > 1000))) {
+            return false;
+        }
+        try {
+            $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());
+            if ($claims === null) return null;
+            $this->assertReady();
+            $userId = self::positive($claims['sub'] ?? null);
+            if ($userId === null) return null;
+            return $this->transaction(function () use (
+                $claims, $userId, $itemId, $quantity, $mutator
+            ): ?bool {
+                $now = $this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch = $this->lockedEpoch($userId);
+                $row = $this->lockedSession($claims['sid']);
+                $state = self::state($row, $userId, $now);
+                if ($state === null || $epoch !== $state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction(
+                        $claims, $state, $now
+                    )) return null;
+
+                if ($mutator->changeLockedCartItem(
+                    $this->db, $userId, $itemId, $quantity
+                ) !== true) {
+                    throw new RuntimeException('v5_cart_mutation_unconfirmed');
+                }
+                return true;
+            });
+        } catch (Throwable) {
+            // Transaction owner performs rollback on native failure.
+            return false;
         }
     }
 
