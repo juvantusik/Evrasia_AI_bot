@@ -174,9 +174,15 @@ check($t->calls === 1, 'active TOTP account still verifies current trust');
 check($s->trustCalls === 1 && $s->grantCalls === 0, 'trusted TOTP account delegates to locked trust issuer');
 check($c->begins === 0, 'trusted TOTP account creates NO new TOTP or SMS challenge');
 
-// No trust token, revoked/invalid token or password-only V4 enrollment must
-// NEVER bypass active native TOTP or silently fall back to SMS.
-foreach ([[false,false],[false,true],[true,false]] as [$tokenValid, $strong]) {
+// Existing valid V4 AUTH_PASSWORD trust is grandfathered even with TOTP.
+[$f, $p, $t, $c, $s] = fixture($totpUser);
+$t->result = new MobileTrustAssessment(true, false);
+$result = $f->signIn('test', 'secret', DID, 'ios', 'existing_v4_trust_token');
+check($result instanceof AuthenticatedV5Session, 'legacy valid V4 trust bypasses repeat TOTP');
+check($s->trustCalls === 1 && $c->begins === 0, 'legacy valid V4 trust no SMS or TOTP');
+
+// No token or invalid/revoked token may bypass active TOTP.
+foreach ([[false,false],[false,true]] as [$tokenValid, $strong]) {
     [$f, $p, $t, $c, $s] = fixture($totpUser);
     $t->result = new MobileTrustAssessment($tokenValid, $strong);
     $result = $f->signIn('test', 'secret', DID, 'ios', 'untrusted_token');
@@ -203,8 +209,15 @@ check($result instanceof AuthenticatedV5Session, 'verified trusted device issued
 check($s->trustCalls === 1 && $c->begins === 0, 'strong trust no SMS challenge');
 check($t->calls === 1, 'trust proof evaluated');
 
-// Legacy V4 password-only trust must never bypass the email OTP.
-foreach ([[false,false],[false,true],[true,false]] as [$tokenValid, $strong]) {
+// Current valid historical V4 trust also bypasses repeat EMAIL OTP.
+[$f, $p, $t, $c, $s] = fixture($user);
+$t->result = new MobileTrustAssessment(true, false);
+$result = $f->signIn('test', 'secret', DID, 'android', 'existing_v4_trust_token');
+check($result instanceof AuthenticatedV5Session, 'legacy valid V4 trust bypasses repeat email OTP');
+check($s->trustCalls === 1 && $c->begins === 0, 'legacy valid V4 trust no email or SMS');
+
+// Invalid or revoked trust still requires email OTP.
+foreach ([[false,false],[false,true]] as [$tokenValid, $strong]) {
     [$f, $p, $t, $c, $s] = fixture($user);
     $t->result = new MobileTrustAssessment($tokenValid, $strong);
     $result = $f->signIn('test', 'secret', DID, 'ios', 'any_token');
