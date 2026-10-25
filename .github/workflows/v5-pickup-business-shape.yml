@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/v5-pickup-business-shape.yml
       - site-integration/samzaberu-v5/tests/diagnostics/V5PickupBasketPropertyShape.php
+      - site-integration/samzaberu-v5/tests/diagnostics/run_v5_pickup_basket_field_readonly.sh
   workflow_dispatch:
 jobs:
   parser:
@@ -17,5 +18,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           source_file=site-integration/samzaberu-v5/tests/diagnostics/V5PickupBasketPropertyShape.php
+          bash -n site-integration/samzaberu-v5/tests/diagnostics/run_v5_pickup_basket_field_readonly.sh
           php -l "$source_file"
           php -d auto_prepend_file= -d auto_append_file= "$source_file" --self-test
