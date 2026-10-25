@@ -31,6 +31,48 @@ try {
         new V5ProductionNativeTransactionPreflight(),
     );
 
+    // Exact route policy is pure and testable without HTTP or Bitrix.
+    $protected = [
+        '/auth/signin',
+        '/auth/challenge/verify',
+        '/auth/challenge/resend',
+        '/auth/challenge/use-sms',
+        '/auth/refresh',
+        '/auth/logout',
+        '/auth/token/validate',
+        '/loyalty/pin',
+    ];
+    foreach ($protected as $path) {
+        if (!V5ProductionNativeRequestBoundaryGuard::isProtectedPostRoute(
+            'POST', '/api/v5' . $path,
+        )) {
+            throw new RuntimeException('PROTECTED_ROUTE_REJECTED');
+        }
+    }
+    check(count($protected) === 8, 'EXACT_PROTECTED_POST_ROUTES');
+
+    $excluded = [
+        ['POST', '/api/v5/legal/consents/validate'],
+        ['GET', '/api/v5/legal/consents'],
+        ['GET', '/api/v5/legal/registration-documents'],
+        ['GET', '/api/v5/cart'],
+        ['GET', '/api/v5/health'],
+        ['POST', '/api/v5/auth/login'],
+        ['POST', '/api/v5/auth/signin?token=1'],
+        ['POST', '/api/v5/auth/signin/'],
+        ['POST', '/api/v5/AUTH/signin'],
+        ['POST', '/api/v5/auth/%73ignin'],
+        ['POST', '/api/v5/auth/signin#fragment'],
+    ];
+    foreach ($excluded as [$method, $uri]) {
+        if (V5ProductionNativeRequestBoundaryGuard::isProtectedPostRoute(
+            $method, $uri,
+        )) {
+            throw new RuntimeException('PUBLIC_OR_UNKNOWN_ROUTE_ACCEPTED');
+        }
+    }
+    check(count($excluded) === 11, 'PUBLIC_AND_UNKNOWN_ROUTES_DENIED');
+
     // Even convincing forged CGI fields cannot make a CLI process eligible.
     $_SERVER = [
         'DOCUMENT_ROOT' => '/home/site_evrasia/web/evrasia.spb.ru/public_html',
