@@ -85,3 +85,27 @@
 **СТАТУС НОВОЙ ВЕРСИИ:** код доступен в GitHub; реальный Bitrix smoke с проверкой **перед SQL** ещё ожидает серверный stdout. Не выдавать за PASS до выполнения. Строгий режим не устанавливается в production и не открывает AUTH V5.
 
 **Открытые release blockers:** отсутствует независимо подтверждённый production exclusive permit/request lifecycle, нативные OTP/password/phone/trust/security writer coverage, интеграция с real provider и аттестованный isolated staging. Успешный preflight/continuity не снимает эти ограничения.
+
+## Октябрь 25: фактический PASS строгой SQL continuity и HTTP-only guard
+
+Принят операторский **реальный Bitrix CLI** read-only stdout:
+
+```
+STRICT_SQL_CONTINUITY_TEST=PASS
+STRICT_NORMAL_SQL_CONTINUITY=PASS
+STRICT_FOREIGN_SQL_BLOCKED_BEFORE_EXECUTION=PASS
+STRICT_DIRECT_COMMIT_GUARDED=PASS
+STRICT_DIRECT_ROLLBACK_GUARDED=PASS
+STRICT_HIDDEN_RESTART_DETECTED=PASS
+FOREIGN_RESTART_PRESERVED=YES
+TRANSACTION_LEFT_OPEN=NO
+FINAL_STATUS=PASS
+FINAL_RC=0
+WRAPPER_RC=0
+```
+
+Production Bitrix, DB, API V4 и public V5 не изменены.
+
+**Новое изменение GitHub-only** в `V5BitrixPdoCompatibilityBridge::__construct`: при любом не-CLI PHP запуске bridge теперь требует `PHP_SAPI=fpm-fcgi`, `requireNativeContinuity=true` и `V5ProductionNativeRequestBoundaryGuard::isEligible(native)=true`, который сверяет `V5RouteMap`, HTTPS, public host, физическое соединение, чистую native/SQL transaction state и pinned Bitrix sources. Двухаргументный нестрогий bridge оставлен только для CLI тестов. Это **предварительная HTTP граница**, НЕ производство или установка `V5NativeBitrixExclusiveTransactionPermitPort`. До выделенного проверенного provider/permit `beginTransaction` не получает готовность, native security hooks остаются неаттестованными.
+
+**Статус HTTP изменения:** сохранено только в feature GitHub; реальный FPM HTTP ingress не тестировался, PHP lint новой версии на сервере пока не проходил. Не устанавливать, не включать V5 AUTH без отдельной независимой release-проверки.
