@@ -66,7 +66,10 @@ final readonly class V5ParallelHttpEntry
                 }
             }
             try {
-                $transport = ($this->transportFactory)();
+                // A validated request is the single request-scoped input to
+                // the private V5 factory; never reread php://input or adopt
+                // raw HTTP fields as server configuration.
+                $transport = ($this->transportFactory)($head);
                 if (!$transport instanceof V5HttpTransportBoundary) return self::unavailable();
                 return $transport->dispatch($head);
             } catch (Throwable) {
@@ -97,10 +100,15 @@ final readonly class V5ParallelHttpEntry
             return self::unavailable();
         }
         try {
-            $transport = ($this->transportFactory)();
+            // Construct exactly one bounded transport request and pass that
+            // SAME object to the lazy private factory and existing handler.
+            // A native first-factor provider may obtain device/platform from
+            // this request without reading unbounded input or CGI globals.
+            $request = V5PhpHttpRequestFactory::fromServer($server, $body);
+            $transport = ($this->transportFactory)($request);
             if (!$transport instanceof V5HttpTransportBoundary) return self::unavailable();
             // Keep all existing handler/strong-session/epoch/native checks.
-            return $transport->dispatch(V5PhpHttpRequestFactory::fromServer($server, $body));
+            return $transport->dispatch($request);
         } catch (Throwable) {
             return self::unavailable();
         }
