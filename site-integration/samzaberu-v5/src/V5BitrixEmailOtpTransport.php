@@ -66,7 +66,7 @@ final readonly class V5BitrixEmailOtpTransport implements V5EmailOtpTransportPor
     ) {
         if ($eventName!==self::LIVE_LOGIN_EVENT
             || $messageId!==self::LIVE_LOGIN_TEMPLATE_ID
-            || preg_match('/\A[a-z0-9_]{1,10}\z/D',$siteId)!==1
+            || $siteId!=='s1'
             || $messageId<=0) {
             throw new \InvalidArgumentException('v5_login_mail_template_unavailable');
         }
