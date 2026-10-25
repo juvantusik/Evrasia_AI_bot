@@ -1,5 +1,17 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## Update 25.10.2026 — основной V5 email-first НЕ блокируется отсутствием мобильного SMS
+
+Source-only изменения `06b267de`, `5e40a41b`, `60079f13`, `9ad7a13f`, `ca6d46e1`, `40eb6c74`:
+
+- `V5MySqlPublicComposition::buildEmailFirst()` допускает независимый `V5PublicVerifiedTotpLifecyclePort` с обязательным `verifiedPublicTotpLifecycle(PDO $db) === true`. Старый `V5PublicVerifiedFactorLifecyclePort` и legacy `build()` сохраняют комбинированный gate TOTP+SMS. Всё ещё обязательны полные native preflight, email proof, один PDO, Redis budget и остальные необходимые зависимости.
+- Без site-native `V5AttestedExplicitSmsRecoveryPort` композиция устанавливает **denial-only** `V5UnavailableSmsLifecycle`, не создаёт и не пересылает SMS. `V5MySqlChallengeConsumption` в этом режиме также отклоняет `kind=sms` после блокировки challenge, **до** native verification. Тем самым SMS-код из другого ранее выпущенного challenge не используется для получения новой мобильной сессии.
+- Ручной SMS fallback можно подключить **только** если одновременно подтверждены full SMS/TOTP lifecycle и существующий website recovery provider. Нельзя подменять этот provider веб-сессией, `EmailFirstSmsRatePolicy($session,...)` или вызовом private `issuePilotSmsCode` через reflection.
+- Это НЕ означает запуск V5 в production и не означает поддержку SMS в мобильном приложении. `ev_v5_email_auth_challenges` отсутствует по последней аттестации, её CREATE требует отдельного разрешения. Фабрика, native trust и runtime E2E не включены/не подтверждены.
+- [Source-only CI #40181890121](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40181890121) — **SUCCESS** для новой TOTP-only композиции, негативных SMS HTTP проверок и PHP lint. Отдельный общий CI остаётся FAIL на старом JS DOM event тесте, не объявлять всё зелёным.
+
+
+
 ## Дополнение: проверка видимости и сессионной зависимости (production READ-ONLY)
 
 По выводу оператора `ev-v5-sms-boundary`: `FINAL_STATUS=PASS`, `FINAL_RC=0`, **18 методов** исследованы статически на production, PHP lint/source SHA PASS, никаких вызовов БД/Redis, SMS/email, PHP Bitrix bootstrap и никаких production writes.
