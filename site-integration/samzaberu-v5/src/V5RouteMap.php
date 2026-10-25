@@ -16,6 +16,7 @@ final class V5RouteMap
         'POST /auth/signin' => 'signin',
         'POST /auth/challenge/verify' => 'verifyChallenge',
         'POST /auth/challenge/resend' => 'resendChallenge',
+        'POST /auth/challenge/use-sms' => 'requestSmsFallback',
         'POST /auth/refresh' => 'refresh',
         'POST /auth/logout' => 'logout',
         'POST /auth/token/validate' => 'validateToken',
