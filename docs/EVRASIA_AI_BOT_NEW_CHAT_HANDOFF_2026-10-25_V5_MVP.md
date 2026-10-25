@@ -645,3 +645,32 @@ Operator ran the pinned `snapshot-working-v4-for-v5-reuse.sh` (commit `516b01bad
 - Existing host/root + pinned V4 Cart/router SHA guards retained. Archive remains under `/root/evrasia-v5-v4-source-snapshots` and is NEVER auto-uploaded to GitHub or served; review embedded PHP secrets before owner-approved private transfer.
 - **GitHub CI `40217397626` SUCCESS** (syntax/lint and other source-only tests); the repaired server snapshot has **not been rerun** yet. Do NOT claim that production V4 source has been copied until operator reports `V4_SNAPSHOT=PASS`, `PRIVATE_ARCHIVE=...`, `SOURCE_FILE_COUNT=...`.
 - Next: owner runs hash-pinned corrected wrapper on `root@evrasia`; if PASS, securely inspect private PHP archive for accidental embedded credentials before sharing, then actually fork proven V4 router/controllers in a V5-only copy while preserving existing `device_id` and V4 business functions. V4 and production unchanged; V5 AUTH OFF.
+
+
+## 37. USER CONFIRMED LIVE V5 COPY NAMESPACE PATCH PASS (2026-10-25)
+
+Operator on root@evrasia successfully completed **COPY of live V4 to installed, separate V5** earlier (router and controllers) and most recently executed the V5_NAMESPACE guard+backup+rewrite. Exact accepted stdout:
+```
+SOURCE_AND_V5_GUARDS=PASS
+BACKUP=/home/site_evrasia/web/evrasia.spb.ru/backups/v5-namespace.WArkhLvE
+V5_CONTROLLERS_UPDATED=11
+V5_ROUTER_CLASS_REFERENCES_UPDATED=40
+V5_SOURCE_FILES_UPDATED=13
+V5_CODE_REUSED_FROM_V4=YES
+PHP_SYNTAX=PASS
+V4_INTEGRITY=PASS
+V5_PUBLIC_ACCESS=BLOCKED
+V5_INDEPENDENT_CONTROLLER_NAMESPACES=YES
+API_V4_CHANGED=NO
+DATABASE_WRITE=NO
+V5_AUTH_ENABLED=NO
+FINAL_STATUS=PASS
+FINAL_RC=0
+WRAPPER_RC=0
+```
+
+Paths: /home/site_evrasia/web/evrasia.spb.ru/public_html/api/v4 and api/v5; /home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/Controllers/V4 and Controllers/V5. LIVE V4 remains independent. V5 namespace Evrasia\\Controllers\\V5, router 40 V5 class refs. The prior V5 and namespace-stage backups are both retained.
+
+**Do not copy or reset V5 again.** Real V4 source in the uploaded 56-file private archive has been inspected. Critical remaining V5-only changes: replace inherited V4 authentication in the copied V5 Auth/Cart/Profile/PinCode/LegalConsents with verified V5-only strong session and server TOTP/email/SMS/trust (V4 JWT cannot pass); use unchanged working V4 business logic from copied controllers; revalidate legal doc codes and persist Bitrix native consent on V5 signup, which original V4 signup does not do. Keep existing mobile device_id contract. The copied V4 router has an initial POST encryption middleware and embedded internal Basic-Auth credentials; DO NOT remove V5 public guard before these are reviewed and V5 auth works. Previous script broadly replaced /api/v4 with /api/v5 in copies, so inspect cross-domain QR URLs before live enable. V5 is still **HTTP blocked by .htaccess + router 503**.
+
+In same operator message a completely separate BonusBalance CAS diagnostic failed at BITRIX_CONNECTION_CONFIGURATION with no writes. Do not conflate BonusBalance with V5 state.
