@@ -68,6 +68,13 @@ interface V5ProfileHttpReaderPort
     public function readVerifiedProfile(#[\SensitiveParameter] string $accessJwt): ?array;
 }
 
+/** Order history is bound to the user in the verified V5 JWT. */
+interface V5OrdersHttpReaderPort
+{
+    /** @return list<array<string,int|string|float|bool|null>>|null */
+    public function readVerifiedOrders(#[\SensitiveParameter] string $accessJwt): ?array;
+}
+
 interface V5TokenValidationPort
 {
     public function isValidAccessToken(string $accessJwt): bool;
@@ -101,6 +108,7 @@ final readonly class V5AuthHttpHandler
         private ?V5SessionLogoutPort $logout = null,
         private ?V5CartHttpReaderPort $cartReader = null,
         private ?V5ProfileHttpReaderPort $profileReader = null,
+        private ?V5OrdersHttpReaderPort $ordersReader = null,
     ) {}
 
     /**
@@ -253,6 +261,34 @@ final readonly class V5AuthHttpHandler
                 return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
             }
             return new V5HttpReply(200, ['profile' => $profile]);
+        } catch (Throwable) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+    }
+
+    /**
+     * GET /orders uses the same server-side V5 session as profile and cart.
+     * No client-provided USER_ID and no V4 auth/business controller.
+     */
+    public function handleProtectedOrdersGet(#[\SensitiveParameter] string $accessJwt): V5HttpReply
+    {
+        if ($this->ordersReader === null) {
+            return new V5HttpReply(503, ['error' => 'v5_unavailable']);
+        }
+        if (strlen($accessJwt) < 110 || strlen($accessJwt) > 4096
+            || preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D',
+                $accessJwt) !== 1) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        try {
+            $orders = $this->ordersReader->readVerifiedOrders($accessJwt);
+            if (!is_array($orders) || !array_is_list($orders)) {
+                return new V5HttpReply(401, ['error' => 'authentication_failed']);
+            }
+            if (count($orders) > 50) {
+                return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+            }
+            return new V5HttpReply(200, ['orders' => $orders]);
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
