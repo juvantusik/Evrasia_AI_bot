@@ -58,6 +58,15 @@ interface V5SessionLogoutPort
  * Existing-basket-line mutation after verified V5 JWT, native user lock and
  * same transaction. Success is only returned after commit, not upon staging.
  */
+/** Server-authorized add-by-catalog-product-ID; returns native line ID. */
+interface V5CartHttpAddPort
+{
+    public function addVerifiedCartProduct(
+        #[\SensitiveParameter] string $accessJwt,
+        int $productId, int $quantity
+    ): ?int;
+}
+
 interface V5CartHttpMutationPort
 {
     public function changeVerifiedCartItem(
@@ -147,6 +156,7 @@ final readonly class V5AuthHttpHandler
         private ?V5OrderDetailHttpReaderPort $orderDetailReader = null,
         private ?V5OrderPlaceHttpPort $orderPlace = null,
         private ?V5CartHttpMutationPort $cartMutation = null,
+        private ?V5CartHttpAddPort $cartAdd = null,
     ) {}
 
     /**
@@ -199,6 +209,9 @@ final readonly class V5AuthHttpHandler
                 'setCartItemQuantity', 'removeCartItem' => $this->cartMutation === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->changeCartItem($body, $action),
+                'addCartItem' => $this->cartAdd === null
+                    ? new V5HttpReply(503, ['error'=>'v5_unavailable'])
+                    : $this->addCartItem($body),
                 'validateLegalConsents' => $this->publicLegalConsents === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->validateLegalConsents($body),
@@ -384,6 +397,33 @@ final readonly class V5AuthHttpHandler
      * endpoint; the client supplies only its already assigned basket item ID.
      * Server supplies locked FUSER, price and user identity.
      */
+    /** New items are identified by product ID; server sets all prices. */
+    private function addCartItem(array $body): V5HttpReply
+    {
+        $request=V5CartMutationRequest::parseAdd($body);
+        if ($request===null) return new V5HttpReply(400,['error'=>'invalid_request']);
+        $jwt=$request['access_token'];
+        if (strlen($jwt)<110 || strlen($jwt)>4096
+            || preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D',$jwt)!==1) {
+            return new V5HttpReply(401,['error'=>'authentication_failed']);
+        }
+        try {
+            $lineId=$this->cartAdd->addVerifiedCartProduct(
+                $jwt,$request['product_id'],$request['quantity']
+            );
+            if (!is_int($lineId) || $lineId<1 || $lineId>2147483647) {
+                return new V5HttpReply(503,['error'=>'temporarily_unavailable']);
+            }
+            return new V5HttpReply(201,['item'=>[
+                'id'=>$lineId,
+                'product_id'=>$request['product_id'],
+                'quantity'=>$request['quantity'],
+            ]]);
+        } catch (Throwable) {
+            return new V5HttpReply(503,['error'=>'temporarily_unavailable']);
+        }
+    }
+
     private function changeCartItem(array $body, string $action): V5HttpReply
     {
         $request = V5CartMutationRequest::parse($body, $action);
