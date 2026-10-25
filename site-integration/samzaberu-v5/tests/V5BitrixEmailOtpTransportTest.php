@@ -39,6 +39,9 @@ function no(callable $cb,string $title):void {
 $proof=new EmailLoginTemplateProofFixture();
 $queue=new EmailD7QueueFixture();
 no(fn()=>new V5BitrixEmailOtpTransport(
+    'EVRASIA_WEB_EMAIL_LOGIN','s2',95,$proof,$queue),
+    'foreign site must not receive login OTP');
+no(fn()=>new V5BitrixEmailOtpTransport(
     'EVRASIA_WEB_EMAIL_LOGIN','s1',94,$proof,$queue),
     'ownership template 94 cannot be used for email login');
 no(fn()=>new V5BitrixEmailOtpTransport(
