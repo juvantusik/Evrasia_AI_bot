@@ -12,7 +12,7 @@ if (!$constant instanceof ReflectionClassConstant) {
     throw new RuntimeException('FAIL: exact email SQL allowlist absent');
 }
 $permitted = $constant->getValue();
-if (!is_array($permitted) || count($permitted) !== 18) {
+if (!is_array($permitted) || count($permitted) !== 19) {
     throw new RuntimeException('FAIL: unexpected email SQL shape count');
 }
 
@@ -45,6 +45,11 @@ foreach($rejected as $sql) {
     try {$method->invoke(null,$sql);}
     catch (RuntimeException) {$checks++;continue;}
     throw new RuntimeException('FAIL: unsafe new email SQL accepted');
+}
+foreach (['SAVEPOINT v5_email_sms_stage_guard',
+    'RELEASE SAVEPOINT v5_email_sms_stage_guard'] as $sql) {
+    $method->invoke(null,$sql);
+    $checks++;
 }
 foreach (['issue','rate','ack','verify'] as $suffix) {
     foreach (['SAVEPOINT ','RELEASE SAVEPOINT '] as $prefix) {
