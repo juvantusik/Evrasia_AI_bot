@@ -22,7 +22,7 @@ foreach ([false, true] as $passwordVerified) {
 
                     if (!$passwordVerified || !$accountAllowed) {
                         $expected = NextFactor::DENY;
-                    } elseif ($trustTokenValid && $trustStronglyEnrolled) {
+                    } elseif ($trustTokenValid) {
                         $expected = NextFactor::COMPLETE;
                     } elseif ($nativeTotpActive) {
                         $expected = NextFactor::TOTP;
@@ -39,18 +39,24 @@ foreach ([false, true] as $passwordVerified) {
                         throw new RuntimeException('Authentication bypass');
                     }
 
-                    // Only CURRENT strongly enrolled trust can bypass repeat TOTP.
+                    // CURRENT valid trust skips repeat TOTP, including original V4 AUTH_PASSWORD trust.
                     if ($passwordVerified && $accountAllowed && $nativeTotpActive) {
-                        $expectedTotpDecision = ($trustTokenValid && $trustStronglyEnrolled)
+                        $expectedTotpDecision = ($trustTokenValid)
                             ? NextFactor::COMPLETE : NextFactor::TOTP;
                         if ($actual !== $expectedTotpDecision) {
                             throw new RuntimeException('Native TOTP/trust ordering mismatch');
                         }
                     }
 
-                    // A password-only legacy trust token is not sufficient.
-                    if ($passwordVerified && $accountAllowed && !$nativeTotpActive && !$trustStronglyEnrolled && $actual === NextFactor::COMPLETE) {
-                        throw new RuntimeException('Legacy trust bypass');
+                    // An already valid historical trust skips a new code;
+                    // an unverified device_id or trust token never does.
+                    if ($passwordVerified && $accountAllowed && $trustTokenValid
+                        && !$trustStronglyEnrolled && $actual !== NextFactor::COMPLETE) {
+                        throw new RuntimeException('Grandfathered V4 trust was wrongly rejected');
+                    }
+                    if ($passwordVerified && $accountAllowed && !$trustTokenValid
+                        && $actual === NextFactor::COMPLETE) {
+                        throw new RuntimeException('Unverified trust bypass');
                     }
 
                     $tested++;
