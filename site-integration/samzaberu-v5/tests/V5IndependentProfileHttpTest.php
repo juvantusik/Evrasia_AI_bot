@@ -16,6 +16,31 @@ if (PHP_SAPI !== 'cli') {
     throw new RuntimeException('offline_profile_contract_only');
 }
 
+// Emit only test identifiers and PHP source locations. Never include JWT,
+// a request body, personal data, raw stack traces or exception arguments.
+set_exception_handler(static function (Throwable $error): void {
+    $name = $error->getMessage();
+    if (str_starts_with($name, 'FAIL: ')
+        && preg_match('/\AFAIL: [a-zA-Z0-9 _.:-]{1,96}\z/D', $name) === 1) {
+        echo 'PROFILE_TEST_FAILURE=' . substr($name, 6) . "\n";
+    } else {
+        echo 'PROFILE_TEST_EXCEPTION_TYPE=' . get_class($error) . "\n";
+    }
+    echo 'PROFILE_TEST_EXCEPTION_FILE=' . basename($error->getFile()) . "\n";
+    echo 'PROFILE_TEST_EXCEPTION_LINE=' . $error->getLine() . "\n";
+    exit(2);
+});
+
+register_shutdown_function(static function (): void {
+    $fatal = error_get_last();
+    if (is_array($fatal) && in_array($fatal['type'] ?? null,
+        [E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR], true)) {
+        echo 'PROFILE_TEST_FATAL_TYPE=' . $fatal['type'] . "\n";
+        echo 'PROFILE_TEST_FATAL_FILE=' . basename((string)($fatal['file'] ?? '')) . "\n";
+        echo 'PROFILE_TEST_FATAL_LINE=' . (int)($fatal['line'] ?? 0) . "\n";
+    }
+});
+
 $checks = 0;
 function profileCheck(bool $ok, string $name): void {
     global $checks;
