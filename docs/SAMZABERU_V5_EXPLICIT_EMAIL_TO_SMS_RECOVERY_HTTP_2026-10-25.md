@@ -1,5 +1,22 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — source-only REAL SQL atomic stage, без вызова платного SMS
+
+`src/V5EmailToSmsAtomicStage.php` — следующий точный **исполняемый SQL-кандидат**, но **не** production installation и **не** complete `V5ExistingWebsiteSmsNativeTransitionPort`. В отличие от прежнего pure-policy он содержит реальные PDO-инструкции с ownership, транзакцией, блокировками, подготовкой нового SMS challenge и условной отменой email:
+
+1. Только валидные server-generated `emailChallengeId`, `sz_... deviceId`, `ios/android`; MySQL error-mode exception, отсутствие чужой транзакции и exact InnoDB engines для `b_user`, `ev_samzaberu_auth_state`, `ev_v5_email_auth_challenges`, `ev_v5_auth_challenges`. Любая отсутствующая таблица → fail closed **до** вызова native provider. В production новая email таблица ещё не создана.
+2. Indexed email ID point lookup используется только как **подсказка для порядка блокировок**, никогда как доказательство принадлежности. Затем в одном owned SQL scope: `b_user FOR UPDATE` → `V5LockedEmailToSmsStageProofPort::currentFactsWithUserLock()` → locked numeric `AUTH_EPOCH` → locked email row. Приватный provider обязан независимо зафиксировать текущие site MFA/TOTP-OFF, verified phone, current email, password epoch, hook coverage и один физический Bitrix PDO. Никакого дефолтного permissive provider нет.
+3. Native callback защищён точным `SAVEPOINT/RELEASE v5_email_sms_stage_guard`. Если Bitrix скрыто завершил транзакцию и потерял SAVEPOINT, bridge карантинируется, новая отправка запрещена.
+4. Подтверждение `V5EmailToSmsTransitionPolicy::emailEligible()` по действующему `accepted` email и locked epoch; новый password-proven `kind='sms'` с отдельным ID, тем же пользователем/устройством и **существующим 64-hex `V5SecurityEventVersions` epoch stamp**, `sms_sent_count=0`, `sms_code_hmac=NULL`. Новый TTL не длиннее email TTL (и не более 300 сек). Затем exact CAS `accepted → cancelled, code_hmac=NULL` с `rowCount===1`, и один `COMMIT`. При ошибке/неизвестном COMMIT stage не возвращает разрешение на доставку. Повторная попытка уже cancelled email не проходит. В SQL bridge добавлены **только exact** CAS и два фиксированных savepoint templates; никаких generic email mutations.
+5. Возвращает **только** `V5CommittedEmailSmsStage` — внутренний DTO для частного server dispatcher, **не** `PendingLoginChallenge` и **не** JWT. Нет SMS transport/OTP generator/Redis/budgets/website PHP session. Только после гарантированного COMMIT приватный provider может вызвать **уже действующую site-native SMS delivery + индивидуальные антифрод-проверки**, добавить подтверждённый receipt к мобильному challenge и лишь после этого вернуть клиенту pending SMS ticket.
+6. Не использовать текущий отдельный candidate `V5MySqlSmsOutbox` как автоматическую замену site SMS budget: он содержит свою отдельную V5 budget-table, которую пользователь не согласовывал. Реальный sender binding должен повторно использовать сайт, не создавать второй лимитер. Нельзя автоматически retry неизвестный платный вызов.
+
+**Проверка:** `tests/V5EmailToSmsAtomicStageTest.php` — source-only PHP reflection allowlist + SQL-shape, lock-order/CAS/no-send, negative PDO stub without account fixtures, **не** real transaction/concurrency E2E. Targeted [Actions #40184843958](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40184843958) **SUCCESS** (коммит `65e11d6e`). Общий V5 offline workflow продолжает отдельно падать на прежнем browser JS `WebsiteEmailAccountConfirmWidgetClickTest.cjs`. Не утверждать, что все CI green.
+
+**STILL NOT DONE:** private `V5LockedEmailToSmsStageProofPort` implementation and `V5ExistingWebsiteSmsNativeTransitionPort` orchestration; independently confirmed paid-provider receipt; real Bitrix transaction/lock-order and race E2E; native security hooks/Auth Epoch coverage for current accounts; owner-approved email ledger CREATE in real `eurasia_new`; production V5 enablement. Browser MFA, V4, Restis not modified.
+
+
+
 ## 25.10.2026 — одноразовый переход без дополнительной таблицы (SOURCE-ONLY)
 
 **Было:** прежний checkpoint ошибочно формулировал отсутствие `email_challenge_id → sms_challenge_id` как обязательную потребность в новой колонке или отдельном ledger и отмечал несовпадение `AUTH_EPOCH` типов как нерешённое.
