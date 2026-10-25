@@ -9,37 +9,44 @@ namespace Evrasia\WebMfa;
  * Use the SAME existing, source-verified loopback Redis connection on site.
  *
  * Deliberately does not depend on IP attribution (currently unverified).
- * Limits are a proposed starting point; they require review before install.
+ * Owner decision 2026-10-25: NO global blocking email cap until usage
+ * statistics are reviewed. The global Redis hourly key is telemetry ONLY
+ * (successful budget reservations, not proven mail deliveries).
+ * Preserve existing per-user cooldown and hourly anti-spam protections.
  */
 final class EmailSendBudget
 {
     public const PER_USER_COOLDOWN_SECONDS = 60;
     public const PER_USER_PER_HOUR = 5;
-    public const GLOBAL_PER_HOUR = 1000;
+
 
     private const LUA = <<<'LUA'
-local limits = {
-    tonumber(ARGV[1]),
-    tonumber(ARGV[2]),
-    tonumber(ARGV[3])
-}
--- A fixed minute bucket would allow two emails one second apart when
--- the minute changes. Hold a true per-account 60-second cooldown key.
+local user_hourly_limit = tonumber(ARGV[1])
+local cooldown_seconds = tonumber(ARGV[2])
+local hourly_ttl = tonumber(ARGV[3])
+if not user_hourly_limit or user_hourly_limit < 1
+    or not cooldown_seconds or cooldown_seconds < 1
+    or not hourly_ttl or hourly_ttl < 1 then
+    return 0
+end
+-- The 60-second cooldown is rolling, not a fixed minute bucket.
 if redis.call('GET', KEYS[1]) then
     return 0
 end
-for i = 2, 3 do
-    local n = tonumber(redis.call('GET', KEYS[i]) or '0')
-    if not n or n >= limits[i] then
-        return 0
-    end
+local used = tonumber(redis.call('GET', KEYS[2]) or '0')
+if not used or used >= user_hourly_limit then
+    return 0
 end
-redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[4]))
-for i = 2, 3 do
-    local n = redis.call('INCR', KEYS[i])
-    if n == 1 then
-        redis.call('EXPIRE', KEYS[i], tonumber(ARGV[i + 3]))
-    end
+redis.call('SET', KEYS[1], '1', 'EX', cooldown_seconds)
+local user_count = redis.call('INCR', KEYS[2])
+if user_count == 1 then
+    redis.call('EXPIRE', KEYS[2], hourly_ttl)
+end
+-- Non-blocking observation only. Never GET/compare a global quota.
+-- A damaged telemetry key must not deny an otherwise permitted login.
+local aggregate = redis.pcall('INCR', KEYS[3])
+if type(aggregate) == 'number' and aggregate == 1 then
+    redis.pcall('EXPIRE', KEYS[3], hourly_ttl)
 end
 return 1
 LUA;
@@ -64,11 +71,8 @@ LUA;
         try {
             $result = $redis->eval(self::LUA, [
                 ...$keys,
-                1,
                 self::PER_USER_PER_HOUR,
-                self::GLOBAL_PER_HOUR,
                 self::PER_USER_COOLDOWN_SECONDS,
-                7200,
                 7200,
             ], 3);
             return $result === 1 || $result === '1';
