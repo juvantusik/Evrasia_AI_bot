@@ -481,6 +481,29 @@ namespace {
     rejects(fn()=>$persisted->assertSavedNativeOrderUnpaid($db,41,[...$saved,'status'=>'F']),
         'Sale row proof refuses completed order');
     ok($native->sql===[],'Sale row proof cannot query native DB under CLI');
+    $row=['ID'=>'901','USER_ID'=>'41','ACCOUNT_NUMBER'=>'V5-901',
+        'STATUS_ID'=>'N','PAYED'=>'N','CANCELED'=>'N'];
+    $matches=[$persisted::class,'matchesPersistedUnpaidRow'];
+    ok($matches($row,41,$saved),'persisted unpaid owned Sale row matches exactly');
+    foreach([
+        ['ID'=>'902'],
+        ['USER_ID'=>'42'],
+        ['ACCOUNT_NUMBER'=>'other'],
+        ['STATUS_ID'=>'F'],
+        ['PAYED'=>'Y'],
+        ['CANCELED'=>'Y'],
+        ['PAYED'=>null],
+        ['CANCELED'=>null],
+    ] as $difference) {
+        ok(!$matches([...$row,...$difference],41,$saved),
+            'changed persisted Sale state never confirms checkout');
+    }
+    ok(!$matches($row,42,$saved),'other authenticated guest cannot confirm order');
+    ok(!$matches($row,41,[...$saved,'status'=>'F']),
+        'receipt with completed status cannot be verified');
+    ok(!$matches($row,41,[...$saved,'id'=>0]),
+        'invalid receipt order ID cannot be verified');
+
     rejects(fn()=>$db->prepare('DELETE FROM ev_v5_pickup_checkout_requests WHERE USER_ID = ?'),
         'checkout request identity cannot be deleted');
     $cleanup=new \Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup();
