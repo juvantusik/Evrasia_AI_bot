@@ -34,3 +34,11 @@
 ## Next
 
 Одно узкое **только читающее** подтверждение `LOGIN_ATTEMPTS` и native mail event configuration в текущей `eurasia_new`, затем завершить native email transport/rate/Bitrix PDO exact SQL candidate без production записи. Для запуска `V5_AUTH_PRODUCTION` потребуется отдельная полная фактическая Bitrix приёмка и явное решение владельца.
+
+## CI acceptance: 25.10.2026
+
+[GitHub Actions #40175634354](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40175634354): **completed SUCCESS**, `PHP_LINT=PASS` для `V5BitrixLockedEmailOtpProof.php`, `V5MySqlConsumedEmailGrantProof.php`, `V5MySqlConsumedChallengeProof.php`; `EMAIL_NATIVE_CLASS_GRAPH=PASS`, `FIRST_FACTOR_PUBLIC_GATES=PASS`. Эта проверка **не создаёт БД/таблиц/пользователей, не инициализирует Bitrix, не отправляет email/SMS**. Результат подтверждает только исходный PHP-контракт и существующие offline gates; не реальный нативный login E2E.
+
+## Дополнительная схема transport
+
+Проверенный `deployment/website-mfa/EmailOwnershipMailTransport.php` использует event `EVRASIA_WEB_EMAIL_OWNERSHIP`, который предназначен для **подтверждения владения почтой**, а не обязательно для одноразового кода *входа*. В website `EmailLoginChallenge.php` mail sender подаётся сервером через callback. Нельзя автоматически использовать ownership event для mobile login без подтверждения действующего email-login mail transport/template на живом Bitrix. Не копировать сайт-код в публичный репозиторий.
