@@ -78,3 +78,22 @@
 В `V5BitrixEmailOtpTransport` зафиксированы **единственно допустимые** live `EVENT_NAME=EVRASIA_WEB_EMAIL_LOGIN`, `MESSAGE_ID=95` (изменения [`191c52c1`](https://github.com/juvantusik/Evrasia_AI_bot/commit/191c52c19c76b952a1cd09102d372574cd53c178) и [`bcc98ceb`](https://github.com/juvantusik/Evrasia_AI_bot/commit/bcc98ceb4ce7273d7f8a87b3c8a50aa0d9e0b176)). Случайный event или ID 94 теперь отвергается **до почтовой очереди**. [GitHub Actions #40176698067](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40176698067) `SUCCESS`, 21 email transport assertions PASS; без БД, аккаунтов, реальных писем.
 
 **Остаётся** read-only установить `SITE_ID` из `b_event_message_site`, а также формат `EMAIL_TO` и `VERIFY_CODE` placeholders в существующем шаблоне. `b_event_message.LID` может обозначать язык шаблона и НЕ является доказательством привязки к сайту. Не угадывать `s1` из unit fixture, не отправлять письма до подтверждения. `V5_AUTH_PRODUCTION=OFF`, missing `ev_v5_email_auth_challenges` blocker remains.
+
+## 25.10.2026 — verified real email login template and site mapping (read-only)
+
+Оператор подтвердил **на живой `eurasia_new`**, `FINAL_STATUS=PASS`, `FINAL_RC=0`, no DB/code writes, no user records, no mail:
+- `b_event_message.ID=95`, `EVENT_NAME=EVRASIA_WEB_EMAIL_LOGIN`, `ACTIVE=Y`, `LID=s1`.
+- `b_event_message_site.EVENT_MESSAGE_ID=95` связан с **`SITE_ID=s1`**.
+- В существующем шаблоне: placeholder `#EMAIL_TO#` = MATCH, `#VERIFY_CODE#` = MATCH. `#CODE_TTL_MINUTES#` = MISSING — **не блокирующее** отсутствие презентационной переменной; серверный email OTP candidate имеет TTL <=300 секунд, и письмо не является authority для expiry.
+- Тело письма, адресаты, коды не выводились и не передавались.
+
+### Реализовано в feature-only GitHub
+
+- [`f410ffa7`](https://github.com/juvantusik/Evrasia_AI_bot/commit/f410ffa71e595cdd3f7599383b39b62e3fb982a6) — `V5BitrixCurrentEmailLoginTemplateProof` использует **существующий** Bitrix/MySQL connection, перед каждой enqueue читает **только статус/название/язык/вычисленные SQL-флаги наличия полей**, и строго аттестует точный site-link. Тела `MESSAGE`/`EMAIL_TO` в PHP не загружаются, необязательный TTL placeholder не требуется, всё неоднозначное => DENY.
+- [`c0e11e00`](https://github.com/juvantusik/Evrasia_AI_bot/commit/c0e11e00986aa9ba2b40cd7713bcf8e962c3320d) — ровно **две** новые read-only SQL формы для mail metadata в `V5BitrixPdoCompatibilityBridge`, все прочие mail table SELECT/UPDATE/DDL запрещены; нет generic allowlist.
+- [`ebd61fd0`](https://github.com/juvantusik/Evrasia_AI_bot/commit/ebd61fd03ed550cf6bc90e70ca8e30d250adf750) — `V5BitrixEmailOtpTransport` закреплён на site **`s1`**, event `EVRASIA_WEB_EMAIL_LOGIN`, MESSAGE_ID `95`. Неверный site/template отклоняется ДО D7.
+- [`bc38c061`](https://github.com/juvantusik/Evrasia_AI_bot/commit/bc38c06150e7c9f2b911e3184812f4fce83b309a) и [`2fbb6561`](https://github.com/juvantusik/Evrasia_AI_bot/commit/2fbb656180f3494d991512cd886c4818f85d6c29) — unit-policy checks и source tests без DB, synthetic accounts, Bitrix bootstrap, or mail send.
+- [`55e79071`](https://github.com/juvantusik/Evrasia_AI_bot/commit/55e7907174f3dfa1b9c58b5a1856f8a135fa628f) — CI hook: [Actions #40177120967](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40177120967) **COMPLETED/SUCCESS**, `PASS: V5 Bitrix real email login template 95/s1 (35 assertions)`, `PASS: V5 Bitrix D7 email-login transport (22 assertions)`, `PASS: V5 native email exact SQL only (38 assertions)`, `PHP_LINT=PASS`, `EMAIL_NATIVE_CLASS_GRAPH=PASS`, `FIRST_FACTOR_PUBLIC_GATES=PASS`.
+
+**Boundary:** CI validates source contract ONLY; it has not executed D7 mail, touched production DB, created `ev_v5_email_auth_challenges` or produced a mobile V5 session. The production V5 email lifecycle remains **OFF**. Required before actual issue: same-existing-DB approved `ev_v5_email_auth_challenges` migration; verified transactional email rate port (account/email/IP/device); native real account/epoch/password/MFA and mail queue E2E; complete Bitrix V5 route and signed grant. Website/V4 remain untouched. Owner forbids any isolated database or synthetic users; no such tests should be reintroduced.
+
