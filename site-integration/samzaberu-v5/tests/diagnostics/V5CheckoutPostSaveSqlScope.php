@@ -80,6 +80,15 @@ function queryScope(array $tokens):array {
                 $upper,$tableMatch)===1)) {
             $tableName=strtoupper($tableMatch[1]);
         }
+        // Emit only the first WHERE column identifier, never any predicate
+        // value or entire SQL. This pins the gift-owner key still unknown.
+        $whereIdentifier='UNRECOGNIZED';
+        if(preg_match('/\bWHERE\s+`?([A-Z][A-Z0-9_]{0,62})`?\s*(?:=|IN\b|IS\b)/i',
+                $upper,$whereMatch)===1) {
+            $whereIdentifier=strtoupper($whereMatch[1]);
+        }
+        // Do not silently reduce compound scopes to one identifier.
+        $isCompound=preg_match('/\b(?:AND|OR)\b/i',$upper)===1;
         $targets=[];
         foreach(['B_SALE_BASKET','B_SALE_FUSER','B_SALE_ORDER',
             'B_SALE_ORDER_PROPS_VALUE','B_SALE_BASKET_PROPS'] as $name) {
@@ -96,6 +105,8 @@ function queryScope(array $tokens):array {
         $results[]=[
             'operation'=>$operation,
             'table_identifier'=>$tableName,
+            'where_identifier'=>$whereIdentifier,
+            'compound_where'=>$isCompound,
             'tables'=>$targets?:['UNRECOGNIZED'],
             'keywords'=>$where,
             'literal_segments'=>$segments,
@@ -114,6 +125,8 @@ function printQueryScope(string $source):void {
         $prefix='QUERY_'.($i+1).'_';
         echo $prefix,'OP=', $q['operation'],PHP_EOL;
         echo $prefix,'TARGET_IDENTIFIER=', $q['table_identifier'],PHP_EOL;
+        echo $prefix,'WHERE_IDENTIFIER=', $q['where_identifier'],PHP_EOL;
+        echo $prefix,'COMPOUND_WHERE=',($q['compound_where']?'YES':'NO'),PHP_EOL;
         echo $prefix,'WHITELIST_TABLES=',implode(',',$q['tables']),PHP_EOL;
         echo $prefix,'KNOWN_SQL_KEYWORDS=',implode(',',$q['keywords']),PHP_EOL;
         echo $prefix,'SQL_LITERAL_SEGMENTS=',$q['literal_segments'],PHP_EOL;
@@ -140,6 +153,9 @@ PHP;
         ||!str_contains($out,'QUERY_2_OP=DELETE')
         ||!str_contains($out,'QUERY_1_TARGET_IDENTIFIER=B_SALE_BASKET')
         ||!str_contains($out,'QUERY_2_TARGET_IDENTIFIER=B_SALE_BASKET_PROPS')
+        ||!str_contains($out,'QUERY_1_WHERE_IDENTIFIER=FUSER_ID')
+        ||!str_contains($out,'QUERY_2_WHERE_IDENTIFIER=FUSER_ID')
+        ||!str_contains($out,'QUERY_2_COMPOUND_WHERE=NO')
         ||!str_contains($out,'QUERY_1_WHITELIST_TABLES=B_SALE_BASKET')
         ||!str_contains($out,'QUERY_2_WHITELIST_TABLES=B_SALE_BASKET_PROPS')
         ||!str_contains($out,'QUERY_1_USES_SERVICE_ID=YES')
