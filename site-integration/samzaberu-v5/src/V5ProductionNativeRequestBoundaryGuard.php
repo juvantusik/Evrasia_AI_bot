@@ -53,6 +53,22 @@ final class V5ProductionNativeRequestBoundaryGuard
         return in_array($action, self::PROTECTED_POST_ACTIONS, true);
     }
 
+    /**
+     * Protected GET cart also runs locked V5 session/PIN-like checks on
+     * the native bridge. It cannot use the anonymous legal/health ingress.
+     * Authorization is separately verified by V5ParallelHttpEntry and the
+     * locked V5 session reader; this boundary never trusts bearer claims.
+     */
+    public static function isProtectedRequestRoute(string $method, string $uri): bool
+    {
+        if (self::isProtectedPostRoute($method, $uri)) {
+            return true;
+        }
+        return $method === 'GET'
+            && $uri === '/api/v5/cart'
+            && (V5RouteMap::ROUTES['GET /cart'] ?? null) === 'readCart';
+    }
+
     public function __construct(
         private readonly V5ProductionNativeTransactionPreflight $preflight,
     ) {}
@@ -79,7 +95,7 @@ final class V5ProductionNativeRequestBoundaryGuard
                 || !is_string($_SERVER['REQUEST_URI'])
                 || $_SERVER['HTTP_HOST'] !== self::PUBLIC_HOST
                 || !in_array($_SERVER['HTTPS'], ['on', '1'], true)
-                || $_SERVER['REQUEST_METHOD'] !== 'POST'
+                || !in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)
             ) {
                 return false;
             }
@@ -96,7 +112,7 @@ final class V5ProductionNativeRequestBoundaryGuard
                 return false;
             }
 
-            if (!self::isProtectedPostRoute(
+            if (!self::isProtectedRequestRoute(
                 $_SERVER['REQUEST_METHOD'],
                 $_SERVER['REQUEST_URI'],
             )) {
