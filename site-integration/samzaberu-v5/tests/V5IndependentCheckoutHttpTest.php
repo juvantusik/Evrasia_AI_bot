@@ -30,7 +30,7 @@ $jwt = str_repeat('A', 120) . '.' . str_repeat('B', 32) . '.' . str_repeat('C', 
 $body = [
     'access_token'=>$jwt,
     'request_id'=>$key,
-    'checkout'=>['rid'=>12,'payment'=>'online','time'=>'19:30','cutlery'=>2,
+    'checkout'=>['rid'=>12,'time'=>'19:30','cutlery'=>2,
         'name'=>'Masked','phone'=>'000000','dispatch'=>'pickup'],
 ];
 
@@ -40,10 +40,15 @@ $check((V5RouteMap::ROUTES['POST /cart/order'] ?? null) === 'placeOrder', 'OWN_V
 $check(V5CheckoutRequest::fromJson([...$body,'user_id'=>99]) === null, 'NO_CLIENT_USER_ID');
 $check(V5CheckoutRequest::fromJson([...$body,'fuser_id'=>7]) === null, 'NO_CLIENT_FUSER_ID');
 $check(V5CheckoutRequest::fromJson([...$body,'request_id'=>'abc']) === null, 'IDEMPOTENCY_ID');
-$check(V5CheckoutRequest::fromJson([...$body,'checkout'=>['payment'=>'online',
-    'name'=>'Masked','phone'=>'000000','time'=>'19:30','dispatch'=>'pickup']]) === null, 'RESTAURANT_REQUIRED');
-$check(V5CheckoutRequest::fromJson([...$body,'checkout'=>['rid'=>12,
-    'name'=>'Masked','phone'=>'000000','time'=>'19:30','dispatch'=>'pickup']]) === null, 'PAYMENT_REQUIRED');
+$check(V5CheckoutRequest::fromJson([...$body,'checkout'=>[
+    'name'=>'Masked','phone'=>'000000','time'=>'19:30','dispatch'=>'pickup'
+]]) === null, 'RESTAURANT_REQUIRED');
+$check(V5CheckoutRequest::fromJson([...$body,'checkout'=>[
+    ...$body['checkout'],'payment'=>'online'
+]]) === null, 'CLIENT_PAYMENT_FORBIDDEN');
+$check(V5CheckoutRequest::fromJson([...$body,'checkout'=>[
+    ...$body['checkout'],'pay_system_id'=>7
+]]) === null, 'CLIENT_PAY_SYSTEM_FORBIDDEN');
 $check(V5CheckoutRequest::fromJson([...$body,'checkout'=>[...$body['checkout'],'redirect_url'=>'https://example.org']]) === null, 'NO_UNVERIFIED_REDIRECT');
 
 $alias = $body;

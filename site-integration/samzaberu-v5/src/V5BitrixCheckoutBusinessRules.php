@@ -9,8 +9,8 @@ use RuntimeException;
  * V5-native validation of the pinned V4 Cart::validateOrderData business
  * decisions, without loading the V4 controller or its request/global state.
  *
- * Mode values and the two OrderAPI checkTime() result keys MUST be provided
- * from the actual installed V4 policy (never client-supplied). There is no
+ * Dispatch modes and OrderAPI checkTime() key come from installed policy.
+ * The server chooses the proven unpaid-pickup Sale pay-system (never client-supplied). There is no
  * permissive fallback for unknown modes, an inactive restaurant, or an
  * unknown time-check response.
  *
@@ -20,26 +20,21 @@ use RuntimeException;
 final readonly class V5BitrixCheckoutBusinessRules
 {
     /**
-     * @param array<string,int> $paymentTypes Exactly the three native site
-     *   checkout mode strings -> installed Sale pay-system IDs (2/5/7).
-     * @param list<string> $dispatchTypes Exactly the two installed modes.
+     * Pay-on-pickup native pay-system ID must be configured by the trusted site.
+     * It does NOT initiate a payment and there is no implicit fallback.
+     * @param list<string> $dispatchTypes Existing site dispatch modes.
      */
     public function __construct(
-        private array $paymentTypes,
+        private int $payOnPickupPaySystemId,
         private array $dispatchTypes,
         private string $timeFailureKey,
     ) {
-        if (count($paymentTypes) !== 3 || !array_is_list($dispatchTypes)
+        if ($payOnPickupPaySystemId < 1 || $payOnPickupPaySystemId > 2147483647
+            || !array_is_list($dispatchTypes)
             || count($dispatchTypes) !== 2
             || count(array_unique($dispatchTypes)) !== 2
-            || (static function(array $values): bool { sort($values); return $values !== [2,5,7]; })(array_values($paymentTypes))
             || preg_match('/\A[a-zA-Z_][a-zA-Z_0-9]{0,31}\z/D', $timeFailureKey) !== 1) {
             throw new RuntimeException('checkout_business_policy_missing');
-        }
-        foreach (array_keys($paymentTypes) as $name) {
-            if (!is_string($name) || preg_match('/\A[a-z0-9_-]{1,32}\z/D', $name) !== 1) {
-                throw new RuntimeException('checkout_business_policy_missing');
-            }
         }
         foreach ($dispatchTypes as $name) {
             if (!is_string($name) || preg_match('/\A[a-z0-9_-]{1,32}\z/D', $name) !== 1) {
@@ -51,7 +46,7 @@ final readonly class V5BitrixCheckoutBusinessRules
     /**
      * @param array<string,mixed> $input V5 checkout payload, not $_POST
      * @param object $basket Already loaded, server-owned native Sale basket.
-     * @return array{rid:int,name:string,phone:string,time:string,payment:string,
+     * @return array{rid:int,name:string,phone:string,time:string,
      *   dispatch:string,cutlery:int,comment:?string,rest:array{id:int,name:string},
      *   pay_system_id:int}
      */
@@ -82,10 +77,11 @@ final readonly class V5BitrixCheckoutBusinessRules
         if (preg_match('/\A(?:[01][0-9]|2[0-3]):[0-5][0-9]\z/D', $input['time']) !== 1) {
             throw new RuntimeException('checkout_time_invalid');
         }
-        $payment = $input['payment'] ?? null;
+        if (array_key_exists('payment', $input) || array_key_exists('pay_system_id', $input)) {
+            throw new RuntimeException('checkout_client_payment_forbidden');
+        }
         $dispatch = $input['dispatch'] ?? null;
-        if (!is_string($payment) || !array_key_exists($payment, $this->paymentTypes)
-            || !is_string($dispatch) || !in_array($dispatch, $this->dispatchTypes, true)) {
+        if (!is_string($dispatch) || !in_array($dispatch, $this->dispatchTypes, true)) {
             throw new RuntimeException('checkout_mode_unavailable');
         }
         $cutlery = $input['cutlery'] ?? 1;
@@ -126,7 +122,6 @@ final readonly class V5BitrixCheckoutBusinessRules
             'name' => $input['name'],
             'phone' => $input['phone'],
             'time' => $input['time'],
-            'payment' => $payment,
             'dispatch' => $dispatch,
             'cutlery' => $cutlery,
             'comment' => $comment,
@@ -147,12 +142,11 @@ final readonly class V5BitrixCheckoutBusinessRules
             'name' => $input['name'],
             'phone' => $input['phone'],
             'time' => $input['time'],
-            'payment' => $payment,
             'dispatch' => $dispatch,
             'cutlery' => $cutlery,
             'comment' => $comment,
             'rest' => ['id' => $rid, 'name' => $rest['NAME']],
-            'pay_system_id' => $this->paymentTypes[$payment],
+            'pay_system_id' => $this->payOnPickupPaySystemId,
         ];
     }
 }

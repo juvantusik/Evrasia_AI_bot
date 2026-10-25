@@ -213,3 +213,18 @@ The user supplied operator PASS from pinned production source-only /orders/set_s
 - V4 still working, API V5 AUTH OFF. No Bitrix bootstrap, DB connection/write, site file write, customer data, payment, or orders created.
 
 **NEXT exactly one focused source-only trace**: committed `tests/diagnostics/V5RestisOrderPaymentEventReader.php` at `65954b22f73274288d4457d49f1a1a74e68b5090` (blob `4258662a90e051925fd48374787dd8f8605640da`); pinned runner `tests/diagnostics/run_v5_restis_payment_event_readonly.sh` at `452b4d7b86e385f15efaa9441348668f10addfce` (blob `2f031dab3cebba96ad9bed302417fdbef15af925`). Exactly five existing production source files examined with all non-allowlisted literals masked, syntactic structure only, never require/eval. Runner verifies current V4 router SHA, five file hashes before/after, and production V5 OFF. Run once and interpret whether a paid event sets status or separate events perform each transition. Do NOT assume `PAYED=Y` implies `STATUS_ID=F` until proven, and never implement a synthetic V5 status writer to replace existing RestIS callback.
+
+
+## 12. RestIS order-paid/status and mobile pickup clarification (2026-10-25)
+
+Confirmed production SOURCE-ONLY read, `FINAL_RC=0`, `WRAPPER_RC=0`:
+
+- `local/php_interface/lib/COrder.php` method `payOrder()`: `$payment->setPaid('Y')` at line 453, then `$order->setField('STATUS_ID','F')` at line 468. This **specific method** couples payment and completed status. It does **not** prove any independent PAYED transition automatically changes status.
+
+- `local/php_interface/init.php` registers a Sale `OnSalePayOrder` callback (line 238). `order-subscribe.php` and `order-merch.php` call `COrder::payOrder()`. These are payment handler paths, NOT evidence that RestIS checkout calls `payOrder()`.
+
+- The authenticated RestIS V4 `POST /orders/set_status` independently maps status into `CSaleOrder::StatusOrder`, including `F`, without a direct `PAYED` write; cron and agents also update status. Thus `STATUS_ID=F` need not imply `PAYED=Y`.
+
+- **Business decision from user:** SamZaberu places orders only; guests pay in person at the restaurant. V5 must NOT require `payment` or `pay_system_id` from the mobile client, initiate online payment, or mark checkout as paid/completed. Server-owned configured unpaid pickup Sale pay-system may be necessary to record a payment COLLECTION item (not a charge); the real system ID is NOT VERIFIED and must be configured from site, no guessed defaults. No new V5 RestIS status writer.
+
+- V5 feature-only checkout HTTP input and business-rule class updated accordingly, with contract tests; production V4 unchanged, V5 AUTH OFF. Live checkout writer and real Bitrix validation remain **NOT IMPLEMENTED/NOT TESTED**.

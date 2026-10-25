@@ -43,7 +43,7 @@ namespace {
     };
     // Fixture enum names are NOT claimed to be the real V4 literals.
     $rules = new V5BitrixCheckoutBusinessRules(
-        ['mode_a'=>2, 'mode_b'=>5, 'mode_c'=>7],
+        2, // Fixture only: server-provided offline pickup pay-system ID.
         ['dispatch_a','dispatch_b'],
         'error'
     );
@@ -52,14 +52,13 @@ namespace {
         'name' => 'No real account',
         'phone' => '000000',
         'time' => '19:30',
-        'payment' => 'mode_b',
         'dispatch' => 'dispatch_a',
     ];
     $basket = new \stdClass();
     $result = $rules->validate($input, $basket);
     $check($result['rid'] === 12, 'SERVER_RESTAURANT_ID');
     $check($result['rest']['name'] === 'Existing restaurant', 'BITRIX_RESTAURANT_NAME');
-    $check($result['pay_system_id'] === 5, 'NATIVE_PAYMENT_ID');
+    $check($result['pay_system_id'] === 2, 'SERVER_PICKUP_PAY_SYSTEM');
     $check($result['cutlery'] === 1, 'DEFAULT_CUTLERY_ONE');
     $check($result['comment'] === null, 'EMPTY_COMMENT_NULL');
     $check(CIBlockElement::$filter === [
@@ -69,8 +68,10 @@ namespace {
         'ORDER_API_CHECKTIME');
     $check($throws(fn() => $rules->validate([...$input,'rid'=>13,'rest'=>12],$basket)),
         'RESTAURANT_ALIAS_CONFLICT');
-    $check($throws(fn() => $rules->validate([...$input,'payment'=>'unknown'],$basket)),
-        'UNKNOWN_PAYMENT_DENIED');
+    $check($throws(fn() => $rules->validate([...$input,'payment'=>'online'],$basket)),
+        'CLIENT_PAYMENT_FORBIDDEN');
+    $check($throws(fn() => $rules->validate([...$input,'pay_system_id'=>7],$basket)),
+        'CLIENT_PAY_SYSTEM_FORBIDDEN');
     $check($throws(fn() => $rules->validate([...$input,'dispatch'=>'unknown'],$basket)),
         'UNKNOWN_DISPATCH_DENIED');
     $check($throws(fn() => $rules->validate([...$input,'name'=>''],$basket)),
@@ -82,8 +83,8 @@ namespace {
     $check($throws(fn() => $rules->validate([...$input,'cutlery'=>31],$basket)),
         'EXCESS_CUTLERY_DENIED');
     $check($throws(fn() => new V5BitrixCheckoutBusinessRules(
-        ['mode_a'=>2,'mode_b'=>5],['dispatch_a','dispatch_b'],'error')),
-        'INCOMPLETE_PAYMENT_POLICY_DENIED');
+        0,['dispatch_a','dispatch_b'],'error')),
+        'MISSING_SERVER_PICKUP_POLICY_DENIED');
     OrderAPI::$timeDenied = true;
     $check($throws(fn() => $rules->validate($input,$basket)), 'TIME_REJECTED_BY_ORDER_API');
     OrderAPI::$timeDenied = false;

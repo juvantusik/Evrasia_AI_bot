@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 /**
- * Bounded JSON admission only, NOT the restaurant, payment or delivery
+ * Bounded JSON admission only, NOT the restaurant, pricing or delivery
  * validator. The installed native checkout writer must apply every existing
  * business rule to current server-side basket and account data.
  */
@@ -22,15 +22,15 @@ final class V5CheckoutRequest
         if (preg_match('/\A(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\z/D',
             $body['request_id']) !== 1) return null;
         $checkout = $body['checkout'];
-        if (count($checkout) < 6 || count($checkout) > 9
-            || !isset($checkout['payment'], $checkout['phone'], $checkout['name'],
+        if (count($checkout) < 5 || count($checkout) > 8
+            || !isset($checkout['phone'], $checkout['name'],
                 $checkout['time'], $checkout['dispatch'])
             || (!isset($checkout['rid']) && !isset($checkout['rest']))) return null;
         if (isset($checkout['rid'], $checkout['rest'])
             && (string)$checkout['rid'] !== (string)$checkout['rest']) return null;
         foreach ($checkout as $key => $value) {
             if (!in_array($key, [
-                'rid','rest','payment','time','dispatch','name','phone','comment','cutlery'
+                'rid','rest','time','dispatch','name','phone','comment','cutlery'
             ], true)) return null;
             if (is_string($value)) {
                 $max = $key === 'comment' ? 500 : ($key === 'name' ? 160 : 64);
@@ -48,8 +48,7 @@ final class V5CheckoutRequest
             return null;
         }
         if ((int)$restaurantId > 2147483647
-            || !is_string($checkout['payment']) || !is_string($checkout['dispatch'])
-            || $checkout['payment'] === '' || $checkout['dispatch'] === '') return null;
+            || !is_string($checkout['dispatch']) || $checkout['dispatch'] === '') return null;
         $checkout['rid'] = (int)$restaurantId;
         unset($checkout['rest']);
 
