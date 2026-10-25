@@ -410,23 +410,16 @@ namespace {
         'gift cleanup cannot widen predicate');
     rejects(fn()=>$db->prepare('DELETE FROM B_API_BASKET WHERE FUSER_ID = ? LIMIT 100'),
         'unreviewed cart DELETE shape forbidden');
-    $cartDelete=$db->prepare('DELETE FROM B_API_BASKET WHERE FUSER_ID = ?');
-    $giftDelete=$db->prepare('DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?');
-    ok($cartDelete instanceof PDOStatement && $giftDelete instanceof PDOStatement,
-        'two exact V4 cleanup templates permitted');
-    rejects(fn()=>$cartDelete->execute([51]),
-        'cart DELETE prohibited without V5-owned transaction');
-    ok($db->beginTransaction(),'native mock checkout transaction starts');
-    rejects(fn()=>$db->assertOwnedCheckoutTransactionContinuity(),
-        'checkout requires strict HTTP native continuity proof even after begin');
-    ok($cartDelete->execute([51]) && $giftDelete->execute([51]),
-        'both exact cleanup DML use same native mock transaction');
-    ok($native->deletedCart===[51] && $native->deletedGifts===[51],
-        'both deletes share the locked FUSER identifier');
-    ok($db->rollBack(),'native mock cleanup rollback completes');
-    ok($native->deletedCart===[] && $native->deletedGifts===[],
-        'rollback atomically restores both basket and gift table state');
-    foreach([
+    // The legacy diagnostic bridge must NOT obtain executable checkout
+    // statements even if the SQL is exactly in the allowlist. Check the
+    // shape independently without executing it or bypassing HTTP admission.
+    $reflector=new \ReflectionMethod(
+        \Evrasia\Samzaberu\V5\V5BitrixPdoCompatibilityBridge::class,
+        'assertStatementAllowed'
+    );
+    $strictSql=[
+        'DELETE FROM B_API_BASKET WHERE FUSER_ID = ?',
+        'DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?',
         'INSERT INTO ev_v5_pickup_checkout_requests (USER_ID, REQUEST_ID, INPUT_SHA256, STATE, CREATED_AT) '
             . "VALUES (?, UNHEX(?), UNHEX(?), 'pending', UTC_TIMESTAMP()) "
             . 'ON DUPLICATE KEY UPDATE USER_ID=USER_ID',
@@ -437,10 +430,28 @@ namespace {
             . "STATE='saved', ORDER_ID=?, ORDER_NUMBER=?, ORDER_STATUS=?, "
             . 'COMPLETED_AT=UTC_TIMESTAMP() '
             . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'"
-    ] as $ledgerSql) {
-        ok($db->prepare($ledgerSql) instanceof PDOStatement,
-            'only pinned checkout idempotency ledger SQL template allowed');
+    ];
+    foreach($strictSql as $sql) {
+        ok($reflector->invoke(null,$sql)===null,
+            'only exact checkout SQL template statically allowlisted');
+        rejects(fn()=>$db->prepare($sql),
+            'checkout template denied to legacy CLI diagnostic bridge');
     }
+    rejects(fn()=>$db->runStatement('DELETE FROM B_API_BASKET WHERE FUSER_ID = ?',[51]),
+        'public runStatement cannot bypass checkout scope');
+    ok($native->sql===[],'refused checkout cannot issue native SQL');
+    ok($db->beginTransaction(),'native diagnostic bridge transaction starts');
+    rejects(fn()=>$db->assertOwnedCheckoutTransactionContinuity(),
+        'checkout requires strict FPM ingress even after begin');
+    foreach($strictSql as $sql) {
+        rejects(fn()=>$db->prepare($sql),
+            'beginning legacy diagnostic transaction cannot bypass checkout scope');
+    }
+    rejects(fn()=>$db->runStatement('DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?',[51]),
+        'direct execution blocked even with diagnostic transaction active');
+    ok($native->deletedCart===[] && $native->deletedGifts===[],
+        'diagnostic scope did not mutate either table');
+    ok($db->rollBack(),'native diagnostic test transaction rolls back');
     rejects(fn()=>$db->prepare('DELETE FROM ev_v5_pickup_checkout_requests WHERE USER_ID = ?'),
         'checkout request identity cannot be deleted');
     $cleanup=new \Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup();
@@ -454,8 +465,9 @@ namespace {
         'cleanup port rejects invalid FUSER identity');
     rejects(fn()=>$cleanup->clearSavedCart($db,41,51,0),
         'cleanup port rejects invalid order ID');
-    // Actual positive class intentionally unavailable under CLI/unstable
-    // native scope; all positive SQL above is FAKE-only.
+    // Positive checkout SQL is intentionally NOT exercised in CLI: a
+    // strict FPM native transaction, locked authenticated owner and live
+    // rollback safety must be proven before executing real writes.
     echo "PASS: V5 Bitrix PDO compatibility bridge ($passed assertions)\n";
     echo "BITRIX_NATIVE_RUNTIME=FAKE\nDATABASE_CONNECTION=NO\nDATABASE_WRITE=NO\n";
     echo "PRODUCTION_WRITE=NO\nSHARED_ORM_TRANSACTION_E2E=NOT_TESTED\n";
