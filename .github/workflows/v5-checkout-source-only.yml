@@ -18,6 +18,11 @@ on:
       - site-integration/samzaberu-v5/tests/V5CartAddHttpTest.php
       - site-integration/samzaberu-v5/tests/V5CartSourceParityTest.php
       - site-integration/samzaberu-v5/src/V5BitrixRealRestisPinReader.php
+      - site-integration/samzaberu-v5/src/AuthDecision.php
+      - site-integration/samzaberu-v5/src/V5LoginWorkflow.php
+      - site-integration/samzaberu-v5/src/V5MySqlStrongSessionStore.php
+      - site-integration/samzaberu-v5/tests/AuthDecisionTest.php
+      - site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
       - site-integration/samzaberu-v5/tests/V5BitrixRealRestisPinReaderTest.php
       - site-integration/samzaberu-v5/deployment/snapshot-working-v4-for-v5-reuse.sh
       - site-integration/samzaberu-v5/src/V5CartMutationRequest.php
@@ -87,6 +92,10 @@ jobs:
             tests/V5CartAddHttpTest.php \
             tests/V5CartSourceParityTest.php \
             src/V5BitrixRealRestisPinReader.php \
+            src/AuthDecision.php \
+            src/V5LoginWorkflow.php \
+            tests/AuthDecisionTest.php \
+            tests/V5LoginWorkflowTest.php \
             tests/V5BitrixRealRestisPinReaderTest.php \
             tests/V5BitrixNativePickupMaterializerTest.php \
             tests/V5PinnedPickupPropertyPolicyTest.php \
@@ -124,3 +133,7 @@ jobs:
           bash -n site-integration/samzaberu-v5/deployment/snapshot-working-v4-for-v5-reuse.sh
       - name: Direct bonus PIN after V5 session (no repeat SMS or V4 JWT)
         run: php site-integration/samzaberu-v5/tests/V5BitrixRealRestisPinReaderTest.php
+      - name: Grandfather current legacy V4 mobile trusted devices
+        run: |
+          php site-integration/samzaberu-v5/tests/AuthDecisionTest.php
+          php site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
