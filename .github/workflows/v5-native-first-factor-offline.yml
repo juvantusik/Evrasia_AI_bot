@@ -22,6 +22,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php'
       - 'site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php'
   workflow_dispatch:
 
 permissions:
@@ -73,6 +74,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php \
             site-integration/samzaberu-v5/src/V5SeparatedFactorLifecycle.php \
             site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
+            site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php \
             site-integration/samzaberu-v5/src/V5BitrixLockedEmailOtpProof.php \
             site-integration/samzaberu-v5/src/V5MySqlConsumedEmailGrantProof.php \
             site-integration/samzaberu-v5/src/V5MySqlConsumedChallengeProof.php \
@@ -92,7 +94,8 @@ jobs:
             site-integration/samzaberu-v5/tests/AuthDecisionTest.php \
             site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php \
             site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php \
-            site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php; do
+            site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php \
+            site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php; do
             php -l "$file"
           done
           echo 'PHP_LINT=PASS'
@@ -117,6 +120,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
           php site-integration/samzaberu-v5/tests/V5AuthHttpHandlerTest.php
           php site-integration/samzaberu-v5/tests/V5SamzaberuSecondFactorPolicyTest.php
+          php site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php
           # Load the actual native EMAIL class graph, without MySQL,
           # Bitrix bootstrap, synthetic accounts or external mail.
           php -r 'require_once "site-integration/samzaberu-v5/src/V5BitrixLockedEmailOtpProof.php"; require_once "site-integration/samzaberu-v5/src/V5MySqlConsumedChallengeProof.php"; if (!class_exists("Evrasia\\Samzaberu\\V5\\V5BitrixLockedEmailOtpProof") || !class_exists("Evrasia\\Samzaberu\\V5\\V5MySqlConsumedEmailGrantProof")) exit(1);'
