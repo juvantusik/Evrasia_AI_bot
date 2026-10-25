@@ -31,6 +31,17 @@ interface V5PublicVerifiedFactorLifecyclePort extends V5PasswordBoundChallengeLi
 }
 
 /**
+ * Manual SMS recovery is NEVER implied by the presence of a generic SMS
+ * provider. Independently attest server-side website recovery eligibility,
+ * bound email challenge, verified phone and existing anti-abuse reuse.
+ * Unknown/null/false always denies manual recovery at assembly time.
+ */
+interface V5AttestedExplicitSmsRecoveryPort extends V5ExplicitSmsRecoveryPort
+{
+    public function verifiedExistingSiteRecovery(PDO $db): ?bool;
+}
+
+/**
  * Future public mobile V5 composition, deliberately NOT wired to site.php.
  * No account/client-IP allowlist or pilot header: verified per-account native
  * coverage and the full live security stack are required INSTEAD.
@@ -81,7 +92,7 @@ final class V5MySqlPublicComposition
         #[\SensitiveParameter] string $smsCodeHmacKey,
         #[\SensitiveParameter] string $emailCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
-        ?V5ExplicitSmsRecoveryPort $manualSmsRecovery = null,
+        ?V5AttestedExplicitSmsRecoveryPort $manualSmsRecovery = null,
     ): V5HttpTransportBoundary {
         // Validate native proof ownership before any release callback can run.
         // A different PDO may represent another physical Bitrix transaction,
@@ -100,6 +111,15 @@ final class V5MySqlPublicComposition
             }
         } catch (Throwable) {
             throw new InvalidArgumentException('V5 public native dependencies unavailable');
+        }
+        if ($manualSmsRecovery !== null) {
+            try {
+                if ($manualSmsRecovery->verifiedExistingSiteRecovery($db) !== true) {
+                    throw new InvalidArgumentException('V5 SMS recovery not verified');
+                }
+            } catch (Throwable) {
+                throw new InvalidArgumentException('V5 SMS recovery not verified');
+            }
         }
         $email = new V5MySqlEmailOtp(
             $db, $emailProof,
