@@ -18,6 +18,8 @@ on:
       - site-integration/samzaberu-v5/tests/V5CartAddHttpTest.php
       - site-integration/samzaberu-v5/tests/V5CartSourceParityTest.php
       - site-integration/samzaberu-v5/src/V5BitrixRealRestisPinReader.php
+      - site-integration/samzaberu-v5/src/V5ExistingMobileTrustProof.php
+      - site-integration/samzaberu-v5/tests/V5ExistingMobileTrustProofTest.php
       - site-integration/samzaberu-v5/src/AuthDecision.php
       - site-integration/samzaberu-v5/src/V5LoginWorkflow.php
       - site-integration/samzaberu-v5/src/V5MySqlStrongSessionStore.php
@@ -92,6 +94,8 @@ jobs:
             tests/V5CartAddHttpTest.php \
             tests/V5CartSourceParityTest.php \
             src/V5BitrixRealRestisPinReader.php \
+            src/V5ExistingMobileTrustProof.php \
+            tests/V5ExistingMobileTrustProofTest.php \
             src/AuthDecision.php \
             src/V5LoginWorkflow.php \
             tests/AuthDecisionTest.php \
@@ -137,3 +141,5 @@ jobs:
         run: |
           php site-integration/samzaberu-v5/tests/AuthDecisionTest.php
           php site-integration/samzaberu-v5/tests/V5LoginWorkflowTest.php
+      - name: Reuse verified existing V4 mobile trusted devices
+        run: php site-integration/samzaberu-v5/tests/V5ExistingMobileTrustProofTest.php
