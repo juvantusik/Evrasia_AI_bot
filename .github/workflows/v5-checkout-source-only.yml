@@ -16,6 +16,7 @@ on:
       - site-integration/samzaberu-v5/src/V5BitrixNativeCartMutator.php
       - site-integration/samzaberu-v5/src/V5BitrixExistingCartAdder.php
       - site-integration/samzaberu-v5/tests/V5CartAddHttpTest.php
+      - site-integration/samzaberu-v5/tests/V5CartSourceParityTest.php
       - site-integration/samzaberu-v5/src/V5CartMutationRequest.php
       - site-integration/samzaberu-v5/src/V5MySqlCartMutation.php
       - site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php
@@ -81,6 +82,7 @@ jobs:
             tests/V5NativePickupCheckoutCompositionTest.php \
             tests/V5CartMutationHttpTest.php \
             tests/V5CartAddHttpTest.php \
+            tests/V5CartSourceParityTest.php \
             tests/V5BitrixNativePickupMaterializerTest.php \
             tests/V5PinnedPickupPropertyPolicyTest.php \
             tests/V5PickupFreshBasketAssemblerTest.php; do
@@ -108,3 +110,5 @@ jobs:
         run: php site-integration/samzaberu-v5/tests/V5CartMutationHttpTest.php
       - name: V5 existing custom-cart product add contract and strict server catalog (mock-only)
         run: php site-integration/samzaberu-v5/tests/V5CartAddHttpTest.php
+      - name: V5 source-of-truth parity (custom API basket, no D7 fallback)
+        run: php site-integration/samzaberu-v5/tests/V5CartSourceParityTest.php
