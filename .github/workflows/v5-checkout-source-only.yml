@@ -9,6 +9,9 @@ on:
       - site-integration/samzaberu-v5/tests/V5BitrixSaleD7OrderBuilderTest.php
       - site-integration/samzaberu-v5/src/V5BitrixCheckoutBusinessRules.php
       - site-integration/samzaberu-v5/src/V5BitrixLockedPickupOrderWriter.php
+      - site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php
+      - site-integration/samzaberu-v5/src/V5BitrixNativePickupCartCleanup.php
+      - site-integration/samzaberu-v5/tests/V5BitrixPdoCompatibilityBridgeTest.php
       - site-integration/samzaberu-v5/src/V5BitrixNativePickupMaterializer.php
       - site-integration/samzaberu-v5/src/V5PinnedPickupPropertyPolicy.php
       - site-integration/samzaberu-v5/tests/V5PinnedPickupPropertyPolicyTest.php
@@ -40,6 +43,8 @@ jobs:
             src/V5BitrixSaleD7OrderBuilder.php \
             src/V5BitrixCheckoutBusinessRules.php \
             src/V5BitrixLockedPickupOrderWriter.php \
+            src/V5BitrixPdoCompatibilityBridge.php \
+            src/V5BitrixNativePickupCartCleanup.php \
             src/V5BitrixNativePickupMaterializer.php \
             src/V5PinnedPickupPropertyPolicy.php \
             src/V5PickupFreshBasketAssembler.php \
@@ -55,6 +60,7 @@ jobs:
             tests/V5BitrixSaleD7OrderBuilderTest.php \
             tests/V5BitrixCheckoutBusinessRulesTest.php \
             tests/V5LockedPickupOrderWriterTest.php \
+            tests/V5BitrixPdoCompatibilityBridgeTest.php \
             tests/V5BitrixNativePickupMaterializerTest.php \
             tests/V5PinnedPickupPropertyPolicyTest.php \
             tests/V5PickupFreshBasketAssemblerTest.php; do
@@ -74,3 +80,5 @@ jobs:
         run: php site-integration/samzaberu-v5/tests/V5PickupFreshBasketAssemblerTest.php
       - name: V5 pinned on-site pickup property policy (mock-only)
         run: php site-integration/samzaberu-v5/tests/V5PinnedPickupPropertyPolicyTest.php
+      - name: V5 native bridge checkout SQL and cleanup fail closed (mock-only)
+        run: php site-integration/samzaberu-v5/tests/V5BitrixPdoCompatibilityBridgeTest.php
