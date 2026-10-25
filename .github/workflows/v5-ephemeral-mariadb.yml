@@ -15,6 +15,8 @@ on:
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsReconciliationTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlSmsBridgeTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlLockedPasswordTotpTest.php'
+      - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlEmailOtpTest.php'
+      - 'site-integration/samzaberu-v5/schema/PROPOSED_ev_v5_email_auth_challenges.sql'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlPilotCompositionTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlAuthEpochInitializationTest.php'
       - 'site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlNativeEventVersionWriterTest.php'
@@ -105,6 +107,16 @@ jobs:
           # Keep every installer source pin unchanged as feature runtime evolves.
           # Only package regression reads the deployed payload; DB tests use HEAD.
           GITHUB_WORKSPACE="$GITHUB_WORKSPACE/v5-installed-payload" bash "$SCRIPT" --self-test
+
+      - name: Real disposable InnoDB email OTP issuance and consumption
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== V5 EMAIL OTP STAGING TEST ==='
+          php8.3 -l site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php
+          php8.3 -l site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlEmailOtpTest.php
+          php8.3 site-integration/samzaberu-v5/tests/integration/V5EphemeralMySqlEmailOtpTest.php
+          echo 'V5_EMAIL_OTP_INNODB=PASS'
 
       - name: Run actual InnoDB session and composed pilot tests
         shell: bash
