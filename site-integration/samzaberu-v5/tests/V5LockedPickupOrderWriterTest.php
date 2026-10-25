@@ -19,6 +19,7 @@ namespace {
     use Evrasia\Samzaberu\V5\V5NativePickupOrderMaterializerPort;
     use Evrasia\Samzaberu\V5\V5NativePickupOrderSaverPort;
     use Evrasia\Samzaberu\V5\V5NativePickupCartCleanupPort;
+    use Evrasia\Samzaberu\V5\V5PickupLocalCallCenterHandoffProofPort;
     use Evrasia\Samzaberu\V5\V5VerifiedLockedCartOwnerPort;
 
     final class FakeStatement extends \PDOStatement {
@@ -144,6 +145,19 @@ namespace {
             }
         }
     }
+    final class LocalHandoff implements V5PickupLocalCallCenterHandoffProofPort {
+        public int $proofCalls = 0;
+        public bool $failProof = false;
+        public function assertExistingBitrixHandoffAccepted(
+            \PDO $db, int $userId, int $orderId
+        ): void {
+            ++$this->proofCalls;
+            if ($this->failProof || !$db->inTransaction()
+                || $userId!==27 || $orderId < 401) {
+                throw new \RuntimeException('local_call_center_handoff_unverified');
+            }
+        }
+    }
     final class CIBlockElement {
         public static function GetList(array $sort,array $filter,
             bool $group=false,bool $pagination=false,array $select=[]): object {
@@ -177,10 +191,11 @@ namespace {
     $mat=new Materializer();
     $save=new Saver();
     $cleanup=new Cleanup();
+    $handoff=new LocalHandoff();
     $writer=new V5BitrixLockedPickupOrderWriter(
         $owner,$mat,new V5BitrixCheckoutBusinessRules(
             2,['pickup','other'],'error'
-        ),$save,$cleanup
+        ),$save,$cleanup,$handoff
     );
     $input=[
         'rid'=>12,'phone'=>'000000','name'=>'Masked',
@@ -192,12 +207,14 @@ namespace {
     $yes($first['user_id']===27 && $first['request_id']===$rid,'VERIFIED_USER');
     $yes($mat->calls===1 && $save->calls===1,'SINGLE_NATIVE_SAVE');
     $yes($cleanup->cleanupCalls===1,'ONE_POST_SAVE_CART_CLEANUP');
-    $yes($cleanup->continuityChecks===3,'BEFORE_AFTER_NATIVE_AND_CLEANUP_TRANSACTION_VERIFIED');
+    $yes($handoff->proofCalls===1,'LOCAL_BITRIX_HANDOFF_PROOF_REQUIRED');
+    $yes($cleanup->continuityChecks===5,'BEFORE_SAVE_AND_HANDOFF_AND_CLEANUP_TRANSACTION_VERIFIED');
     $replay=$writer->placeLockedOrder($db,27,$rid,array_reverse($input,true));
     $yes($replay===$first,'DURABLE_REPLAY_IDENTITY');
     $yes($save->calls===1 && $mat->calls===1,'REPLAY_DOES_NOT_SAVE');
-    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===3,
+    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===5,
         'REPLAY_DOES_NOT_CLEAN_CART');
+    $yes($handoff->proofCalls===1,'REPLAY_DOES_NOT_TRIGGER_HANDOFF_PROOF');
     $yes($throws(fn()=>$writer->placeLockedOrder(
         $db,27,$rid,[...$input,'comment'=>'changed']
     )),'RETRY_DIFFERENT_BODY_DENIED');
@@ -239,11 +256,21 @@ namespace {
         'NO_NATIVE_SAVE_BEFORE_TRANSACTION_PROOF');
     $cleanup->denyContinuity=false;
 
+    $handoff->failProof=true;
+    $yes($throws(fn()=>$writer->placeLockedOrder(
+        $db,27,'33333333333333333333333333333333',$input
+    )),'LOCAL_HANDOFF_NOT_CONFIRMED_DENIES_RECEIPT');
+    $yes($save->calls===2 && $cleanup->cleanupCalls===1,
+        'NO_CART_CLEAR_ON_UNCONFIRMED_HANDOFF');
+    $yes($db->ledger['27:33333333333333333333333333333333']['STATE']==='pending',
+        'HANDOFF_FAILURE_REQUIRES_NATIVE_ROLLBACK');
+    $handoff->failProof=false;
+
     $cleanup->failCleanup=true;
     $yes($throws(fn()=>$writer->placeLockedOrder(
         $db,27,'22222222222222222222222222222222',$input
     )),'FAILED_CART_CLEANUP_DENIES_RECEIPT');
-    $yes($save->calls===2 && $cleanup->cleanupCalls===2,
+    $yes($save->calls===3 && $cleanup->cleanupCalls===2,
         'CART_CLEANUP_ONLY_AFTER_NATIVE_SAVE');
     $yes($db->ledger['27:22222222222222222222222222222222']['STATE']==='pending',
         'FAILED_CLEANUP_REQUIRES_NATIVE_ROLLBACK');
