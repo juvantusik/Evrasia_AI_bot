@@ -35,6 +35,7 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
     private bool $opened = false;
     private bool $poisoned = false;
     private bool $guardedTerminalInProgress = false;
+    private bool $verifiedHttpIngressAtConstruction = false;
     private ?V5ProductionNativeTransactionContinuity $continuityGuard = null;
 
     public function __construct(
@@ -75,7 +76,23 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             if (!$boundary->isEligible($this->native)) {
                 throw new RuntimeException('v5_bitrix_http_scope_unverified');
             }
+            $this->verifiedHttpIngressAtConstruction = true;
         }
+    }
+
+    /**
+     * Strict HTTP ingress eligibility established on THIS native connection
+     * at construction. Not a transaction permit, not an attestation of
+     * native security mutation hooks or user authentication.
+     */
+    public function hasStrictV5HttpIngress(): bool
+    {
+        return PHP_SAPI === 'fpm-fcgi'
+            && $this->verifiedHttpIngressAtConstruction
+            && $this->requireNativeContinuity
+            && !$this->poisoned
+            && !$this->opened
+            && $this->native === \Bitrix\Main\Application::getConnection();
     }
 
     public function getAttribute(int $attribute): mixed
