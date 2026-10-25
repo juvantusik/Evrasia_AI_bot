@@ -1,6 +1,9 @@
 # Evrasia AI Bot / СамЗаберу API V5 — handoff 25 октября 2026
 ## АКТУАЛЬНАЯ ТОЧКА ПЕРЕХОДА В НОВЫЙ ЧАТ
 
+> **PRODUCTION ATTESTATION — 25.10.2026, operator-provided guarded deploy output:** production `evrasia` `/local/php_interface/website-mfa/EmailSendBudget.php` switched from verified Git blob `b20486bf4b99318cfd0ad22a6fe2db2e0cc09f01` to `cc6c1b775f584eb84b7811c7fb5ba204ba3be2aa`, `php -l` PASS and metadata preserved. Verified private root backup exists. `FINAL_STATUS=PASS`, `FINAL_RC=0`, `GLOBAL_EMAIL_BLOCKING_CAP=REMOVED_FROM_SOURCE`; user cooldown 60 sec + 5/hour remain; global Redis hourly counter is nonblocking reservation telemetry. `PHP_FPM_OPCACHE_RUNTIME_VERIFIED=NO`: do not yet claim FPM has reloaded source. No DB, Redis, SMS, mail sends, V4 or V5 AUTH enablement. This supersedes earlier checkpoint text claiming production source has not been updated. Do not repeat the same deploy; next check must be read-only OPcache/FPM evidence.
+
+
 > **ДОПОЛНЕНИЕ ПОЗДНЕЕ 25.10.2026 — РЕШЕНИЕ ВЛАДЕЛЬЦА О ПОЧТОВОМ ЛИМИТЕ.** Общий блокирующий потолок **1000 email/час УБИРАЕМ**, до сбора фактической статистики по email и SMS общие блокирующие потолки не вводить. В feature GitHub изменён только существующий `deployment/website-mfa/EmailSendBudget.php`: пер-пользовательские cooldown 60 сек и 5 писем/час сохранены; прежний общий Redis hourly counter остаётся только НЕБЛОКИРУЮЩИМ наблюдением за budget reservations, не доставленными письмами. `V5ExistingWebsiteEmailBudget` по-прежнему использует этот существующий сайт-Redis, второй limiter не допускается. Старые описания `GLOBAL_PER_HOUR=1000` ниже — исторические. **Production website НЕ менялся этим source-коммитом; live-хеш и соответствие ещё не установлены.** Не раскатывать обновление без аттестации живого файла, backup и проверки. V5 AUTH production OFF.
 
 
