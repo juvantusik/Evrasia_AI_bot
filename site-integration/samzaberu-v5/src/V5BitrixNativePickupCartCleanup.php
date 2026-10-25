@@ -73,6 +73,25 @@ final readonly class V5BitrixNativePickupCartCleanup implements V5NativePickupCa
                 throw new RuntimeException('checkout_cleanup_sql_unavailable');
             }
             $this->assertNativeTransactionContinuity($db);
+            self::assertDeleteCount($sql, $q->rowCount());
+        }
+    }
+
+    /**
+     * The just-materialized new basket must remove at least one existing
+     * API cart row. Gifts are optional, so zero removed gift rows is valid.
+     * Fail closed on negative/implausible counts; never claim a successful
+     * new checkout when nothing belonged to this FUSER in the API cart.
+     *
+     * The caller owns the still-open transaction and must roll back ALL
+     * Sale/ledger/cart changes on this exception.
+     */
+    public static function assertDeleteCount(string $sql, int $affected): void
+    {
+        if (!in_array($sql, [self::DELETE_CART, self::DELETE_GIFTS], true)
+            || $affected < 0 || $affected > 100000
+            || ($sql === self::DELETE_CART && $affected === 0)) {
+            throw new RuntimeException('checkout_cleanup_deleted_rows_unexpected');
         }
     }
 }
