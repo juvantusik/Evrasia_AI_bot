@@ -521,3 +521,21 @@ Owner's route requirement UNCHANGED: SamZaberu -> V5 -> Bitrix -> EXISTING LOCAL
 - Server runner `site-integration/samzaberu-v5/tests/diagnostics/run_v5_sale_save_delegation_readonly.sh`, commit `a9314d6186ea2b4edfac664a739f4f9e09a4181b`, Git blob `0feff4079097df461e0cce06cbec04e95d083079`: pinned source-only parser, V4 SHA and private V5 OFF guards, exact installed Sale PHP files. No production writes, no real order.
 - CI workflow `v5-sale-save-delegation-source-only.yml`, final commit `419266a97a598f83ed46f71504741fe8827d4e7f`. **GitHub Actions `40213874973` SUCCESS** PHP lint+selftest + Bash lint. Initial workflow `40213834940` failed because `php -n` disabled tokenizer on GitHub runner; fixed workflow/runner to permit built-in tokenizer while clearing auto_prepend_file/auto_append_file, final green.
 - **Operator next:** run ONLY the hash-pinned new wrapper, return `SAVE_ORDER_RECEIVER` / `SAVE_ORDERBASE_RECEIVER` and method counts, assess exact delegated save. Do not claim physical shared transaction complete from source-only shape. A live isolated savepoint continuity test or formally verified native transaction behavior still gates checkout. Do NOT create real order, deploy V5, modify V4, enable auth, send SMS/payment.
+
+
+## 29. Owner's exact installed Bitrix Sale save delegation evidence and one final narrow receiver trace (2026-10-25)
+
+**Accepted user/operator read-only output** from pinned real `root@evrasia` runner:
+`V5_SALE_SAVE_DELEGATION_SOURCE=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, mode SOURCE_ONLY_READ_ONLY, V4 unchanged, V5 AUTH OFF, no site source execution, Bitrix bootstrap, DB connection or real order.
+
+- Installed `bitrix/modules/sale/lib/order.php`, `Order::save()`: `SAVE_ORDER_CALL_SHAPES=1`, `SAVE_ORDER_RECEIVER=PARENT METHOD=save COUNT=1`, no direct transaction terminals. Thus this override calls its parent save.
+- Installed `bitrix/modules/sale/lib/orderbase.php`, `OrderBase::save()`: `SAVE_ORDERBASE_CALL_SHAPES=1`, `SAVE_ORDERBASE_RECEIVER=OTHER METHOD=save COUNT=1`, no direct transaction terminals. The **actual identity** of OTHER receiver and possible nested side effects remained unknown as of this operator output. DO NOT assume it is Basket or any other object, nor that the chain preserves the same physical transaction; `NATIVE_TRANSACTION_E2E=NOT_TESTED`.
+- Product owner boundary remains: **SamZaberu -> V5 -> Bitrix -> existing local call-center handoff**. Do NOT inspect call-center / restaurant servers; no access required.
+
+The only targeted follow-up is a static source-only CLASSIFIER for the **single `OTHER->save()` call site** in installed OrderBase::save(), plus optional last local assignment of its receiver. The classifier masks arbitrary source identifiers and all literal strings/numbers; emits only allowlisted method names/variable labels and expression shape:
+- `tests/diagnostics/V5SaleSaveReceiverSourceTrace.php`, commit `754124399b4bd872d7e917bf5295ec8a338bec49`, Git blob `60335287366d40ce4f275da330c1ed80c2e27c0d`. PHP tokenizer, no require/eval, Bitrix bootstrap or SQL.
+- Hash-pinned server runner `tests/diagnostics/run_v5_sale_save_receiver_readonly.sh`, commit `abe118d7c5d6ade1725685e34b6824d4bfd9672d`, blob `a7ed83cd20f29d5baa8d54acb3266080c155d4ef`, checks production hostname root, installed OrderBase source and exact V4 Cart/router hashes and V5 private OFF JSON before and after, parser self-test and SHA integrity.
+- Updated workflow `.github/workflows/v5-sale-save-delegation-source-only.yml`, commit `45ba8c7795a6927c73a776d845de82e1859b5c08`. **GitHub Actions run `40214209403` SUCCESS**, PHP lint, redaction self-test, bash -n.
+- Await user stdout: `ORDERBASE_SAVE_OTHER_RECEIVER_KIND`, `ORDERBASE_SAVE_OTHER_RECEIVER_SHAPE`, `ORDERBASE_SAVE_OTHER_LAST_ASSIGNMENT_SHAPE`. If identifier masked or unresolved, do NOT invent a class/type. Only then determine whether a bounded further check is worthwhile; avoid repetitive broad source scans. This is source structure only, **not** proof of native Bitrix Sale order transaction continuity.
+
+No feature runtime changes, no deployment, DB schema, real orders or payments, no user-created accounts, no call-center network calls, V4 unchanged, V5 AUTH OFF.
