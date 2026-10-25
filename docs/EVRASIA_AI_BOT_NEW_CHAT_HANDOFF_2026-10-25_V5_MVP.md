@@ -689,3 +689,24 @@ Actual installed V4 Controllers/V4/PinCode.php source was inspected in owner-upl
 - No production code, V4, V5 live copy or DB was changed by these commits; real V5 public auth is still disabled. Do not confuse feature-only direct PIN adapter + mock tests with live PIN display; NEXT required action is integrate existing V5 strong session/factor issuer into the owner's separately copied real V5 Auth and router, then bind PIN reader, test using real approved user. No new PIN-specific SMS/QR endpoint required.
 
 Also note: existing TrustedDeviceService::validateTrust() alone verifies token status but NOT that a device was enrolled after strong MFA. Old password-only V4 mobile trusted registrations exist; mobile V5 may waive repeat factor only with strong-enrollment proof. This is an established auth business requirement, not extra new hardening.
+
+
+## 39. LIVE STANDALONE V5 PIN CONTROLLER INSTALLED (2026-10-25)
+
+Operator pasted exact output of running the private V5-only PinCode.php replacement:
+\`\`\`
+V5_SOURCE=PASS
+V5_PUBLIC_ACCESS=BLOCKED
+BACKUP=/home/site_evrasia/web/evrasia.spb.ru/backups/v5-pin-before.dD4cN8d8
+V5_DIRECT_PIN_CONTROLLER=INSTALLED
+V5_PIN_SMS_SEND=NO
+V5_PIN_VK_SEND=NO
+V5_STRONG_AUTH_WIRING=PENDING
+API_V4_CHANGED=NO
+DATABASE_WRITE=NO
+FINAL_STATUS=PASS
+WRAPPER_RC=0
+\`\`\`
+The copied V5 Controller/PinCode::send() now reads verified account LOGIN, invokes existing CRestis::pincode, emits JSON {pin_code: ...}, no CSms/VK transport. Critically, Auth::verifiedStrongUserId() is NOT YET implemented in copied V5 Auth.php. Therefore PIN stays closed pending legitimate TOTP/email/SMS/trusted V5 MFA and V5-session issuance. The V5 router is still globally HTTP 503/.htaccess blocked. No claim that mobile PIN live flow works yet. No changes to V4 or DB.
+
+Next mandatory actual integration is copied Controller/V5/Auth.php, original V4 Auth::signin calls CUser::Login then \JwtAuthorization::createTokens() and registers password-only mobile device; this old flow must be replaced for V5. The website MFA is already deployed in local/components/eurasia/signin/class.php, local/components/eurasia/totp.enrollment/class.php, local/php_interface/pincode.php; use its existing native TOTP and trust mechanisms plus existing website email/SMS challenge rather than rewrite. Need inspect these **live site sources in a bounded read-only manner** before preparing the exact V5-only patch because site source not included in the 56-file V4 archive. Do not invent website function names or bypass second factor. Existing V5 strong session library exists on GitHub but public composition needs real site production bindings, not mocks.
