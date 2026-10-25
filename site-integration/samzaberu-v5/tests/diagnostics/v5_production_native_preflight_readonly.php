@@ -121,19 +121,39 @@ try {
     }
     echo "RAW_FOREIGN_ROLLBACK=PASS\n";
 
-    $_SERVER['DOCUMENT_ROOT'] = '/tmp';
-    if ($preflight->isClean($db)) {
-        throw new RuntimeException('WRONG_ROOT_ACCEPTED');
-    }
-    $_SERVER['DOCUMENT_ROOT'] = $site;
-    echo "WRONG_SITE_ROOT_DENIED=PASS\n";
-
-    if ($preflight->isClean(new \stdClass())
-        || !$preflight->isClean($db)
-        || (string)($sqlState()['tx'] ?? '') !== '0') {
-        throw new RuntimeException('FINAL_SCOPE_GUARD');
+    /*
+     * Evaluate final connection invariants BEFORE deliberately perturbing
+     * DOCUMENT_ROOT. Bitrix's request globals are mutable and are not a
+     * safe thing to change and then use for additional connection checks.
+     */
+    if ($preflight->isClean(new \stdClass())) {
+        throw new RuntimeException('WRONG_CONNECTION_ACCEPTED');
     }
     echo "WRONG_CONNECTION_DENIED=PASS\n";
+
+    if (!$preflight->isClean($db)) {
+        throw new RuntimeException('FINAL_PREFLIGHT_NOT_CLEAN');
+    }
+    echo "FINAL_PREFLIGHT_CLEAN=PASS\n";
+
+    if ((string)($sqlState()['tx'] ?? '') !== '0') {
+        throw new RuntimeException('FINAL_SQL_TRANSACTION_OPEN');
+    }
+    echo "FINAL_SQL_TRANSACTION_CLOSED=PASS\n";
+
+    /*
+     * Last active check: the wrong website root must fail closed.
+     * Restore immediately; do not invoke Bitrix again in this process.
+     */
+    $_SERVER['DOCUMENT_ROOT'] = '/tmp';
+    try {
+        if ($preflight->isClean($db)) {
+            throw new RuntimeException('WRONG_ROOT_ACCEPTED');
+        }
+    } finally {
+        $_SERVER['DOCUMENT_ROOT'] = $site;
+    }
+    echo "WRONG_SITE_ROOT_DENIED=PASS\n";
     echo "TRANSACTION_LEFT_OPEN=NO\n";
     echo "PRODUCTION_PREFLIGHT_READONLY=PASS\n";
     echo "EXCLUSIVE_REQUEST_PERMIT=NOT_IMPLEMENTED\n";
@@ -152,7 +172,9 @@ try {
         'RAW_FOREIGN_NOT_DENIED',
         'RAW_ROLLBACK_STATE',
         'WRONG_ROOT_ACCEPTED',
-        'FINAL_SCOPE_GUARD',
+        'WRONG_CONNECTION_ACCEPTED',
+        'FINAL_PREFLIGHT_NOT_CLEAN',
+        'FINAL_SQL_TRANSACTION_OPEN',
     ];
     echo 'ERROR_CODE=' . (in_array($e->getMessage(), $codes, true)
         ? $e->getMessage() : 'RUNTIME_FAILURE') . "\n";
