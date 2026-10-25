@@ -9,6 +9,8 @@ require_once __DIR__ . '/V5MySqlConsumedChallengeProof.php';
 require_once __DIR__ . '/V5MySqlSessionActions.php';
 require_once __DIR__ . '/V5MySqlSessionLogout.php';
 require_once __DIR__ . '/V5MySqlCartRead.php';
+require_once __DIR__ . '/V5MySqlProfileRead.php';
+require_once __DIR__ . '/V5BitrixLockedProfileReader.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/V5PublicFactorKindAdapter.php';
@@ -191,7 +193,8 @@ final class V5MySqlPublicComposition
             new V5MySqlSessionActions($sessions, $pinReader),
             $tokenValidator, null,
             new V5MySqlSessionLogout($sessions),
-            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader)
+            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
+            new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader())
         ));
     }
 
@@ -249,6 +252,7 @@ final class V5MySqlPublicComposition
             null,
             new V5MySqlSessionLogout($sessions),
             $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
+            new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
         ));
     }
     /**
