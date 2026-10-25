@@ -25,8 +25,9 @@ final readonly class V5SeparatedFactorLifecycle implements V5PasswordBoundChalle
     public function __construct(
         private V5PasswordBoundChallengeLifecyclePort $totp,
         private V5PasswordBoundChallengeLifecyclePort $sms,
+        private ?V5PasswordBoundChallengeLifecyclePort $email = null,
     ) {
-        if ($totp === $sms) {
+        if ($totp === $sms || ($email !== null && ($totp === $email || $sms === $email))) {
             throw new InvalidArgumentException('Separate factor issuers required');
         }
     }
@@ -53,10 +54,10 @@ final readonly class V5SeparatedFactorLifecycle implements V5PasswordBoundChalle
             throw new AuthenticationRejected('challenge_unavailable');
         }
 
-        // This feature router has no authenticated MOBILE email issuer.
-        // Never misroute an EMAIL challenge to the existing SMS provider.
-        // Public V5 remains OFF until an attested email lifecycle is injected.
-        if ($kind === ChallengeKind::EMAIL) {
+        // Never route email through the paid SMS provider. Missing verified
+        // mobile email lifecycle must fail closed; a website PHP session is
+        // not a valid mobile email provider.
+        if ($kind === ChallengeKind::EMAIL && $this->email === null) {
             throw new AuthenticationRejected('challenge_unavailable');
         }
 
@@ -67,7 +68,11 @@ final readonly class V5SeparatedFactorLifecycle implements V5PasswordBoundChalle
             throw new AuthenticationRejected('challenge_unavailable');
         }
 
-        $issuer = $kind === ChallengeKind::TOTP ? $this->totp : $this->sms;
+        $issuer = match ($kind) {
+            ChallengeKind::TOTP => $this->totp,
+            ChallengeKind::SMS => $this->sms,
+            ChallengeKind::EMAIL => $this->email,
+        };
         try {
             $ticket = $issuer->beginBound(
                 $account, $login, $password, $deviceId, $platform, $kind

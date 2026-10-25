@@ -84,8 +84,17 @@ function rejectFactor(callable $run,string $message):void {
 $totp = new CiFactorIssuer(ChallengeKind::TOTP);
 $sms = new CiFactorIssuer(ChallengeKind::SMS);
 $router = new V5SeparatedFactorLifecycle($totp,$sms);
+$email = new CiFactorIssuer(ChallengeKind::EMAIL);
+$withEmail = new V5SeparatedFactorLifecycle($totp,$sms,$email);
 $tAccount = new PasswordVerifiedAccount(41,true,true);
 $sAccount = new PasswordVerifiedAccount(41,true,false);
+$emailTicket=$withEmail->beginBound($sAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL);
+okFactor($emailTicket->kind===ChallengeKind::EMAIL && $email->bound===1
+    && $sms->bound===0,'email-only user routes to email issuer, no paid SMS');
+$email->wrongKind=ChallengeKind::SMS;
+rejectFactor(fn()=>$withEmail->beginBound($sAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL),
+    'email issuer cannot relabel challenge as paid SMS');
+$email->wrongKind=null;
 rejectFactor(fn()=>$router->beginBound($sAccount,'login','password',DEVICE,'ios',ChallengeKind::EMAIL),
     'email cannot silently use the SMS fallback provider');
 okFactor($router instanceof V5PasswordBoundChallengeLifecyclePort,'typed bound lifecycle');
@@ -176,6 +185,6 @@ try {
     okFactor(true,'factor providers must be distinct objects');
 }
 
-printf("PASS: V5 separated TOTP/SMS routing with email-first fail-closed (%d assertions)\n",$passed);
+printf("PASS: V5 separate TOTP/email/SMS routing with optional email and fail-closed (%d assertions)\n",$passed);
 echo "MODE=CI_OFFLINE_ONLY\nREAL_SMS_SENT=NO\nREAL_BITRIX_BOOTSTRAP=NO\n";
 echo "PRODUCTION_CODE_WRITE=NO\nAPI_V4_CHANGED=NO\nV5_PUBLIC_AUTH_ENABLED=NO\n";

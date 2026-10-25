@@ -40,12 +40,29 @@ interface V5PasswordBoundChallengeLifecyclePort
  * Keeping them separated avoids advertising "challenge_sent" for a message
  * that has only been queued in an outbox and not actually delivered.
  */
+/**
+ * Optional email verifier: public code consumption must first check whether
+ * a random challenge ID belongs to the independent V5 email ledger.
+ * A present email challenge MUST NEVER fall through to SMS/TOTP verification.
+ */
+interface V5EmailChallengeVerificationPort
+{
+    public function ownsEmailChallenge(string $challengeId): bool;
+    public function verifyAndConsume(
+        string $challengeId,
+        #[\SensitiveParameter] string $code,
+        string $deviceId,
+        string $platform
+    ): ?ConsumedLoginChallenge;
+}
+
 final readonly class V5MySqlChallengeHttpPort
     implements V5AtomicChallengePort, V5PasswordBoundChallengePort
 {
     public function __construct(
         private V5MySqlChallengeConsumption $consumption,
         private ?V5ChallengeLifecyclePort $lifecycle = null,
+        private ?V5EmailChallengeVerificationPort $email = null,
     ) {}
 
     public function begin(
@@ -76,6 +93,9 @@ final readonly class V5MySqlChallengeHttpPort
         #[\SensitiveParameter] string $code,
         string $deviceId,string $platform
     ):?ConsumedLoginChallenge {
+        if ($this->email !== null && $this->email->ownsEmailChallenge($challengeId)) {
+            return $this->email->verifyAndConsume($challengeId,$code,$deviceId,$platform);
+        }
         return $this->consumption->verifyAndConsume(
             $challengeId,$code,$deviceId,$platform
         );

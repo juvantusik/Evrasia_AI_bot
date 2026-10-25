@@ -75,7 +75,7 @@ interface V5EmailOtpTransportPort
  * lock b_user/epoch/challenge -> current email proof -> mark accepted.
  * The code cannot verify while the mail operation is unresolved.
  */
-final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecyclePort
+final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecyclePort, V5EmailChallengeVerificationPort
 {
     private const TABLES = [
         'b_user', 'ev_samzaberu_auth_state',
@@ -224,6 +224,16 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             // No code/recipient is written to the challenge table or log.
             $code=''; $email='';
         }
+    }
+
+    /** Public bridge routes to email only after this indexed existence check. */
+    public function ownsEmailChallenge(string $challengeId): bool
+    {
+        if (!V5LoginWorkflow::validChallengeId($challengeId)) return false;
+        $this->ready();
+        return $this->q('SELECT challenge_id FROM ev_v5_email_auth_challenges '
+            .'WHERE challenge_id = ? LIMIT 1',[$challengeId])->fetchColumn()
+            === $challengeId;
     }
 
     /** One-time consume only. MUST be used by a dedicated email HTTP bridge. */
