@@ -139,6 +139,23 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             throw new RuntimeException('v5_bitrix_commit_not_owned');
         }
         $this->assertCurrentApplicationConnection();
+        if ($this->requireNativeContinuity && !$this->guardedTerminalInProgress) {
+            $guard = $this->continuityGuard;
+            $this->continuityGuard = null;
+            if ($guard === null || !$guard->isArmed()) {
+                $this->abandonUncertainNativeTransaction();
+                throw new RuntimeException('v5_bitrix_commit_continuity_unavailable');
+            }
+            $this->guardedTerminalInProgress = true;
+            try {
+                if (!$guard->finishCommit()) {
+                    throw new RuntimeException('v5_bitrix_commit_continuity_lost');
+                }
+                return true;
+            } finally {
+                $this->guardedTerminalInProgress = false;
+            }
+        }
         try {
             if ($this->native->commitTransaction() === false) {
                 throw new RuntimeException('Native commit failed');
