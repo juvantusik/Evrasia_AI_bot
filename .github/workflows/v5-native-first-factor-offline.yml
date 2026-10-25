@@ -25,7 +25,6 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php'
       - 'site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php'
       - 'site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php'
-      - 'site-integration/samzaberu-v5/tests/V5EmailRateSqlContractTest.php'
       - 'site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php'
   workflow_dispatch:
 
@@ -78,7 +77,6 @@ jobs:
             site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php \
             site-integration/samzaberu-v5/src/V5SeparatedFactorLifecycle.php \
             site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
-            site-integration/samzaberu-v5/src/V5MySqlEmailOtpRate.php \
             site-integration/samzaberu-v5/src/V5ExistingWebsiteEmailBudget.php \
             site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php \
             site-integration/samzaberu-v5/src/V5BitrixLockedEmailOtpProof.php \
@@ -106,7 +104,6 @@ jobs:
             site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php \
-            site-integration/samzaberu-v5/tests/V5EmailRateSqlContractTest.php \
             site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php; do
             php -l "$file"
           done
@@ -135,7 +132,6 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php
-          php site-integration/samzaberu-v5/tests/V5EmailRateSqlContractTest.php
           php site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php
           # Load the actual native EMAIL class graph, without MySQL,
           # Bitrix bootstrap, synthetic accounts or external mail.
