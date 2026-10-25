@@ -11,7 +11,7 @@ use Evrasia\Samzaberu\V5\{
     V5TokenValidationPort,PasswordVerifiedAccount,MobileTrustAssessment,
     ConsumedLoginChallenge,PendingLoginChallenge,ChallengeKind,
     V5AccessJwtCodec,V5OpaqueRefreshTokens,V5HttpTransportBoundary,
-    V5AttestedExplicitSmsRecoveryPort,V5StagedHttpRequest,
+    V5AttestedExplicitSmsRecoveryPort,V5PublicVerifiedTotpLifecyclePort,V5StagedHttpRequest,
 };
 
 final class PublicWireDb extends PDO {
@@ -162,10 +162,12 @@ $siteRedisNoConnection=new class {
 };
 $emailAssembly=static function (
     PDO $connection,\Evrasia\Samzaberu\V5\V5BitrixLockedEmailOtpProof $emailNative,
-    ?V5AttestedExplicitSmsRecoveryPort $smsRecovery = null
+    ?V5AttestedExplicitSmsRecoveryPort $smsRecovery = null,
+    ?V5PublicVerifiedTotpLifecyclePort $totpOnly = null
 ) use ($server,$native,$dependencies,$ports,$access,$refresh,$siteRedisNoConnection) {
     return V5MySqlPublicComposition::buildEmailFirst(
-        $connection,$server,$native,$dependencies,$ports,$ports,$ports,$ports,
+        $connection,$server,$native,$dependencies,$ports,$ports,$ports,
+        $totpOnly ?? $ports,
         $ports,$ports,$ports,$access,$refresh,$emailNative,$siteRedisNoConnection,
         str_repeat('c',40),str_repeat('d',40),str_repeat('e',40),null,$smsRecovery
     );
@@ -259,6 +261,58 @@ publicWireCheck($deniedSms->status===503 && $manual->requests===1,
     'site recovery provider denial never returns SMS ticket or JWT');
 publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
     'manual SMS attestation and denied dispatch never call Redis or legacy SMS');
+
+// The normal email-first assembly must not require a paid SMS sender.
+// Native TOTP is mandatory; manual SMS remains closed until site-native
+// full-lifecycle + recovery attestations are separately proven.
+final class PublicWireTotpOnly implements V5PublicVerifiedTotpLifecyclePort {
+    public ?bool $ready = null;
+    public int $checks = 0;
+    public int $issued = 0;
+    public function verifiedPublicTotpLifecycle(PDO $db):?bool {
+        $this->checks++;
+        return $this->ready;
+    }
+    public function begin(int $userId,string $deviceId,string $platform,
+        ChallengeKind $kind): PendingLoginChallenge {
+        $this->issued++;throw new RuntimeException('not_installed');
+    }
+    public function beginBound(PasswordVerifiedAccount $account,string $login,
+        string $password,string $deviceId,string $platform,
+        ChallengeKind $kind): PendingLoginChallenge {
+        $this->issued++;throw new RuntimeException('not_installed');
+    }
+    public function resendSms(string $challengeId,string $deviceId,
+        string $platform): PendingLoginChallenge {
+        $this->issued++;throw new RuntimeException('not_installed');
+    }
+}
+$totpOnly=new PublicWireTotpOnly();
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof,null,$totpOnly),
+    'email-first denies unknown native TOTP-only readiness');
+$totpOnly->ready=false;
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof,null,$totpOnly),
+    'email-first denies negative native TOTP readiness');
+$totpOnly->ready=true;
+$totpOnlyTransport=$emailAssembly($db,$matchingProof,null,$totpOnly);
+publicWireCheck($totpOnlyTransport instanceof V5HttpTransportBoundary,
+    'verified TOTP/email can assemble WITHOUT paid SMS lifecycle');
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof,$manual,$totpOnly),
+    'TOTP-only provider cannot activate paid SMS even with positive recovery stub');
+$deniedFallback=$totpOnlyTransport->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/challenge/use-sms',true,
+    'application/json',$manualRequest,(string)strlen($manualRequest)
+));
+publicWireCheck($deniedFallback->status===401 && $totpOnly->issued===0,
+    'manual SMS fallback stays unavailable with TOTP-only provider');
+$deniedResend=$totpOnlyTransport->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/challenge/resend',true,
+    'application/json',$manualRequest,(string)strlen($manualRequest)
+));
+publicWireCheck($deniedResend->status===401 && $totpOnly->issued===0,
+    'SMS resend stays unavailable and cannot invoke TOTP native provider');
+publicWireCheck($manual->requests===1 && $siteRedisNoConnection->calls===0,
+    'TOTP-only gates never dispatch paid SMS or connect to site Redis');
 
 printf("PASS: V5 public mobile composition (%d synthetic assertions)\n",$checks);
 echo "REAL_NATIVE_PROVIDERS_VERIFIED=NO\n";
