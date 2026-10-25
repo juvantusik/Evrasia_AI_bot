@@ -41,3 +41,14 @@
 3. Протестировать fail-closed и чужие транзакции в изолированном Bitrix staging до any production auth enablement.
 
 Последний серверный вывод: `PREFLIGHT_TEST=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`.
+
+## Дополнение: контроль непрерывности после BEGIN (2026-10-25)
+
+**Добавлено только в GitHub-ветке, production не изменён:**
+
+- `src/V5ProductionNativeTransactionContinuity.php`: не выдаёт `V5NativeBitrixExclusiveTransactionPermitPort`; может быть вооружён **только после** уже разрешённого `V5BitrixPdoCompatibilityBridge::beginTransaction()`, при native depth=1, физическом MariaDB `@@in_transaction=1` и неизменном connection ID. Создаёт уникальный SAVEPOINT на том же master mysqli. Синхронные `finishCommit()` и `finishRollback()` проверяют continuity, освобождают SAVEPOINT и немедленно вызывают соответствующее завершение существующего моста. При потере savepoint, соединения или глубины — fail-closed / `abandonUncertainNativeTransaction`, без отката потенциально чужой транзакции.
+- `tests/diagnostics/v5_native_continuity_readonly.php`: подготовленный реальный CLI-only read-only acceptance на установленном Bitrix. Проверяет штатный rollback, read-only COMMIT, и скрытый прямой `COMMIT; START TRANSACTION READ ONLY`, при котором SQL `@@in_transaction=1` и Bitrix depth=1, но исходный savepoint исчез. Требуется отдельный серверный результат; на момент коммита тест ещё **НЕ ЗАПУЩЕН**.
+
+**Важно:** контроль непрерывности не является доказательством эксклюзивного владения запросом, не меняет `V5BitrixPdoCompatibilityBridge::commit` для остальных вызывающих его компонентов, не аттестует native security callback coverage и не включает V5 AUTH. HTTP router и V4 остаются прежними. Публичный V5 router содержит отдельные health/legal endpoints, но auth factory не подключена.
+
+**Следующее:** выполнить закреплённый CLI read-only acceptance, затем исследовать действительные native account-security mutation paths и связать continuity и lifecycle напрямую с V5-only auth handler так, чтобы неконтролируемый вызов `commit` был невозможен.
