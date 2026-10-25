@@ -53,6 +53,9 @@ final class V5MySqlPublicComposition
      * and site's existing Redis handle. Native email proof must be attached
      * to that PDO; release readiness is separately attested by the preflight.
      *
+     * Optional manual SMS recovery is a separate reviewed site-native
+     * provider; its absence fails closed, with no paid SMS dispatched.
+     *
      * No database/table is created by this factory.
      * A missing email challenge ledger fails closed in the issuer.
      *
@@ -78,6 +81,7 @@ final class V5MySqlPublicComposition
         #[\SensitiveParameter] string $smsCodeHmacKey,
         #[\SensitiveParameter] string $emailCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
+        ?V5ExplicitSmsRecoveryPort $manualSmsRecovery = null,
     ): V5HttpTransportBoundary {
         // Validate native proof ownership before any release callback can run.
         // A different PDO may represent another physical Bitrix transaction,
@@ -124,7 +128,7 @@ final class V5MySqlPublicComposition
         );
         $challenges = new V5MySqlChallengeHttpPort(
             new V5MySqlChallengeConsumption($db, $factors, $bindingKey, $smsCodeHmacKey),
-            $lifecycle, $email
+            $lifecycle, $email, $manualSmsRecovery
         );
         return new V5HttpTransportBoundary(new V5AuthHttpHandler(
             new V5LoginWorkflow($passwords, $trust, $challenges, $sessions),
