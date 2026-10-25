@@ -99,14 +99,21 @@ final readonly class V5PrivatePilotConfig
     /** Only the admitted V5 entry may invoke this after body validation. */
     public function transportFactory(): Closure
     {
-        return function (): V5HttpTransportBoundary {
+        return function (?V5StagedHttpRequest $request = null): V5HttpTransportBoundary {
+            // Keep config-integrity check FIRST. Existing explicitly denied
+            // direct factory calls remain safely rejected without bootstrap.
             if (!$this->unchangedAndCurrent()) throw new RuntimeException('v5_private_config_unavailable');
-            // Isolated PHP scope, fixed filename. No include path from a client.
-            // This reviewed file returns the fully wired EXISTING transport;
-            // merely inspecting config never executes its native composition.
-            $transport = (static function (string $path): mixed {
+            if (!$request instanceof V5StagedHttpRequest
+                || !$request->trustedHttps
+                || !str_starts_with($request->requestUri, V5RouteMap::BASE_PATH . '/')) {
+                throw new RuntimeException('v5_private_request_unavailable');
+            }
+            // The validated request is scoped to this fixed, reviewed include.
+            // No globals, no second php://input read and no client-controlled path.
+            // Sensitive rawBody and authorizationHeader must never be logged.
+            $transport = (static function (string $path, V5StagedHttpRequest $request): mixed {
                 return require $path;
-            })($this->directory . '/site-factory.php');
+            })($this->directory . '/site-factory.php', $request);
             if (!$transport instanceof V5HttpTransportBoundary)
                 throw new RuntimeException('v5_private_factory_unavailable');
             return $transport;
