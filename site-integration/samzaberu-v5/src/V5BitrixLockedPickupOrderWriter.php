@@ -166,6 +166,36 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
         ksort($checkout, SORT_STRING);
         $encoded = json_encode($checkout, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         $hashHex = hash('sha256', $encoded);
+        // The guest's b_user and strong-session rows are already locked by
+        // StrongSessionStore. Read any existing durable receipt BEFORE
+        // requiring a cart owner: checkout may have removed the FUSER row.
+        // On an unrecognized request, prove cart ownership BEFORE inserting
+        // even the pending idempotency marker.
+        $previous = $this->one($db, self::LOCK, [$userId, $normalizedId]);
+        if (is_array($previous)) {
+            if (!is_string($previous['HASH_HEX'] ?? null)
+                || !hash_equals(strtoupper($hashHex), strtoupper($previous['HASH_HEX']))) {
+                throw new RuntimeException('checkout_idempotency_conflict');
+            }
+            if (($previous['STATE'] ?? null) === 'saved') {
+                $id = self::positiveId($previous['ORDER_ID'] ?? null);
+                $number = $previous['ORDER_NUMBER'] ?? null;
+                $status = $previous['ORDER_STATUS'] ?? null;
+                if ($id === null || !is_string($number) || $number === ''
+                    || !is_string($status) || $status === '') {
+                    throw new RuntimeException('checkout_saved_receipt_invalid');
+                }
+                return $this->receipt($userId, $requestId, $id, $number, $status);
+            }
+            if (($previous['STATE'] ?? null) !== 'pending'
+                || ($previous['ORDER_ID'] ?? null) !== null) {
+                throw new RuntimeException('checkout_idempotency_pending_invalid');
+            }
+        }
+        $fuserId = $this->owner->verifiedFuserIdWithUserLock($db, $userId);
+        if (!is_int($fuserId) || $fuserId < 1 || !$db->inTransaction()) {
+            throw new RuntimeException('checkout_cart_owner_unavailable');
+        }
         $this->execute($db, self::INSERT, [$userId, $normalizedId, $hashHex]);
         $row = $this->one($db, self::LOCK, [$userId, $normalizedId]);
         if (!is_array($row)
@@ -188,14 +218,6 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             || $row['ORDER_ID'] !== null) {
             throw new RuntimeException('checkout_idempotency_pending_invalid');
         }
-        // Replays above must not require an existing basket after the
-        // original checkout cleared it. Only a NEW request needs a
-        // locked, unambiguous USER_ID -> FUSER_ID ownership proof.
-        $fuserId = $this->owner->verifiedFuserIdWithUserLock($db, $userId);
-        if (!is_int($fuserId) || $fuserId < 1 || !$db->inTransaction()) {
-            throw new RuntimeException('checkout_cart_owner_unavailable');
-        }
-
         $basket = $this->materializer->preparedBasket(
             $db, $userId, $fuserId, $siteId
         );
