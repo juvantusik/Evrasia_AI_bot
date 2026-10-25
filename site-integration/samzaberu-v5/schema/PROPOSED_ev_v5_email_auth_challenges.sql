@@ -1,6 +1,10 @@
--- STAGING ONLY. No production migrations are performed by this file.
+-- PROPOSED ONLY: not applied, not automatically approved or executable.
+-- For the EXISTING production eurasia_new database ONLY, subject to a separate
+-- express owner approval, verified backup, guarded execution and rollback plan.
+-- Do not run from GitHub CI, test databases or public HTTP endpoints.
 -- Separate mobile V5 email OTP ledger; never reuse website PHP sessions.
--- b_user, ev_samzaberu_auth_state, ev_web_email_ownership_proof MUST be InnoDB.
+-- Existing b_user, ev_samzaberu_auth_state, ev_web_email_ownership_proof
+-- MUST already be InnoDB. No existing table or API V4 may be altered.
 -- No plaintext address, OTP, password or device id is persisted.
 CREATE TABLE ev_v5_email_auth_challenges (
     challenge_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
