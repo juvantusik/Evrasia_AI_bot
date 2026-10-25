@@ -56,6 +56,18 @@ The operator subsequently ran a single guarded transactional correction for thei
 - Existing repository service `artifacts/api-server/src/services/bitrix-antifraud-loyalty-gateway.ts` calls the protected `https://evrasia.rest/api/internal/anti-fraud/loyalty`. The multicard test indicates the **site-side `/api/Balance` by Phone can report an account-level `TotalSum` when multiple active cards exist**. This is a lead to investigate, **not proof** of the website widget's own data path or why it showed the larger value.
 - Preserve `RESTIS_STATE=113` account/card resolution semantics, source precision and negative balances. Never “fix” a mismatch by multiplying/dividing by 2 without a verified source path.
 
+## Follow-up: Bitrix stored balance and personal-account convergence (2026-10-25)
+
+Live production read-only source and database checks clarified the path from the RestIS HTTP response to the user-facing site:
+
+- `local/php_interface/account.php` uses `CRestis::requestJson(..., ["Phone" => $phone])`, computes `floor((float)$arBonusData["TotalSum"])`, and `CUser::Update` persists it as `UF_BONUS` (observed around source lines 148-165). The handler executes conditionally; do not assume the account page refreshes this field on every request.
+- `local/components/eurasia/account/component.php` maps Bitrix `UF_BONUS` to `$arResult["USER"]["BONUS"]` (observed line 29); the site account template references that result. `local/php_interface/lib/User/UserHandler.php` also reads `TotalSum` and overrides `UF_BONUS` in its user data output. These are **distinct pathways**, and the exact source of the transient display mismatch was not isolated.
+- A guarded `READ ONLY` PDO transaction against the **existing** `eurasia_new` schema found the bonus custom field stored in `b_uts_user.UF_BONUS` (joined by `VALUE_ID`). The private exact-phone lookup matched **one** Bitrix user; its field equaled the previously committed RestIS card balance. Operator reported that the website was **also showing the matching balance by then**. `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, transaction rolled back, no DB writes.
+- Therefore the prior 2:1 mismatch was **transient** and later converged. **Do not declare a permanent doubling defect or prove a specific cache bug**. Potential causes include stale Bitrix `UF_BONUS`, delayed AJAX refresh, page/component cache or a transient RestIS response. Capturing time-correlated sanitized `/api/Balance` HTTP response, Bitrix field value and browser display during a *future naturally occurring* discrepancy is the appropriate next read-only evidence.
+- Keep `UF_BONUS` (integer/rounded) distinct from RestIS `CardTotalSum` (fractional signed balance); negative values and `floor()` behavior must be tested explicitly. Do not infer correctness of other API V4/V5 loyalty routes solely from current account-page convergence.
+
+Production code changes: **none**. Database writes during this follow-up: **none**. No user identifiers or actual balance values recorded in this public document.
+
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
 ```sql
