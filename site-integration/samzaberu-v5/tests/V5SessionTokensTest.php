@@ -53,6 +53,12 @@ $dec = static fn(string $s): string => (string)base64_decode(
 $token = $codec->issueForCommittedSession($session, $now);
 $claims = $codec->verifyAccess($token, $now);
 $ok('verified real V5 signature', is_array($claims));
+$emailSession = array_replace($session, ['assurance' => 'email']);
+$emailJwt = $codec->issueForCommittedSession($emailSession, $now);
+$emailClaims = $codec->verifyAccess($emailJwt, $now);
+$ok('verified email OTP JWT', is_array($emailClaims));
+$ok('email OTP server assurance', V5SessionAssurancePolicy::permitsProtectedAction($emailClaims, $emailSession, $now));
+
 $ok('strict issuer', $claims['iss'] === 'evrasia-samzaberu-v5');
 $ok('strict audience', $claims['aud'] === 'samzaberu-v5');
 $ok('access only', $claims['token_use'] === 'access');
