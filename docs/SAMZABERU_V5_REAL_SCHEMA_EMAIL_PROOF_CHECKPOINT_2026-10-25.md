@@ -66,3 +66,15 @@
 [GitHub Actions #40176277318](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40176277318): **completed SUCCESS**, `PASS: V5 Bitrix D7 email-login transport (19 assertions)`; 38 existing native exact SQL checks PASS, PHP lint PASS, native class-graph PASS, first-factor public gates PASS. **Это не запуск доставки**.
 
 Точный installed сайт email-login mail event и его активный message template пока НЕ получены из реальной `eurasia_new`; не устанавливать случайное `EVENT_NAME` или `MESSAGE_ID`. Adapter может быть подключён только после read-only attestation active event template и точного назначения email/login полей на живом Bitrix. Missing V5 email ledger и реальные auth/event-epoch hooks остаются release blockers. `V5_AUTH=OFF`, `PRODUCTION_WRITES=NO`.
+
+## 25.10.2026 — получены реальные event/template IDs для входа по email
+
+Оператор выполнил **read-only** запрос по `eurasia_new.b_event_message` на `evrasia`, `FINAL_STATUS=PASS`, `DATABASE_WRITE=NO`, `EMAIL_SENT=NO`:
+- `ID=95, EVENT_NAME=EVRASIA_WEB_EMAIL_LOGIN, ACTIVE=Y` — **существующий активный шаблон входа**.
+- `ID=94, EVENT_NAME=EVRASIA_WEB_EMAIL_OWNERSHIP, ACTIVE=Y` — **отдельное подтверждение владения почтой**, не использовать для login OTP.
+- `ID=92, EVENT_NAME=USER_OTP_AUTH_CODE, ACTIVE=N` — выключен; не переключать V5 на него.
+- `ID=93, EVENT_NAME=USER_OTP_EMAIL_CONFIRM, ACTIVE=N`; другие шаблоны не относятся к login OTP.
+
+В `V5BitrixEmailOtpTransport` зафиксированы **единственно допустимые** live `EVENT_NAME=EVRASIA_WEB_EMAIL_LOGIN`, `MESSAGE_ID=95` (изменения [`191c52c1`](https://github.com/juvantusik/Evrasia_AI_bot/commit/191c52c19c76b952a1cd09102d372574cd53c178) и [`bcc98ceb`](https://github.com/juvantusik/Evrasia_AI_bot/commit/bcc98ceb4ce7273d7f8a87b3c8a50aa0d9e0b176)). Случайный event или ID 94 теперь отвергается **до почтовой очереди**. [GitHub Actions #40176698067](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40176698067) `SUCCESS`, 21 email transport assertions PASS; без БД, аккаунтов, реальных писем.
+
+**Остаётся** read-only установить `SITE_ID` из `b_event_message_site`, а также формат `EMAIL_TO` и `VERIFY_CODE` placeholders в существующем шаблоне. `b_event_message.LID` может обозначать язык шаблона и НЕ является доказательством привязки к сайту. Не угадывать `s1` из unit fixture, не отправлять письма до подтверждения. `V5_AUTH_PRODUCTION=OFF`, missing `ev_v5_email_auth_challenges` blocker remains.
