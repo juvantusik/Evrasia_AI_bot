@@ -70,6 +70,8 @@ final class V5ProductionNativeRequestBoundaryGuard
                 (V5RouteMap::ROUTES['GET /cart'] ?? null) === 'readCart',
             '/api/v5/profile' =>
                 (V5RouteMap::ROUTES['GET /profile'] ?? null) === 'readProfile',
+            '/api/v5/orders' =>
+                (V5RouteMap::ROUTES['GET /orders'] ?? null) === 'readOrders',
             default => false,
         };
     }
