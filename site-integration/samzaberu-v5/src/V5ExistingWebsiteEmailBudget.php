@@ -22,10 +22,11 @@ use Throwable;
  * if the following V5 challenge INSERT rolls back, the user's email cooldown
  * is still charged. That is fail-closed and must be measured before rollout.
  *
- * Important: the existing EmailSendBudget has GLOBAL_PER_HOUR=1000.
- * We DO NOT pretend that it has no global ceiling or silently alter the
- * working site's rules. Enabling mobile callers against that shared ceiling
- * requires explicit owner acceptance of the combined load.
+ * Owner decision 2026-10-25: no shared blocking email hourly ceiling
+ * until observed traffic is reviewed. The existing website helper retains
+ * per-user cooldown/hour quotas; its global Redis hourly counter is now
+ * NON-BLOCKING telemetry of successful reservations only, not deliveries.
+ * Actual installed production helper still requires source attestation.
  */
 final readonly class V5ExistingWebsiteEmailBudget implements V5EmailOtpRatePort
 {
