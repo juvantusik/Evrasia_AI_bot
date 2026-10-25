@@ -7,6 +7,7 @@ on:
       - .github/workflows/v5-restis-order-create-source-only.yml
       - site-integration/samzaberu-v5/tests/diagnostics/V5RestisOrderCreateTrace.php
       - site-integration/samzaberu-v5/tests/diagnostics/run_v5_restis_order_creation_readonly.sh
+      - site-integration/samzaberu-v5/tests/diagnostics/run_v5_restis_event_boundary_readonly.sh
   workflow_dispatch:
 jobs:
   parser:
@@ -21,3 +22,4 @@ jobs:
           php -l "$dir/V5RestisOrderCreateTrace.php"
           php "$dir/V5RestisOrderCreateTrace.php" --self-test
           bash -n "$dir/run_v5_restis_order_creation_readonly.sh"
+          bash -n "$dir/run_v5_restis_event_boundary_readonly.sh"
