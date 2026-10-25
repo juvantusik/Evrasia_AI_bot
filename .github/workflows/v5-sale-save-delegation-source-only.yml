@@ -18,6 +18,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           BASE=site-integration/samzaberu-v5/tests/diagnostics
-          php -n -l "$BASE/V5SaleSaveDelegationTrace.php"
-          php -n "$BASE/V5SaleSaveDelegationTrace.php" --self-test
+          php -d auto_prepend_file= -d auto_append_file= -l "$BASE/V5SaleSaveDelegationTrace.php"
+          php -d auto_prepend_file= -d auto_append_file= "$BASE/V5SaleSaveDelegationTrace.php" --self-test
           bash -n "$BASE/run_v5_sale_save_delegation_readonly.sh"
