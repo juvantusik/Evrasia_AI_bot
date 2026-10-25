@@ -197,3 +197,14 @@ Installed runtime SHA-256:
 - `event_sync/event_sync_v2_manifest.json`: `73948b3e457753dda12ebbee762add00beeb34a4090ff29bd1efcfda40446de3`
 
 Output: `RESTIS_SQL_INSTALLED=YES`, `SQL_WORKER_LOGIN_ASSIGNED=NO`, `WORKER_ENABLED=NO`, `BITRIX_WRITER_ENABLED=NO`, `PRODUCTION_READINESS=DENIED`. The manifest is a local record; no process acts on it unless separately wired into the runtime. Next implementation: create **new dedicated SQL login** for the existing `ev_bonus_event_worker` role (do not reuse read-only `ev_bonus_sync_ro`), configure secret on Bitrix without disclosing it, then stage release gates and controlled live activation.
+
+
+## 12. Dedicated worker SQL identity and secret receipt — 2026-10-25
+
+Operator confirmed `FINAL_STATUS=PASS`, `FINAL_RC=0` on EUR-CRM SQL Server 2014 for `MODE=PRODUCTION_SQL_IDENTITY_INSTALL`: created SQL login and `RESTISBONUS` user `ev_bonus_event_worker_login`, joined only `ev_bonus_event_worker` database role with EXECUTE access to claim/ack/retry; existing read-only identity `ev_bonus_sync_ro` unchanged. SQL trigger still **disabled**. No bonus data or Bitrix writes.
+
+Operator then confirmed `FINAL_STATUS=PASS`, `WRAPPER_RC=0`, `MODE=PRODUCTION_WORKER_SECRET_INSTALL` on Bitrix `evrasia`: root-only `/root/ev-bonus-secrets/restis-outbox.json` was created through hidden SSH password prompt (password not printed); actual SQL authentication, EUR-CRM/RESTISBONUS identity, role membership and three EXECUTE permissions PASS; worker login has no direct `dbo.Cards` UPDATE permission. The read-only config `restis-ro.json` was not modified. Runtime manifest `sql_event_role_provisioned=true`; `worker_enabled=false`; `bitrix_writer_enabled=false`; manifest backup created.
+
+**Important**: successful SQL connection from the one-off installer does not prove that the installed runtime `event_worker.py` reads this new secret. NEXT: bind `connect_outbox()` to the separate private `restis-outbox.json` (preserve source read-only configuration), verify effective connection with a read-only query, and keep the trigger/worker/CAS disabled until deliberately activated. No worker execution or CAS has occurred by this receipt.
+
+Latest actual status: SQL outbox/procs and disabled capture trigger installed; worker SQL principal installed and authenticated; private runtime files and secret installed; worker/Bitrix writer still OFF; no end-to-end bonus sync yet.
