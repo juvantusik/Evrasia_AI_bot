@@ -50,9 +50,26 @@ namespace Bitrix\Sale {
     }
 }
 namespace {
-    require_once __DIR__ . '/../src/V5BitrixLockedCartReader.php';
-
     use Evrasia\Samzaberu\V5\V5BitrixLockedCartReader;
+
+    // Catch dependency/bootstrap errors too. Never print SQL, account data or
+    // stack traces; exact error class and source location suffice for fixing.
+    set_exception_handler(static function (\Throwable $error): void {
+        echo 'CART_TEST_EXCEPTION_TYPE=' . get_class($error) . "\n";
+        echo 'CART_TEST_EXCEPTION_FILE=' . basename($error->getFile()) . "\n";
+        echo 'CART_TEST_EXCEPTION_LINE=' . $error->getLine() . "\n";
+        exit(2);
+    });
+    register_shutdown_function(static function (): void {
+        $fatal = error_get_last();
+        if (is_array($fatal) && in_array($fatal['type'] ?? null,
+            [E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR], true)) {
+            echo 'CART_TEST_FATAL_FILE=' . basename((string)($fatal['file'] ?? '')) . "\n";
+            echo 'CART_TEST_FATAL_LINE=' . (int)($fatal['line'] ?? 0) . "\n";
+        }
+    });
+
+    require_once __DIR__ . '/../src/V5BitrixLockedCartReader.php';
 
     // Mock PDO and Bitrix D7 objects, no account, connection, SQL or fixture DB.
     final class CartReadStatement extends PDOStatement
