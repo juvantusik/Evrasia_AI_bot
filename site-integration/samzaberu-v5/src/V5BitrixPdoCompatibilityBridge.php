@@ -127,8 +127,12 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             }
             return true;
         } catch (Throwable) {
-            // Unknown begin outcome: never reuse this connection for V5.
+            // Unknown BEGIN outcome: never advertise V5 ownership after
+            // a failed strict continuity arm. Never roll back an unknown owner.
             $this->poisoned = true;
+            if ($this->requireNativeContinuity) {
+                $this->opened = false;
+            }
             throw new RuntimeException('v5_bitrix_begin_unavailable');
         }
     }
