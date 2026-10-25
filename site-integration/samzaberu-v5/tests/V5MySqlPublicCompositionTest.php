@@ -125,6 +125,78 @@ publicWireCheck($reply->status===401,'synthetic login reaches real handler and r
 publicWireCheck($ports->passwordCalls===1 && $ports->challengeCalls===0,
     'bad first factor never begins challenge or sends SMS');
 
+
+/**
+ * Source-only EMAIL-first assembly regression. No accounts, connections,
+ * Bitrix bootstrap, Redis queries, SQL, SMTP or OTP delivery are used.
+ * All providers below deliberately refuse authentication.
+ */
+$denyHash = new class implements \Evrasia\Samzaberu\V5\V5PasswordHashComparatorPort {
+    public function matches(string $storedHash,string $enteredPassword):bool{return false;}
+};
+$denyAdmission = new class implements \Evrasia\Samzaberu\V5\V5PasswordLoginAdmissionPort {
+    public function permitsAfterProof(int $userId,string $enteredPassword):?bool{return null;}
+};
+$denyPhone = new class implements \Evrasia\Samzaberu\V5\V5PhoneLoginNormalizerPort {
+    public function normalizeForLookup(string $input):?string{return null;}
+};
+$denyPolicy = new class implements \Evrasia\Samzaberu\V5\V5ExistingLoginPolicyPort {
+    public function permits(int $userId,int $loginAttempts):?bool{return null;}
+};
+$denyNoMfa = new class implements \Evrasia\Samzaberu\V5\V5NoMfaFallbackPolicyPort {
+    public function permitsPasswordPlusSms(int $userId):?bool{return null;}
+};
+$denyHooks = new class implements \Evrasia\Samzaberu\V5\V5NativeSecurityHookCoveragePort {
+    public function fullyCovered(PDO $db,int $userId):?bool{return null;}
+};
+$makeProof=static fn(PDO $connection)=>new \Evrasia\Samzaberu\V5\V5BitrixLockedEmailOtpProof(
+    $connection,$denyHash,$denyAdmission,$denyPhone,$denyPolicy,$denyNoMfa,$denyHooks,
+    str_repeat('p',40),str_repeat('q',40)
+);
+$siteRedisNoConnection=new class {
+    public int $calls=0;
+    public function eval(string $lua,array $args,int $numKeys):mixed {
+        $this->calls++;
+        return false;
+    }
+};
+$emailAssembly=static function (
+    PDO $connection,\Evrasia\Samzaberu\V5\V5BitrixLockedEmailOtpProof $emailNative
+) use ($server,$native,$dependencies,$ports,$access,$refresh,$siteRedisNoConnection) {
+    return V5MySqlPublicComposition::buildEmailFirst(
+        $connection,$server,$native,$dependencies,$ports,$ports,$ports,$ports,
+        $ports,$ports,$ports,$access,$refresh,$emailNative,$siteRedisNoConnection,
+        str_repeat('c',40),str_repeat('d',40),str_repeat('e',40)
+    );
+};
+$matchingProof=$makeProof($db);
+$otherConnection=new PublicWireDb();
+$foreignProof=$makeProof($otherConnection);
+publicWireCheck($matchingProof->boundTo($db) && !$matchingProof->boundTo($otherConnection),
+    'native email proof exposes strict physical PDO identity without executing SQL');
+$earlier=$ports->passwordCalls;
+publicWireReject(fn()=>$emailAssembly($db,$foreignProof),
+    'email-first refuses native proof from a foreign Bitrix transaction');
+publicWireCheck($ports->passwordCalls===$earlier && $siteRedisNoConnection->calls===0,
+    'foreign PDO denial cannot access password or Redis providers');
+$native->verified=false;
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof),
+    'email-first denies without native release attestation');
+$native->verified=true;
+$dependencies->verified=false;
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof),
+    'email-first denies without complete public dependency attestation');
+$dependencies->verified=true;
+$ports->publicFactorReady=null;
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof),
+    'email-first denies without independently attested TOTP and SMS lifecycle');
+$ports->publicFactorReady=true;
+$emailTransport=$emailAssembly($db,$matchingProof);
+publicWireCheck($emailTransport instanceof V5HttpTransportBoundary,
+    'same-PDO email-first providers assemble the existing HTTP boundary');
+publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
+    'email-first composition does not send email or SMS or call Redis');
+
 printf("PASS: V5 public mobile composition (%d synthetic assertions)\n",$checks);
 echo "REAL_NATIVE_PROVIDERS_VERIFIED=NO\n";
 echo "PUBLIC_FACTORY_INSTALLED=NO\n";
