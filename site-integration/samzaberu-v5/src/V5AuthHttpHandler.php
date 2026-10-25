@@ -7,6 +7,7 @@ require_once __DIR__ . '/V5LoginWorkflow.php';
 require_once __DIR__ . '/V5LegalConsentContract.php';
 require_once __DIR__ . '/V5PublicLegalCodeValidation.php';
 require_once __DIR__ . '/V5CheckoutRequest.php';
+require_once __DIR__ . '/V5CartMutationRequest.php';
 
 use JsonException;
 use Throwable;
@@ -53,6 +54,17 @@ interface V5SessionLogoutPort
  * Server-validated V5 cart GET, no caller-supplied FUSER or user ID.
  * The native business-service adapter is required; no V4-controller/JWT call.
  */
+/**
+ * Existing-basket-line mutation after verified V5 JWT, native user lock and
+ * same transaction. Success is only returned after commit, not upon staging.
+ */
+interface V5CartHttpMutationPort
+{
+    public function changeVerifiedCartItem(
+        #[\SensitiveParameter] string $accessJwt, int $itemId, ?int $quantity
+    ): ?bool;
+}
+
 interface V5CartHttpReaderPort
 {
     /** @return array{items:list<array<string,mixed>>,total:array<string,mixed>}|null */
@@ -134,6 +146,7 @@ final readonly class V5AuthHttpHandler
         private ?V5OrdersHttpReaderPort $ordersReader = null,
         private ?V5OrderDetailHttpReaderPort $orderDetailReader = null,
         private ?V5OrderPlaceHttpPort $orderPlace = null,
+        private ?V5CartHttpMutationPort $cartMutation = null,
     ) {}
 
     /**
@@ -183,6 +196,9 @@ final readonly class V5AuthHttpHandler
                 'placeOrder' => $this->orderPlace === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->placeOrder($body),
+                'setCartItemQuantity', 'removeCartItem' => $this->cartMutation === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->changeCartItem($body, $action),
                 'validateLegalConsents' => $this->publicLegalConsents === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->validateLegalConsents($body),
@@ -363,6 +379,44 @@ final readonly class V5AuthHttpHandler
      * require the existing site business validator, Sale D7 persistence and
      * payment policy in the injected native writer (not implemented here).
      */
+    /**
+     * Native V5-only existing item mutation. This is NOT an add-by-product
+     * endpoint; the client supplies only its already assigned basket item ID.
+     * Server supplies locked FUSER, price and user identity.
+     */
+    private function changeCartItem(array $body, string $action): V5HttpReply
+    {
+        $request = V5CartMutationRequest::parse($body, $action);
+        if ($request === null) {
+            return new V5HttpReply(400, ['error'=>'invalid_request']);
+        }
+        $jwt = $request['access_token'];
+        if (strlen($jwt) < 110 || strlen($jwt) > 4096
+            || preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D', $jwt)!==1) {
+            return new V5HttpReply(401, ['error'=>'authentication_failed']);
+        }
+        try {
+            $saved=$this->cartMutation->changeVerifiedCartItem(
+                $jwt, $request['item_id'], $request['quantity']
+            );
+            if ($saved === null) {
+                return new V5HttpReply(401, ['error'=>'authentication_failed']);
+            }
+            if ($saved !== true) {
+                return new V5HttpReply(503, ['error'=>'temporarily_unavailable']);
+            }
+            $result=['item_id'=>$request['item_id']];
+            if ($request['quantity']===null) {
+                $result['removed']=true;
+            } else {
+                $result['quantity']=$request['quantity'];
+            }
+            return new V5HttpReply(200,['item'=>$result]);
+        } catch (Throwable) {
+            return new V5HttpReply(503,['error'=>'temporarily_unavailable']);
+        }
+    }
+
     private function placeOrder(array $body): V5HttpReply
     {
         $normalized = V5CheckoutRequest::fromJson($body);
