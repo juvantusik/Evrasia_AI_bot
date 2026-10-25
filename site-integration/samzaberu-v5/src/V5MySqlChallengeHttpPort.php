@@ -109,7 +109,16 @@ final readonly class V5MySqlChallengeHttpPort
     public function requestSmsInsteadOfEmail(
         string $emailChallengeId,string $deviceId,string $platform
     ):PendingLoginChallenge {
-        if ($this->manualSmsRecovery === null) {
+        // A client may not request a paid SMS using an arbitrary 64-hex ID
+        // or an existing SMS/TOTP challenge. The email ledger is the sole
+        // authority for factor identity; its absence MUST fail closed.
+        // ownsEmailChallenge is a primary-key existence check ONLY:
+        // the private provider still MUST lock/recheck accepted state,
+        // current account/epoch, device, verified phone and TOTP absence.
+        if ($this->manualSmsRecovery === null
+            || $this->email === null
+            || !V5LoginWorkflow::validChallengeId($emailChallengeId)
+            || !$this->email->ownsEmailChallenge($emailChallengeId)) {
             throw new AuthenticationRejected('challenge_unavailable');
         }
         return $this->manualSmsRecovery->requestSmsInsteadOfEmail(
