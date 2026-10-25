@@ -66,6 +66,16 @@ interface V5LockedCartReaderPort
     public function readLockedCart(PDO $db, int $userId): ?array;
 }
 
+/**
+ * Native Bitrix profile fields, read in the same locked V5 JWT/session scope.
+ * V4 user endpoints and V4 token parsing are never used.
+ */
+interface V5LockedProfileReaderPort
+{
+    /** @return array<string,int|string|null>|null */
+    public function readLockedProfile(PDO $db, int $userId): ?array;
+}
+
 final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
 {
     private const TABLES = [
@@ -325,6 +335,42 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                     && is_array($snapshot['total'])
                     && !array_is_list($snapshot['total'])
                     ? $snapshot : null;
+            });
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Independent V5 profile read under the existing strong V5 bearer,
+     * Bitrix b_user, AUTH_EPOCH and session row locks.
+     *
+     * @return array<string,int|string|null>|null
+     */
+    public function readProfileForAccess(
+        #[\SensitiveParameter] string $accessJwt,
+        V5LockedProfileReaderPort $reader
+    ): ?array {
+        try {
+            $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());
+            if ($claims === null) return null;
+            $this->assertReady();
+            $userId = self::positive($claims['sub'] ?? null);
+            if ($userId === null) return null;
+            return $this->transaction(function () use ($claims, $userId, $reader): ?array {
+                $now = $this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch = $this->lockedEpoch($userId);
+                $row = $this->lockedSession($claims['sid']);
+                $state = self::state($row, $userId, $now);
+                if ($state === null || $epoch !== $state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
+                ) return null;
+
+                $profile = $reader->readLockedProfile($this->db, $userId);
+                return is_array($profile) && ($profile['id'] ?? null) === $userId
+                    ? $profile : null;
             });
         } catch (Throwable) {
             return null;
