@@ -109,9 +109,11 @@ interface V5PasswordProofPort
 }
 
 /**
- * Both facts must be checked server-side against current trust token version,
- * token hash, account, device binding, revoked status and strong enrollment.
- * Old V4 password-only registrations MUST NOT count as strong enrollment.
+ * Existing V4 mobile trust registrations are grandfathered, including
+ * AUTH_PASSWORD-origin rows, provided the CURRENT token is server-verified
+ * for this account and device, active, unexpired and not revoked.
+ * New V5 trust issuance is permitted only after verified TOTP/email/SMS.
+ * A bare device_id is never proof of an existing trusted device.
  */
 interface V5TrustProofPort
 {
@@ -258,20 +260,19 @@ final readonly class V5LoginWorkflow
             throw new AuthenticationRejected('authentication_failed');
         }
 
-        // Validate current STRONG enrollment first, irrespective of native
-        // TOTP enrollment. Device ID without a current trust token is NEVER
-        // sufficient, and the issuing transaction re-checks trust + epoch.
+        // Accept a CURRENT valid mobile trust regardless of its historical
+        // registration method, including password-origin V4 registrations.
+        // Only new V5 trust issuance requires TOTP/email/SMS.
+        // Device ID alone is not sufficient; issuer rechecks token + epoch.
         $validTrust = false;
-        $mfaEnrolled = false;
         if ($trustToken !== null && $trustToken !== '' && strlen($trustToken) <= 1024) {
             $assessment = $this->trust->evaluate(
                 $account->userId, $deviceId, $platform, $trustToken
             );
             $validTrust = $assessment->tokenValid;
-            $mfaEnrolled = $assessment->strongEnrollmentProven;
         }
         $decision = AuthDecision::afterPassword(
-            true, true, $account->nativeTotpActive, $validTrust, $mfaEnrolled
+            true, true, $account->nativeTotpActive, $validTrust, false
         );
 
         if ($decision === NextFactor::COMPLETE) {
