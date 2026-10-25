@@ -54,7 +54,9 @@ namespace Bitrix\Sale {
     }
     final class FakePayment {
         public array $fields = [];
+        public static bool $paid = false;
         public function setField(string $key, mixed $value): bool { $this->fields[$key] = $value; return true; }
+        public function isPaid(): bool { return self::$paid; }
     }
     final class FakePaymentCollection {
         public FakePayment $payment;
@@ -75,6 +77,7 @@ namespace Bitrix\Sale {
     final class Order {
         public static ?self $last = null;
         public static bool $failSave = false;
+        public static bool $paid = false;
         public static int $saves = 0;
         public FakeShipmentCollection $shipments;
         public FakePaymentCollection $payments;
@@ -96,9 +99,11 @@ namespace Bitrix\Sale {
         public function getCurrency(): string { return 'RUB'; }
         public function getPropertyCollection(): FakePropertyCollection { return $this->properties; }
         public function save(): FakeResult { self::$saves++; return new FakeResult(!self::$failSave); }
+        public function isPaid(): bool { return self::$paid; }
         public function getId(): int { return 901; }
         public function getField(string $field): ?string {
-            return ['ACCOUNT_NUMBER'=>'V5-901','STATUS_ID'=>'N'][$field] ?? null;
+            return ['ACCOUNT_NUMBER'=>'V5-901','STATUS_ID'=>'N',
+                'PAYED'=>self::$paid ? 'Y' : 'N'][$field] ?? null;
         }
     }
 }
@@ -154,6 +159,14 @@ namespace {
     Order::$failSave = true;
     $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3, ['PHONE'=>'x'])), 'SAVE_FAILURE_DENIED');
     Order::$failSave = false;
+    Order::$paid = true;
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3,
+        ['PHONE'=>'x'])), 'PAID_ON_CREATE_DENIED');
+    Order::$paid = false;
+    \Bitrix\Sale\FakePayment::$paid = true;
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3,
+        ['PHONE'=>'x'])), 'PAID_PAYMENT_ON_CREATE_DENIED');
+    \Bitrix\Sale\FakePayment::$paid = false;
     echo 'V5_NATIVE_D7_ORDER_BUILDER=PASS', PHP_EOL;
     echo 'D7_BUILDER_ASSERTIONS=', $count, PHP_EOL;
     echo 'BITRIX_D7_ADAPTER_EXERCISED=MOCK_ONLY', PHP_EOL;

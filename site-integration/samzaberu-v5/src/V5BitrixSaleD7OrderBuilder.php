@@ -135,10 +135,18 @@ final class V5BitrixSaleD7OrderBuilder
             || $saved->isSuccess() !== true) {
             throw new RuntimeException('checkout_save_failed');
         }
+        // In SamZaberu the guest pays AT the restaurant. Creating a native
+        // Bitrix payment collection entry must NOT mark it paid or completed.
+        // A hook that changes PAID/STATUS during the same save is a hard stop.
+        if (!method_exists($order, 'isPaid') || $order->isPaid() !== false
+            || $order->getField('PAYED') !== 'N'
+            || !method_exists($payment, 'isPaid') || $payment->isPaid() !== false) {
+            throw new RuntimeException('checkout_unexpected_paid_order');
+        }
         $id = $order->getId();
         $number = $order->getField('ACCOUNT_NUMBER');
         $status = $order->getField('STATUS_ID');
-        if (!is_int($id) || $id < 1
+        if (!is_int($id) || $id < 1 || !in_array($status, ['N','P'], true)
             || !is_string($number) || $number === '' || strlen($number) > 64
             || !is_string($status) || $status === '' || strlen($status) > 16) {
             throw new RuntimeException('checkout_save_receipt_invalid');
