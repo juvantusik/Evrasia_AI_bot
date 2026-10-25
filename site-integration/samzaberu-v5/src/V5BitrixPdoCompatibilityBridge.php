@@ -541,6 +541,8 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             . "STATE='saved', ORDER_ID=?, ORDER_NUMBER=?, ORDER_STATUS=?, "
             . 'COMPLETED_AT=UTC_TIMESTAMP() '
             . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'",
+        'SELECT ID, USER_ID, ACCOUNT_NUMBER, STATUS_ID, PAYED, CANCELED '
+            . 'FROM b_sale_order WHERE ID = ? AND USER_ID = ? LIMIT 2 FOR UPDATE',
         'DELETE FROM B_API_BASKET WHERE FUSER_ID = ?',
         'DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?',
     ];
