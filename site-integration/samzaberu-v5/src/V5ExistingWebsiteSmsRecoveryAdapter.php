@@ -81,6 +81,23 @@ interface V5ExistingWebsiteSmsNativeTransitionPort
         string $deviceId,
         string $platform,
     ): PendingLoginChallenge;
+
+    /**
+     * READ-ONLY post-commit attestation; MUST NOT send or retry an SMS.
+     * Independently confirm this exact new challenge is the current
+     * password-proven SMS challenge for the original locked/consumed email
+     * and device, with server-side OTP HMAC and provider-accepted send state.
+     * Site CSms::send() returning NULL/false/unknown is NEVER success;
+     * local queued, claimed or unknown states are NEVER success.
+     * Missing provider acceptance/authoritative receipt => NULL/FALSE.
+     */
+    public function confirmedCurrentSmsSend(
+        PDO $db,
+        string $emailChallengeId,
+        string $smsChallengeId,
+        string $deviceId,
+        string $platform,
+    ): ?bool;
 }
 
 /**
@@ -91,6 +108,8 @@ interface V5ExistingWebsiteSmsNativeTransitionPort
  *
  * This class performs NO SQL, Redis reservation, SMS generation/sending,
  * Bitrix login, session creation or website PHP modifications by itself.
+ * A staged SMS row or a raw site CSms::send() result alone never causes
+ * a client-visible ticket: post-commit independent send attestation is REQUIRED.
  */
 final readonly class V5ExistingWebsiteSmsRecoveryAdapter
     implements V5AttestedExplicitSmsRecoveryPort
@@ -130,7 +149,14 @@ final readonly class V5ExistingWebsiteSmsRecoveryAdapter
                 $this->db, $emailChallengeId, $deviceId, $platform
             );
             if ($ticket->kind !== ChallengeKind::SMS
-                || hash_equals($emailChallengeId, $ticket->challengeId)) {
+                || hash_equals($emailChallengeId, $ticket->challengeId)
+                || $this->native->confirmedCurrentSmsSend(
+                    $this->db,
+                    $emailChallengeId,
+                    $ticket->challengeId,
+                    $deviceId,
+                    $platform
+                ) !== true) {
                 throw new AuthenticationRejected('challenge_unavailable');
             }
             return $ticket;
