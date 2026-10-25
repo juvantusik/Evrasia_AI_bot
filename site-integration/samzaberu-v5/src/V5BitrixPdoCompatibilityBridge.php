@@ -278,6 +278,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             throw new RuntimeException('v5_bitrix_connection_poisoned');
         }
         self::assertStatementAllowed($query);
+        // Checkout SQL may never be prepared by legacy CLI diagnostics or
+        // V5 auth adapters without the strict FPM-owned transaction.
+        $this->assertCheckoutSqlScope($query);
         return new V5BitrixEmulatedStatement($this, $query);
     }
 
@@ -307,6 +310,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         }
         // Even direct callers may not bypass prepare()'s allowlist.
         self::assertStatementAllowed($template);
+        // runStatement() is public for the PDOStatement wrapper; recheck
+        // here so a direct caller cannot bypass prepare() admission.
+        $this->assertCheckoutSqlScope($template);
         $this->assertCurrentApplicationConnection();
         $sql = $this->encodeParameters($template, $params);
         $this->assertStrictStatementContinuity();
@@ -349,6 +355,28 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         } catch (Throwable) {
             throw new RuntimeException('v5_bitrix_sql_execution_unavailable');
         }
+    }
+
+    /**
+     * A separate, stricter admission policy for V5 checkout INSERT/SELECT/
+     * UPDATE and its two cart/gift DELETE templates. The generic auth
+     * diagnostic bridge can NEVER execute these, even after mock BEGIN.
+     */
+    private function assertCheckoutSqlScope(string $sql): void
+    {
+        if (!in_array($sql, self::PICKUP_CHECKOUT_SQL, true)) {
+            return;
+        }
+        if (PHP_SAPI !== 'fpm-fcgi'
+            || !$this->verifiedHttpIngressAtConstruction
+            || !$this->requireNativeContinuity
+            || !$this->opened || $this->poisoned
+            || !$this->continuityGuard instanceof V5ProductionNativeTransactionContinuity
+            || !$this->continuityGuard->isArmed()
+            || !$this->ownsCurrentNativeTransaction($this->native)) {
+            throw new RuntimeException('v5_checkout_sql_scope_unverified');
+        }
+        $this->assertCurrentApplicationConnection();
     }
 
     private function assertCurrentApplicationConnection(): void
