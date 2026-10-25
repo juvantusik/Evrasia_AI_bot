@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5ProductionNativeTransactionPreflight.php';
+require_once __DIR__ . '/V5RouteMap.php';
 
 use Throwable;
 
@@ -82,6 +83,15 @@ final class V5ProductionNativeRequestBoundaryGuard
                 return false;
             }
 
+            $relative = substr($_SERVER['REQUEST_URI'], strlen(V5RouteMap::BASE_PATH));
+            $action = V5RouteMap::ROUTES['POST ' . $relative] ?? null;
+            if (!in_array($action, [
+                'signin', 'verifyChallenge', 'resendChallenge',
+                'requestSmsFallback', 'refresh', 'logout',
+                'validateToken', 'showBonusPin',
+            ], true)) {
+                return false;
+            }
             return $this->preflight->isClean($native);
         } catch (Throwable) {
             return false;
