@@ -182,3 +182,18 @@ The installation command was authored in conversation from the same V2 SQL defin
 **Next controlled implementation step**: deploy PHP worker/bridge/CAS/cache components from pinned Bitrix staging to a private dormant runtime directory; provision a dedicated least-privilege worker SQL login and secret transport; activate writer gates and trigger/worker separately after one bounded real-user/rollback-ready integration verification. Preserve gifts, V4/V5 and already-working site behavior. Backfill and on-registration initialization remain separate required workstreams.
 
 **Live release status:** `RESTIS_OUTBOX_CREATED=YES`, `RESTIS_TRIGGER_INSTALLED=YES`, `RESTIS_TRIGGER_ENABLED=NO`, `SQL_ROLE_CREATED=YES`, `WORKER_SQL_LOGIN_ASSIGNED=NO`, `WORKER_ENABLED=NO`, `BITRIX_WRITES_ENABLED=NO`, `PRODUCTION_READINESS=DENIED`.
+
+
+## 11. Bitrix runtime file-install receipt — 2026-10-25
+
+Operator executed production runtime file install on host `evrasia`; `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, `RUNTIME_INSTALLED=YES`, `MODE=PRODUCTION_RUNTIME_FILE_INSTALL`. Separate private directory `/root/ev-bonus-sync-runtime` was created; **no website files, DB rows, workers, CAS or cache changed**. Staging left unchanged. Four hard-coded path references were rewritten to runtime; SQL-installed manifest bit became true, all execution gates stayed off.
+
+Installed runtime SHA-256:
+- `event_sync/event_worker.py`: `abaacbce5e7ac80908cf9f991d7c864f04429a15b80128bbec0e30c3ac51825f`
+- `event_sync/event_bridge.php`: `c392b1ebfc2b5cba6a1585b4e716b79116ebea6806b0d834c78b1982ddf26b0a`
+- `bonus_transaction_executor.php`: `b2135b80b500290e9d2fbaf3c0fac625865fb2ce3d6785ce7d406ebe51e464f5`
+- `cas_writer.php`: `30344acddeb8ebf8dd7c6be2f171f764c89a6718a85d831d304bf5fc04b2ff6f`
+- `bonus_cache_policy.php`: `f18ec769d743d901324f9f0dea500af7646ee8519c33bd72912415caa4a7060e`
+- `event_sync/event_sync_v2_manifest.json`: `73948b3e457753dda12ebbee762add00beeb34a4090ff29bd1efcfda40446de3`
+
+Output: `RESTIS_SQL_INSTALLED=YES`, `SQL_WORKER_LOGIN_ASSIGNED=NO`, `WORKER_ENABLED=NO`, `BITRIX_WRITER_ENABLED=NO`, `PRODUCTION_READINESS=DENIED`. The manifest is a local record; no process acts on it unless separately wired into the runtime. Next implementation: create **new dedicated SQL login** for the existing `ev_bonus_event_worker` role (do not reuse read-only `ev_bonus_sync_ro`), configure secret on Bitrix without disclosing it, then stage release gates and controlled live activation.
