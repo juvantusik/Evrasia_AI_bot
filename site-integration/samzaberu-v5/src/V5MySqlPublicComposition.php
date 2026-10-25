@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5PublicTrafficPreflight.php';
+require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 require_once __DIR__ . '/V5MySqlConsumedChallengeProof.php';
 require_once __DIR__ . '/V5MySqlSessionActions.php';
 require_once __DIR__ . '/V5MySqlSessionLogout.php';
@@ -109,6 +110,7 @@ final class V5MySqlPublicComposition
         ?V5LockedCartReaderPort $cartReader = null,
         ?V5AttestedExplicitSmsRecoveryPort $manualSmsRecovery = null,
     ): V5HttpTransportBoundary {
+        self::assertNativeHttpBoundary($db);
         // Validate native proof ownership before any release callback can run.
         // A different PDO may represent another physical Bitrix transaction,
         // even when both connections point to the same schema.
@@ -212,6 +214,7 @@ final class V5MySqlPublicComposition
         #[\SensitiveParameter] string $smsCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
     ): V5HttpTransportBoundary {
+        self::assertNativeHttpBoundary($db);
         // No secret, request header or client-provided assertion can bypass
         // installed release evidence. The real providers MUST be attested.
         if (!(new V5PublicTrafficPreflight($nativeEvidence, $dependencyEvidence))
@@ -248,4 +251,25 @@ final class V5MySqlPublicComposition
             $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
         ));
     }
+    /**
+     * Mobile public HTTP must use the SAME strictly guarded native Bitrix
+     * mysqli bridge for its locked user/session/factor writes. A generic PDO
+     * connection would bypass verified ingress and savepoint continuity.
+     *
+     * CLI remains available for existing isolated, synthetic and read-only
+     * diagnostics. This gate is NOT exclusive transaction permission and
+     * does not attest site-native MFA/epoch/phone security writers.
+     */
+    private static function assertNativeHttpBoundary(PDO $db): void
+    {
+        if (PHP_SAPI === 'cli') {
+            return;
+        }
+        if (PHP_SAPI !== 'fpm-fcgi'
+            || !$db instanceof V5BitrixPdoCompatibilityBridge
+            || !$db->hasStrictV5HttpIngress()) {
+            throw new InvalidArgumentException('V5 protected HTTP native connection unavailable');
+        }
+    }
+
 }
