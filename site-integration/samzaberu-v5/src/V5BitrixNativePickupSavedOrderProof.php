@@ -46,14 +46,35 @@ final readonly class V5BitrixNativePickupSavedOrderProof implements V5PickupSave
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!is_array($row)
             || $stmt->fetch(PDO::FETCH_ASSOC) !== false
-            || (string)($row['ID'] ?? '') !== (string)$orderId
-            || (string)($row['USER_ID'] ?? '') !== (string)$userId
-            || ($row['ACCOUNT_NUMBER'] ?? null) !== $accountNumber
-            || ($row['STATUS_ID'] ?? null) !== $status
-            || ($row['PAYED'] ?? null) !== 'N'
-            || ($row['CANCELED'] ?? null) !== 'N') {
+            || !self::matchesPersistedUnpaidRow($row, $userId, $saved)) {
             throw new RuntimeException('checkout_order_persisted_state_mismatch');
         }
         $db->assertOwnedCheckoutTransactionContinuity();
+    }
+
+    /**
+     * Pure row predicate, covered by source-only tests. It checks the REAL
+     * Sale row identity/status, not a non-persistent in-memory order object.
+     * It MUST NOT replace strict connection, transaction, or row-lock checks.
+     *
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $saved
+     */
+    public static function matchesPersistedUnpaidRow(
+        array $row, int $userId, array $saved
+    ): bool {
+        $orderId=$saved['id'] ?? null;
+        $number=$saved['number'] ?? null;
+        $status=$saved['status'] ?? null;
+        return $userId > 0 && $userId <= 2147483647
+            && is_int($orderId) && $orderId > 0 && $orderId <= 2147483647
+            && is_string($number) && $number !== '' && strlen($number) <= 64
+            && is_string($status) && in_array($status, ['N','P'], true)
+            && (string)($row['ID'] ?? '') === (string)$orderId
+            && (string)($row['USER_ID'] ?? '') === (string)$userId
+            && ($row['ACCOUNT_NUMBER'] ?? null) === $number
+            && ($row['STATUS_ID'] ?? null) === $status
+            && ($row['PAYED'] ?? null) === 'N'
+            && ($row['CANCELED'] ?? null) === 'N';
     }
 }
