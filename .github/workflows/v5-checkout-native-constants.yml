@@ -1,0 +1,23 @@
+name: V5 checkout native constant source parser
+on:
+  push:
+    branches:
+      - feature/v5-production-native-preflight-20261025
+    paths:
+      - .github/workflows/v5-checkout-native-constants.yml
+      - site-integration/samzaberu-v5/tests/diagnostics/V5CheckoutNativeConstantsTrace.php
+      - site-integration/samzaberu-v5/tests/diagnostics/run_v5_checkout_native_constants_readonly.sh
+  workflow_dispatch:
+jobs:
+  source-parser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source-only PHP syntax and redaction test
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base=site-integration/samzaberu-v5/tests/diagnostics
+          php -l "$base/V5CheckoutNativeConstantsTrace.php"
+          php "$base/V5CheckoutNativeConstantsTrace.php" --self-test
+          bash -n "$base/run_v5_checkout_native_constants_readonly.sh"
