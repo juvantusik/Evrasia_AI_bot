@@ -94,6 +94,23 @@ interface V5LockedOrderDetailReaderPort
     public function readLockedOrderDetail(PDO $db, int $userId, int $orderId): ?array;
 }
 
+/**
+ * The only authority allowed to write a Bitrix Sale D7 order for V5.
+ * Must use the same physical native transaction, persist or resolve a
+ * durable idempotency key, preserve existing site checkout pricing, delivery,
+ * restaurant, gift and payment validation, and return only after successful
+ * D7 save. Never use V4 runtime, V4 JWT or a client FUSER_ID.
+ *
+ * No positive production implementation is provided by the V5 MVP.
+ */
+interface V5LockedOrderPlacementPort
+{
+    /** @return array{id:int,user_id:int,request_id:string,number:string,status:string,saved:bool} */
+    public function placeLockedOrder(
+        PDO $db, int $userId, string $requestId, array $checkout
+    ): array;
+}
+
 final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
 {
     private const TABLES = [
@@ -465,6 +482,60 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                     && isset($detail['items'])
                     && is_array($detail['items']) && array_is_list($detail['items'])
                     && count($detail['items']) <= 200 ? $detail : null;
+            });
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * V5-owned checkout path. Same strong JWT, Bitrix user, epoch and
+     * revocation checks as order detail, followed by a native D7 writer.
+     * Any writer failure throws to ROLLBACK (never COMMIT a partial order).
+     * The native writer itself must enforce durable request-id uniqueness.
+     *
+     * @return array{id:int,number:string,status:string}|null
+     */
+    public function placeOrderForAccess(
+        #[\SensitiveParameter] string $accessJwt,
+        string $requestId,
+        array $checkout,
+        V5LockedOrderPlacementPort $writer,
+    ): ?array {
+        if (preg_match('/\\A(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\\z/D',
+            $requestId) !== 1 || count($checkout) < 1) return null;
+        try {
+            $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());
+            if ($claims === null) return null;
+            $this->assertReady();
+            $userId = self::positive($claims['sub'] ?? null);
+            if ($userId === null) return null;
+            return $this->transaction(function () use ($claims, $userId, $requestId, $checkout, $writer): ?array {
+                $now = $this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch = $this->lockedEpoch($userId);
+                $row = $this->lockedSession($claims['sid']);
+                $state = self::state($row, $userId, $now);
+                if ($state === null || $epoch !== $state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)) {
+                    return null;
+                }
+                $result = $writer->placeLockedOrder($this->db, $userId, $requestId, $checkout);
+                if (!is_array($result)
+                    || ($result['saved'] ?? null) !== true
+                    || ($result['user_id'] ?? null) !== $userId
+                    || ($result['request_id'] ?? null) !== $requestId
+                    || !is_int($result['id'] ?? null) || $result['id'] < 1
+                    || !is_string($result['number'] ?? null) || $result['number'] === ''
+                    || !is_string($result['status'] ?? null) || $result['status'] === '') {
+                    throw new RuntimeException('checkout_save_unconfirmed');
+                }
+                return [
+                    'id' => $result['id'],
+                    'number' => $result['number'],
+                    'status' => $result['status'],
+                ];
             });
         } catch (Throwable) {
             return null;

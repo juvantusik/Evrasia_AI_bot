@@ -25,6 +25,7 @@ final class V5RouteMap
         'GET /profile' => 'readProfile',
         'GET /orders' => 'readOrders',
         'POST /orders/detail' => 'readOrderDetail',
+        'POST /cart/order' => 'placeOrder',
         'GET /legal/consents' => 'publicLegalConsents',
         'GET /legal/registration-documents' => 'publicRegistrationDocuments',
         'POST /legal/consents/validate' => 'validateLegalConsents',

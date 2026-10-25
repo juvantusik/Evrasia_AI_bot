@@ -33,7 +33,7 @@ final class V5ProductionNativeRequestBoundaryGuard
     private const PROTECTED_POST_ACTIONS = [
         'signin', 'verifyChallenge', 'resendChallenge',
         'requestSmsFallback', 'refresh', 'logout',
-        'validateToken', 'showBonusPin', 'readOrderDetail',
+        'validateToken', 'showBonusPin', 'readOrderDetail', 'placeOrder',
     ];
 
     /**

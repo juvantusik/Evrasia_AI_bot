@@ -6,6 +6,7 @@ namespace Evrasia\Samzaberu\V5;
 require_once __DIR__ . '/V5LoginWorkflow.php';
 require_once __DIR__ . '/V5LegalConsentContract.php';
 require_once __DIR__ . '/V5PublicLegalCodeValidation.php';
+require_once __DIR__ . '/V5CheckoutRequest.php';
 
 use JsonException;
 use Throwable;
@@ -83,6 +84,20 @@ interface V5OrderDetailHttpReaderPort
     ): ?array;
 }
 
+/**
+ * Only a V5 session-bound native checkout writer may place an order.
+ * No V4 controller/JWT and no client-supplied Bitrix USER_ID or FUSER_ID.
+ */
+interface V5OrderPlaceHttpPort
+{
+    /** @return array{id:int,number:string,status:string}|null */
+    public function placeVerifiedOrder(
+        #[\SensitiveParameter] string $accessJwt,
+        string $requestId,
+        array $checkout
+    ): ?array;
+}
+
 interface V5TokenValidationPort
 {
     public function isValidAccessToken(string $accessJwt): bool;
@@ -118,6 +133,7 @@ final readonly class V5AuthHttpHandler
         private ?V5ProfileHttpReaderPort $profileReader = null,
         private ?V5OrdersHttpReaderPort $ordersReader = null,
         private ?V5OrderDetailHttpReaderPort $orderDetailReader = null,
+        private ?V5OrderPlaceHttpPort $orderPlace = null,
     ) {}
 
     /**
@@ -164,6 +180,9 @@ final readonly class V5AuthHttpHandler
                 'readOrderDetail' => $this->orderDetailReader === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->readOrderDetail($body),
+                'placeOrder' => $this->orderPlace === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->placeOrder($body),
                 'validateLegalConsents' => $this->publicLegalConsents === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->validateLegalConsents($body),
@@ -334,6 +353,41 @@ final readonly class V5AuthHttpHandler
                 return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
             }
             return new V5HttpReply(200, ['order' => $detail]);
+        } catch (Throwable) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+    }
+
+    /**
+     * POST /cart/order is an independent V5 route. Checkout details still
+     * require the existing site business validator, Sale D7 persistence and
+     * payment policy in the injected native writer (not implemented here).
+     */
+    private function placeOrder(array $body): V5HttpReply
+    {
+        $normalized = V5CheckoutRequest::fromJson($body);
+        if ($normalized === null) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        $jwt = $normalized['access_token'];
+        if (strlen($jwt) < 110 || strlen($jwt) > 4096
+            || preg_match('/\\A[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\z/D', $jwt) !== 1) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        try {
+            $order = $this->orderPlace->placeVerifiedOrder(
+                $jwt, $normalized['request_id'], $normalized['checkout']
+            );
+            if ($order === null) {
+                return new V5HttpReply(401, ['error' => 'authentication_failed']);
+            }
+            if (!is_array($order) || !isset($order['id'], $order['number'], $order['status'])
+                || !is_int($order['id']) || $order['id'] < 1
+                || !is_string($order['number']) || $order['number'] === ''
+                || !is_string($order['status']) || $order['status'] === '') {
+                return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+            }
+            return new V5HttpReply(201, ['order' => $order]);
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
