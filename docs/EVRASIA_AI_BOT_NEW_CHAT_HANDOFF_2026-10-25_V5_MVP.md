@@ -146,3 +146,18 @@ echo "WRAPPER_RC=$RC"
 ~~~
 
 Note: if the user supplies last output before using this block, analyze it and DO NOT run the test again. Current fixed script already clears terminal at the beginning.
+
+
+## 9. Operator-verified order-detail acceptance — 2026-10-25 (supersedes pending status)
+
+User supplied REAL stdout from corrected pinned launcher `cc085321dbe8b45c64d1620eeab05c9d021b5d3a`:
+
+- `V5_INDEPENDENT_ORDER_DETAIL_MVP=PASS`
+- `ORDER_DETAIL_ASSERTIONS=19`
+- `V5_ORDER_DETAIL_MVP=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`
+- `BITRIX_D7_ADAPTER_EXERCISED=MOCK_ONLY`; `BITRIX_BOOTSTRAP=NO`; `DATABASE_CONNECTION=NO`.
+- `V4_RUNTIME_IMPORTED=NO`; `PRODUCTION_CODE_WRITE=NO`; `DATABASE_WRITE=NO`; `V5_AUTH_ENABLED=NO`; no synthetic guest or SMS.
+
+ACCEPTED independent V5 offline MVP checks: profile **12/12**, cart read **16/16**, orders list **18/18**, order detail **19/19** — total **65/65**. Do **NOT** rerun these fixed offline tests or say that protected V5 API is LIVE.
+
+**Immediate next development:** independent V5 checkout / order placement, using Bitrix Sale D7 and real business rules of the existing V4 `Cart::order` / shared `CartApiService` as *reference*, with **zero** runtime dependency on Controllers/V4 or legacy JWT. Do not fake order placement by directly inserting OrderTable rows or bypassing restaurant/delivery/payment/gift/price policy. V4 checkout source exists only in the operator's existing root-only production snapshot `/root/ev-v5-mvp.2eCDIApS`, not in the feature GitHub tree; for exact input and D7 call contract use one **narrow** masked, read-only checkout-symbol extraction on already pinned V4 sources, not broad security or architecture audits. No production/site/database writes without separate approval. Current V5 AUTH OFF.
