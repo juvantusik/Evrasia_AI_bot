@@ -29,11 +29,13 @@ final class AuthDecision
             return NextFactor::DENY;
         }
 
-        // A CURRENT, server-verified STRONG trust enrollment skips repeated
-        // MFA, even when the account has active Bitrix native TOTP. Neither
-        // device_id nor an old V4 password-only record is sufficient proof.
-        // Issuer MUST lock user+epoch and reverify trust on this very request.
-        if ($trustTokenValid && $trustStronglyEnrolled) {
+        // Grandfather current, server-verified trusted devices previously
+        // registered by V4 after AUTH_PASSWORD. The CURRENT trust token is
+        // still mandatory; device_id alone never authenticates an account.
+        // New device trust may be issued ONLY after TOTP/email/SMS success.
+        // Recheck current trust in the V5 session issuer on this request.
+        // $trustStronglyEnrolled remains only for old caller compatibility.
+        if ($trustTokenValid) {
             return NextFactor::COMPLETE;
         }
 
