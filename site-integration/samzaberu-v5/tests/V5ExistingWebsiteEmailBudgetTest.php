@@ -44,12 +44,17 @@ checkBridge($bridge->reserveWithLocks($db,7,$id,'person@example.invalid'),
     'site Redis email budget success is reused');
 checkBridge($redis->calls===1,'exactly one site Redis Lua request');
 [$lua,$args,$numKeys]=$redis->args;
-checkBridge($numKeys===3 && str_contains($lua,"redis.call('INCR', KEYS[i])"),
-    'existing website Lua used without SQL limits or second algorithm');
-checkBridge(count($args)===9 && $args[3]===1
-    && $args[4]===WebsiteBudget::PER_USER_PER_HOUR
-    && $args[5]===WebsiteBudget::GLOBAL_PER_HOUR,
-    'existing per-user and shared global website limits are not hidden');
+checkBridge($numKeys===3 && str_contains($lua,"redis.call('INCR', KEYS[2])"),
+    'existing website Lua retains individual limits without a new algorithm');
+checkBridge(count($args)===6
+    && $args[3]===WebsiteBudget::PER_USER_PER_HOUR
+    && $args[4]===WebsiteBudget::PER_USER_COOLDOWN_SECONDS
+    && $args[5]===7200,
+    'existing per-user cooldown and hourly limits retained');
+checkBridge(!str_contains($lua, "redis.call('GET', KEYS[3])")
+    && str_contains($lua, "redis.pcall('INCR', KEYS[3])")
+    && !defined(WebsiteBudget::class.'::GLOBAL_PER_HOUR'),
+    'shared global hourly counter is telemetry only, never a blocking limit');
 checkBridge(str_starts_with($args[0],'evrasia:{web_mfa_email_login}:v1:'),
     'actual existing Redis website budget namespace shared with mobile');
 checkBridge(!str_contains(implode(' ',array_slice($args,0,3)),'person@example.invalid'),
@@ -77,8 +82,9 @@ checkBridge(!$bridge->reserveWithLocks($db,7,$id,'person@example.invalid'),
 $redis->throws=true;
 checkBridge(!$bridge->reserveWithLocks($db,7,$id,'person@example.invalid'),
     'Redis exception, V5 challenge fails closed');
-checkBridge(WebsiteBudget::GLOBAL_PER_HOUR===1000,
-    'real existing website global cap identified before owner rollout');
+checkBridge(WebsiteBudget::PER_USER_PER_HOUR===5
+    && WebsiteBudget::PER_USER_COOLDOWN_SECONDS===60,
+    'existing website per-user protection remains');
 echo "PASS: V5 reuse existing website email Redis budget ($checks assertions)\n";
 echo "MODE=PURE_PHP_NO_DB\nREDIS_CONNECTED=NO\n";
 echo "USER_RECORDS=NO\nEMAIL_SENT=NO\nPRODUCTION_WRITE=NO\n";
