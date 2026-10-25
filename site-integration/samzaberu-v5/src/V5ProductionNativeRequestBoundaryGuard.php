@@ -29,6 +29,30 @@ final class V5ProductionNativeRequestBoundaryGuard
     private const ROUTER = self::SITE_ROOT . '/api/v5/router.php';
     private const PUBLIC_HOST = 'evrasia.rest';
 
+    /** V5-owned POST actions only. Public legal and GET cart are separate. */
+    private const PROTECTED_POST_ACTIONS = [
+        'signin', 'verifyChallenge', 'resendChallenge',
+        'requestSmsFallback', 'refresh', 'logout',
+        'validateToken', 'showBonusPin',
+    ];
+
+    /**
+     * Exact route-to-action policy shared with V5RouteMap. The request must
+     * use a route's raw, unmodified URI: no query, prefix or alternate path.
+     * This method does not bootstrap Bitrix or grant transaction ownership.
+     */
+    public static function isProtectedPostRoute(string $method, string $uri): bool
+    {
+        if ($method !== 'POST'
+            || strlen($uri) > 128
+            || !str_starts_with($uri, V5RouteMap::BASE_PATH . '/')) {
+            return false;
+        }
+        $relative = substr($uri, strlen(V5RouteMap::BASE_PATH));
+        $action = V5RouteMap::ROUTES['POST ' . $relative] ?? null;
+        return in_array($action, self::PROTECTED_POST_ACTIONS, true);
+    }
+
     public function __construct(
         private readonly V5ProductionNativeTransactionPreflight $preflight,
     ) {}
@@ -72,26 +96,13 @@ final class V5ProductionNativeRequestBoundaryGuard
                 return false;
             }
 
-            $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-            if (!is_string($path)
-                || $path === ''
-                || preg_match(
-                    '~\A/api/v5(?:/[a-z0-9/_-]*)?\z~D',
-                    $path,
-                ) !== 1
-            ) {
+            if (!self::isProtectedPostRoute(
+                $_SERVER['REQUEST_METHOD'],
+                $_SERVER['REQUEST_URI'],
+            )) {
                 return false;
             }
 
-            $relative = substr($_SERVER['REQUEST_URI'], strlen(V5RouteMap::BASE_PATH));
-            $action = V5RouteMap::ROUTES['POST ' . $relative] ?? null;
-            if (!in_array($action, [
-                'signin', 'verifyChallenge', 'resendChallenge',
-                'requestSmsFallback', 'refresh', 'logout',
-                'validateToken', 'showBonusPin',
-            ], true)) {
-                return false;
-            }
             return $this->preflight->isClean($native);
         } catch (Throwable) {
             return false;
