@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5MySqlSmsOutbox.php';
+require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -129,6 +130,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
 
         $this->ready();
         $started=false; $guard=false; $releaseAttempted=false;
+        $activeGuard='v5_email_issue_guard';
         $challengeId=''; $email=''; $code='';
         try {
             if (!$this->db->beginTransaction()) throw new RuntimeException('email_begin');
@@ -193,6 +195,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             $this->lockedAccount($account->userId);
             $current=$this->lockedEpoch($account->userId);
             $guard=false; $releaseAttempted=false;
+            $activeGuard='v5_email_ack_guard';
             $this->q('SAVEPOINT v5_email_ack_guard',[]); $guard=true;
             $still=$current === $epoch
                 && $this->native->stillCurrentWithLocks(
@@ -215,8 +218,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             $started=false;
             return new PendingLoginChallenge($challengeId,ChallengeKind::EMAIL,$this->ttl);
         } catch (Throwable) {
-            $this->rollbackIfOwned($started,$guard,$releaseAttempted,
-                ['v5_email_ack_guard','v5_email_issue_guard']);
+            $this->rollbackIfOwned($started,$guard,$releaseAttempted,$activeGuard);
             throw new AuthenticationRejected('challenge_unavailable');
         } finally {
             // No code/recipient is written to the challenge table or log.
@@ -238,6 +240,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
         }
         $this->ready();
         $started=false; $guard=false; $releaseAttempted=false;
+        $activeGuard='v5_email_verify_guard';
         try {
             // Indexed point lookup before the transaction only identifies
             // which b_user row to lock FIRST; it is never authorization.
@@ -311,8 +314,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
                     ChallengeKind::EMAIL,$challengeId)
                 : null;
         } catch (Throwable) {
-            $this->rollbackIfOwned($started,$guard,$releaseAttempted,
-                ['v5_email_verify_guard']);
+            $this->rollbackIfOwned($started,$guard,$releaseAttempted,$activeGuard);
             return null;
         }
     }
@@ -385,14 +387,14 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
      * a possibly foreign transaction; quarantine the V5 Bitrix bridge.
      */
     private function rollbackIfOwned(
-        bool $started,bool $guard,bool $releaseAttempted,array $guards
+        bool $started,bool $guard,bool $releaseAttempted,string $activeGuard
     ): void {
         if (!$started) return;
         if ($guard) {
             if (!$releaseAttempted) {
                 try {
                     // Only the active native savepoint name is valid.
-                    $this->q('RELEASE SAVEPOINT '.$guards[0],[]);
+                    $this->q('RELEASE SAVEPOINT '.$activeGuard,[]);
                     $guard=false;
                 } catch (Throwable) {}
             }
