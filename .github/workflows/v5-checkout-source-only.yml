@@ -11,6 +11,7 @@ on:
       - site-integration/samzaberu-v5/src/V5BitrixLockedPickupOrderWriter.php
       - site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php
       - site-integration/samzaberu-v5/src/V5BitrixNativePickupCartCleanup.php
+      - site-integration/samzaberu-v5/src/V5BitrixNativePickupSavedOrderProof.php
       - site-integration/samzaberu-v5/tests/V5BitrixPdoCompatibilityBridgeTest.php
       - site-integration/samzaberu-v5/src/V5BitrixNativePickupMaterializer.php
       - site-integration/samzaberu-v5/src/V5PinnedPickupPropertyPolicy.php
@@ -45,6 +46,7 @@ jobs:
             src/V5BitrixLockedPickupOrderWriter.php \
             src/V5BitrixPdoCompatibilityBridge.php \
             src/V5BitrixNativePickupCartCleanup.php \
+            src/V5BitrixNativePickupSavedOrderProof.php \
             src/V5BitrixNativePickupMaterializer.php \
             src/V5PinnedPickupPropertyPolicy.php \
             src/V5PickupFreshBasketAssembler.php \
