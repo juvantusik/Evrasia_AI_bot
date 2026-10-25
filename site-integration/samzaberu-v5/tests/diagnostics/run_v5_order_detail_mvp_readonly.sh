@@ -78,6 +78,8 @@ src/V5MySqlOrderDetailRead.php 1a75fdd4e9cac3c7307702f64c95752218a547c2
 src/V5MySqlStrongSessionStore.php 4e80b4f443990a02e51dd48c3393301ea52d13e1
 src/V5AuthHttpHandler.php c6305ba7d03140358b4175e405874733bb4bb2cc
 src/V5RouteMap.php e4ec25713585e0a3f4ef3c22b60a2eb09a04c7f2
+src/V5HttpTransportBoundary.php 4a047a6b1ac7ccf644ff5371f7cceef6785b7bb5
+src/V5ParallelHttpEntry.php e8d7084d8ab415a723ece3977152238b536853c8
 src/V5ProductionNativeRequestBoundaryGuard.php 62fa1abb9b7a9d6689df97e244ee98eba024ccba
 src/V5MySqlPublicComposition.php 515b681d2628b8871fbc85719ef4d33eb8d7742e
 src/V5MySqlPilotComposition.php 750669a2a848ba4a113f5d4e41cfa6880e0ef5a1
@@ -96,6 +98,8 @@ for file in \
     "$WORK/src/V5MySqlStrongSessionStore.php" \
     "$WORK/src/V5AuthHttpHandler.php" \
     "$WORK/src/V5RouteMap.php" \
+    "$WORK/src/V5HttpTransportBoundary.php" \
+    "$WORK/src/V5ParallelHttpEntry.php" \
     "$WORK/src/V5MySqlPublicComposition.php" \
     "$WORK/src/V5MySqlPilotComposition.php" \
     "$WORK/tests/V5IndependentOrderDetailMvpTest.php"; do
