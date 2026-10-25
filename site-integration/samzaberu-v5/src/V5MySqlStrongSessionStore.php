@@ -85,6 +85,15 @@ interface V5LockedOrdersReaderPort
     public function readLockedOrders(PDO $db, int $userId): ?array;
 }
 
+/**
+ * Order details and lines for the already locked V5 user and order ID.
+ */
+interface V5LockedOrderDetailReaderPort
+{
+    /** @return array<string,mixed>|null */
+    public function readLockedOrderDetail(PDO $db, int $userId, int $orderId): ?array;
+}
+
 final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
 {
     private const TABLES = [
@@ -416,6 +425,46 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $orders = $reader->readLockedOrders($this->db, $userId);
                 return is_array($orders) && array_is_list($orders)
                     && count($orders) <= 50 ? $orders : null;
+            });
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Protected detail lookup uses the SAME V5 strong-session authorization
+     * and transaction as the existing orders list.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function readOrderDetailForAccess(
+        #[\SensitiveParameter] string $accessJwt,
+        int $orderId,
+        V5LockedOrderDetailReaderPort $reader,
+    ): ?array {
+        if ($orderId < 1) return null;
+        try {
+            $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());
+            if ($claims === null) return null;
+            $this->assertReady();
+            $userId = self::positive($claims['sub'] ?? null);
+            if ($userId === null) return null;
+            return $this->transaction(function () use ($claims, $userId, $orderId, $reader): ?array {
+                $now = $this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch = $this->lockedEpoch($userId);
+                $row = $this->lockedSession($claims['sid']);
+                $state = self::state($row, $userId, $now);
+                if ($state === null || $epoch !== $state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
+                ) return null;
+
+                $detail = $reader->readLockedOrderDetail($this->db, $userId, $orderId);
+                return is_array($detail) && ($detail['id'] ?? null) === $orderId
+                    && isset($detail['items'])
+                    && is_array($detail['items']) && array_is_list($detail['items'])
+                    && count($detail['items']) <= 200 ? $detail : null;
             });
         } catch (Throwable) {
             return null;
