@@ -38,7 +38,7 @@ namespace {
     $reject=static function(callable $fn):bool {
         try{$fn();return false;}catch(\RuntimeException){return true;}
     };
-    $native=new V5PickupBasketNativeFieldPolicy('catalog','VerifiedProvider','Y');
+    $native=new V5PickupBasketNativeFieldPolicy('catalog','VerifiedProvider','PRODUCT_PROVIDER_CLASS','Y');
     $items=[
         ['product_id'=>81,'quantity'=>2],
         ['product_id'=>82,'quantity'=>1],

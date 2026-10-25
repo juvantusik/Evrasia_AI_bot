@@ -21,10 +21,16 @@ final readonly class V5PickupBasketNativeFieldPolicy
     public function __construct(
         public string $moduleId,
         public string $providerClass,
+        public string $providerFieldKey,
         public string $customPrice,
     ) {
         if (preg_match('/\A[a-z][a-z0-9_]{1,24}\z/D', $moduleId) !== 1
             || preg_match('/\A\\\\?[A-Za-z_][A-Za-z_0-9]*(?:\\\\[A-Za-z_][A-Za-z_0-9]*)*\z/D', $providerClass) !== 1
+            || preg_match('/\A[A-Z][A-Z0-9_]{1,48}\z/D', $providerFieldKey) !== 1
+            || in_array($providerFieldKey, [
+                'PRICE','BASE_PRICE','QUANTITY','NAME','LID','CURRENCY',
+                'CUSTOM_PRICE','DETAIL_PAGE_URL'
+            ], true)
             || !in_array($customPrice, ['Y', 'N'], true)) {
             throw new RuntimeException('checkout_native_field_policy_unavailable');
         }

@@ -40,17 +40,22 @@ namespace {
     };
 
     $fieldPolicy=new V5PickupBasketNativeFieldPolicy(
-        'catalog','SomeTrustedCatalogProvider','Y'
+        'catalog','SomeTrustedCatalogProvider','PRODUCT_PROVIDER_CLASS','Y'
     );
     $check($fieldPolicy->moduleId==='catalog','TRUSTED_MODULE');
     $check($fieldPolicy->providerClass==='SomeTrustedCatalogProvider','TRUSTED_PROVIDER');
+    $check($fieldPolicy->providerFieldKey==='PRODUCT_PROVIDER_CLASS','TRUSTED_PROVIDER_FIELD');
     $check($fieldPolicy->customPrice==='Y','TRUSTED_PRICE_FLAG');
-    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy('','Provider','Y')),
+    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy('','Provider','PRODUCT_PROVIDER_CLASS','Y')),
         'MODULE_REQUIRED');
-    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy('catalog','Provider','maybe')),
+    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy('catalog','Provider','PRODUCT_PROVIDER_CLASS','maybe')),
         'CUSTOM_PRICE_REQUIRED');
-    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy('catalog','Invalid;Provider','Y')),
+    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy('catalog','Invalid;Provider','PRODUCT_PROVIDER_CLASS','Y')),
         'INVALID_PROVIDER_DENIED');
+    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy(
+        'catalog','Provider','PRICE','Y')), 'RESERVED_PROVIDER_FIELD_DENIED');
+    $check($rejects(fn()=>new V5PickupBasketNativeFieldPolicy(
+        'catalog','Provider','../../key','Y')), 'INVALID_PROVIDER_FIELD_DENIED');
     $policy=new TestSiteProperties();
     $materializer=new V5BitrixNativePickupMaterializer($fieldPolicy,$policy);
     $db=new TestPickupPdo();

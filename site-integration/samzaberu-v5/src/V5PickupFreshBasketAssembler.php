@@ -97,7 +97,7 @@ final class V5PickupFreshBasketAssembler
                 'DETAIL_PAGE_URL'=>$info['DETAIL_PAGE_URL'],
                 'CURRENCY'=>$currency,
                 'LID'=>$siteId,
-                'PRODUCT_PROVIDER_CLASS'=>$nativeFields->providerClass,
+                $nativeFields->providerFieldKey=>$nativeFields->providerClass,
                 'PRICE'=>$price,
                 'BASE_PRICE'=>$base,
                 'CUSTOM_PRICE'=>$nativeFields->customPrice,
