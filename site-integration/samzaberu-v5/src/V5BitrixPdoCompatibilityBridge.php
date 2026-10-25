@@ -341,6 +341,22 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             . 'AND status = ? AND failed_attempts = ?',
     ];
 
+    /**
+     * ONLY the two read-only template checks used by
+     * V5BitrixCurrentEmailLoginTemplateProof. Never return email addresses
+     * or mail bodies, never query unbounded templates and never update them.
+     * CHAR(35) deliberately avoids sending a literal SQL comment marker.
+     * @var list<string>
+     */
+    private const EMAIL_LOGIN_MAIL_METADATA_SQL = [
+        "SELECT ID,EVENT_NAME,ACTIVE,LID,"
+            ."IF(INSTR(COALESCE(EMAIL_TO,''),CONCAT(CHAR(35),'EMAIL_TO',CHAR(35)))>0,1,0) AS email_to_ok,"
+            ."IF(INSTR(COALESCE(MESSAGE,''),CONCAT(CHAR(35),'VERIFY_CODE',CHAR(35)))>0,1,0) AS verify_code_ok "
+            ."FROM b_event_message WHERE ID = ? LIMIT 2",
+        'SELECT SITE_ID FROM b_event_message_site '
+            .'WHERE EVENT_MESSAGE_ID = ? ORDER BY SITE_ID LIMIT 2',
+    ];
+
     // Exact native sale FUSER ownership point read for protected V5 cart.
     // b_sale_fuser ownership must remain locked until the cart read completes;
     // NO generic allowlisting of sale/basket tables or arbitrary SQL shapes.
@@ -400,6 +416,14 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         if (str_contains($sql, 'ev_v5_email_auth_challenges')
             || str_contains($sql, 'ev_web_email_ownership_proof')) {
             throw new RuntimeException('v5_bitrix_email_sql_forbidden');
+        }
+        // The Bitrix mail registry may be read ONLY using two exact
+        // attestation statements. No mail template body leaves the DB.
+        if (in_array($sql, self::EMAIL_LOGIN_MAIL_METADATA_SQL, true)) {
+            return;
+        }
+        if (str_contains($sql, 'b_event_message')) {
+            throw new RuntimeException('v5_bitrix_mail_registry_sql_forbidden');
         }
         // Only the EXACT statements emitted by V5MySqlStrongSessionStore.
         // Never add the sessions table to the generic SELECT/UPDATE regex:
