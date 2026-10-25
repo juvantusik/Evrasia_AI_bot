@@ -296,3 +296,19 @@ Confirmed production SOURCE-ONLY read, `FINAL_RC=0`, `WRAPPER_RC=0`:
 - **Remaining actual integration blockers** before activation: source-mask hid one V4 provider basket-field key+value and CUSTOM_PRICE literal/module value; materializer requires these from verified installed site policy rather than invented defaults. Trusted V4 `source`, `IGNORE_RESTIS` values must be confirmed. Native Sale D7 event/transaction continuity and durable ledger schema are NOT installed/tested; the actual `V5NativePickupOrderMaterializerPort` and writer are **not wired into production composition** and V5 AUTH stays OFF. Do not claim this is a live order checkout.
 
 **Next focused action:** confirm only those 3–4 masked installed V4 constants with a tiny source-only whitelist parser (NOT broad audits), then configure V5-only native provider and do native transaction acceptance before real-account pilot. Do NOT rerun profile/cart/orders/order-detail already accepted 12/16/18/19 checks.
+
+
+## 15. Exact remaining checkout constants: source-only parser and trusted provider field (2026-10-25)
+
+Previous operator supplied `V5_PICKUP_NATIVE_BUSINESS_SHAPE=PASS` from pinned V4 Cart::order:
+- BasketFields: QUANTITY, NAME, DETAIL_PAGE_URL, CURRENCY, LID, **one literal field masked in original trace**, PRICE=PROPERTY_RED_PRICE_VALUE, BASE_PRICE=CATALOG_PRICE_1, CUSTOM_PRICE masked.
+- V4 pay mapping `cash->2`, `card->5`, `sbp->2`; SamZaberu guests pay ON SITE, no gateway or app payment selector.
+- Property codes confirmed, incl restaurant, phone, cutlery, time, source, dispatch, IGNORE_RESTIS; external REST_ID must never be fabricated.
+
+**NEW GitHub source-only progress (no production writes):**
+- Committed `tests/diagnostics/V5CheckoutNativeConstantsTrace.php`, pinned at `7c3ea14f0996c2fce7cb765d3bf234d3f6a5f1f2`, Git blob `7986f4bcc87eb5862a6e5871c9a6b65e9275c39d`. It does ONLY static `token_get_all` extraction of V4 Cart::order, allowlists basket key identifiers, small safe module/provider/flag values, plus `source` and `IGNORE_RESTIS` assignments. Arbitrary strings are MASKED.
+- Read-only server runner `tests/diagnostics/run_v5_checkout_native_constants_readonly.sh`, commit `3d0b763d515fe6a39c45c35d85294df212cd4a0f`, Git blob `259d62a7192ea497e253d8d5c75722e81899be25`; exact pinned Cart.php SHA `73989036542321bbac5ee76a1b104713ff932621ffaa0f4e2aa08ed28949a039`, V4 router SHA `5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d`, V5 AUTH OFF guard. One script read-only, no DB, no real order or payment.
+- GitHub Actions source-parser self-test `40208619538` SUCCESS. Early workflow run `40208595494` failed simply because the runner was not yet committed in that run; fixed by adding it; PASS at latest pin.
+- V5 native basket provider field is no longer hardcoded. `V5PickupBasketNativeFieldPolicy` now requires explicit site-confirmed `providerFieldKey`, and `V5PickupFreshBasketAssembler` emits that key. Commit `5c7419d8b3ae0c8d6ba7142f830c5307bb7387c3`; GitHub Actions `40208708791` SUCCESS, source-only test suite. No production enablement.
+
+**NEXT:** operator runs the *one* pinned read-only native constants wrapper and pastes full stdout. Interpret `BASKET_KEY`, `BASKET_CREATE_MODULE`, `PROPERTY_SOURCE_VALUE`, `PROPERTY_IGNORE_RESTIS_VALUE` without guessing masked values. Then set concrete V5-only trusted site policy and continue native D7 transaction-continuity/real-account checkout verification. No need to rerun accepted V5 offline profile/cart/orders/order-detail or 120/120 checkout tests. V4 unchanged, V5 AUTH OFF.
