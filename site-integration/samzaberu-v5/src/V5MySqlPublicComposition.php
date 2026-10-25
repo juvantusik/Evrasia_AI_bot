@@ -14,6 +14,8 @@ require_once __DIR__ . '/V5BitrixLockedProfileReader.php';
 require_once __DIR__ . '/V5BitrixLockedCartReader.php';
 require_once __DIR__ . '/V5MySqlOrdersRead.php';
 require_once __DIR__ . '/V5BitrixLockedOrdersReader.php';
+require_once __DIR__ . '/V5MySqlOrderDetailRead.php';
+require_once __DIR__ . '/V5BitrixLockedOrderDetailReader.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/V5PublicFactorKindAdapter.php';
@@ -200,7 +202,8 @@ final class V5MySqlPublicComposition
                 ? new V5MySqlCartRead($sessions, $cartReader ?? new V5BitrixLockedCartReader())
                 : null,
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
-            new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader())
+            new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
+            new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader())
         ));
     }
 
@@ -262,6 +265,7 @@ final class V5MySqlPublicComposition
                 : null,
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
+            new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
         ));
     }
     /**
