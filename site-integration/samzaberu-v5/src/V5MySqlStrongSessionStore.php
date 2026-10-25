@@ -502,7 +502,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         array $checkout,
         V5LockedOrderPlacementPort $writer,
     ): ?array {
-        if (preg_match('/\\A(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\\z/D',
+        if (preg_match('/\A(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\\z/D',
             $requestId) !== 1 || count($checkout) < 1) return null;
         try {
             $claims = $this->access->verifyAccess($accessJwt, $this->peekTime());

@@ -371,7 +371,7 @@ final readonly class V5AuthHttpHandler
         }
         $jwt = $normalized['access_token'];
         if (strlen($jwt) < 110 || strlen($jwt) > 4096
-            || preg_match('/\\A[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\z/D', $jwt) !== 1) {
+            || preg_match('/\A[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\z/D', $jwt) !== 1) {
             return new V5HttpReply(401, ['error' => 'authentication_failed']);
         }
         try {
