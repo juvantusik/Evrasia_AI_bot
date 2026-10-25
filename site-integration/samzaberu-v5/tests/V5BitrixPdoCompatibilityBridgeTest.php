@@ -506,6 +506,25 @@ namespace {
 
     rejects(fn()=>$db->prepare('DELETE FROM ev_v5_pickup_checkout_requests WHERE USER_ID = ?'),
         'checkout request identity cannot be deleted');
+    $cleanupClass=\Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup::class;
+    ok($cleanupClass::assertDeleteCount($cleanupClass::DELETE_CART,1)===null,
+        'new checkout must remove one or more actual API basket items');
+    ok($cleanupClass::assertDeleteCount($cleanupClass::DELETE_CART,3)===null,
+        'multiple API basket lines are allowed');
+    ok($cleanupClass::assertDeleteCount($cleanupClass::DELETE_GIFTS,0)===null,
+        'optional gifts may be absent');
+    ok($cleanupClass::assertDeleteCount($cleanupClass::DELETE_GIFTS,2)===null,
+        'existing gifts may be cleaned');
+    rejects(fn()=>$cleanupClass::assertDeleteCount($cleanupClass::DELETE_CART,0),
+        'new checkout cannot silently succeed with empty API cart cleanup');
+    rejects(fn()=>$cleanupClass::assertDeleteCount($cleanupClass::DELETE_CART,-1),
+        'invalid delete count denied');
+    rejects(fn()=>$cleanupClass::assertDeleteCount($cleanupClass::DELETE_GIFTS,-1),
+        'invalid gift delete count denied');
+    rejects(fn()=>$cleanupClass::assertDeleteCount($cleanupClass::DELETE_CART,100001),
+        'implausible mass basket delete denied');
+    rejects(fn()=>$cleanupClass::assertDeleteCount('DELETE FROM b_user',1),
+        'unrecognized delete cannot be confirmed');
     $cleanup=new \Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup();
     rejects(fn()=>$cleanup->clearSavedCart($db,41,51,901),
         'cleanup port does not run in non-strict CLI connection');
