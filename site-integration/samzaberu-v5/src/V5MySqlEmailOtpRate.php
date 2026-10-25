@@ -40,6 +40,9 @@ final readonly class V5EmailOtpRateLimit
 /**
  * Reserve six local, HMAC-keyed windows in the SAME V5-owned InnoDB
  * transaction as b_user + AUTH_EPOCH + email challenge issuance.
+ * Verified email is HMAC-keyed from its canonical ADDRESS, not its
+ * per-user epoch-bound stamp, so the same address shares a quota across
+ * multiple accounts without storing plaintext email.
  *
  * Account cooldown is a true rolling window rather than a minute bucket.
  * There is deliberately no shared global/day/hour cap for every guest.
@@ -96,13 +99,14 @@ final readonly class V5MySqlEmailOtpRate implements V5EmailOtpRatePort
     }
 
     public function reserveWithLocks(
-        PDO $db,int $userId,string $deviceId,string $emailStamp
+        PDO $db,int $userId,string $deviceId,string $verifiedEmail
     ):bool {
         if ($db !== $this->db || !$db->inTransaction() || $userId < 1
             || $db->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'mysql'
             || $db->getAttribute(PDO::ATTR_ERRMODE) !== PDO::ERRMODE_EXCEPTION
             || preg_match('/\Asz_[a-f0-9]{64}\z/D',$deviceId)!==1
-            || preg_match('/\A[a-f0-9]{64}\z/D',$emailStamp)!==1) return false;
+            || strlen($verifiedEmail)>254
+            || filter_var($verifiedEmail,FILTER_VALIDATE_EMAIL)===false) return false;
 
         try {
             $ip=$this->network->currentVerifiedRemoteIp();
@@ -111,11 +115,12 @@ final readonly class V5MySqlEmailOtpRate implements V5EmailOtpRatePort
             $now=self::number($this->exec('SELECT UNIX_TIMESTAMP()',[])->fetchColumn());
             if ($now===null || $now<1) return false;
 
+            $canonicalEmail=strtolower(trim($verifiedEmail));
             $identities=[
                 'account_cooldown'=>(string)$userId,
                 'account_hour'=>(string)$userId,
                 'account_day'=>(string)$userId,
-                'email_hour'=>$emailStamp,
+                'email_hour'=>$canonicalEmail,
                 'ip_hour'=>inet_pton($ip),
                 'device_hour'=>$deviceId,
             ];
