@@ -93,6 +93,18 @@ Another source `local/php_interface/cron_bonus.php` explicitly reads `CRestis::r
 
 Next investigation should read masked component call parameters and cache TTL, verify cron registration/configuration without exposing secrets, and identify which UI path was actually rendered. Do not purge cache or change cron/production during diagnosis.
 
+## Follow-up cache / updater configuration evidence (2026-10-25)
+
+A subsequent production **static read-only** inspection confirmed these concrete paths:
+
+- `local/components/eurasia/account.bonus/component.php`: creates `Bitrix\\Main\\Data\\Cache`, sets `$cacheTime = $arParams["CACHE_TIME"]` and a user-dependent cache ID, checks `initCache(...)` and retrieves cached `$arResult`. On a generation path it loads `UF_BONUS` from `UserTable::getRow`, normalizes negative values to zero **for the UI**, puts the value in `$arResult["BONUS"]`, and calls `endDataCache($arResult)`. The template renders that value. This offers a concrete stale-balance mechanism; **effective cache enable flag, TTL, and cache-hit at the time of the anomaly were not yet measured**.
+- The `eurasia:account.bonus` component is referenced in the account main template around source lines 610-619 and 631-639. The masked inspection did not show literal `CACHE_TIME` values, the enabling flag or conditional rendering, so **do not infer both calls execute**, the number of actual cache entries, or TTL.
+- `local/php_interface/update_bonus.php` has a `time()-3600` guard, compares it against a user's last-update timestamp, queries RestIS `/api/Balance` when eligible and writes rounded `TotalSum` into `UF_BONUS` through `CUser::Update`. It is a **candidate on-demand writer**, not evidence that it ran during the observed convergence.
+- `local/php_interface/cron_bonus.php` reads RestIS and writes `UF_BONUS` via `CUser::Update`; however, a check of 10 readable system/root cron files found **zero direct references to `cron_bonus.php` and `update_bonus.php`**. Scope excluded other users, Bitrix agents, timers or dynamically included wrappers. No scheduling claim is supported.
+- In the sampled JavaScript `local/templates/eurasia/js/account.js`, balance-related markers were present around lines 91-103. The actual AJAX interaction and its causal relation to the transient website balance still require inspection.
+
+No cache cleared and no DB, RestIS or application write was performed during this investigation.
+
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
 ```sql
