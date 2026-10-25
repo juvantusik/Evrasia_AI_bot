@@ -54,7 +54,7 @@ final readonly class V5AccessJwtCodec
             || preg_match('/\A[a-f0-9]{64}\z/D', $committedSession['sid']) !== 1
             || !is_int($committedSession['auth_epoch'] ?? null)
             || $committedSession['auth_epoch'] < 1
-            || !in_array($committedSession['assurance'] ?? null, ['totp', 'sms', 'trusted'], true)
+            || !in_array($committedSession['assurance'] ?? null, ['totp', 'sms', 'email', 'trusted'], true)
             || !is_int($committedSession['assured_at'] ?? null)
             || $committedSession['assured_at'] < 1
             || $committedSession['assured_at'] > $now
