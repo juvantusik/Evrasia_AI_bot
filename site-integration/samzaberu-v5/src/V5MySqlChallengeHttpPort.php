@@ -57,12 +57,13 @@ interface V5EmailChallengeVerificationPort
 }
 
 final readonly class V5MySqlChallengeHttpPort
-    implements V5AtomicChallengePort, V5PasswordBoundChallengePort
+    implements V5AtomicChallengePort, V5PasswordBoundChallengePort, V5ExplicitSmsRecoveryPort
 {
     public function __construct(
         private V5MySqlChallengeConsumption $consumption,
         private ?V5ChallengeLifecyclePort $lifecycle = null,
         private ?V5EmailChallengeVerificationPort $email = null,
+        private ?V5ExplicitSmsRecoveryPort $manualSmsRecovery = null,
     ) {}
 
     public function begin(
@@ -98,6 +99,21 @@ final readonly class V5MySqlChallengeHttpPort
         }
         return $this->consumption->verifyAndConsume(
             $challengeId,$code,$deviceId,$platform
+        );
+    }
+
+    /**
+     * Only a separately installed native recovery provider can send SMS.
+     * Merely knowing a challenge ID never grants phone access or a code.
+     */
+    public function requestSmsInsteadOfEmail(
+        string $emailChallengeId,string $deviceId,string $platform
+    ):PendingLoginChallenge {
+        if ($this->manualSmsRecovery === null) {
+            throw new AuthenticationRejected('challenge_unavailable');
+        }
+        return $this->manualSmsRecovery->requestSmsInsteadOfEmail(
+            $emailChallengeId,$deviceId,$platform
         );
     }
 
