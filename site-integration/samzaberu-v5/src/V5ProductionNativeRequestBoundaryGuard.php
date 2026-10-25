@@ -64,9 +64,14 @@ final class V5ProductionNativeRequestBoundaryGuard
         if (self::isProtectedPostRoute($method, $uri)) {
             return true;
         }
-        return $method === 'GET'
-            && $uri === '/api/v5/cart'
-            && (V5RouteMap::ROUTES['GET /cart'] ?? null) === 'readCart';
+        if ($method !== 'GET') return false;
+        return match ($uri) {
+            '/api/v5/cart' =>
+                (V5RouteMap::ROUTES['GET /cart'] ?? null) === 'readCart',
+            '/api/v5/profile' =>
+                (V5RouteMap::ROUTES['GET /profile'] ?? null) === 'readProfile',
+            default => false,
+        };
     }
 
     public function __construct(
