@@ -389,3 +389,18 @@ User pasted **production pinned SOURCE-ONLY PASS** for `CartApiService::orderCre
 - NOT YET RESOLVED: precise WHERE field of `BASKET_CUSTOM_GIFTS`, Bitrix Sale native transaction identity with PDO and `$DB`, real successful order delivery to the restaurant, side-effects and post-save cart cleanup under concurrent FUSER mutation, real-account pilot. No proposed ledger table has been installed. V5 AUTH OFF, V4 unchanged, no production checkout invoked.
 
 Next: prioritize narrowly verifying actual RESTIS fulfillment transport and DB same-transaction guarantees (no broad repetition of already accepted API auth/cart/history or 141 offline tests); only then implement site-local cleanup using existing shared logic rather than duplicating checkout business policy.
+
+
+## 21. User directive: checkout ends at EXISTING LOCAL HANDOFF TO CALL CENTER (2026-10-25)
+
+**OVERRIDES all earlier wording suggesting direct RESTIS/restaurant routing or requiring call-center infrastructure research.**
+User explicitly clarified: the order travels `СамЗаберу -> V5 API -> Bitrix -> existing transmission to CALL CENTER -> restaurant`. **Do NOT access, audit, duplicate or change call-center / restaurant servers or internal routing. No such access exists or is needed.** Our responsibility ends at locally verified handoff from Bitrix into its already installed transmission mechanism. This is NOT proof of final delivery or call-center processing and should never be described as such.
+
+Stable source facts (user/operator read-only PASS):
+- `CartApiService::orderCreatedEvent()` executes two scoped DELETEs: `B_API_BASKET` (by FUSER_ID) and `BASKET_CUSTOM_GIFTS` (second WHERE key still unknown). It cleans the API cart/gifts, **does not send a call-center message**.
+- `Cart::order()` sets `IGNORE_RESTIS=Y`; `COrder::orderSaveHook()` skips standard RestIS send when Y. Do not turn off this flag or introduce a new V5 RESTIS sender to bypass it. Existing local Bitrix-to-call-center acceptance must be confirmed at the Bitrix side only.
+- New `V5PickupLocalCallCenterHandoffProofPort` in `src/V5BitrixLockedPickupOrderWriter.php`, commit `acaee760e050b91348c7b6814ba5cd9ed503afbe`. V5 writer verifies acceptance after NEW Sale D7 save but **before cart cleanup and persisted successful receipt**, inside its still-owned native transaction. Proof is intended to READ existing local Bitrix acceptance only; must never call outside servers or enqueue a duplicate. Replay bypasses proof/save/cleanup. Failure denies success and the strong session wrapper rolls back if transaction continuity holds.
+- Mock tests update commit `5cc9f8c182e09747da9b48f379cdff1eb6ca0005`: verifies the new proof is mandatory, called once on new order, skipped on replay, rejection prevents cart wipe and returned receipt. GitHub Actions `40211268485` **SUCCESS**, 146/146 MOCK-ONLY: HTTP 16 + D7 builder 24 + business 18 + writer 29 + native materializer 23 + fresh basket 24 + site policy 12.
+- A concise owner-focused contract and *only local* release gates: `docs/SAMZABERU_V5_ORDER_CALL_CENTER_BOUNDARY_2026-10-25.md` (commit `73dcca5e53fb32cf228349ec4feef0cd89a0cdb9`). It is intentionally not an operational integration specification for call center.
+
+Release conditions **still NOT met**: implement/verify local Bitrix handoff proof; exact `BASKET_CUSTOM_GIFTS` cleanup WHERE key; one physical Bitrix D7/$DB/PDO bridge transaction (strict continuity); durable V5 request ledger DDL not deployed; real guest end-to-end acceptance not tested. V5 AUTH OFF, V4 unchanged, no production writes, no real orders or call center calls. No guessing / no synthetic users. Focus on finishing these **local** gates rather than more call-center / RestIS infrastructure discovery.
