@@ -28,7 +28,7 @@ function markerFlags(string $raw): array
     ];
     $found = [];
     foreach ($patterns as $key => $pattern) {
-        if (@preg_match($pattern, $raw) === 1) $found[] = $key;
+        if (preg_match($pattern, $raw) === 1) $found[] = $key;
     }
     return $found;
 }
@@ -111,10 +111,9 @@ function inspectFile(string $root, string $rel): array
             $flags=markerFlags($raw);
             $safe=trim((string)preg_replace('/\s+/u',' ',$masked));
             if (strlen($safe)>240) $safe=substr($safe,0,240).'[TRUNCATED]';
-            if (preg_match('/\A[A-Za-z0-9_\\$\\\\>\-:.=;\[\]\(\), \'"\{\}\|!\?\&\+\*%\/]+.*\z/s', $safe)!==1) {
-                // Do not print an unusual binary/source fragment.
-                $safe='MASKED_STATEMENT';
-            }
+            // All string literals were already mapped to an explicit allowlist.
+            // Strip control characters; never display arbitrary source text.
+            $safe = (string)preg_replace('/[\\x00-\\x1f\\x7f]/', '', $safe);
             $rows[]=[
                 'line'=>$startLine,
                 'method'=>$currentMethod,
