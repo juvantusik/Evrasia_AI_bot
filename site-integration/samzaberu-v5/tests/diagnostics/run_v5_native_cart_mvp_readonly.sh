@@ -6,7 +6,7 @@ printf '\033[3J\033[2J\033[H'
 SITE='/home/site_evrasia/web/evrasia.spb.ru/public_html'
 CAND='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/candidates/6fa8773746e9a40e22008d67636c896eefeec3ed'
 OFF='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90/site-config.json'
-COMMIT='60581ca52f745c70344b451d83e8f80975498666'
+COMMIT='3c9c7074ee7739ae8b5fda1af16e709ec4380e92'
 BASE="https://raw.githubusercontent.com/juvantusik/Evrasia_AI_bot/$COMMIT/site-integration/samzaberu-v5"
 WORK=''
 TEST='NOT_RUN'
@@ -75,7 +75,7 @@ done <<'FILES'
 src/V5BitrixLockedCartReader.php 9d9dfd8f9555ddda6f84a89711e6ddf1d6480e68
 src/V5MySqlPublicComposition.php 41bcad895a8261bc3dc7e0a9d4d5610350b517ee
 src/V5MySqlPilotComposition.php 8de9acd60d34043ea61757e5caf9ecf1ab01b1be
-tests/V5IndependentNativeCartReadTest.php 2b04f7b73ee9417a52988eecf75bea723c531892
+tests/V5IndependentNativeCartReadTest.php cfaf103fbbc0ac46a6b12e09daf514c7fdc7b2c0
 FILES
 chown -R root:site_evrasia "$WORK"
 chmod 750 "$WORK" "$WORK/src" "$WORK/tests"
