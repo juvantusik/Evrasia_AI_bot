@@ -76,6 +76,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5SmsDispatchBudget.php \
             site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php \
             site-integration/samzaberu-v5/src/V5SeparatedFactorLifecycle.php \
+            site-integration/samzaberu-v5/src/V5PublicFactorKindAdapter.php \
             site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
             site-integration/samzaberu-v5/src/V5ExistingWebsiteEmailBudget.php \
             site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php \
@@ -136,6 +137,8 @@ jobs:
           # Load the actual native EMAIL class graph, without MySQL,
           # Bitrix bootstrap, synthetic accounts or external mail.
           php -r 'require_once "site-integration/samzaberu-v5/src/V5BitrixLockedEmailOtpProof.php"; require_once "site-integration/samzaberu-v5/src/V5MySqlConsumedChallengeProof.php"; if (!class_exists("Evrasia\\Samzaberu\\V5\\V5BitrixLockedEmailOtpProof") || !class_exists("Evrasia\\Samzaberu\\V5\\V5MySqlConsumedEmailGrantProof")) exit(1);'
+          php -r 'require_once "site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php"; if (!method_exists("Evrasia\\Samzaberu\\V5\\V5MySqlPublicComposition", "buildEmailFirst") || !class_exists("Evrasia\\Samzaberu\\V5\\V5PublicFactorKindAdapter")) exit(1);'
+          echo 'EMAIL_FIRST_PUBLIC_COMPOSITION_GRAPH=PASS'
           echo 'EMAIL_NATIVE_CLASS_GRAPH=PASS'
           echo 'FIRST_FACTOR_PUBLIC_GATES=PASS'
 
