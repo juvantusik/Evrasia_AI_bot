@@ -8,6 +8,8 @@ on:
       - site-integration/samzaberu-v5/src/V5BitrixSaleD7OrderBuilder.php
       - site-integration/samzaberu-v5/tests/V5BitrixSaleD7OrderBuilderTest.php
       - site-integration/samzaberu-v5/src/V5BitrixCheckoutBusinessRules.php
+      - site-integration/samzaberu-v5/src/V5BitrixLockedPickupOrderWriter.php
+      - site-integration/samzaberu-v5/tests/V5LockedPickupOrderWriterTest.php
       - site-integration/samzaberu-v5/tests/V5BitrixCheckoutBusinessRulesTest.php
       - site-integration/samzaberu-v5/src/V5CheckoutRequest.php
       - site-integration/samzaberu-v5/src/V5MySqlOrderPlace.php
@@ -31,6 +33,7 @@ jobs:
           for file in \
             src/V5BitrixSaleD7OrderBuilder.php \
             src/V5BitrixCheckoutBusinessRules.php \
+            src/V5BitrixLockedPickupOrderWriter.php \
             src/V5CheckoutRequest.php \
             src/V5MySqlOrderPlace.php \
             src/V5RouteMap.php \
@@ -41,7 +44,8 @@ jobs:
             src/V5MySqlPilotComposition.php \
             tests/V5IndependentCheckoutHttpTest.php \
             tests/V5BitrixSaleD7OrderBuilderTest.php \
-            tests/V5BitrixCheckoutBusinessRulesTest.php; do
+            tests/V5BitrixCheckoutBusinessRulesTest.php \
+            tests/V5LockedPickupOrderWriterTest.php; do
             php -l "$BASE/$file"
           done
       - name: Independent V5 checkout request and HTTP admission
@@ -50,3 +54,5 @@ jobs:
         run: php site-integration/samzaberu-v5/tests/V5BitrixSaleD7OrderBuilderTest.php
       - name: V5 on-site pickup checkout business rules (mock-only)
         run: php site-integration/samzaberu-v5/tests/V5BitrixCheckoutBusinessRulesTest.php
+      - name: V5 checkout locked native writer idempotency (mock-only)
+        run: php site-integration/samzaberu-v5/tests/V5LockedPickupOrderWriterTest.php
