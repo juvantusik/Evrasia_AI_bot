@@ -73,6 +73,29 @@ try {
     }
     check(count($excluded) === 11, 'PUBLIC_AND_UNKNOWN_ROUTES_DENIED');
 
+    check(
+        V5ProductionNativeRequestBoundaryGuard::isProtectedRequestRoute(
+            'GET', '/api/v5/cart'
+        ),
+        'PROTECTED_JWT_CART_GET_ACCEPTED',
+    );
+    foreach ([
+        ['GET', '/api/v5/cart/'],
+        ['GET', '/api/v5/cart?limit=1'],
+        ['POST', '/api/v5/cart'],
+        ['GET', '/api/v5/legal/consents'],
+        ['GET', '/api/v5/legal/registration-documents'],
+        ['GET', '/api/v5/health'],
+        ['POST', '/api/v5/legal/consents/validate'],
+    ] as [$method, $uri]) {
+        if (V5ProductionNativeRequestBoundaryGuard::isProtectedRequestRoute(
+            $method, $uri
+        )) {
+            throw new RuntimeException('CART_OR_PUBLIC_ROUTE_SCOPE_ERROR');
+        }
+    }
+    check(true, 'ANONYMOUS_AND_ALTERNATE_GET_DENIED');
+
     // Even convincing forged CGI fields cannot make a CLI process eligible.
     $_SERVER = [
         'DOCUMENT_ROOT' => '/home/site_evrasia/web/evrasia.spb.ru/public_html',
