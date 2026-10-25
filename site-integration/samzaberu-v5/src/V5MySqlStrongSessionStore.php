@@ -159,10 +159,11 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         string $platform,
         string $trustToken,
     ): AuthenticatedV5Session {
-        // TOTP enrollment is not a ban on CURRENT strongly enrolled trust.
-        // verifiedTrustWithUserLock must independently check the active native
-        // MFA state, current MFA/epoch version, token hash, expiry/revocation,
-        // and strong-enrollment evidence, under the SAME transaction.
+        // Preserve valid previously enrolled V4 trusts even where the
+        // original registration method was AUTH_PASSWORD. The proof MUST
+        // still verify CURRENT token/account/device, expiry, non-revocation
+        // and user/epoch state under this same transaction.
+        // New trust tokens are created only AFTER TOTP/email/SMS success.
         if (!$account->accountAllowed
             || !V5LoginWorkflow::validInstallation($deviceId, $platform)
             || $trustToken === '' || strlen($trustToken) > 1024
