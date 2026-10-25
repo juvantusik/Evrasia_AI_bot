@@ -52,6 +52,11 @@ final class V5NativeBitrixD7MailQueue implements V5BitrixMailQueuePort
  */
 final readonly class V5BitrixEmailOtpTransport implements V5EmailOtpTransportPort
 {
+    // LIVE eurasia_new.b_event_message read-only evidence. Site mapping and
+    // template fields still require separate positive attestation per send.
+    public const LIVE_LOGIN_EVENT = 'EVRASIA_WEB_EMAIL_LOGIN';
+    public const LIVE_LOGIN_TEMPLATE_ID = 95;
+
     public function __construct(
         private string $eventName,
         private string $siteId,
@@ -59,8 +64,8 @@ final readonly class V5BitrixEmailOtpTransport implements V5EmailOtpTransportPor
         private V5CurrentBitrixEmailLoginTemplatePort $template,
         private V5BitrixMailQueuePort $queue,
     ) {
-        if (preg_match('/\A[A-Z][A-Z0-9_]{5,63}\z/D',$eventName)!==1
-            || $eventName==='EVRASIA_WEB_EMAIL_OWNERSHIP'
+        if ($eventName!==self::LIVE_LOGIN_EVENT
+            || $messageId!==self::LIVE_LOGIN_TEMPLATE_ID
             || preg_match('/\A[a-z0-9_]{1,10}\z/D',$siteId)!==1
             || $messageId<=0) {
             throw new \InvalidArgumentException('v5_login_mail_template_unavailable');
