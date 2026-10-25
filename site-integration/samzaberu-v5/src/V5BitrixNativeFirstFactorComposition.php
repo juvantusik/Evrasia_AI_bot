@@ -15,6 +15,7 @@ require_once __DIR__ . '/V5PinnedBitrixMfaPolicies.php';
 require_once __DIR__ . '/V5BitrixMfaAdmissionGuards.php';
 require_once __DIR__ . '/V5MySqlAttemptWindowStore.php';
 require_once __DIR__ . '/V5PhpHttpRequestFactory.php';
+require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -54,6 +55,33 @@ final class V5BitrixNativeFirstFactorComposition
         V5AttemptBudgetPolicy $attemptBudgets,
         #[\SensitiveParameter] string $attemptHmacKey,
     ): V5PasswordProofPort {
+        // In real PHP-FPM the account reader MUST use the exact guarded
+        // native Bitrix mysqli bridge; the attempt writer MUST use a
+        // different, dedicated, nonpersistent, native PDO/MySQL connection.
+        // Merely comparing PHP object identities is insufficient: two
+        // adapter instances can alias the same physical Bitrix connection.
+        //
+        // CLI stays unchanged for isolated regression tests. Neither mode
+        // supplies an exclusive transaction permit or user authentication.
+        if (PHP_SAPI !== 'cli') {
+            if (PHP_SAPI !== 'fpm-fcgi'
+                || !($accountReadDb instanceof V5BitrixPdoCompatibilityBridge)
+                || !$accountReadDb->hasStrictV5HttpIngress()
+                || get_class($attemptBudgetDb) !== PDO::class) {
+                throw new InvalidArgumentException('V5 first-factor physical connection scope unavailable');
+            }
+            try {
+                // A persistent PDO could preserve an earlier request's MySQL
+                // transaction/session state. For the four-budget ledger it
+                // is not an approved physical connection boundary.
+                if ($attemptBudgetDb->getAttribute(PDO::ATTR_PERSISTENT) !== false) {
+                    throw new InvalidArgumentException('V5 attempt store persistent connection forbidden');
+                }
+            } catch (Throwable) {
+                throw new InvalidArgumentException('V5 attempt store physical connection unavailable');
+            }
+        }
+
         // Keep the owned attempt-counter transaction independent of the
         // account read and any later strong-session/Bitrix transaction.
         if ($accountReadDb === $attemptBudgetDb
