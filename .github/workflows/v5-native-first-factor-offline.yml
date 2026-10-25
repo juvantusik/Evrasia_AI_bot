@@ -20,6 +20,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5EmailToSmsLedgerOwnershipTest.php'
       - 'site-integration/samzaberu-v5/tests/V5EmailSmsSharedEpochContractTest.php'
       - 'site-integration/samzaberu-v5/tests/V5EmailToSmsTransitionPolicyTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5EmailToSmsAtomicStageTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php'
@@ -90,6 +91,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5UnavailableSmsLifecycle.php \
             site-integration/samzaberu-v5/src/V5ExistingWebsiteSmsRecoveryAdapter.php \
             site-integration/samzaberu-v5/src/V5EmailToSmsTransitionPolicy.php \
+            site-integration/samzaberu-v5/src/V5EmailToSmsAtomicStage.php \
             site-integration/samzaberu-v5/src/V5MySqlChallengeConsumption.php \
             site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
             site-integration/samzaberu-v5/src/V5ExistingWebsiteEmailBudget.php \
@@ -115,6 +117,7 @@ jobs:
             site-integration/samzaberu-v5/tests/V5EmailToSmsLedgerOwnershipTest.php \
             site-integration/samzaberu-v5/tests/V5EmailSmsSharedEpochContractTest.php \
             site-integration/samzaberu-v5/tests/V5EmailToSmsTransitionPolicyTest.php \
+            site-integration/samzaberu-v5/tests/V5EmailToSmsAtomicStageTest.php \
             site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php \
             site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php \
@@ -145,6 +148,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5EmailToSmsLedgerOwnershipTest.php
           php site-integration/samzaberu-v5/tests/V5EmailSmsSharedEpochContractTest.php
           php site-integration/samzaberu-v5/tests/V5EmailToSmsTransitionPolicyTest.php
+          php site-integration/samzaberu-v5/tests/V5EmailToSmsAtomicStageTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php
