@@ -11,7 +11,7 @@ use Evrasia\Samzaberu\V5\{
     V5TokenValidationPort,PasswordVerifiedAccount,MobileTrustAssessment,
     ConsumedLoginChallenge,PendingLoginChallenge,ChallengeKind,
     V5AccessJwtCodec,V5OpaqueRefreshTokens,V5HttpTransportBoundary,
-    V5StagedHttpRequest,
+    V5AttestedExplicitSmsRecoveryPort,V5StagedHttpRequest,
 };
 
 final class PublicWireDb extends PDO {
@@ -161,12 +161,13 @@ $siteRedisNoConnection=new class {
     }
 };
 $emailAssembly=static function (
-    PDO $connection,\Evrasia\Samzaberu\V5\V5BitrixLockedEmailOtpProof $emailNative
+    PDO $connection,\Evrasia\Samzaberu\V5\V5BitrixLockedEmailOtpProof $emailNative,
+    ?V5AttestedExplicitSmsRecoveryPort $smsRecovery = null
 ) use ($server,$native,$dependencies,$ports,$access,$refresh,$siteRedisNoConnection) {
     return V5MySqlPublicComposition::buildEmailFirst(
         $connection,$server,$native,$dependencies,$ports,$ports,$ports,$ports,
         $ports,$ports,$ports,$access,$refresh,$emailNative,$siteRedisNoConnection,
-        str_repeat('c',40),str_repeat('d',40),str_repeat('e',40)
+        str_repeat('c',40),str_repeat('d',40),str_repeat('e',40),null,$smsRecovery
     );
 };
 $matchingProof=$makeProof($db);
@@ -220,6 +221,44 @@ publicWireCheck($manualReply->status===401,
 publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
     'uninstalled SMS fallback must not invoke SMTP, Redis or old native SMS begin');
 
+
+// Attested site SMS recovery is optional, but a supplied provider MUST
+// independently prove its installed eligibility; unknown and denial abort
+// assembly without attempting an SMS, Redis, password or account lookup.
+final class PublicWireSmsRecovery implements V5AttestedExplicitSmsRecoveryPort {
+    public ?bool $attested=null;
+    public int $proofCalls=0;
+    public int $requests=0;
+    public function verifiedExistingSiteRecovery(PDO $db):?bool {
+        $this->proofCalls++;
+        return $this->attested;
+    }
+    public function requestSmsInsteadOfEmail(string $emailChallengeId,
+        string $deviceId,string $platform):PendingLoginChallenge {
+        $this->requests++;
+        throw new RuntimeException('private_native_recovery_not_installed');
+    }
+}
+$manual=new PublicWireSmsRecovery();
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof,$manual),
+    'unknown installed SMS recovery attestation rejects optional binding');
+$manual->attested=false;
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof,$manual),
+    'negative installed SMS recovery attestation rejects optional binding');
+publicWireCheck($manual->proofCalls===2 && $manual->requests===0,
+    'negative attestation can never dispatch paid SMS');
+$manual->attested=true;
+$enabledRecoveryTransport=$emailAssembly($db,$matchingProof,$manual);
+publicWireCheck($enabledRecoveryTransport instanceof V5HttpTransportBoundary,
+    'independently attested provider is the only optional recovery path');
+$deniedSms=$enabledRecoveryTransport->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/challenge/use-sms',true,
+    'application/json',$manualRequest,(string)strlen($manualRequest)
+));
+publicWireCheck($deniedSms->status===503 && $manual->requests===1,
+    'site recovery provider denial never returns SMS ticket or JWT');
+publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
+    'manual SMS attestation and denied dispatch never call Redis or legacy SMS');
 
 printf("PASS: V5 public mobile composition (%d synthetic assertions)\n",$checks);
 echo "REAL_NATIVE_PROVIDERS_VERIFIED=NO\n";
