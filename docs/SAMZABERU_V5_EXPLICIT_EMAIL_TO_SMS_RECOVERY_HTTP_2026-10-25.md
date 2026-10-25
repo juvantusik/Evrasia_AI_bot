@@ -1,5 +1,24 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — real native Bitrix FACT PROOFS CONNECTED (GitHub, NOT production)
+
+Owner asked «подключаем». Implemented **`src/V5BitrixEmailSmsStageProof.php`** as the concrete, fail-closed `V5LockedEmailToSmsStageProofPort` for the existing `V5EmailToSmsAtomicStage`. This is **not another paid SMS service or rate limiter**. It reuses:
+
+- `V5BitrixSmsPhoneRows::read(...,true)` + `confirmedDestination` and the **existing** `V5SecurityEventVersions` phone-event stamp, never request phone or `PERSONAL_PHONE`. Current SQL transaction and exact same PDO are required.
+- `V5SecurityEventVersions::forLockedPasswordProof()` for the existing keyed 64-hex SMS auth epoch stamp; no new HMAC algorithm/key.
+- The **same** `V5BitrixLockedEmailOtpProof::verifiedEmail()` source via new safe `currentVerifiedEmailStampWithUserLock()` (returns ONLY stamp; no email, no bearer token, no new site ownership algorithm).
+- Existing `V5ExistingLoginPolicyPort`, `V5NoMfaFallbackPolicyPort`, and **mandatory** `V5NativeSecurityHookCoveragePort`; unknown/false denies.
+- `SELECT USER_ID FROM b_sec_user WHERE USER_ID = ? LIMIT 2 FOR UPDATE`: **any** configured MFA row blocks downgrade to SMS. Native confirmed phone is also locked. No website PHP session or Bitrix login.
+- `V5EmailToSmsAtomicStage` now selects `LOGIN_ATTEMPTS` with locked user so native login policy is not bypassed. Current underlying stage still does the owned transaction, new SMS row, email CAS and COMMIT, but does not send paid SMS.
+
+**Source-only CI:** [V5 first-factor offline #40185214838](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40185214838) **SUCCESS**, including new `tests/V5BitrixEmailSmsStageProofContractTest.php` PHP syntax and structural safety checks. DOES NOT prove installed MFA hooks, real PDO lock order, current production schema, or external SMS delivery. Generic offline workflow still has the independently known `WebsiteEmailAccountConfirmWidgetClickTest.cjs` failure.
+
+**Unfinished before enabling:** no installed implementation of `V5ExistingWebsiteSmsNativeTransitionPort` that connects the committed stage to the *real* `signin/class.php::issuePilotSmsCode` / `CSms::send`, website per-user quota and authoritative sent receipt; native security event hook coverage is not verified in production; table `eurasia_new.ev_v5_email_auth_challenges` has not been separately approved or created. Never treat existence of `V5BitrixEmailSmsStageProof` as permission to release/dispatch.
+
+**Next operator-only read-only checkpoint:** inspect *metadata* for `ev_v5_email_auth_challenges`, `ev_v5_auth_challenges`, `ev_v5_sms_outbox`, `ev_v5_sms_budget_windows` plus structural use/return semantics of the **already-pinned** live `issuePilotSmsCode` / `CSms::send` without exposing SMS bodies, recipients or secrets. No source code dump, no testing against synthetic users, no message dispatch, no DDL. Wrapper MUST execute terminal clear `printf '\\033[3J\\033[2J\\033[H'` *after its heredoc and immediately before execution/first visible script output*.
+
+
+
 ## 25.10.2026 — source-only REAL SQL atomic stage, без вызова платного SMS
 
 `src/V5EmailToSmsAtomicStage.php` — следующий точный **исполняемый SQL-кандидат**, но **не** production installation и **не** complete `V5ExistingWebsiteSmsNativeTransitionPort`. В отличие от прежнего pure-policy он содержит реальные PDO-инструкции с ownership, транзакцией, блокировками, подготовкой нового SMS challenge и условной отменой email:
