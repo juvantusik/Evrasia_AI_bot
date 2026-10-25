@@ -17,6 +17,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php'
       - 'site-integration/samzaberu-v5/tests/V5UnavailableSmsLifecycleTest.php'
       - 'site-integration/samzaberu-v5/tests/V5ExistingWebsiteSmsRecoveryAdapterTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5EmailToSmsLedgerOwnershipTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php'
@@ -108,6 +109,7 @@ jobs:
             site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5UnavailableSmsLifecycleTest.php \
             site-integration/samzaberu-v5/tests/V5ExistingWebsiteSmsRecoveryAdapterTest.php \
+            site-integration/samzaberu-v5/tests/V5EmailToSmsLedgerOwnershipTest.php \
             site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php \
             site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php \
@@ -135,6 +137,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php
           php site-integration/samzaberu-v5/tests/V5UnavailableSmsLifecycleTest.php
           php site-integration/samzaberu-v5/tests/V5ExistingWebsiteSmsRecoveryAdapterTest.php
+          php site-integration/samzaberu-v5/tests/V5EmailToSmsLedgerOwnershipTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php
