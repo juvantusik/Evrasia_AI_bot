@@ -60,7 +60,7 @@ function methodTokensForTrace(string $data,string $method): array
     }
     abortOrderTrace('METHOD_NOT_FOUND');
 }
-function traceSiteMethod(string $filename,string $method,int $limit): void
+function traceSiteMethod(string $filename,string $method,int $limit,bool $allStatements=false): void
 {
     if(!is_file($filename)||is_link($filename)||filesize($filename)>1800000)
         abortOrderTrace('FILE_UNAVAILABLE');
@@ -78,7 +78,7 @@ function traceSiteMethod(string $filename,string $method,int $limit): void
         if(!in_array($v,[';','{','}'],true))continue;
         // Only the known integration points of interest. No arbitrary
         // string constants, customer values, SQL, file paths or full source.
-        if(preg_match('/IGNORE_RESTIS|REST_ID|orderCreatedEvent|orderSaveHook'
+        if($allStatements || preg_match('/IGNORE_RESTIS|REST_ID|orderCreatedEvent|orderSaveHook'
             .'|generateXML|Restis|RESTIS|restis|Queue|queue|StatusOrder'
             .'|OnSaleOrderSaved|sendOrder|sendToRest|setPaid/i',$raw)===1){
             $out=trim((string)preg_replace('/\s+/',' ',$masked));
@@ -108,12 +108,27 @@ PHP;
        ||!str_contains($sanitized,"'Y'")
        ||str_contains($sanitized,'production-secret-123'))
         abortOrderTrace('SELFTEST_MASK_FAILED');
-    echo "PASS: target method parser and source-literal masking\n";exit(0);
+    $fixture2=<<<'PHP'
+<?php
+class CartApiService {
+  function orderCreatedEvent(){
+    $event = new SomeEvent('hidden-webhook-credential');
+    $event->send();
+  }
 }
-if($argc!==4 || $argv[1]!=='--source-only')abortOrderTrace('ARGUMENTS');
+PHP;
+    $event=methodTokensForTrace($fixture2,'orderCreatedEvent');
+    $safe=implode('',array_map('safeOrderToken',$event));
+    if(str_contains($safe,'hidden-webhook-credential')
+       ||!str_contains($safe,'send'))abortOrderTrace('SERVICE_SELFTEST_FAILED');
+    echo "PASS: orderCreatedEvent parser and source-literal masking\n";exit(0);
+}
+if($argc!==5 || $argv[1]!=='--source-only')abortOrderTrace('ARGUMENTS');
 traceSiteMethod($argv[2],'order',22);
 traceSiteMethod($argv[3],'orderSaveHook',45);
 traceSiteMethod($argv[3],'generateXML',35);
+echo "=== CART API SERVICE EVENT BOUNDARY ===\n";
+traceSiteMethod($argv[4],'orderCreatedEvent',85,true);
 echo "CUSTOMER_DATA_READ=NO\n";
 echo "DATABASE_CONNECTION=NO\n";
 echo "PRODUCTION_CODE_WRITE=NO\n";
