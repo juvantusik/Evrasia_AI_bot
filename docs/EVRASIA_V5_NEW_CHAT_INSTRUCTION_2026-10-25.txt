@@ -1,0 +1,53 @@
+Продолжаем проект Evrasia AI Bot / СамЗаберу API V5. Это продолжение предыдущего чата от 25.10.2026, а не начало нового проекта.
+
+СРАЗУ открой репозиторий juvantusik/Evrasia_AI_bot, ветку feature/v5-production-native-preflight-20261025, и обязательно прочитай в таком порядке:
+1) docs/EVRASIA_V5_STANDALONE_LIVE_HANDOFF_2026-10-25.md — ГЛАВНЫЙ актуальный checkpoint, отменяет устаревшие противоречия;
+2) docs/EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-25_V5_MVP.md — дополнительные детали, особенно §37–41;
+3) при необходимости смотри site-integration/samzaberu-v5/src/ (auth/trust/pin), но не переписывай заново бизнес-логику.
+
+ГЛАВНОЕ РЕШЕНИЕ: рабочий API V4 НА СЕРВЕРЕ УЖЕ ЦЕЛИКОМ СКОПИРОВАН в независимые каталоги API V5:
+- /home/site_evrasia/web/evrasia.spb.ru/public_html/api/v4/
+- /home/site_evrasia/web/evrasia.spb.ru/public_html/api/v5/
+- /home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/Controllers/V4/
+- /home/site_evrasia/web/evrasia.spb.ru/public_html/local/php_interface/Controllers/V5/
+11 контроллеров V5 и 40 ссылок роутера уже переключены на namespace V5; все PHP lint PASS. В4 работает неизменным. НЕ копируй V4 ещё раз, НЕ наследуй и НЕ импортируй V4 runtime из V5, НЕ переписывай корзину/заказы и не строй дополнительные бизнес-адаптеры. Публичный V5 пока закрыт (503 v5_under_construction + .htaccess).
+
+В собственном Controllers/V5/PinCode.php УЖЕ установлен прямой PIN из CRestis::pincode, без SMS/ВК. PIN пока закрыт: Controllers/V5/Auth.php ещё использует старый JwtAuthorization и НЕ имеет verifiedStrongUserId(). В V5 Auth.php уже успешно удалена автоматическая регистрация нового траста через AUTH_PASSWORD после одного пароля; повторные запуски ничего не меняли, проверка read-only подтвердила CURRENT_TRUST_REGISTRATION=NO, 9 методов остались, PHP lint PASS. НЕ повторяй это изменение.
+
+Владелец подтвердил важные правила:
+- СТАРЫЕ действующие трасты сохраняем и принимаем после проверки пароля, без повторной рассылки TOTP/email/SMS, даже если исходный траст зарегистрирован после AUTH_PASSWORD; нельзя удалять накопленные трасты.
+- НОВЫЕ трасты регистрируем только после успешного TOTP, email OTP или SMS challenge; не после одного пароля или одного device_id.
+- Само мобильное ПРИЛОЖЕНИЕ создаёт trust_token НА УСТРОЙСТВЕ; СЕРВЕР НЕ ДОЛЖЕН ВОЗВРАЩАТЬ trust_token в ответе. Это последнее уточнение владельца. Сверь реальный серверный протокол приёма/подтверждения клиентского токена в исходниках; не путай с device_id формата sz_ + 64 lowercase hex (всего 67 символов). Существующий серверный trust validator ждёт два отдельных поля device_id и trust_token. Не принимай один device_id как доказательство траста. Ранее обнаружено, что устаревший V4 login генерировал server token и НЕ возвращал его в signin; не делай без проверки вывода, что каждая пассивно накопленная запись уже подтверждается приложением. Сначала сверить фактический формат и приём токена, не менять приложение/сервис наугад.
+- Без действующего траста: TOTP (если включён), иначе email OTP, ручной SMS fallback. После подтверждённого входа выдаём отдельную V5-сессию и показываем PIN прямо в ЛК без повторного SMS.
+- Legal/оферта/согласия при регистрации остаются обязательной задачей V5, использовать текущие Bitrix UserConsent.
+
+Сервер evrasia; домен https://evrasia.rest. Не менять живой V4, реальные заказы, производственные таблицы или SMS без отдельного разрешения. Никаких синтетических аккаунтов. Не предлагай переписать V4 заново или проходить множество ненужных offline-аудитов: владелец хочет быстро завершить необходимые изменения, дополнительные укрепления оставить на потом.
+
+ПОСЛЕДНИЙ ШАГ УЖЕ ВЫПОЛНЕН НА СЕРВЕРЕ:
+Копирование 8 исходников в частный архив /home/tech/evrasia-v5-runtime.DhwrZNst.tar.gz. Вывод:
+SOURCE_FILES=8
+V4_CHANGED=NO
+V5_CHANGED=NO
+DATABASE_WRITE=NO
+FINAL_STATUS=PASS
+WRAPPER_RC=0
+Внутри JwtAuthorization.php, текущие Controllers/V5/Auth.php и PinCode.php, EmailFirstLoginRuntime.php, EmailFirstSessionBridge.php, EmailFirstManualSmsChoice.php, EmailFirstSmsRatePolicy.php, EmailFirstSmsResendGuard.php. В предыдущем чате пользователь прислал ТОЛЬКО ВЫВОД, а не .tar.gz. Сейчас нужен именно уже созданный файл: попроси приложить его к НОВОМУ чату, если он ещё не приложен, НО НЕ заставляй пересоздавать. Ранее в чате также был 5-файловый архив evrasia-v5-auth-src.2ssakqOZ.tar.gz с website signin/TOTP, AuthAssuranceService, TrustedDeviceWebService. Если доступен, используй его; если нет, попроси передать один раз. Не публикуй эти архивы или парольные исходники в GitHub.
+
+ТВОЯ СЛЕДУЮЩАЯ РАБОТА: сразу прочти новый runtime archive, сопоставь с ранее полученным website-auth кодом и подготовь точечную рабочую замену только Auth.php и необходимые V5-only привязки:
+(1) пароль + подтверждённый существующий device trust -> V5 access/refresh;
+(2) без trust -> TOTP/email/ручной SMS -> V5 access/refresh и регистрация нового trust на основе клиентского токена;
+(3) Auth::verifiedStrongUserId() проверяет V5-only сессию для уже установленного V5 PinCode;
+(4) регистрация/legal-коды, затем контролируемый реальный пилот.
+Всё делать поверх уже скопированного работающего V4 кода, без изменения работающих бизнес-методов.
+
+Каждый серверный блок выдавай в виде bash <<'ИМЯ' (изолированная оболочка), С НАЧАЛЬНОЙ ОЧИСТКОЙ ТЕРМИНАЛА: printf '\033[3J\033[2J\033[H'. Не запускай set -e в текущей интерактивной root-оболочке, поскольку PuTTY уже закрывался. Сначала проверка фактического состояния, резервная копия, минимальная правка только V5, PHP lint, итог PASS/FAIL/WRAPPER_RC. Не меняй V5, если нет уверенности в текущих реальных исходниках.
+
+Проверенные backup:
+- /home/site_evrasia/web/evrasia.spb.ru/backups/v5-before-v4-copy.DLXqsAuy
+- /home/site_evrasia/web/evrasia.spb.ru/backups/v5-namespace.WArkhLvE
+- /home/site_evrasia/web/evrasia.spb.ru/backups/v5-pin-before.dD4cN8d8
+- /home/site_evrasia/web/evrasia.spb.ru/backups/v5-auth-trust.VmRZbRHH
+
+Отдельную разработку BonusBalance (CAS, RESTISBONUS, triggers, outbox) НЕ смешивай с API V5 — её выводы случайно попадали в общий терминал.
+
+Начинай с содержимого архива, не задавай уже отвеченных вопросов, не повторяй копирование/снятие исходников, учитывай созданные и подтверждённые live изменения и двигайся к реально работающей V5 авторизации.
