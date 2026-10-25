@@ -34,7 +34,9 @@ $configPath = $private.'/site-config.json'; $factoryPath = $private.'/site-facto
 $key = bin2hex(random_bytes(32));
 $settings = ['mode'=>'pilot','pilot_key_sha256'=>hash('sha256',$key),
     'expires_at'=>time()+3600,'allowed_peer_ips'=>['192.0.2.4','2001:db8::4']];
-$factorySource = '<?php $GLOBALS["privateFactoryCalls"] = ($GLOBALS["privateFactoryCalls"] ?? 0) + 1; '
+$factorySource = '<?php if (!isset($request) || !($request instanceof \\Evrasia\\Samzaberu\\V5\\V5StagedHttpRequest)) throw new \\RuntimeException("no trusted V5 request"); '
+    .'$GLOBALS["privateFactoryRequestScope"] = ($request->requestUri === "/api/v5/auth/signin" && $request->method === "POST" && $request->rawBody === "{\\"unexpected\\":true}"); '
+    .'$GLOBALS["privateFactoryCalls"] = ($GLOBALS["privateFactoryCalls"] ?? 0) + 1; '
     .'return new \\Evrasia\\Samzaberu\\V5\\V5HttpTransportBoundary();';
 // Correct PHP namespace separators; source never contains the pilot key.
 $factorySource = str_replace('\\\\','\\',$factorySource);
@@ -74,6 +76,8 @@ try {
         && $GLOBALS['privateFactoryCalls']===0,'invalid body does not bootstrap admitted pilot');
     privateCheck($entry->dispatch($server,$read)->status===503 && $GLOBALS['privateFactoryCalls']===1,
         'pilot permit does NOT create auth: an unconfigured transport still denies');
+    privateCheck(($GLOBALS['privateFactoryRequestScope'] ?? false) === true,
+        'fixed private factory can access only the validated scoped request');
     $before=$GLOBALS['privateFactoryCalls'];
     foreach ([['mode'=>'off'],['mode'=>'public'],['mode'=>true],['expires_at'=>time()-1],
         ['expires_at'=>time()+90000],['expires_at'=>(string)(time()+60)],
