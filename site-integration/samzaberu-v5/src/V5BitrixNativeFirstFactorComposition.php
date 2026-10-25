@@ -14,6 +14,7 @@ require_once __DIR__ . '/V5NoMfaFallbackPolicy.php';
 require_once __DIR__ . '/V5PinnedBitrixMfaPolicies.php';
 require_once __DIR__ . '/V5BitrixMfaAdmissionGuards.php';
 require_once __DIR__ . '/V5MySqlAttemptWindowStore.php';
+require_once __DIR__ . '/V5PhpHttpRequestFactory.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -115,6 +116,94 @@ final class V5BitrixNativeFirstFactorComposition
             new V5PinnedBitrixPasswordComparator(),
             new V5PinnedBitrixPasswordLoginAdmission(),
         );
+    }
+
+    /**
+     * Build the EXISTING native first-factor proof from the request already
+     * validated and size-bounded by V5ParallelHttpEntry. This closes the
+     * gap where the private factory otherwise had to take device_id/platform
+     * from a second untrusted source. It performs no DB I/O on its own.
+     *
+     * This is sign-in ONLY; refresh, verify, cart and legal requests must
+     * never manufacture a new first-factor identity. The two dedicated
+     * connections and the installed site policy providers remain mandatory.
+     *
+     * @param array<string,mixed> $server Trusted CGI fields from web server.
+     */
+    public static function buildFromScopedSignIn(
+        PDO $accountReadDb,
+        PDO $attemptBudgetDb,
+        V5StagedHttpRequest $request,
+        array $server,
+        V5CurrentLoginControlsPort $loginControls,
+        V5PerUserSmsEligibilityPort $userSmsPolicy,
+        V5AttemptBudgetPolicy $attemptBudgets,
+        #[\SensitiveParameter] string $attemptHmacKey,
+    ): V5PasswordProofPort {
+        $identity = self::deviceFromScopedSignIn($request);
+        if ($identity === null
+            || ($server['REQUEST_METHOD'] ?? null) !== $request->method
+            || ($server['REQUEST_URI'] ?? null) !== $request->requestUri
+            || ($server['HTTP_HOST'] ?? null) !== 'evrasia.rest'
+            || !self::trustedHttps($server)) {
+            throw new InvalidArgumentException('V5 sign-in request scope unavailable');
+        }
+        // Existing build owns the only first-factor implementation:
+        // current Bitrix hash, native post-hash admission and four budgets.
+        return self::build(
+            $accountReadDb, $attemptBudgetDb, $server,
+            $identity['device_id'], $identity['platform'],
+            $loginControls, $userSmsPolicy, $attemptBudgets, $attemptHmacKey
+        );
+    }
+
+    /**
+     * Pure input extraction; no password, login or trust token escapes.
+     * Null means this is NOT an exact, already-bounded sign-in request.
+     *
+     * @return array{device_id:string,platform:string}|null
+     */
+    public static function deviceFromScopedSignIn(V5StagedHttpRequest $request): ?array
+    {
+        if ($request->method !== 'POST'
+            || $request->requestUri !== '/api/v5/auth/signin'
+            || !$request->trustedHttps
+            || strlen($request->rawBody) < 1
+            || strlen($request->rawBody) > 8192
+            || preg_match('/\Aapplication\/json(?:[ \t]*;[ \t]*charset=utf-8)?\z/iD',
+                $request->contentType) !== 1
+            || ($request->contentLength !== null
+                && $request->contentLength !== (string)strlen($request->rawBody))) {
+            return null;
+        }
+        try {
+            $data = json_decode($request->rawBody, true, 16, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!is_array($data) || array_is_list($data)) {
+            return null;
+        }
+        foreach (array_keys($data) as $key) {
+            if (!is_string($key) || !in_array($key,
+                ['login', 'password', 'device_id', 'platform', 'trust_token'], true)) {
+                return null;
+            }
+        }
+        $login = $data['login'] ?? null;
+        $password = $data['password'] ?? null;
+        $deviceId = $data['device_id'] ?? null;
+        $platform = $data['platform'] ?? null;
+        $trust = $data['trust_token'] ?? null;
+        if (!is_string($login) || $login === '' || strlen($login) > 320
+            || !is_string($password) || $password === '' || strlen($password) > 4096
+            || !is_string($deviceId) || !is_string($platform)
+            || !V5LoginWorkflow::validInstallation($deviceId, $platform)
+            || ($trust !== null
+                && (!is_string($trust) || strlen($trust) > 1024))) {
+            return null;
+        }
+        return ['device_id' => $deviceId, 'platform' => $platform];
     }
 
     private static function readyDb(PDO $db): bool
