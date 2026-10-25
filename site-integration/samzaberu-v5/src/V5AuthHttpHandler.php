@@ -75,6 +75,14 @@ interface V5OrdersHttpReaderPort
     public function readVerifiedOrders(#[\SensitiveParameter] string $accessJwt): ?array;
 }
 
+interface V5OrderDetailHttpReaderPort
+{
+    /** @return array<string,mixed>|null */
+    public function readVerifiedOrderDetail(
+        #[\SensitiveParameter] string $accessJwt, int $orderId
+    ): ?array;
+}
+
 interface V5TokenValidationPort
 {
     public function isValidAccessToken(string $accessJwt): bool;
@@ -109,6 +117,7 @@ final readonly class V5AuthHttpHandler
         private ?V5CartHttpReaderPort $cartReader = null,
         private ?V5ProfileHttpReaderPort $profileReader = null,
         private ?V5OrdersHttpReaderPort $ordersReader = null,
+        private ?V5OrderDetailHttpReaderPort $orderDetailReader = null,
     ) {}
 
     /**
@@ -152,6 +161,9 @@ final readonly class V5AuthHttpHandler
                 'validateToken' => $this->tokenValidator === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->validateToken($body),
+                'readOrderDetail' => $this->orderDetailReader === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->readOrderDetail($body),
                 'validateLegalConsents' => $this->publicLegalConsents === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->validateLegalConsents($body),
@@ -289,6 +301,39 @@ final readonly class V5AuthHttpHandler
                 return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
             }
             return new V5HttpReply(200, ['orders' => $orders]);
+        } catch (Throwable) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+    }
+
+    /**
+     * POST /orders/detail with JSON {access_token,order_id} uses the
+     * existing V5 token/session, never a client USER_ID or V4 handler.
+     */
+    private function readOrderDetail(array $body): V5HttpReply
+    {
+        if (!self::hasOnlyKeys($body, ['access_token','order_id'])
+            || !self::isString($body, 'access_token')
+            || !isset($body['order_id'])
+            || !is_int($body['order_id']) || $body['order_id'] < 1) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        $jwt = $body['access_token'];
+        if (strlen($jwt) < 110 || strlen($jwt) > 4096
+            || preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D', $jwt) !== 1) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        try {
+            $detail = $this->orderDetailReader->readVerifiedOrderDetail(
+                $jwt, $body['order_id']
+            );
+            if ($detail === null) return new V5HttpReply(404, ['error' => 'order_not_found']);
+            if (!is_array($detail) || ($detail['id'] ?? null) !== $body['order_id']
+                || !isset($detail['items']) || !is_array($detail['items'])
+                || !array_is_list($detail['items']) || count($detail['items']) > 200) {
+                return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+            }
+            return new V5HttpReply(200, ['order' => $detail]);
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
