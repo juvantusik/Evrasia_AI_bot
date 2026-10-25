@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5MySqlStrongSessionStore.php';
 require_once __DIR__ . '/V5MySqlChallengeConsumption.php';
+require_once __DIR__ . '/V5MySqlConsumedEmailGrantProof.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -29,6 +30,7 @@ final readonly class V5MySqlConsumedChallengeProof implements V5LockedStrongSess
         private V5LockedStrongSessionProofPort $trustedDeviceProof,
         private V5LockedChallengeNativeFactorPort $native,
         #[\SensitiveParameter] private string $bindingKey,
+        private ?V5LockedConsumedEmailGrantProofPort $email = null,
     ) {
         if(strlen($bindingKey)<32)
             throw new InvalidArgumentException('V5 consumed grant binding key unavailable');
@@ -52,6 +54,12 @@ final readonly class V5MySqlConsumedChallengeProof implements V5LockedStrongSess
             return false;
 
         try{
+            // An email grant comes from its OWN one-time ledger, not the
+            // native TOTP/SMS ledger. No verifier => no JWT.
+            if ($grant->kind===ChallengeKind::EMAIL) {
+                return $this->email !== null
+                    && $this->email->verifiedConsumedEmailWithUserLock($db,$grant)===true;
+            }
             $q=$this->execute($db,'SELECT user_id,device_binding,platform,kind,'
                 .'status,password_proven,issued_at,expires_at,failed_attempts,'
                 .'sms_sent_count,verification_stamp,auth_epoch,sms_code_hmac,'

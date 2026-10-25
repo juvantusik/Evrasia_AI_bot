@@ -340,7 +340,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         ?string $grantReference, callable $proof,
     ): AuthenticatedV5Session {
         if ($userId < 1 || !V5LoginWorkflow::validInstallation($deviceId, $platform)
-            || !in_array($assurance, ['totp','sms','trusted'], true)
+            || !in_array($assurance, ['totp','sms','email','trusted'], true)
             || ($grantReference !== null && !V5LoginWorkflow::validChallengeId($grantReference))
             || ($grantReference === null && $assurance !== 'trusted')
             || ($grantReference !== null && $assurance === 'trusted')) {
@@ -546,7 +546,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             || !is_string($row['sid']) || !self::hex64($row['sid'])
             || self::positive($row['user_id'] ?? null) !== $userId
             || ($row['status'] ?? null) !== 'active'
-            || !in_array($row['assurance'] ?? null, ['totp','sms','trusted'], true)
+            || !in_array($row['assurance'] ?? null, ['totp','sms','email','trusted'], true)
         ) return null;
         $epoch=self::positive($row['auth_epoch'] ?? null);
         $assured=self::positive($row['assured_at'] ?? null);

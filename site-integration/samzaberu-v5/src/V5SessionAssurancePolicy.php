@@ -64,7 +64,7 @@ final class V5SessionAssurancePolicy
 
         $assurance = $serverSession['assurance'] ?? null;
         if (!is_string($assurance)
-            || !in_array($assurance, ['totp', 'sms', 'trusted'], true)
+            || !in_array($assurance, ['totp', 'sms', 'email', 'trusted'], true)
         ) {
             return false;
         }
