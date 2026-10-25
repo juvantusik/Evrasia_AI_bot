@@ -1,5 +1,18 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## Дополнение: проверка видимости и сессионной зависимости (production READ-ONLY)
+
+По выводу оператора `ev-v5-sms-boundary`: `FINAL_STATUS=PASS`, `FINAL_RC=0`, **18 методов** исследованы статически на production, PHP lint/source SHA PASS, никаких вызовов БД/Redis, SMS/email, PHP Bitrix bootstrap и никаких production writes.
+
+- `emailUseSmsAction` — `public`, но **не независимый API**: напрямую использует `$_SESSION`, `$USER`, `check_bitrix_sessid`; вызывает `EmailFirstSessionBridge::switchToSms` и внутреннюю отправку. **Не использовать как V5 endpoint**.
+- `evEmailIssueSmsAfterReservation`, `evEmailIssueSmsFromVerifiedContext`, `evEmailIssueSmsFromVerifiedContextNative` — **private instance methods**, все содержат `$_SESSION`. Последний непосредственно вызывает `issuePilotSmsCode`. Не пытаться вызвать через reflection/обход visibility, не подставлять искусственную PHP-сессию.
+- `issuePilotSmsCode` — `private`, непосредственно **не** ссылается на `$_SESSION`, вызывает `getPilotProfilePhone`, `enforcePilotSmsRateLimit` и существующий `CSms`. Это **точка для возможного извлечения общего site-native сервиса**, а не готовый публичный метод. `getPilotProfilePhone` и `enforcePilotSmsRateLimit` тоже private и не содержат прямого session access.
+- `EmailFirstSmsRatePolicy`: `begin`, `check`, `reserve` — `public static` и не содержат прямого `$_SESSION`; `EmailFirstSmsResendGuard::canIssue` / `markReserved` — `public static`, проверка повторных отправок. Их **семантика и типы аргументов пока не аттестованы**, нельзя объявить их общим мобильным бюджетом без анализа входных данных.
+- `EmailFirstSessionBridge::switchToSms` — `public static`, но принимает девять аргументов и является мостом **веб-состояния**, а не доказанным мобильным OTP proof.
+- Вывод старого статического парсера о `EmailFirstSmsResendGuard::mark` (public_default) **не считать достоверной сигнатурой**: требуется корректная проверка структуры токенов/классов при необходимости.
+
+**Решение интеграции:** V5 HTTP route уже существует, но без подтверждённого native provider **остаётся отказным**. Не переносить серверную веб-сессию, не обращаться к private methods через reflection, не дублировать `CSms`, генерацию OTP или rate-limiter. Следующий минимальный шаг — получить **только структурные сигнатуры/типы аргументов и форму фактического вызова CSms** из живого source (без строк, телефонов, secret values) и выбрать общий site-native transport / guard boundary. Отдельное разрешение на production PHP change требуется до любой экстракции или deployment; DDL `eurasia_new.ev_v5_email_auth_challenges` отдельно согласовывается.
+
 ## Реальная production-инвентаризация — 25.10.2026 (READ-ONLY, operator PASS)
 
 Подтверждён действующий **сайт** (не приложение) и версия файла `local/components/eurasia/signin/class.php`: SHA256 `3df2c4d31ecf765a2d0bfcb4d5181aa9f51734d901872bf4ed93a07a6601817f`. Следующие методы обнаружены статически, **это НЕ подтверждение их публичной callable-сигнатуры или отсутствия привязки к браузерной сессии**:
