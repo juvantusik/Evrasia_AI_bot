@@ -29,7 +29,7 @@ final class V5ProductionNativeRequestBoundaryGuard
     private const ROUTER = self::SITE_ROOT . '/api/v5/router.php';
     private const PUBLIC_HOST = 'evrasia.rest';
 
-    /** V5-owned POST actions only. Public legal and GET cart are separate. */
+    /** V5-owned POST actions only. Public legal is never in this set. */
     private const PROTECTED_POST_ACTIONS = [
         'signin', 'verifyChallenge', 'resendChallenge',
         'requestSmsFallback', 'refresh', 'logout',
