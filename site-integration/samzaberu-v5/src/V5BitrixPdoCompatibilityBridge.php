@@ -288,6 +288,59 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             . 'LOGIN_ATTEMPTS FROM b_user WHERE LOGIN = ? LIMIT 2 FOR UPDATE',
     ];
 
+    /** @var list<string> */
+    private const EMAIL_AUTH_SQL = [
+        // Exact site login/current email proof reads.
+        'SELECT ID,LOGIN,EMAIL,PASSWORD,ACTIVE,BLOCKED,'
+            . 'PASSWORD_EXPIRED,LOGIN_ATTEMPTS,UNIX_TIMESTAMP(TIMESTAMP_X) AS profile_stamp '
+            . 'FROM b_user WHERE ID = ? FOR UPDATE',
+        'SELECT ID FROM b_user WHERE EMAIL = ? LIMIT 2 FOR UPDATE',
+        'SELECT ID FROM b_user WHERE LOGIN = ? LIMIT 2 FOR UPDATE',
+        'SELECT USER_ID FROM b_sec_user WHERE USER_ID = ? LIMIT 2 FOR UPDATE',
+        'SELECT user_id,current_email_mac,profile_updated_at,'
+            . 'verified_at,source,revoked FROM ev_web_email_ownership_proof '
+            . 'WHERE user_id = ? FOR UPDATE',
+        // Locking and auth epoch form used by email issuance and consumed grant.
+        'SELECT ID,ACTIVE,BLOCKED,PASSWORD_EXPIRED '
+            . 'FROM b_user WHERE ID = ? FOR UPDATE',
+        'SELECT ID,ACTIVE,BLOCKED,PASSWORD_EXPIRED '
+            . 'FROM b_user WHERE ID=? FOR UPDATE',
+        'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state '
+            . 'WHERE USER_ID = ? FOR UPDATE',
+        'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state '
+            . 'WHERE USER_ID=? FOR UPDATE',
+        // Existing eurasia_new does NOT yet have this V5 email ledger.
+        // Exact prepared statements are inert until independently approved
+        // same-DB migration and full native admission; no DDL here.
+        'SELECT COUNT(*) FROM ev_v5_email_auth_challenges '
+            . 'WHERE user_id = ? AND status IN (?,?) AND expires_at > ?',
+        'SELECT challenge_id FROM ev_v5_email_auth_challenges '
+            . 'WHERE challenge_id = ? LIMIT 1',
+        'SELECT user_id FROM ev_v5_email_auth_challenges '
+            . 'WHERE challenge_id = ? LIMIT 1',
+        'SELECT challenge_id,user_id,device_binding,platform,status,'
+            . 'email_stamp,auth_epoch,code_hmac,issued_at,expires_at,failed_attempts '
+            . 'FROM ev_v5_email_auth_challenges WHERE challenge_id = ? FOR UPDATE',
+        'SELECT challenge_id,user_id,device_binding,platform,status,'
+            . 'email_stamp,auth_epoch,code_hmac,issued_at,expires_at,failed_attempts '
+            . 'FROM ev_v5_email_auth_challenges WHERE challenge_id=? FOR UPDATE',
+        // Only the existing password-bound email OTP code may mutate its
+        // own NEW ledger. Never permit generic UPDATE/INSERT/SELECT here.
+        'INSERT INTO ev_v5_email_auth_challenges '
+            . '(challenge_id,user_id,device_binding,platform,status,email_stamp,'
+            . 'auth_epoch,code_hmac,issued_at,expires_at,failed_attempts) '
+            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        'UPDATE ev_v5_email_auth_challenges SET status = ? '
+            . 'WHERE challenge_id = ? AND user_id = ? AND status = ? '
+            . 'AND auth_epoch = ? AND email_stamp = ? AND expires_at > ?',
+        'UPDATE ev_v5_email_auth_challenges '
+            . 'SET status = ?, code_hmac = NULL WHERE challenge_id = ? '
+            . 'AND status = ? AND failed_attempts = ?',
+        'UPDATE ev_v5_email_auth_challenges '
+            . 'SET failed_attempts = ?, status = ? WHERE challenge_id = ? '
+            . 'AND status = ? AND failed_attempts = ?',
+    ];
+
     // Exact native sale FUSER ownership point read for protected V5 cart.
     // b_sale_fuser ownership must remain locked until the cart read completes;
     // NO generic allowlisting of sale/basket tables or arbitrary SQL shapes.
@@ -312,10 +365,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         if ($sql === self::CART_OWNER_SQL) {
             return;
         }
-        // Only the three known transaction-continuity guard pairs issued by
-        // V5MySqlStrongSessionStore::transaction(),
-        // V5MySqlChallengeConsumption::verifyAndConsume() and
-        // V5MySqlPasswordBoundTotpIssuer::beginBound().
+        // Fixed transaction continuity guards, including four exact
+        // names owned by V5MySqlEmailOtp (issue/rate/ack/verify). No
+        // generic savepoint name or external SQL may be submitted.
         // runStatement() separately demands an owned native transaction for
         // ALL these write-shaped statements. No arbitrary names/rollback/batch.
         if (in_array($sql, [
@@ -325,12 +377,29 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             'RELEASE SAVEPOINT v5_native_factor_guard',
             'SAVEPOINT v5_totp_issue_guard',
             'RELEASE SAVEPOINT v5_totp_issue_guard',
+            'SAVEPOINT v5_email_issue_guard',
+            'RELEASE SAVEPOINT v5_email_issue_guard',
+            'SAVEPOINT v5_email_rate_guard',
+            'RELEASE SAVEPOINT v5_email_rate_guard',
+            'SAVEPOINT v5_email_ack_guard',
+            'RELEASE SAVEPOINT v5_email_ack_guard',
+            'SAVEPOINT v5_email_verify_guard',
+            'RELEASE SAVEPOINT v5_email_verify_guard',
         ], true)) {
             return;
         }
         // No generic EMAIL/LOGIN predicate allowance or ACTIVE pre-filter.
         if (in_array($sql, self::AUTH_IDENTITY_READ_SQL, true)) {
             return;
+        }
+        // Email queries must match the exact staging source templates.
+        // All other access to V5's email ledger and ownership proof denied.
+        if (in_array($sql, self::EMAIL_AUTH_SQL, true)) {
+            return;
+        }
+        if (str_contains($sql, 'ev_v5_email_auth_challenges')
+            || str_contains($sql, 'ev_web_email_ownership_proof')) {
+            throw new RuntimeException('v5_bitrix_email_sql_forbidden');
         }
         // Only the EXACT statements emitted by V5MySqlStrongSessionStore.
         // Never add the sessions table to the generic SELECT/UPDATE regex:
