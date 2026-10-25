@@ -95,7 +95,13 @@ namespace {
             return new \Bitrix\Sale\BasketBase();
         }
         public function orderProperties(\PDO $db,int $userId,array $business): array {
-            return ['REST_ID'=>(string)$business['rid'],'phone'=>$business['phone']];
+            return [
+                '__PAYER_NAME'=>$business['name'],
+                'restaurant'=>$business['rest']['name'],
+                'phone'=>$business['phone'],
+                'source'=>'trusted-source',
+                'IGNORE_RESTIS'=>'Y',
+            ];
         }
     }
     final class Saver implements V5NativePickupOrderSaverPort {
@@ -105,7 +111,8 @@ namespace {
             int $paySystemId,array $propertyValues): array {
             if ($this->fail) throw new \RuntimeException('native save failed');
             if ($userId!==27||$siteId!=='s1'||$paySystemId!==2
-                ||($propertyValues['REST_ID']??null)!=='12') {
+                ||($propertyValues['restaurant']??null)!=='Site restaurant'
+                ||isset($propertyValues['REST_ID'])) {
                 throw new \RuntimeException('server payment/owner mismatch');
             }
             ++$this->calls;

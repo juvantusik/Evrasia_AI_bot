@@ -133,6 +133,7 @@ final readonly class V5BitrixNativePickupMaterializer implements V5NativePickupO
             throw new RuntimeException('checkout_properties_unavailable');
         }
         $required = [
+            '__PAYER_NAME'=>$business['name'] ?? null,
             'restaurant'=>$business['rest']['name'],
             'phone'=>$business['phone'] ?? null,
             'cutlery'=>isset($business['cutlery']) ? (string)$business['cutlery'] : null,

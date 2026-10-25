@@ -56,10 +56,11 @@ namespace {
     $db=new TestPickupPdo();
     $business=[
         'rid'=>12,'rest'=>['id'=>12,'name'=>'Existing restaurant'],
-        'phone'=>'masked','cutlery'=>2,'time'=>'19:30','dispatch'=>'pickup',
+        'phone'=>'masked','name'=>'Verified buyer','cutlery'=>2,'time'=>'19:30','dispatch'=>'pickup',
     ];
     $properties=$materializer->orderProperties($db,27,$business);
     $check($properties['restaurant']==='Existing restaurant','SERVER_RESTAURANT_NAME');
+    $check($properties['__PAYER_NAME']==='Verified buyer','NATIVE_PAYER_NAME');
     $check($properties['phone']==='masked','SERVER_PHONE');
     $check($properties['cutlery']==='2','SERVER_CUTLERY');
     $check($properties['time']==='19:30','SERVER_PICKUP_TIME');

@@ -70,6 +70,12 @@ namespace Bitrix\Sale {
     }
     final class FakePropertyCollection {
         public array $props = [];
+        public function getPayerName(): FakeProperty {
+            return $this->getPropertyByCode('BUYER_NAME');
+        }
+        public function getPhone(): FakeProperty {
+            return $this->getPropertyByCode('phone');
+        }
         public function getPropertyByCode(string $code): FakeProperty {
             return $this->props[$code] ??= new FakeProperty();
         }
@@ -135,6 +141,7 @@ namespace {
     $builder = new V5BitrixSaleD7OrderBuilder();
     $basket = new BasketBase([new FakeBasketItem(2.0)]);
     $receipt = $builder->savePrepared(27, 's1', $basket, 3, [
+        '__PAYER_NAME' => 'Real site-owned buyer name fixture',
         'PHONE' => 'masked',
         'RESTAURANT' => '12',
         'phone' => 'masked',
@@ -148,24 +155,31 @@ namespace {
     $assert(Order::$last?->payments->payment->fields['CURRENCY'] === 'RUB', 'PAYMENT_CURRENCY');
     $assert(Order::$last?->properties->getPropertyByCode('RESTAURANT')->value === '12', 'NATIVE_PROPERTY');
     $assert(Order::$last?->properties->getPropertyByCode('phone')->value === 'masked', 'LOWERCASE_V4_PROPERTY');
+    $assert(Order::$last?->properties->getPayerName()->value === 'Real site-owned buyer name fixture',
+        'NATIVE_SPECIAL_PAYER_NAME');
+    $assert(Order::$last?->properties->getPhone()->value === 'masked', 'NATIVE_SPECIAL_PHONE');
     $assert(Order::$saves === 1, 'SAVED_ONCE');
-    $assert($fails(fn() => $builder->savePrepared(0, 's1', $basket, 3, ['PHONE'=>'x'])), 'INVALID_USER');
+    $assert($fails(fn() => $builder->savePrepared(0, 's1', $basket, 3, ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'INVALID_USER');
     $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3, [])), 'PROPS_REQUIRED');
-    $assert($fails(fn() => $builder->savePrepared(27, 's1', new BasketBase([]), 3, ['PHONE'=>'x'])), 'EMPTY_BASKET');
-    $assert($fails(fn() => $builder->savePrepared(27, 's1', new BasketBase([new FakeBasketItem(1.0, false)]), 3, ['PHONE'=>'x'])), 'UNBUYABLE');
-    $assert($fails(fn() => $builder->savePrepared(27, 's1', new BasketBase([new FakeBasketItem(1.0, true, true)]), 3, ['PHONE'=>'x'])), 'DELAYED');
-    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 999, ['PHONE'=>'x'])), 'UNKNOWN_PAYMENT');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3,
+        ['phone'=>'masked'])), 'PAYER_NAME_REQUIRED');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3,
+        ['__PAYER_NAME'=>'Masked'])), 'PHONE_REQUIRED');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', new BasketBase([]), 3, ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'EMPTY_BASKET');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', new BasketBase([new FakeBasketItem(1.0, false)]), 3, ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'UNBUYABLE');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', new BasketBase([new FakeBasketItem(1.0, true, true)]), 3, ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'DELAYED');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 999, ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'UNKNOWN_PAYMENT');
     $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3, ['bad-code'=>'x'])), 'INVALID_PROPERTY_CODE');
     Order::$failSave = true;
-    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3, ['PHONE'=>'x'])), 'SAVE_FAILURE_DENIED');
+    $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3, ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'SAVE_FAILURE_DENIED');
     Order::$failSave = false;
     Order::$paid = true;
     $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3,
-        ['PHONE'=>'x'])), 'PAID_ON_CREATE_DENIED');
+        ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'PAID_ON_CREATE_DENIED');
     Order::$paid = false;
     \Bitrix\Sale\FakePayment::$paid = true;
     $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3,
-        ['PHONE'=>'x'])), 'PAID_PAYMENT_ON_CREATE_DENIED');
+        ['__PAYER_NAME'=>'Masked','phone'=>'x'])), 'PAID_PAYMENT_ON_CREATE_DENIED');
     \Bitrix\Sale\FakePayment::$paid = false;
     echo 'V5_NATIVE_D7_ORDER_BUILDER=PASS', PHP_EOL;
     echo 'D7_BUILDER_ASSERTIONS=', $count, PHP_EOL;

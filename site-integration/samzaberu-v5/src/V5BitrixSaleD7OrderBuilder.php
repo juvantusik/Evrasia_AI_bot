@@ -115,7 +115,26 @@ final class V5BitrixSaleD7OrderBuilder
 
         $properties = $order->getPropertyCollection();
         if (!is_object($properties)) throw new RuntimeException('order_properties_unavailable');
+        // Installed V4 uses Bitrix's special payer-name / phone properties,
+        // not just a generic code "name". Never lose the purchaser identity.
+        $payerName = $propertyValues['__PAYER_NAME'] ?? null;
+        $phone = $propertyValues['phone'] ?? null;
+        if (!is_string($payerName) || $payerName === '' || strlen($payerName) > 160
+            || !is_string($phone) || $phone === '' || strlen($phone) > 64
+            || !method_exists($properties, 'getPayerName')
+            || !method_exists($properties, 'getPhone')) {
+            throw new RuntimeException('checkout_payer_missing');
+        }
+        $nativeName = $properties->getPayerName();
+        $nativePhone = $properties->getPhone();
+        if (!is_object($nativeName) || !method_exists($nativeName,'setValue')
+            || !is_object($nativePhone) || !method_exists($nativePhone,'setValue')) {
+            throw new RuntimeException('checkout_native_payer_unavailable');
+        }
+        self::requireSuccess($nativeName->setValue($payerName));
+        self::requireSuccess($nativePhone->setValue($phone));
         foreach ($propertyValues as $code => $value) {
+            if ($code === '__PAYER_NAME') continue;
             if (!is_string($code) || preg_match('/\A[A-Za-z][A-Za-z0-9_]{0,63}\z/D', $code) !== 1
                 || !is_string($value) || strlen($value) > 1000
                 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $value) === 1) {
