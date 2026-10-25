@@ -206,6 +206,21 @@ publicWireCheck($emailHttpResponse->status===401
 publicWireCheck($ports->challengeCalls===0 && $siteRedisNoConnection->calls===0,
     'bad email-first signin cannot start a factor or reserve Redis email quota');
 
+$manualRequest=json_encode([
+    'challenge_id'=>str_repeat('f',64),
+    'device_id'=>'sz_'.str_repeat('e',64),
+    'platform'=>'ios',
+],JSON_THROW_ON_ERROR);
+$manualReply=$emailTransport->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/challenge/use-sms',true,
+    'application/json',$manualRequest,(string)strlen($manualRequest)
+));
+publicWireCheck($manualReply->status===401,
+    'email-first public assembly without installed site SMS recovery cannot activate manual fallback');
+publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
+    'uninstalled SMS fallback must not invoke SMTP, Redis or old native SMS begin');
+
+
 printf("PASS: V5 public mobile composition (%d synthetic assertions)\n",$checks);
 echo "REAL_NATIVE_PROVIDERS_VERIFIED=NO\n";
 echo "PUBLIC_FACTORY_INSTALLED=NO\n";
