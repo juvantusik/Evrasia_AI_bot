@@ -339,6 +339,11 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         'UPDATE ev_v5_email_auth_challenges '
             . 'SET failed_attempts = ?, status = ? WHERE challenge_id = ? '
             . 'AND status = ? AND failed_attempts = ?',
+        // New V5-only atomic email->SMS stage. This exact CAS clears the
+        // original OTP and can be executed only under V5-owned transaction.
+        'UPDATE ev_v5_email_auth_challenges SET status = ?, code_hmac = NULL '
+            . 'WHERE challenge_id = ? AND user_id = ? AND status = ? '
+            . 'AND auth_epoch = ? AND email_stamp = ? AND expires_at > ?',
     ];
 
     /**
@@ -401,6 +406,8 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             'RELEASE SAVEPOINT v5_email_ack_guard',
             'SAVEPOINT v5_email_verify_guard',
             'RELEASE SAVEPOINT v5_email_verify_guard',
+            'SAVEPOINT v5_email_sms_stage_guard',
+            'RELEASE SAVEPOINT v5_email_sms_stage_guard',
         ], true)) {
             return;
         }
