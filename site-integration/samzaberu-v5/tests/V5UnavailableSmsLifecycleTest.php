@@ -59,7 +59,7 @@ $checks++;
 $source = file_get_contents(__DIR__ . '/../src/V5MySqlChallengeConsumption.php');
 if (!is_string($source)
     || !str_contains($source,'$kind === ChallengeKind::SMS && !$this->smsVerificationEnabled')
-    || !str_contains($source,"$this->db->rollBack(); $started=false;")
+    || !str_contains($source, '$this->db->rollBack(); $started=false;')
 ) {
     throw new RuntimeException('FAIL: SMS grant guard must run under locked challenge');
 }
