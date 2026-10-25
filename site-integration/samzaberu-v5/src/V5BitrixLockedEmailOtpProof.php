@@ -88,6 +88,28 @@ final readonly class V5BitrixLockedEmailOtpProof implements V5LockedEmailOtpProo
         }
     }
 
+    /**
+     * Server-only stamp for an already password-proven email challenge.
+     * Reuses the EXACT site's verifiedEmail() policy, HMAC keys and
+     * ownership proof; never returns an email, bearer token or authorization.
+     * Caller MUST own b_user lock and a native Bitrix transaction, and must
+     * independently compare this stamp to a locked accepted challenge.
+     */
+    public function currentVerifiedEmailStampWithUserLock(
+        PDO $db, int $userId, int $lockedEpoch
+    ): ?string {
+        if ($userId < 1 || $lockedEpoch < 1) return null;
+        try {
+            if (!$this->sameOwnedConnection($db)
+                || !$this->epochMatches($db,$userId,$lockedEpoch)) return null;
+            $user=$this->user($db,$userId);
+            if ($user===null) return null;
+            return $this->verifiedEmail($db,$userId,$lockedEpoch,$user)?->stamp;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     public function stillCurrentWithLocks(
         PDO $db, int $userId, int $lockedEpoch, string $expectedStamp
     ): bool {
