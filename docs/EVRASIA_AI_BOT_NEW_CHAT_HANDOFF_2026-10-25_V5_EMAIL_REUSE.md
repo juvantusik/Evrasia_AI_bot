@@ -1,6 +1,9 @@
 # Evrasia AI Bot / СамЗаберу API V5 — handoff 25 октября 2026
 ## АКТУАЛЬНАЯ ТОЧКА ПЕРЕХОДА В НОВЫЙ ЧАТ
 
+> **OPCACHE READ-ONLY FOLLOW-UP (operator output, 25.10.2026):** installed live `EmailSendBudget.php` Git blob `cc6c1b775f584eb84b7811c7fb5ba204ba3be2aa` reconfirmed, `php -l` PASS. 11 PHP-FPM processes spanning 8.1 / 8.3 / 8.4, `opcache.enable=1` found in each `/etc/php/<version>/fpm/php.ini`; version 8.3 explicitly has `opcache.revalidate_freq=0`. Effective `opcache.validate_timestamps` and which PHP-FPM pool serves the site are NOT attested; FPM live cached bytecode not inspected. `FINAL_STATUS=PASS`, `FINAL_RC=0`, no HTTP/DB/Redis interactions, no restart or cache clear. Do NOT misrepresent this as positive live OPcache attestation or require a restart just because OPcache is enabled. Source migration already complete, no need to reinstall.
+
+
 > **PRODUCTION ATTESTATION — 25.10.2026, operator-provided guarded deploy output:** production `evrasia` `/local/php_interface/website-mfa/EmailSendBudget.php` switched from verified Git blob `b20486bf4b99318cfd0ad22a6fe2db2e0cc09f01` to `cc6c1b775f584eb84b7811c7fb5ba204ba3be2aa`, `php -l` PASS and metadata preserved. Verified private root backup exists. `FINAL_STATUS=PASS`, `FINAL_RC=0`, `GLOBAL_EMAIL_BLOCKING_CAP=REMOVED_FROM_SOURCE`; user cooldown 60 sec + 5/hour remain; global Redis hourly counter is nonblocking reservation telemetry. `PHP_FPM_OPCACHE_RUNTIME_VERIFIED=NO`: do not yet claim FPM has reloaded source. No DB, Redis, SMS, mail sends, V4 or V5 AUTH enablement. This supersedes earlier checkpoint text claiming production source has not been updated. Do not repeat the same deploy; next check must be read-only OPcache/FPM evidence.
 
 
