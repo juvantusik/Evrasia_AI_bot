@@ -12,6 +12,8 @@ on:
       - site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php
       - site-integration/samzaberu-v5/src/V5BitrixNativePickupCartCleanup.php
       - site-integration/samzaberu-v5/src/V5BitrixNativePickupSavedOrderProof.php
+      - site-integration/samzaberu-v5/src/V5NativePickupCheckoutComposition.php
+      - site-integration/samzaberu-v5/tests/V5NativePickupCheckoutCompositionTest.php
       - site-integration/samzaberu-v5/tests/V5BitrixPdoCompatibilityBridgeTest.php
       - site-integration/samzaberu-v5/src/V5BitrixNativePickupMaterializer.php
       - site-integration/samzaberu-v5/src/V5PinnedPickupPropertyPolicy.php
@@ -47,6 +49,7 @@ jobs:
             src/V5BitrixPdoCompatibilityBridge.php \
             src/V5BitrixNativePickupCartCleanup.php \
             src/V5BitrixNativePickupSavedOrderProof.php \
+            src/V5NativePickupCheckoutComposition.php \
             src/V5BitrixNativePickupMaterializer.php \
             src/V5PinnedPickupPropertyPolicy.php \
             src/V5PickupFreshBasketAssembler.php \
@@ -63,6 +66,7 @@ jobs:
             tests/V5BitrixCheckoutBusinessRulesTest.php \
             tests/V5LockedPickupOrderWriterTest.php \
             tests/V5BitrixPdoCompatibilityBridgeTest.php \
+            tests/V5NativePickupCheckoutCompositionTest.php \
             tests/V5BitrixNativePickupMaterializerTest.php \
             tests/V5PinnedPickupPropertyPolicyTest.php \
             tests/V5PickupFreshBasketAssemblerTest.php; do
@@ -84,3 +88,5 @@ jobs:
         run: php site-integration/samzaberu-v5/tests/V5PinnedPickupPropertyPolicyTest.php
       - name: V5 native bridge checkout SQL and cleanup fail closed (mock-only)
         run: php site-integration/samzaberu-v5/tests/V5BitrixPdoCompatibilityBridgeTest.php
+      - name: V5 strict native checkout composition wiring (mock-only)
+        run: php site-integration/samzaberu-v5/tests/V5NativePickupCheckoutCompositionTest.php
