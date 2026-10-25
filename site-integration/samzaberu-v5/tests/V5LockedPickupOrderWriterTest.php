@@ -18,6 +18,7 @@ namespace {
     use Evrasia\Samzaberu\V5\V5BitrixCheckoutBusinessRules;
     use Evrasia\Samzaberu\V5\V5NativePickupOrderMaterializerPort;
     use Evrasia\Samzaberu\V5\V5NativePickupOrderSaverPort;
+    use Evrasia\Samzaberu\V5\V5NativePickupCartCleanupPort;
     use Evrasia\Samzaberu\V5\V5VerifiedLockedCartOwnerPort;
 
     final class FakeStatement extends \PDOStatement {
@@ -121,6 +122,28 @@ namespace {
                 'status'=>'N','price'=>250.0,'currency'=>'RUB'];
         }
     }
+    final class Cleanup implements V5NativePickupCartCleanupPort {
+        public int $continuityChecks = 0;
+        public int $cleanupCalls = 0;
+        public bool $denyContinuity = false;
+        public bool $failCleanup = false;
+        public function assertNativeTransactionContinuity(\PDO $db): void {
+            ++$this->continuityChecks;
+            if ($this->denyContinuity || !($db instanceof FakeLedgerPDO)
+                || !$db->inTransaction()) {
+                throw new \RuntimeException('unverified_native_transaction');
+            }
+        }
+        public function clearSavedCart(
+            \PDO $db, int $userId, int $fuserId, int $orderId
+        ): void {
+            ++$this->cleanupCalls;
+            if ($this->failCleanup || $userId!==27 || $fuserId!==51
+                || $orderId<401 || !$db->inTransaction()) {
+                throw new \RuntimeException('cleanup_unavailable');
+            }
+        }
+    }
     final class CIBlockElement {
         public static function GetList(array $sort,array $filter,
             bool $group=false,bool $pagination=false,array $select=[]): object {
@@ -153,10 +176,11 @@ namespace {
     $owner=new Owner();
     $mat=new Materializer();
     $save=new Saver();
+    $cleanup=new Cleanup();
     $writer=new V5BitrixLockedPickupOrderWriter(
         $owner,$mat,new V5BitrixCheckoutBusinessRules(
             2,['pickup','other'],'error'
-        ),$save
+        ),$save,$cleanup
     );
     $input=[
         'rid'=>12,'phone'=>'000000','name'=>'Masked',
@@ -167,9 +191,13 @@ namespace {
     $yes($first['id']===401 && $first['saved']===true,'FIRST_RECEIPT');
     $yes($first['user_id']===27 && $first['request_id']===$rid,'VERIFIED_USER');
     $yes($mat->calls===1 && $save->calls===1,'SINGLE_NATIVE_SAVE');
+    $yes($cleanup->cleanupCalls===1,'ONE_POST_SAVE_CART_CLEANUP');
+    $yes($cleanup->continuityChecks===3,'BEFORE_AFTER_NATIVE_AND_CLEANUP_TRANSACTION_VERIFIED');
     $replay=$writer->placeLockedOrder($db,27,$rid,array_reverse($input,true));
     $yes($replay===$first,'DURABLE_REPLAY_IDENTITY');
     $yes($save->calls===1 && $mat->calls===1,'REPLAY_DOES_NOT_SAVE');
+    $yes($cleanup->cleanupCalls===1 && $cleanup->continuityChecks===3,
+        'REPLAY_DOES_NOT_CLEAN_CART');
     $yes($throws(fn()=>$writer->placeLockedOrder(
         $db,27,$rid,[...$input,'comment'=>'changed']
     )),'RETRY_DIFFERENT_BODY_DENIED');
@@ -201,6 +229,24 @@ namespace {
     $yes(count($db->ledger)===2
         && $db->ledger['27:abcdefabcdefabcdefabcdefabcdefab']['STATE']==='pending',
         'LEDGER_ROLLBACK_REQUIRED_BY_CALLER');
+
+    $save->fail=false;
+    $cleanup->denyContinuity=true;
+    $yes($throws(fn()=>$writer->placeLockedOrder(
+        $db,27,'11111111111111111111111111111111',$input
+    )),'UNVERIFIED_NATIVE_SQL_TRANSACTION_DENIED');
+    $yes($save->calls===1 && $cleanup->cleanupCalls===1,
+        'NO_NATIVE_SAVE_BEFORE_TRANSACTION_PROOF');
+    $cleanup->denyContinuity=false;
+
+    $cleanup->failCleanup=true;
+    $yes($throws(fn()=>$writer->placeLockedOrder(
+        $db,27,'22222222222222222222222222222222',$input
+    )),'FAILED_CART_CLEANUP_DENIES_RECEIPT');
+    $yes($save->calls===2 && $cleanup->cleanupCalls===2,
+        'CART_CLEANUP_ONLY_AFTER_NATIVE_SAVE');
+    $yes($db->ledger['27:22222222222222222222222222222222']['STATE']==='pending',
+        'FAILED_CLEANUP_REQUIRES_NATIVE_ROLLBACK');
 
     echo 'V5_PICKUP_ORDER_WRITER_MVP=PASS',PHP_EOL;
     echo 'PICKUP_WRITER_ASSERTIONS=',$checks,PHP_EOL;
