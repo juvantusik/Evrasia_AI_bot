@@ -64,7 +64,7 @@ namespace Bitrix\Sale {
     }
     final class FakeProperty {
         public ?string $value = null;
-        public function setValue(string $value): bool { $this->value = $value; return true; }
+        public function setValue(string $value): void { $this->value = $value; }
     }
     final class FakePropertyCollection {
         public array $props = [];
@@ -87,7 +87,7 @@ namespace Bitrix\Sale {
         public static function create(string $site, int $user): self {
             return self::$last = new self($site, $user);
         }
-        public function setPersonTypeId(int $id): bool { return $id === 1; }
+        public function setPersonTypeId(int $id): void { if ($id !== 1) throw new \RuntimeException('person_type'); }
         public function setBasket(BasketBase $basket): bool { return true; }
         public function getShipmentCollection(): FakeShipmentCollection { return $this->shipments; }
         public function getPaymentCollection(): FakePaymentCollection { return $this->payments; }
@@ -132,6 +132,7 @@ namespace {
     $receipt = $builder->savePrepared(27, 's1', $basket, 3, [
         'PHONE' => 'masked',
         'RESTAURANT' => '12',
+        'phone' => 'masked',
     ]);
     $assert($receipt['id'] === 901 && $receipt['number'] === 'V5-901', 'RECEIPT');
     $assert($receipt['status'] === 'N' && $receipt['currency'] === 'RUB', 'STATUS_CURRENCY');
@@ -141,6 +142,7 @@ namespace {
     $assert(Order::$last?->payments->payment->fields['SUM'] === 105.75, 'PAYMENT_SUM');
     $assert(Order::$last?->payments->payment->fields['CURRENCY'] === 'RUB', 'PAYMENT_CURRENCY');
     $assert(Order::$last?->properties->getPropertyByCode('RESTAURANT')->value === '12', 'NATIVE_PROPERTY');
+    $assert(Order::$last?->properties->getPropertyByCode('phone')->value === 'masked', 'LOWERCASE_V4_PROPERTY');
     $assert(Order::$saves === 1, 'SAVED_ONCE');
     $assert($fails(fn() => $builder->savePrepared(0, 's1', $basket, 3, ['PHONE'=>'x'])), 'INVALID_USER');
     $assert($fails(fn() => $builder->savePrepared(27, 's1', $basket, 3, [])), 'PROPS_REQUIRED');

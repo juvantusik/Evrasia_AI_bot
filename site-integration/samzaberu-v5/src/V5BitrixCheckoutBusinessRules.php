@@ -28,14 +28,12 @@ final readonly class V5BitrixCheckoutBusinessRules
         private array $paymentTypes,
         private array $dispatchTypes,
         private string $timeFailureKey,
-        private string $timeMessageKey,
     ) {
         if (count($paymentTypes) !== 3 || !array_is_list($dispatchTypes)
             || count($dispatchTypes) !== 2
             || count(array_unique($dispatchTypes)) !== 2
-            || array_values(array_unique(array_values($paymentTypes))) !== [2, 5, 7]
-            || preg_match('/\A[a-zA-Z_][a-zA-Z_0-9]{0,31}\z/D', $timeFailureKey) !== 1
-            || preg_match('/\A[a-zA-Z_][a-zA-Z_0-9]{0,31}\z/D', $timeMessageKey) !== 1) {
+            || (static function(array $values): bool { sort($values); return $values !== [2,5,7]; })(array_values($paymentTypes))
+            || preg_match('/\A[a-zA-Z_][a-zA-Z_0-9]{0,31}\z/D', $timeFailureKey) !== 1) {
             throw new RuntimeException('checkout_business_policy_missing');
         }
         foreach (array_keys($paymentTypes) as $name) {

@@ -22,11 +22,15 @@ final class V5CheckoutRequest
         if (preg_match('/\A(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\z/D',
             $body['request_id']) !== 1) return null;
         $checkout = $body['checkout'];
-        if (count($checkout) < 1 || count($checkout) > 8
-            || !isset($checkout['rest'], $checkout['payment'])) return null;
+        if (count($checkout) < 6 || count($checkout) > 9
+            || !isset($checkout['payment'], $checkout['phone'], $checkout['name'],
+                $checkout['time'], $checkout['dispatch'])
+            || (!isset($checkout['rid']) && !isset($checkout['rest']))) return null;
+        if (isset($checkout['rid'], $checkout['rest'])
+            && (string)$checkout['rid'] !== (string)$checkout['rest']) return null;
         foreach ($checkout as $key => $value) {
             if (!in_array($key, [
-                'rest','payment','time','dispatch','name','phone','comment','cutlery'
+                'rid','rest','payment','time','dispatch','name','phone','comment','cutlery'
             ], true)) return null;
             if (is_string($value)) {
                 $max = $key === 'comment' ? 500 : ($key === 'name' ? 160 : 64);
@@ -38,11 +42,17 @@ final class V5CheckoutRequest
                 return null;
             }
         }
-        if ((!is_int($checkout['rest']) || $checkout['rest'] < 1)
-            && (!is_string($checkout['rest']) || preg_match('/\A[1-9][0-9]{0,9}\z/D', $checkout['rest']) !== 1)) {
+        $restaurantId = $checkout['rid'] ?? $checkout['rest'];
+        if ((!is_int($restaurantId) || $restaurantId < 1)
+            && (!is_string($restaurantId) || preg_match('/\A[1-9][0-9]{0,9}\z/D', $restaurantId) !== 1)) {
             return null;
         }
-        if (!is_int($checkout['payment']) && !is_string($checkout['payment'])) return null;
+        if ((int)$restaurantId > 2147483647
+            || !is_string($checkout['payment']) || !is_string($checkout['dispatch'])
+            || $checkout['payment'] === '' || $checkout['dispatch'] === '') return null;
+        $checkout['rid'] = (int)$restaurantId;
+        unset($checkout['rest']);
+
         if (is_int($checkout['cutlery'] ?? 0) && ($checkout['cutlery'] ?? 0) > 30) return null;
         return [
             'access_token' => $body['access_token'],

@@ -116,7 +116,7 @@ final class V5BitrixSaleD7OrderBuilder
         $properties = $order->getPropertyCollection();
         if (!is_object($properties)) throw new RuntimeException('order_properties_unavailable');
         foreach ($propertyValues as $code => $value) {
-            if (!is_string($code) || preg_match('/\A[A-Z0-9_]{1,64}\z/D', $code) !== 1
+            if (!is_string($code) || preg_match('/\A[A-Za-z][A-Za-z0-9_]{0,63}\z/D', $code) !== 1
                 || !is_string($value) || strlen($value) > 1000
                 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $value) === 1) {
                 throw new RuntimeException('checkout_property_unavailable');
@@ -151,7 +151,7 @@ final class V5BitrixSaleD7OrderBuilder
 
     private static function requireSuccess(mixed $result): void
     {
-        if ($result === false || $result === null
+        if ($result === false
             || (is_object($result) && method_exists($result, 'isSuccess')
                 && $result->isSuccess() !== true)) {
             throw new RuntimeException('sale_operation_failed');
