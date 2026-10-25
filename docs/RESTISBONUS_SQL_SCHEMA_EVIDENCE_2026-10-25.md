@@ -40,7 +40,13 @@ The operator executed read-only `sys.triggers` / `sys.trigger_events` / `sys.sql
 | `dbo.BonusUpdate` | `UPDATE` | 1 | Disabled |
 | `dbo.CARD_DEL` | `DELETE` | 0 | Enabled |
 
-**Important:** In the screenshot, the `TriggerSQL` cell was truncated, so the **actual trigger bodies and side effects are NOT verified**. Enabled `UpdateRecord` will be eligible to run on UPDATE; the enabled `CARD_DEL` concerns DELETE rather than UPDATE. **Do not interpret disabled `BonusUpdate` as proof that a direct balance UPDATE is safe or that it cannot affect other systems.** Trigger bodies, additional consumers, journal semantics, transaction ownership, external integrations, cache invalidation, and business API behavior remain to be determined.
+**Full trigger bodies reviewed from the operator's copied SSMS output:** `UpdateRecord` is an `AFTER UPDATE` trigger. Only when `inserted` contains exactly one row, it reads the old and new `PHONE` values and the updated `ID` / `CardNumber`, then runs `UPDATE Cards SET DATE_CORR = GETDATE() WHERE ID = @ID`. The previously present `ChangePhoneCard` insert is commented out. No other explicit DML exists in its supplied body. An internal `UPDATE` of the same table can involve SQL Server trigger recursion/nesting settings: verify `sys.databases.is_recursive_triggers_on` and the environment before any write.
+
+`BonusUpdate` is a **disabled** `AFTER UPDATE` trigger. It loops through rows in `inserted` using a local cursor, and would write `deleted.CardTotalSum` (old), `inserted.CardTotalSum` (new), `GETDATE()`, `inserted.CardNumber`, and `inserted.SuperNumber` to `[RestISBonus].[dbo].[BonusUpdatedHistory]` for matching IDs. It does **not** test whether `CardTotalSum` actually changed: enabling it blindly could log incidental updates (such as `DATE_CORR`) as bonus-change events. It was disabled at the observed checkpoint; the source does **not** establish why. No current journal write is verified for direct balance UPDATE.
+
+`CARD_DEL` is an enabled `DELETE` trigger; it will not fire on a plain UPDATE, and its body was not reviewed.
+
+**Safety conclusion:** The full shown trigger definitions narrow the known database-side effects but are not proof that a direct `CardTotalSum` change is an authorized/audited Restis balance-adjustment mechanism. Check live application writers, dedicated audit/ledger processes, recursive trigger setting, and reconciliation before production mutation. Do not enable `BonusUpdate` as a workaround.
 
 An operator-proposed change of a single test owner's balance to a round positive value was **requested but NOT executed** at this checkpoint. The original observed row was still unchanged after the trigger metadata read.
 
@@ -71,7 +77,7 @@ ORDER BY t.name, te.type_desc;
 
 ## Follow-up before any mutation or API change
 
-1. Read **full, non-truncated** definitions for `UpdateRecord` and disabled `BonusUpdate`; inventory their DML, dependencies, error/transaction behavior and possible external actions. Metadata status alone is insufficient.
+1. Full definitions for `UpdateRecord` and `BonusUpdate` were obtained from SSMS and reviewed; now verify trigger recursion/nesting settings, external writers and stored-procedure dependencies before any mutation.
 2. Read real `RESTISBONUS.dbo.RB_CARD_LOG` schema and scoped row history to establish reconciliation and audit semantics; read `BonusUpdatedHistory` as needed. No journal row manipulation.
 3. Inspect actual deployed Bitrix V4 / Restis bridge readers and their mapping from the current user to the Restis card; verify API current-response vs the same row and refresh/cache timing. Do **not** alter working V4 blindly.
 4. Any eventually approved balance change must establish authoritative writer, backups, exact-row preconditions, rollback limitations, audit trail, idempotency and post-check across DB/API/site. An `UPDATE` to `CardTotalSum` alone is **not yet approved**.
