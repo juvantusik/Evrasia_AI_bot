@@ -166,7 +166,7 @@ final readonly class V5BitrixNativePickupMaterializer implements V5NativePickupO
         // REST_ID is the external RestIS order reference; NEVER set it
         // equal to the restaurant ID. pay_link/pay_expire are for online
         // payment only and must not be populated for pay-on-pickup.
-        if (!in_array($additions['IGNORE_RESTIS'],['Y','N'],true)) {
+        if ($additions['IGNORE_RESTIS'] !== 'Y') {
             throw new RuntimeException('checkout_restis_policy_invalid');
         }
         return $required + $additions;
