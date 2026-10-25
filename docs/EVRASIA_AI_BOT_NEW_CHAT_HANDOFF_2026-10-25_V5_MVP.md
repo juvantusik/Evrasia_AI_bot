@@ -180,3 +180,17 @@ After operator-confirmed 19/19 order-detail PASS, the feature-only V5 checkout s
 - Narrow V4 checkout call-argument-shape extractor: `tests/diagnostics/V5CheckoutBusinessCallTrace.php`; masks all PHP string literals and does not execute source.
 - **NEXT one-time operator runner**: `site-integration/samzaberu-v5/tests/diagnostics/run_v5_checkout_contract_readonly.sh` at commit `8f087a4f631e940b77eacb484033992f21bd3610`, Git blob `675843de0e2642e5a47adcdeb3e633cf86cb39d4`. It pins the new HTTP source SHA, runs **only new** source-only checkout contract test, then emits limited call-shape hints for current pinned `Cart::order`. V4/site/DB stay unchanged, V5 AUTH stays OFF, no order placed. Requires actual operator stdout before declaring its test PASS.
 - Use the exact pinned business hints from the result to implement the **real native D7 V5 checkout writer**, preserving existing `CartApiService`, restaurant, timing, delivery, coupons, gifts, and payment; never create a fake persistence/PAY success claim or a V4 runtime dependency.
+
+
+### Operator checkout result and Bitrix Sale D7 builder (2026-10-25)
+
+Confirmed operator root@evrasia output from pinned checkout runner `8f087a4f631e940b77eacb484033992f21bd3610`:
+- `V5_CHECKOUT_HTTP_ADMISSION=PASS`, `CHECKOUT_HTTP_ASSERTIONS=12`, `V5_CHECKOUT_HTTP_TEST=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`.
+- Real installed V4 `Cart::order` code shape (source-only, untouched) confirmed: `validateOrderData($_POST)`, `getProductsForOrder($productIds)`, `Sale\\Order::create(site,user)`, payer type **1**, delivery service **1**, `createItem`, `setFields`, `setBasket`, shipments/quantities, pay system, `doFinalAction(true)`, order properties, `save()`, `orderCreatedEvent`, gateway `pay`. This is a *method-call trace*, not native V5 parity or a confirmed payment integration.
+- `BITRIX_D7_ADAPTER_EXERCISED=NO`, `ORDER_CREATED=NO`, `DATABASE_CONNECTION=NO`, `PRODUCTION_CODE_WRITE=NO`, `API_V4_CHANGED=NO`, `V5_AUTH_ENABLED=NO`.
+
+GitHub feature-only native D7 order builder added at commit `12fec975e2bb580a242b26583afb2d1e97b2fd2a`, `src/V5BitrixSaleD7OrderBuilder.php`: creates Sale D7 order, attaches a site-prepared basket, native shipment, payment record, properties and calls `Order::save()`. It does **not** call external payment gateway or import V4. It is NOT wired as a positive `V5LockedOrderPlacementPort` yet: real site checkout validation, prepared products/prices, idempotent durable request ledger, and transaction continuity remain necessary before production writes.
+
+GitHub Actions workflow #40203115822 **SUCCESS** (source-only): `V5_CHECKOUT_HTTP_ADMISSION=PASS` **12 assertions**, `V5_NATIVE_D7_ORDER_BUILDER=PASS` **17 assertions**, PHP lint PASS; D7 was MOCK-ONLY, `REAL_ORDER_CREATED=NO`. CI URL: https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40203115822 .
+
+**NEXT concrete implementation dependency, not security audit:** read the *narrow masked method bodies* of installed V4 `Cart::validateOrderData`, V4 `Cart::order` order-property mappings and shared `CartApiService::getProductsForOrder` to port exact site rules, pricing and required fields into an independent V5 checkout planner. Follow with native V5 placement code, not another generic security system. Retain V4/runtime independence, no synthetic accounts and V5 AUTH OFF.
