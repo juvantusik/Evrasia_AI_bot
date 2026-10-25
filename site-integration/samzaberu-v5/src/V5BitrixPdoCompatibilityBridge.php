@@ -223,6 +223,24 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         return new V5BitrixEmulatedStatement($this, $query);
     }
 
+    /**
+     * Strict V5-only safety check immediately before and after native SQL.
+     * This protects against hidden COMMIT+BEGIN before the next statement,
+     * not merely at the eventual transaction commit.
+     */
+    private function assertStrictStatementContinuity(): void
+    {
+        if (!$this->requireNativeContinuity || !$this->opened) {
+            return;
+        }
+        $guard = $this->continuityGuard;
+        if (!$guard instanceof V5ProductionNativeTransactionContinuity
+            || !$guard->confirmBeforeStatement()) {
+            $this->abandonUncertainNativeTransaction();
+            throw new RuntimeException('v5_bitrix_statement_continuity_lost');
+        }
+    }
+
     /** @internal Only the private fixed-SQL statement adapter calls this. */
     public function runStatement(string $template, array $params): array
     {
@@ -233,6 +251,7 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         self::assertStatementAllowed($template);
         $this->assertCurrentApplicationConnection();
         $sql = $this->encodeParameters($template, $params);
+        $this->assertStrictStatementContinuity();
         $isSelect = str_starts_with(ltrim($sql), 'SELECT ');
         if (!$this->opened && (!$isSelect || str_contains(strtoupper($sql), 'FOR UPDATE'))) {
             throw new RuntimeException('v5_bitrix_write_or_lock_without_scope');
@@ -257,6 +276,7 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
                     }
                     $rows[] = $row;
                 }
+                $this->assertStrictStatementContinuity();
                 return [$rows, 0];
             }
             if ($this->native->queryExecute($sql) === false) {
@@ -266,6 +286,7 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             if (!is_int($affected) && !(is_string($affected) && ctype_digit($affected))) {
                 throw new RuntimeException('Invalid native affected count');
             }
+            $this->assertStrictStatementContinuity();
             return [[], (int)$affected];
         } catch (Throwable) {
             throw new RuntimeException('v5_bitrix_sql_execution_unavailable');
