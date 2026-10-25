@@ -25,8 +25,9 @@ Bitrix/передачи в колл-центр**. Не запрашивать д
   ветку отправки в RestIS. **Не** выключать флаг для обхода этой проверки
   без отдельного подтверждения существующего локального механизма.
 - `CartApiService::orderCreatedEvent()` делает две операции `DELETE`
-  для `B_API_BASKET` (ограничение `FUSER_ID`) и
-  `BASKET_CUSTOM_GIFTS` (второй WHERE-столбец не подтверждён).
+  для `B_API_BASKET WHERE FUSER_ID=?` и
+  `BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID=?`.
+  Оба условия точно подтверждены исходным кодом Bitrix.
   Этот метод не передаёт заказ в колл-центр.
 - Оплата происходит **при получении в ресторане**. Нельзя требовать от
   приложения `payment`, инициировать шлюз или автоматически писать
@@ -87,3 +88,24 @@ fresh basket 24, properties 12). Реальный Bitrix не вызывался
 После реального `V5_POSTSAVE_SQL_SCOPE=PASS` реализована независимая V5-only очистка `B_API_BASKET WHERE FUSER_ID=?` и `BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID=?`, с параметром только из защищённой V5-сессии и заблокированного `b_sale_fuser`. Два запроса добавлены в **точный список разрешённых SQL**, а не в общий доступ ко всем DELETE. Операции выполняются через тот же native-адаптер Bitrix, что и V5 strong sessions. Новый метод `assertOwnedCheckoutTransactionContinuity()` запрещает выполнение cleanup на неподтверждённой или CLI/non-strict транзакции. Добавлен fail-closed контроль InnoDB для обеих таблиц. Никакого отдельного подключения PDO или отправки в колл-центр нет.
 
 Автономный GitHub CI <https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40211875189> — SUCCESS. Проверено 146/146 source-only checkout assertions и 147 отдельных проверок fake Bitrix bridge, включая отказ неверным DELETE и откат обеих очисток на одном mock-native соединении. Это **не** доказывает атомарность живого `Sale\\Order::save()` и существующего `\$DB`: реальный E2E и production checkout остаются OFF. Схема request ledger в production не установлена. Локальный признак приёма заказа существующим каналом Bitrix→колл-центр также ещё требует подтверждения **на стороне Bitrix**, без обращения к серверам колл-центра.
+
+
+## 2026-10-25: проверка реально сохранённого заказа
+
+Исходники API V5 расширены интерфейсом `V5PickupSavedNativeOrderProofPort`
+и строгой реализацией `V5BitrixNativePickupSavedOrderProof`. После нативного
+`Sale\\Order::save()` и до проверки существующей локальной передачи в
+колл-центр V5 проверяет непосредственно строку `b_sale_order` в той же
+транзакции. Точная строка `SELECT ID, USER_ID, ACCOUNT_NUMBER, STATUS_ID,
+PAYED, CANCELED FROM b_sale_order WHERE ID=? AND USER_ID=? LIMIT 2 FOR UPDATE`
+допускается только через строгий FPM V5 bridge; диагностический CLI режим
+не может выполнить её. Проверяются совпадение `ID`, `USER_ID`,
+`ACCOUNT_NUMBER`, `STATUS_ID` (N/P), `PAYED=N` и `CANCELED=N`.
+Любое отклонение блокирует подтверждение checkout и очистку корзины.
+
+Это **не** подтверждение передачи заказа колл-центру. Порт подтверждения
+локальной передачи по-прежнему требует самостоятельного доказательства
+принятия существующим механизмом Bitrix. Реальный E2E с D7 и общей
+транзакцией не проводился; API V5 AUTH OFF, production без изменений.
+GitHub Actions `40213227241`: SUCCESS, 156 checkout + 186 bridge =
+342/342 автономных проверок.
