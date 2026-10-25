@@ -94,6 +94,39 @@ final class V5ProductionNativeTransactionContinuity
     }
 
     /**
+     * Refresh the continuity proof before another SQL statement is sent
+     * through the strict bridge. Releasing the original SAVEPOINT must
+     * succeed; hidden COMMIT+BEGIN destroys it even if native depth is 1.
+     * Re-create the same unpredictable SAVEPOINT for the next boundary.
+     *
+     * A failed check always poisons V5 ownership. Never roll back a scope
+     * whose owner is no longer known.
+     */
+    public function confirmBeforeStatement(): bool
+    {
+        if (!$this->active || $this->finished) {
+            return false;
+        }
+        try {
+            if (!$this->bridge->ownsCurrentNativeTransaction($this->native)
+                || \Bitrix\Main\Application::getConnection() !== $this->native
+                || V5NativeDepthShapeReader::read($this->native) !== 1
+                || $this->native->getResource() !== $this->physical
+                || !self::stateMatches($this->physical, $this->connectionId)
+                || $this->physical->query('RELEASE SAVEPOINT ' . $this->savepoint) !== true
+                || $this->physical->query('SAVEPOINT ' . $this->savepoint) !== true
+            ) {
+                $this->bridge->abandonUncertainNativeTransaction();
+                return false;
+            }
+            return true;
+        } catch (Throwable) {
+            $this->bridge->abandonUncertainNativeTransaction();
+            return false;
+        }
+    }
+
+    /**
      * The last operation before calling the bridge's native COMMIT.
      * No third-party callbacks may execute between RELEASE and COMMIT.
      */
