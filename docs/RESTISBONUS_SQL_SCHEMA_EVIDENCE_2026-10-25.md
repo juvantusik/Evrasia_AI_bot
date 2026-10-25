@@ -83,6 +83,16 @@ The time between first observing the changed RestIS API value and first observin
 
 **Diagnostic conclusion:** RestIS SQL-to-API freshness succeeded quickly in this experiment. The persistence/update of Bitrix `UF_BONUS` was delayed. The website widget can show a temporarily inconsistent value and later converge. Priorities: identify precise `UF_BONUS` writers and schedules, inspect the widget's rendered source and AJAX flow, and if the anomaly repeats capture synchronized sanitized browser response + API value + DB field. Do not assume the site is simply displaying the old `UF_BONUS` when it shows a value different from *both* sampled sources. No V4/V5 code modifications were made.
 
+## Live Bitrix component-cache path identified (2026-10-25)
+
+Production read-only static scan of 997 PHP files identified 38 files referencing `UF_BONUS`; heuristic proximity to update calls was observed in 12 files, **not proof of 12 active writers**.
+
+The site component `local/components/eurasia/account.bonus/component.php` has a user-scoped cache key, reads existing cached `$arResult` via `$cache->initCache(...)` / `getVars()` (approximately lines 12-19), and, in the cache generation path, loads `UserTable::getRow(..., ["UF_BONUS", "UF_BONUS_PERCENT", ...])`, maps `UF_BONUS` into `$arResult["BONUS"]` (approximately line 48) and caches it with `$cache->endDataCache($arResult)` (approximately line 70). The default template renders `$arResult["BONUS"]` (approximately line 64). **This is a concrete path for a stale widget balance**, but the actual `CACHE_TYPE`, `CACHE_TIME`, cache hit/miss and whether this exact component produced the operator's transient higher value are **not yet verified**.
+
+Another source `local/php_interface/cron_bonus.php` explicitly reads `CRestis::requestJson("/api/Balance", ["Phone" => $phone])` and writes floored `TotalSum` into `UF_BONUS` via `CUser::Update` (approximately lines 67-86); `local/php_interface/account.php` also contains such a write in its `bonus_balance` handler. Other possible writers include `update_bonus.php`, `cron_bonus_percent.php` and several account/signup/auth paths. **These files are candidates only:** no cron scheduling, frequency or causal link to the measured 341-second update lag has yet been demonstrated.
+
+Next investigation should read masked component call parameters and cache TTL, verify cron registration/configuration without exposing secrets, and identify which UI path was actually rendered. Do not purge cache or change cron/production during diagnosis.
+
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
 ```sql
