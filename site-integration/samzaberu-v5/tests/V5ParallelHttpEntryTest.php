@@ -5,6 +5,7 @@ require_once __DIR__ . '/../src/V5ParallelHttpEntry.php';
 
 use Evrasia\Samzaberu\V5\{
     V5ParallelHttpEntry, V5HttpTransportBoundary, V5StagedHttpResponse,
+    V5StagedHttpRequest,
     V5RouteMap, V5AuthHttpHandler, V5LoginWorkflow, V5PasswordProofPort,
     V5TrustProofPort, V5AtomicChallengePort, V5StrongSessionPort,
     PasswordVerifiedAccount, MobileTrustAssessment, ChallengeKind,
@@ -113,6 +114,45 @@ parallelCheck($parallelFactories === 0, 'invalid input never loads native factor
 parallelWire($parallelEntry->dispatch($parallelServer, $parallelRead), 401);
 parallelCheck($parallelProviders->passwordCalls === 1 && $parallelFactories === 1,
     'existing workflow reached once, without synthetic authentication success');
+// A future native first-factor factory receives ONLY the request that the
+// entry has already size-bounded and shape-validated. No fresh body I/O and
+// no client-controlled global factory configuration are needed.
+$scopedRequests = [];
+$scopedFactory = static function (V5StagedHttpRequest $request) use (&$scopedRequests): V5HttpTransportBoundary {
+    $scopedRequests[] = $request;
+    return new V5HttpTransportBoundary(); // Always 503, no user/JWT providers.
+};
+$scopedEntry = new V5ParallelHttpEntry(true, $scopedFactory);
+$readsBefore = $parallelReads;
+parallelWire($scopedEntry->dispatch($parallelServer, $parallelRead), 503);
+parallelCheck(count($scopedRequests) === 1 && $parallelReads === $readsBefore + 1
+    && $scopedRequests[0]->rawBody === $parallelBody
+    && $scopedRequests[0]->requestUri === '/api/v5/auth/signin'
+    && $scopedRequests[0]->method === 'POST'
+    && $scopedRequests[0]->trustedHttps === true,
+    'bounded parsed POST request supplied to V5 factory once');
+parallelWire($scopedEntry->dispatch($parallelServer,
+    static fn(int $limit): string => '{}'), 400);
+parallelCheck(count($scopedRequests) === 1,
+    'malformed POST never reaches request-scoped native factory');
+$cartServer = array_replace($parallelServer, [
+    'REQUEST_METHOD' => 'GET',
+    'REQUEST_URI' => '/api/v5/cart',
+]);
+$readsBefore = $parallelReads;
+parallelWire($scopedEntry->dispatch($cartServer, $parallelRead), 401);
+parallelCheck(count($scopedRequests) === 1 && $parallelReads === $readsBefore,
+    'anonymous cart never reaches request-scoped factory');
+$cartServer['HTTP_AUTHORIZATION'] = 'Bearer eyJhbGciOiJIUzI1NiJ9.'
+    . str_repeat('a', 100) . '.signature';
+parallelWire($scopedEntry->dispatch($cartServer, $parallelRead), 503);
+parallelCheck(count($scopedRequests) === 2 && $parallelReads === $readsBefore
+    && $scopedRequests[1]->method === 'GET'
+    && $scopedRequests[1]->requestUri === '/api/v5/cart'
+    && $scopedRequests[1]->rawBody === ''
+    && $scopedRequests[1]->authorizationHeader === $cartServer['HTTP_AUTHORIZATION'],
+    'authorized-shaped cart metadata supplied without body read or JWT acceptance');
+
 parallelWire($parallelEntry->dispatch(array_replace($parallelServer, [
     'REQUEST_URI' => '/api/v5/legal/consents',
 ]), $parallelRead), 405);
