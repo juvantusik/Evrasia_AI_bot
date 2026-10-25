@@ -431,6 +431,15 @@ namespace {
             . 'COMPLETED_AT=UTC_TIMESTAMP() '
             . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'"
     ];
+    // Guard against future source drift: the bridge must allow EXACTLY the
+    // SQL emitted by the writer and cleanup class, never a rewritten variant.
+    $writerClass=\Evrasia\Samzaberu\V5\V5BitrixLockedPickupOrderWriter::class;
+    $cleanupClass=\Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup::class;
+    ok($strictSql[0]===$cleanupClass::DELETE_CART,'V4 cart SQL matches strict bridge policy');
+    ok($strictSql[1]===$cleanupClass::DELETE_GIFTS,'V4 gift SQL matches strict bridge policy');
+    ok($strictSql[2]===$writerClass::INSERT,'pickup ledger insert matches bridge policy');
+    ok($strictSql[3]===$writerClass::LOCK,'pickup ledger lock matches bridge policy');
+    ok($strictSql[4]===$writerClass::COMPLETE,'pickup ledger complete matches bridge policy');
     foreach($strictSql as $sql) {
         ok($reflector->invoke(null,$sql)===null,
             'only exact checkout SQL template statically allowlisted');
