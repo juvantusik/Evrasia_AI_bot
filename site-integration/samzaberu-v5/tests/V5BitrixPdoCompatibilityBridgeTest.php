@@ -436,7 +436,7 @@ namespace {
         'UPDATE ev_v5_pickup_checkout_requests SET '
             . "STATE='saved', ORDER_ID=?, ORDER_NUMBER=?, ORDER_STATUS=?, "
             . 'COMPLETED_AT=UTC_TIMESTAMP() '
-            . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'
+            . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'"
     ] as $ledgerSql) {
         ok($db->prepare($ledgerSql) instanceof PDOStatement,
             'only pinned checkout idempotency ledger SQL template allowed');
