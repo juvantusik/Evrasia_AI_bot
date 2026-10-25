@@ -63,6 +63,22 @@ interface V5NativePickupCartCleanupPort
 }
 
 /**
+ * A native Sale object in memory does not prove that its saved b_sale_order
+ * row still belongs to the guest or remains unpaid after installed hooks.
+ *
+ * Verify the actual saved ORDER row on the SAME original Bitrix transaction
+ * before any call-center acceptance proof or API cart cleanup.
+ * This is NOT evidence of call-center acceptance or external delivery.
+ */
+interface V5PickupSavedNativeOrderProofPort
+{
+    /** @param array{id:int,number:string,status:string,price:float,currency:string} $saved */
+    public function assertSavedNativeOrderUnpaid(
+        PDO $db, int $userId, array $saved
+    ): void;
+}
+
+/**
  * Local Bitrix-to-existing-call-center boundary. The call center subsequently
  * routes orders to restaurants; V5 MUST NOT inspect, call or reproduce its
  * infrastructure. The proof port is read-only and must confirm that the NEW
@@ -132,6 +148,7 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
         private V5NativePickupOrderMaterializerPort $materializer,
         private V5BitrixCheckoutBusinessRules $rules,
         private V5NativePickupOrderSaverPort $saver,
+        private V5PickupSavedNativeOrderProofPort $persistedOrder,
         private V5NativePickupCartCleanupPort $cleanup,
         private V5PickupLocalCallCenterHandoffProofPort $localHandoff,
     ) {}
@@ -238,6 +255,13 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             || !in_array($saved['status'], ['N','P'], true)) {
             throw new RuntimeException('checkout_order_not_new');
         }
+        // Native Sale::save can invoke installed event handlers which
+        // mutate the order row. Verify the actual locked b_sale_order row,
+        // not merely Order's in-memory fields, before any cart mutation.
+        $this->cleanup->assertNativeTransactionContinuity($db);
+        $this->persistedOrder->assertSavedNativeOrderUnpaid($db, $userId, $saved);
+        $this->cleanup->assertNativeTransactionContinuity($db);
+
         // Order::save() alone does NOT prove acceptance by the existing
         // Bitrix -> call-center handoff. Confirm the LOCAL existing channel
         // before clearing the guest basket or acknowledging checkout.
