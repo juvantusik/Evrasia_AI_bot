@@ -1,5 +1,21 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — одноразовый переход без дополнительной таблицы (SOURCE-ONLY)
+
+**Было:** прежний checkpoint ошибочно формулировал отсутствие `email_challenge_id → sms_challenge_id` как обязательную потребность в новой колонке или отдельном ledger и отмечал несовпадение `AUTH_EPOCH` типов как нерешённое.
+
+**Стало:** различие форматов уже разрешено существующим кодом проекта: `ev_samzaberu_auth_state.AUTH_EPOCH` и `ev_v5_email_auth_challenges.auth_epoch` — общий положительный `BIGINT UNSIGNED`. `ev_v5_auth_challenges.auth_epoch` — `CHAR(64)` с существующим HMAC, который рассчитывает **`V5SecurityEventVersions::forLockedPasswordProof()`** из ТОГО ЖЕ числового epoch, текущего b_user password hash, ID пользователя и серверного authKey. `V5SecurityEventVersions::stillCurrent()` уже проверяет версию на SMS пути. **Новый hash/ключ/таблица/epoch не требуются.** Это source-contract, не production E2E.
+
+Для требования **at most one paid SMS start per original email challenge** самостоятельная cross-reference колонка не обязательно нужна при fail-closed варианте: private native provider под одной физической SQL-транзакцией сначала блокирует `b_user`, общий `AUTH_EPOCH`, проверяет native email/TOTP/phone, затем блокирует `accepted` email challenge; **в той же транзакции** готовит отдельный password-proven SMS challenge с корректным HMAC epoch; после успешной записи одного нового SMS challenge выполняет условную отмену исходного email (`status = cancelled`, `code_hmac = NULL`) с проверкой affected rows **ровно 1**, а затем COMMIT. Если какая-либо стадия не прошла — нет нового SMS challenge, нет права на отправку. Вторая конкурирующая попытка увидит уже отменённый email challenge и не создаст ещё один платный SMS. При сомнительном COMMIT отправка запрещена.
+
+**Важное ограничение:** эта стратегия сознательно НЕ возвращает прежний SMS challenge по повторному запросу и НЕ предполагает автоматический retry при неизвестной оплате. Пользователь может выполнить новый обычный signin; это дешевле/безопаснее, чем дать двум факторам одновременно остаться действующими. Конкретные locks/CAS и использование существующего site-native SMS outbox/CSms требуют отдельной реализации и реальной native проверки; внешняя платная отправка только **после** durable COMMIT/резервирования и с подтверждённым receipt, **никогда** внутри транзакции. Не использовать второй rate-limiter или веб-сессию для мобильного устройства.
+
+**Что реализовано сейчас:** `src/V5EmailToSmsTransitionPolicy.php` — pure locked-row check `emailEligible()` / `stagedSmsEligible()` для обоих уже существующих форматов, а также точный `CANCEL_EMAIL_CAS` contract; сам код **не выполняет SQL/COMMIT/SMS**. `tests/V5EmailToSmsTransitionPolicyTest.php` проверяет корректный email/SMS контекст и отказы при просрочке, использованном challenge, TOTP, иной device binding, ином epoch, отсутствии password proof и уже начатой отправке. `tests/V5EmailSmsSharedEpochContractTest.php` подтверждает привязку к `V5SecurityEventVersions` без второго authority. Целевой [CI #40184301530](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40184301530) **SUCCESS** (source-only, нет пользователей, БД, SMS, Redis, писем). Общий offline workflow продолжает иметь независимый провал JS DOM click теста.
+
+**Чего НЕ сделано:** не установлен private `V5ExistingWebsiteSmsNativeTransitionPort`; не подтверждён атомарный DB E2E/receipt; proposed `ev_v5_email_auth_challenges` не создана, DDL не одобрен; V5 AUTH production OFF, V4/сайт/Restis не затрагивались. Механизм переноса SMS в мобильный API нельзя считать работающим до этих шагов.
+
+
+
 ## 25.10.2026 — дополнительная обязательная проверка принадлежности challenge к email ledger
 
 После security review source-only V5 HTTP bridge `V5MySqlChallengeHttpPort::requestSmsInsteadOfEmail` больше не пересылает в native SMS provider **любой** 64-hex `challenge_id`. Сначала он проверяет:
