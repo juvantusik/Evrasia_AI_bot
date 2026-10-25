@@ -11,6 +11,7 @@ require_once __DIR__ . '/V5MySqlSessionLogout.php';
 require_once __DIR__ . '/V5MySqlCartRead.php';
 require_once __DIR__ . '/V5MySqlProfileRead.php';
 require_once __DIR__ . '/V5BitrixLockedProfileReader.php';
+require_once __DIR__ . '/V5BitrixLockedCartReader.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/V5PublicFactorKindAdapter.php';
@@ -193,7 +194,9 @@ final class V5MySqlPublicComposition
             new V5MySqlSessionActions($sessions, $pinReader),
             $tokenValidator, null,
             new V5MySqlSessionLogout($sessions),
-            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
+            ($cartReader !== null || PHP_SAPI === 'fpm-fcgi')
+                ? new V5MySqlCartRead($sessions, $cartReader ?? new V5BitrixLockedCartReader())
+                : null,
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader())
         ));
     }
@@ -251,7 +254,9 @@ final class V5MySqlPublicComposition
             $tokenValidator,
             null,
             new V5MySqlSessionLogout($sessions),
-            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
+            ($cartReader !== null || PHP_SAPI === 'fpm-fcgi')
+                ? new V5MySqlCartRead($sessions, $cartReader ?? new V5BitrixLockedCartReader())
+                : null,
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
         ));
     }
