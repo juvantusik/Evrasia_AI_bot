@@ -17,6 +17,7 @@ on:
       - site-integration/samzaberu-v5/src/V5BitrixExistingCartAdder.php
       - site-integration/samzaberu-v5/tests/V5CartAddHttpTest.php
       - site-integration/samzaberu-v5/tests/V5CartSourceParityTest.php
+      - site-integration/samzaberu-v5/deployment/snapshot-working-v4-for-v5-reuse.sh
       - site-integration/samzaberu-v5/src/V5CartMutationRequest.php
       - site-integration/samzaberu-v5/src/V5MySqlCartMutation.php
       - site-integration/samzaberu-v5/src/V5MySqlPublicComposition.php
@@ -112,3 +113,8 @@ jobs:
         run: php site-integration/samzaberu-v5/tests/V5CartAddHttpTest.php
       - name: V5 source-of-truth parity (custom API basket, no D7 fallback)
         run: php site-integration/samzaberu-v5/tests/V5CartSourceParityTest.php
+      - name: Review proven V4 reuse snapshot syntax (no production connection)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n site-integration/samzaberu-v5/deployment/snapshot-working-v4-for-v5-reuse.sh
