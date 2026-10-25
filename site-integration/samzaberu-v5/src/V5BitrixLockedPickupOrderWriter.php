@@ -38,12 +38,14 @@ interface V5NativePickupOrderMaterializerPort
 
 /**
  * V4's CartApiService::orderCreatedEvent() executes two DELETE statements
- * on B_API_BASKET (FUSER_ID) and BASKET_CUSTOM_GIFTS (site basket owner).
- * A production implementation is NOT supplied yet: V4 uses $DB, whereas
- * the V5 transaction and durable ledger are managed via PDO.
+ * on B_API_BASKET (FUSER_ID) and BASKET_CUSTOM_GIFTS (UF_FUSER_ID).
+ * A strict feature-only implementation exists in
+ * V5BitrixNativePickupCartCleanup; it runs solely through the native Bitrix
+ * PDO compatibility bridge in a strictly verified V5 HTTP transaction.
+ * The implementation is NOT composed or deployed in production.
  *
- * Implement this ONLY after proving that its writes, Bitrix Sale::save(),
- * and the V5 PDO ledger use one physically identical database transaction.
+ * Enable ONLY after proving its writes, Bitrix Sale::save(), and the
+ * V5 idempotency ledger share one physically identical transaction.
  * No RESTIS dispatch, no call to V4 controller and no independent COMMIT.
  */
 interface V5NativePickupCartCleanupPort
