@@ -633,3 +633,15 @@ Implemented next real step:
 - Old experimental V5 developer handoff `docs/SAMZABERU_API_V5_DEVELOPER_HANDOFF_2026-10-25.md` now explicitly marked SUPERSEDED in commit `5cac76875178868d8351f9e7e882ca09e160b3fa`, so developer is not told to reimplement V4 business endpoints against wrong V5 DTOs.
 
 **NEXT DIRECT ACTION:** Run the single pinned read-only source snapshot on root@evrasia; get OWNER-REVIEWED V4 PHP source archive into trusted workspace (must check for embedded secrets first; never upload blindly to public repo). Then clone the actual existing router/controllers in an independent V5 feature branch, identify only auth/legal/registration diff, keep business route semantics and site checkout unchanged, run targeted regression tests on existing data without synthetic accounts/orders, seek approval prior to production cutover. NEVER return to generic V5 Sale::save token tracing and never claim 463 mock passes mean real V5 completion. V4 still production, V5 AUTH OFF and no production changes.
+
+
+## 35. V4 snapshot failed on unrelated files; corrected exact source filter (2026-10-25)
+
+Operator ran the pinned `snapshot-working-v4-for-v5-reuse.sh` (commit `516b01bad85a9f72fea8cb427fc8c0b800f16a7b`); it exited before snapshot with `FAIL: unexpected file type`. The source directory contains other legitimate files not ending in `.php`/`.htaccess`; the original defensive preflight had incorrectly treated such files as fatal, and its `cp -a` would have copied them anyway. No working V4 or V5 modified.
+
+**Corrected implementation** `site-integration/samzaberu-v5/deployment/snapshot-working-v4-for-v5-reuse.sh` at **commit `19bdac604c6b64199ab3a54efe8a86c73fb48513`**, Git blob **`5294e77a10558c5025bd1a8e7e2f1aa25a74cded`**:
+- Skip unrelated files (non-`.php`, non-`.htaccess`) and report `UNRELATED_FILES_SKIPPED`; no more false fatal because a source directory contains README/JSON/assets.
+- Replaced copying entire directories via `cp -a` with selective byte-compared source-only `cp -p` of PHP and .htaccess; symlinks in source trees still fail closed, selected files size <=1 MB.
+- Existing host/root + pinned V4 Cart/router SHA guards retained. Archive remains under `/root/evrasia-v5-v4-source-snapshots` and is NEVER auto-uploaded to GitHub or served; review embedded PHP secrets before owner-approved private transfer.
+- **GitHub CI `40217397626` SUCCESS** (syntax/lint and other source-only tests); the repaired server snapshot has **not been rerun** yet. Do NOT claim that production V4 source has been copied until operator reports `V4_SNAPSHOT=PASS`, `PRIVATE_ARCHIVE=...`, `SOURCE_FILE_COUNT=...`.
+- Next: owner runs hash-pinned corrected wrapper on `root@evrasia`; if PASS, securely inspect private PHP archive for accidental embedded credentials before sharing, then actually fork proven V4 router/controllers in a V5-only copy while preserving existing `device_id` and V4 business functions. V4 and production unchanged; V5 AUTH OFF.
