@@ -65,6 +65,15 @@ interface V5LockedBonusPinReaderPort
  * verifies basket-line ownership and saves on the same guarded Bitrix
  * physical transaction. No V4 controller, browser cookie or new FUSER.
  */
+/** Native add-by-catalog-ID under the same strong session and FUSER lock. */
+interface V5LockedCartAddPort
+{
+    /** Returns the verified persisted new Bitrix basket-line ID, not product ID. */
+    public function addLockedCatalogItem(
+        PDO $db, int $userId, int $productId, int $quantity
+    ): int;
+}
+
 interface V5LockedCartMutatorPort
 {
     public function changeLockedCartItem(
@@ -432,6 +441,49 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         } catch (Throwable) {
             // Transaction owner performs rollback on native failure.
             return false;
+        }
+    }
+
+    /**
+     * Only add a *new* server-verified catalog product; no user/FUSER/price
+     * fields are taken from the app. Return persisted item ID after COMMIT.
+     */
+    public function addCartItemForAccess(
+        #[\SensitiveParameter] string $accessJwt, int $productId, int $quantity,
+        V5LockedCartAddPort $adder,
+    ): ?int {
+        if ($productId < 1 || $productId > 2147483647
+            || $quantity < 1 || $quantity > 1000) return null;
+        try {
+            $claims=$this->access->verifyAccess($accessJwt,$this->peekTime());
+            if ($claims===null) return null;
+            $this->assertReady();
+            $userId=self::positive($claims['sub'] ?? null);
+            if ($userId===null) return null;
+            return $this->transaction(function () use (
+                $claims,$userId,$productId,$quantity,$adder
+            ): ?int {
+                $now=$this->dbTime();
+                $this->lockUser($userId);
+                $this->requireNativeCoverage($userId);
+                $epoch=$this->lockedEpoch($userId);
+                $row=$this->lockedSession($claims['sid']);
+                $state=self::state($row,$userId,$now);
+                if ($state===null || $epoch!==$state['auth_epoch']
+                    || !V5SessionAssurancePolicy::permitsProtectedAction(
+                        $claims,$state,$now
+                    )) return null;
+                $basketId=$adder->addLockedCatalogItem(
+                    $this->db,$userId,$productId,$quantity
+                );
+                if ($basketId<1 || $basketId>2147483647) {
+                    throw new RuntimeException('v5_cart_add_unconfirmed');
+                }
+                return $basketId;
+            });
+        } catch (Throwable) {
+            // The strong-session transaction rolls back on native failure.
+            return null;
         }
     }
 
