@@ -539,3 +539,30 @@ The only targeted follow-up is a static source-only CLASSIFIER for the **single 
 - Await user stdout: `ORDERBASE_SAVE_OTHER_RECEIVER_KIND`, `ORDERBASE_SAVE_OTHER_RECEIVER_SHAPE`, `ORDERBASE_SAVE_OTHER_LAST_ASSIGNMENT_SHAPE`. If identifier masked or unresolved, do NOT invent a class/type. Only then determine whether a bounded further check is worthwhile; avoid repetitive broad source scans. This is source structure only, **not** proof of native Bitrix Sale order transaction continuity.
 
 No feature runtime changes, no deployment, DB schema, real orders or payments, no user-created accounts, no call-center network calls, V4 unchanged, V5 AUTH OFF.
+
+
+## 30. Owner explicitly redirected from endless Sale::save investigation to API V5 IMPLEMENTATION (2026-10-25)
+
+**Binding owner decision:** "дальше, давай к реализации v5". STOP repeated read-only `save()`/RESTIS/call-center research. Product order route: SamZaberu -> V5 -> native Bitrix Sale -> **existing LOCAL channel to call center** -> downstream restaurant. Do not access or explore call-center servers. Use existing V4 business services/policy without V4 auth/JWT/controller or production code changes.
+
+Last accepted source-only operator output (retained for honesty, not another investigation):
+`V5_SALE_OTHER_SAVE_RECEIVER=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, `ORDERBASE_SAVE_OTHER_RECEIVER_KIND=LOCAL_VARIABLE`, `ORDERBASE_SAVE_OTHER_RECEIVER_SHAPE=$VAR`, `ORDERBASE_SAVE_OTHER_LAST_ASSIGNMENT_SHAPE=$this -> ID ( )`, no site execution/DB writes. The method name was redacted, **so the actual delegated class/transaction behavior remains unverified**; NEVER claim source-only checks prove native physical transaction atomicity. No follow-up parser needed unless specifically requested.
+
+### Concrete API V5 implementation, in feature branch only
+
+- **New** `site-integration/samzaberu-v5/src/V5NativePickupCheckoutComposition.php`, commit `7b2621dbf32a7f71292d941e39e7fa8c20440a7e`. Real object factory for the already authored independent V5-only checkout route `POST /api/v5/cart/order`:
+  - `V5BitrixLockedCartFuserOwner`;
+  - `V5BitrixNativePickupMaterializer` with `V5PickupBasketNativeFieldPolicy` + `V5PinnedPickupPropertyPolicy`;
+  - `V5BitrixCheckoutBusinessRules` from explicit site values;
+  - `V5NativePickupSaleD7Saver(new V5BitrixSaleD7OrderBuilder())`;
+  - `V5BitrixNativePickupSavedOrderProof`;
+  - `V5BitrixNativePickupCartCleanup`;
+  - required, externally/site-supplied `V5PickupLocalCallCenterHandoffProofPort`;
+  - `V5BitrixLockedPickupOrderWriter`, with preserved request-id receipt/replay and guarded transaction/cleanup.
+- `V5NativePickupSiteConfiguration` is explicit validated immutable **server-owned** values: pay-on-pickup system ID, dispatch type list, time-check failure key, exact basket NOTES, source, happytime. No fake defaults or app-controlled properties. `V5NativePickupSiteReleaseEvidencePort` **mandatory** and not implemented in production: must confirm actual site-local readiness of native Sale transaction + existing Bitrix-to-call-center handoff. Factory `buildForStrictHttp(...)` refuses CLI, generic PDO, missing strict `fpm-fcgi` V5 native ingress, active native transaction during construction, denied/unknown/error site attestation. It cannot deploy or enable the site.
+- Existing `V5MySqlPublicComposition::buildEmailFirst` / `build`, as well as pilot composition, already accept optional `checkoutWriter`; the concrete factory's output fits this injection, and existing V5RouteMap + V5MySqlOrderPlace + V5AuthHttpHandler provide the HTTP route. **No new router needed and no public route activated.** Real site composer/attestations must be supplied separately before live checkout.
+- **New** `tests/V5NativePickupCheckoutCompositionTest.php`, commit `334f595ae1c63b29ec9d7037eb2d572f652f7743`: checks exact reflection wiring of all 7 real native port types, V4 IGNORE_RESTIS=Y property, trusted field sourcing, no DB or external sends, CLI rejection occurs before injected site-release mock can grant approval, invalid site policy rejected. No bootstrap.
+- Checkout GitHub CI workflow updated `db55c5a5df713cae50b15532759905a803930c1b`. **Run `40214572165` SUCCESS**: HTTP 16 + Sale D7 24 + business 18 + writer 39 + native materializer 23 + fresh basket 24 + property 12 + native SQL bridge 195 + new composition 24 = **375/375 MOCK-ONLY PASS**. These tests are NOT a live Bitrix order.
+- **New architecture/how-to document** `docs/SAMZABERU_V5_NATIVE_CHECKOUT_COMPOSITION_2026-10-25.md` commit `a8f277c619c835b415ae5d12c937a5182ec14968`; explains actual V5 object graph and how site can inject into existing V5 route *after* approval.
+
+Next real development priority: continue implementing native V5 **feature functionality** and contract/diagnostics for independently deployable API, not broad transaction archaeology. Production remains untouched, V4 independent, V5 AUTH OFF, no real orders/accounts, no SMS/payment/call-center network actions. Remaining true release gates: proven physical native transaction & Sale side effects; independent positive site-only acceptance marker into existing local call-center channel; exact trusted site fields and offline request-ledger DDL not installed; owner-approved real guest pilot. Never misrepresent PASS mock as deployment/readiness.
