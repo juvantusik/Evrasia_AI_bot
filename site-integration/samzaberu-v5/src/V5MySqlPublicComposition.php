@@ -266,7 +266,7 @@ final class V5MySqlPublicComposition
             return;
         }
         if (PHP_SAPI !== 'fpm-fcgi'
-            || !$db instanceof V5BitrixPdoCompatibilityBridge
+            || !($db instanceof V5BitrixPdoCompatibilityBridge)
             || !$db->hasStrictV5HttpIngress()) {
             throw new InvalidArgumentException('V5 protected HTTP native connection unavailable');
         }
