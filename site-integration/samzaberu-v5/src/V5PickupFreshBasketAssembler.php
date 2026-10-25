@@ -87,7 +87,7 @@ final class V5PickupFreshBasketAssembler
                 || $base > 1000000) {
                 throw new RuntimeException('checkout_native_price_unavailable');
             }
-            $line = $basket->createItem($nativeFields->moduleId, $id);
+            $line = $basket->createItem(V5PickupBasketNativeFieldPolicy::MODULE_ID, $id);
             if (!is_object($line) || !method_exists($line, 'setFields')) {
                 throw new RuntimeException('checkout_basket_item_create_failed');
             }
@@ -97,10 +97,10 @@ final class V5PickupFreshBasketAssembler
                 'DETAIL_PAGE_URL'=>$info['DETAIL_PAGE_URL'],
                 'CURRENCY'=>$currency,
                 'LID'=>$siteId,
-                $nativeFields->providerFieldKey=>$nativeFields->providerClass,
+                V5PickupBasketNativeFieldPolicy::NOTES_FIELD=>$nativeFields->notes,
                 'PRICE'=>$price,
                 'BASE_PRICE'=>$base,
-                'CUSTOM_PRICE'=>$nativeFields->customPrice,
+                'CUSTOM_PRICE'=>V5PickupBasketNativeFieldPolicy::CUSTOM_PRICE,
             ]);
             if ($result === false || (is_object($result)
                 && method_exists($result,'isSuccess')
