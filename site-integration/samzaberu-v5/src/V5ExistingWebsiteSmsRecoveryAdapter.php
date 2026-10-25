@@ -113,7 +113,7 @@ interface V5ExistingWebsiteSmsNativeTransitionPort
  *
  * This class performs NO SQL, Redis reservation, SMS generation/sending,
  * Bitrix login, session creation or website PHP modifications by itself.
- * A staged SMS row or a raw site CSms::send() result alone never causes
+ * A staged SMS row or a raw site transport result alone never causes
  * a client-visible ticket: post-commit independent send attestation is REQUIRED.
  */
 final readonly class V5ExistingWebsiteSmsRecoveryAdapter
