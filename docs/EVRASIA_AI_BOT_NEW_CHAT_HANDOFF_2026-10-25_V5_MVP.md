@@ -357,3 +357,19 @@ Follow-on single-purpose source-only inventory:
 - Pinned runner `tests/diagnostics/run_v5_checkout_postsave_sql_scope_readonly.sh` at commit `f9331312dbd952f5e15048ae0378209dd9848113`, git blob `86708ced300c5db2c913d8f2449314936ad346b3`. Checks real CartApiService SHA `61671c764f23a82ce66a990d5c9122ebf25fdac800ab51828c0805c8c9db18e0`, V4 router SHA `5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d`, V5 private OFF JSON, parser hash and self-test; no data read/write; no auth enable.
 - GitHub Actions `40209857194` **SUCCESS**, verifies parser syntax+selftest and wrapper Bash syntax; this does **not** attest live SQL details. Await operator stdout of exactly this runner to decide cart cleanup/RestIS boundary.
 - Next step after interpreting two SQL operations: implement V5-only post-checkout behavior using existing trusted site service semantics only if transaction and idempotency boundaries permit, and separately establish where **actual restaurant dispatch** occurs. Do not enable V5 production checkout or send SMS/payments/orders. All earlier 133/133 offline checkout tests remain accepted.
+
+
+## 19. Real checkout post-save SQL read-only verification (2026-10-25)
+
+**Operator output accepted**: `V5_POSTSAVE_SQL_SCOPE=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, pinned real V4 `CartApiService`, V4 router, V5 AUTH OFF, SQL source-only (no DB connection/write).
+
+Inside `CartApiService::orderCreatedEvent()` exactly TWO `$DB->Query()`:
+- QUERY 1: `DELETE`, contains `FUSER_ID`, `WHERE`, uses `$this->id` service identity. Table not in narrow standard `B_SALE_*` allowlist.
+- QUERY 2: `DELETE`, contains `WHERE`, uses `$this->id`. Table not in the narrow standard allowlist.
+- **No actual RESTIS dispatch or enqueue within the method**, so this is a post-save **data deletion** concern, not a RestIS delivery bridge. Do NOT assume specific table names or side effects until safely classified; do NOT call after native V5 save speculatively.
+- Existing COrder Sale save hook skips its usual send path when `IGNORE_RESTIS='Y'`; V4 Cart::order sets it to Y. Need independently identify actual restaurant order transport/fetch before enabling V5 order create; a successful Bitrix Sale save alone is not proven restaurant delivery.
+
+Safe NEXT targeted operator script:
+- `site-integration/samzaberu-v5/tests/diagnostics/V5CheckoutPostSaveSqlScope.php`, corrected at commit `524925aec78ad12eee069fd978ce950042662431` blob `498e471a23789f96db057f69021d0cd4e2570e22`: outputs only syntactically safe `DELETE FROM <identifier>` / `UPDATE <identifier>` table name and SQL operation, never SQL or literal contents. Explicit self-test includes both UPDATE and DELETE and no secret exposure. Earlier intermediate version failed CI due UPDATE test case; corrected and CI `40210217515` SUCCESS.
+- Pinned runner `site-integration/samzaberu-v5/tests/diagnostics/run_v5_checkout_postsave_sql_scope_readonly.sh`, commit `0b86629d7ca68989e82cdc29bd971ca78557b1ed`, blob `2de5cb5fb9de099991c903dceed4776299c2a61f`. It checks exact installed CartApiService SHA, router SHA, V5 OFF before/after; only source reads. GitHub Actions `40210227811` SUCCESS with PHP lint, redaction self-test, Bash lint. Returns `QUERY_1_TARGET_IDENTIFIER`, `QUERY_2_TARGET_IDENTIFIER` to determine deletion scope; no SQL executed.
+- Remain cautious: native V5 writer and ledger are feature-only offline tests, **not** deployed, no production DB schema and no real orders; V4 unchanged. Next development is exact post-save lifecycle and actual restaurant dispatch, then native transaction continuity validation, not new auth work.
