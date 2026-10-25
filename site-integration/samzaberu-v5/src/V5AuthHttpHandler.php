@@ -58,6 +58,16 @@ interface V5CartHttpReaderPort
     public function readVerifiedCart(#[\SensitiveParameter] string $accessJwt): ?array;
 }
 
+/**
+ * Native profile identity comes only from the already authenticated V5 JWT.
+ * No client-supplied Bitrix user ID or V4 profile handler.
+ */
+interface V5ProfileHttpReaderPort
+{
+    /** @return array<string,int|string|null>|null */
+    public function readVerifiedProfile(#[\SensitiveParameter] string $accessJwt): ?array;
+}
+
 interface V5TokenValidationPort
 {
     public function isValidAccessToken(string $accessJwt): bool;
@@ -90,6 +100,7 @@ final readonly class V5AuthHttpHandler
         private ?V5PublicLegalConsentsPort $publicLegalConsents = null,
         private ?V5SessionLogoutPort $logout = null,
         private ?V5CartHttpReaderPort $cartReader = null,
+        private ?V5ProfileHttpReaderPort $profileReader = null,
     ) {}
 
     /**
@@ -213,6 +224,35 @@ final readonly class V5AuthHttpHandler
             return new V5HttpReply(200, [
                 'items' => $cart['items'], 'total' => $cart['total']
             ]);
+        } catch (Throwable) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+    }
+
+    /**
+     * GET /profile: native Bitrix b_user through V5's strong JWT/session,
+     * with no V4 controller or cookie authentication.
+     */
+    public function handleProtectedProfileGet(#[\SensitiveParameter] string $accessJwt): V5HttpReply
+    {
+        if ($this->profileReader === null) {
+            return new V5HttpReply(503, ['error' => 'v5_unavailable']);
+        }
+        if (strlen($accessJwt) < 110 || strlen($accessJwt) > 4096
+            || preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D',
+                $accessJwt) !== 1) {
+            return new V5HttpReply(401, ['error' => 'authentication_failed']);
+        }
+        try {
+            $profile = $this->profileReader->readVerifiedProfile($accessJwt);
+            if ($profile === null) {
+                return new V5HttpReply(401, ['error' => 'authentication_failed']);
+            }
+            if (!is_array($profile) || !is_int($profile['id'] ?? null)
+                || $profile['id'] < 1) {
+                return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+            }
+            return new V5HttpReply(200, ['profile' => $profile]);
         } catch (Throwable) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
