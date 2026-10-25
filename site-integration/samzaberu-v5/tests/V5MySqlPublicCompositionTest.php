@@ -262,9 +262,9 @@ publicWireCheck($deniedSms->status===503 && $manual->requests===0,
 publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
     'manual SMS attestation and denied dispatch never call Redis or legacy SMS');
 
-// The normal email-first assembly must not require a paid SMS sender.
-// Native TOTP is mandatory; manual SMS remains closed until site-native
-// full-lifecycle + recovery attestations are separately proven.
+// Email-first does not require the generic SMS lifecycle. The distinct,
+// attested website recovery path is allowed with TOTP-only native readiness,
+// but direct SMS begin and resend MUST stay closed. No site SMS is sent here.
 final class PublicWireTotpOnly implements V5PublicVerifiedTotpLifecyclePort {
     public ?bool $ready = null;
     public int $checks = 0;
@@ -297,8 +297,28 @@ $totpOnly->ready=true;
 $totpOnlyTransport=$emailAssembly($db,$matchingProof,null,$totpOnly);
 publicWireCheck($totpOnlyTransport instanceof V5HttpTransportBoundary,
     'verified TOTP/email can assemble WITHOUT paid SMS lifecycle');
+$manual->attested=null;
 publicWireReject(fn()=>$emailAssembly($db,$matchingProof,$manual,$totpOnly),
-    'TOTP-only provider cannot activate paid SMS even with positive recovery stub');
+    'unknown website recovery readiness still fails closed with TOTP-only');
+$manual->attested=false;
+publicWireReject(fn()=>$emailAssembly($db,$matchingProof,$manual,$totpOnly),
+    'denied website recovery readiness still fails closed with TOTP-only');
+$manual->attested=true;
+$totpWithSiteRecovery=$emailAssembly($db,$matchingProof,$manual,$totpOnly);
+publicWireCheck($totpWithSiteRecovery instanceof V5HttpTransportBoundary,
+    'attested website recovery works with independent TOTP-only lifecycle');
+$deniedMissingEmail=$totpWithSiteRecovery->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/challenge/use-sms',true,
+    'application/json',$manualRequest,(string)strlen($manualRequest)
+));
+publicWireCheck($deniedMissingEmail->status===503 && $manual->requests===0,
+    'website SMS recovery does not send when email ledger is absent');
+$deniedSiteResend=$totpWithSiteRecovery->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/challenge/resend',true,
+    'application/json',$manualRequest,(string)strlen($manualRequest)
+));
+publicWireCheck($deniedSiteResend->status===401 && $totpOnly->issued===0,
+    'attested recovery does not expose ordinary V5 SMS resend');
 $deniedFallback=$totpOnlyTransport->dispatch(new V5StagedHttpRequest(
     'POST','/api/v5/auth/challenge/use-sms',true,
     'application/json',$manualRequest,(string)strlen($manualRequest)
