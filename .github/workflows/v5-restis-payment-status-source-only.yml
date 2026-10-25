@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/v5-restis-payment-status-source-only.yml
       - site-integration/samzaberu-v5/tests/diagnostics/V5RestisOrderPaymentEventReader.php
+      - site-integration/samzaberu-v5/tests/diagnostics/run_v5_restis_payment_event_readonly.sh
   workflow_dispatch:
 jobs:
   parser:
@@ -17,5 +18,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           script=site-integration/samzaberu-v5/tests/diagnostics/V5RestisOrderPaymentEventReader.php
+          bash -n site-integration/samzaberu-v5/tests/diagnostics/run_v5_restis_payment_event_readonly.sh
           php -l "$script"
           php -d auto_prepend_file= -d auto_append_file= "$script" --self-test
