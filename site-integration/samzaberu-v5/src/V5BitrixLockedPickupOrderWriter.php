@@ -36,6 +36,30 @@ interface V5NativePickupOrderMaterializerPort
     public function orderProperties(PDO $db, int $userId, array $business): array;
 }
 
+/**
+ * V4's CartApiService::orderCreatedEvent() executes two DELETE statements
+ * on B_API_BASKET (FUSER_ID) and BASKET_CUSTOM_GIFTS (site basket owner).
+ * A production implementation is NOT supplied yet: V4 uses $DB, whereas
+ * the V5 transaction and durable ledger are managed via PDO.
+ *
+ * Implement this ONLY after proving that its writes, Bitrix Sale::save(),
+ * and the V5 PDO ledger use one physically identical database transaction.
+ * No RESTIS dispatch, no call to V4 controller and no independent COMMIT.
+ */
+interface V5NativePickupCartCleanupPort
+{
+    /** Fail closed unless the native and V5 transaction are physically shared. */
+    public function assertNativeTransactionContinuity(PDO $db): void;
+
+    /**
+     * Clear ONLY this verified user's already-saved checkout basket/gifts
+     * inside the still-owned native transaction. No global FUSER from cookie.
+     */
+    public function clearSavedCart(
+        PDO $db, int $userId, int $fuserId, int $orderId
+    ): void;
+}
+
 /** Testable seam for the already-written V5 native Sale D7 builder. */
 interface V5NativePickupOrderSaverPort
 {
@@ -87,6 +111,7 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
         private V5NativePickupOrderMaterializerPort $materializer,
         private V5BitrixCheckoutBusinessRules $rules,
         private V5NativePickupOrderSaverPort $saver,
+        private V5NativePickupCartCleanupPort $cleanup,
     ) {}
 
     /** @return array{id:int,user_id:int,request_id:string,number:string,status:string,saved:bool} */
@@ -154,6 +179,9 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
         if (!is_array($properties) || count($properties) < 1 || !$db->inTransaction()) {
             throw new RuntimeException('checkout_native_business_unavailable');
         }
+        // Before Sale::save(), require a verified shared physical DB
+        // transaction; PDO::inTransaction() alone is not sufficient.
+        $this->cleanup->assertNativeTransactionContinuity($db);
         $saved = $this->saver->save($userId, $siteId, $basket,
             $business['pay_system_id'], $properties);
         if (!is_array($saved)
@@ -163,8 +191,14 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             || !in_array($saved['status'], ['N','P'], true)) {
             throw new RuntimeException('checkout_order_not_new');
         }
-        // The caller owns the physical native SQL transaction and must prove
-        // that D7 save did not commit it (V5 savepoint release gate).
+        // The saved (unpaid) order must be in the still-owned transaction.
+        // Mirror the exact V4 two-table cart cleanup once, only for a NEW
+        // saved request_id. Replayed receipts return above without clearing.
+        $this->cleanup->assertNativeTransactionContinuity($db);
+        $this->cleanup->clearSavedCart($db, $userId, $fuserId, $saved['id']);
+        $this->cleanup->assertNativeTransactionContinuity($db);
+        // Any failed cleanup, lost transaction or ledger update must roll
+        // back the order and cleanup together. This is a release gate.
         if (!$db->inTransaction()) throw new RuntimeException('checkout_native_transaction_lost');
         $stmt = $this->execute($db, self::COMPLETE, [
             $saved['id'], $saved['number'], $saved['status'],
