@@ -163,3 +163,22 @@ These findings are from operator-supplied outputs; they **do not authorize produ
 **Next**: examine the PHP bridge → CAS executor → user mapping → targeted bonus cache implementation and status semantics; test bounded actual integration only with separate authorization and rollback-ready controls. Validate phone-change / multi-card semantics and retry-vs-ACK mapping. Before live RestIS installation, prepare least-privilege SQL worker role, backup, rollback and separate enable gates. Do not modify V4/V5 or gifts.
 
 Current state: `SQL_MIGRATION_APPLIED=NO`; `NEW_TRIGGER_INSTALLED=NO`; `EVENT_WORKER_ENABLED=NO`; `CAS_EXECUTED=NO`; `BONUS_CACHE_CLEARED=NO`; `DATABASE_WRITE=NO` in these tests; `PRODUCTION_READINESS=DENIED`. Staging SQL and worker implementation **have not been committed to GitHub** by this docs-only checkpoint.
+
+
+## 10. Production SQL install receipt — 2026-10-25
+
+Operator ran a guarded SQL Server 2014 installation transaction in **production `EUR-CRM` / `RESTISBONUS`** and provided `FINAL_STATUS=PASS`, `FINAL_RC=0`, `MODE=PRODUCTION_DDL_INSTALL`. The installation was **committed**; unlike prior isolated tests, this is a production DDL change.
+
+Confirmed deployed SQL objects:
+- `dbo.ev_bitrix_bonus_events` table and pending index
+- `dbo.tr_ev_bitrix_bonus_changes` AFTER UPDATE trigger on `dbo.Cards`, **installed but DISABLED**
+- `dbo.ev_bonus_claim`, `dbo.ev_bonus_ack`, `dbo.ev_bonus_retry` stored procedures
+- `ev_bonus_event_worker` database role with EXECUTE on those three procedures, **no SQL principal assigned**
+
+Guards in operator output: `EXISTING_TRIGGERS_MODIFIED=NO`; `BONUS_DATA_CHANGED=NO`; `BITRIX_DATABASE_WRITE=NO`; `WORKER_ENABLED=NO`. Production worker, Bitrix CAS writes and bonus-cache invalidation were not enabled by this action. There is **no live event capture while trigger remains disabled**; do not describe the integration as running.
+
+The installation command was authored in conversation from the same V2 SQL definitions that passed isolated test, but no post-install object-definition hash / external monitoring receipt was supplied. Keep deployment receipt separate from source commit.
+
+**Next controlled implementation step**: deploy PHP worker/bridge/CAS/cache components from pinned Bitrix staging to a private dormant runtime directory; provision a dedicated least-privilege worker SQL login and secret transport; activate writer gates and trigger/worker separately after one bounded real-user/rollback-ready integration verification. Preserve gifts, V4/V5 and already-working site behavior. Backfill and on-registration initialization remain separate required workstreams.
+
+**Live release status:** `RESTIS_OUTBOX_CREATED=YES`, `RESTIS_TRIGGER_INSTALLED=YES`, `RESTIS_TRIGGER_ENABLED=NO`, `SQL_ROLE_CREATED=YES`, `WORKER_SQL_LOGIN_ASSIGNED=NO`, `WORKER_ENABLED=NO`, `BITRIX_WRITES_ENABLED=NO`, `PRODUCTION_READINESS=DENIED`.
