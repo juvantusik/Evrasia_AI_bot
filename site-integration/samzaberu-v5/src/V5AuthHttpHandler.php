@@ -117,6 +117,9 @@ final readonly class V5AuthHttpHandler
                 'resendChallenge' => $this->workflow === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->resend($body),
+                'requestSmsFallback' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->requestSmsFallback($body),
                 // Without explicit verified V5 operations, HTTP remains 503.
                 'refresh' => $this->sessionActions === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
@@ -319,6 +322,25 @@ final readonly class V5AuthHttpHandler
                 $body['challenge_id'],
                 $body['device_id'],
                 $body['platform'],
+            ),
+            'challenge_pending'
+        );
+    }
+
+    private function requestSmsFallback(array $body): V5HttpReply
+    {
+        // Explicit request, never a signin parameter or an automatic resend.
+        // No client phone, recipient email, user ID or factor override.
+        if (!self::hasOnlyKeys($body, ['challenge_id','device_id','platform'])
+            || !self::isString($body, 'challenge_id')
+            || !self::isString($body, 'device_id')
+            || !self::isString($body, 'platform')
+        ) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        return self::pending(
+            $this->workflow->requestSmsFallback(
+                $body['challenge_id'], $body['device_id'], $body['platform']
             ),
             'challenge_pending'
         );
