@@ -48,6 +48,16 @@ final readonly class V5BitrixLockedEmailOtpProof implements V5LockedEmailOtpProo
         }
     }
 
+    /**
+     * Assembly-only identity guard: the Bitrix proof, challenge ledger and
+     * strong V5 session writer must share the SAME physical PDO object.
+     * Does not execute SQL, open a connection or inspect user records.
+     */
+    public function boundTo(PDO $db): bool
+    {
+        return $db === $this->connection;
+    }
+
     public function verifyPasswordAndCurrentEmailWithLocks(
         PDO $db, PasswordVerifiedAccount $account,
         #[\SensitiveParameter] string $login,
