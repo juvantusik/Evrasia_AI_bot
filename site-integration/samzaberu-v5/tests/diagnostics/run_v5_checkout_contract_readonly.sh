@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
+printf '\033[3J\033[2J\033[H'
 set -Eeuo pipefail
 umask 077
-printf '\033[3J\033[2J\033[H'
 
 SITE='/home/site_evrasia/web/evrasia.spb.ru/public_html'
 CAND='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/candidates/6fa8773746e9a40e22008d67636c896eefeec3ed'
