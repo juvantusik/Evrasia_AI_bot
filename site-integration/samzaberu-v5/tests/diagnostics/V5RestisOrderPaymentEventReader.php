@@ -23,7 +23,7 @@ function markerFlags(string $raw): array
         'PAYMENT_EVENT' => '/OnSalePayOrder|OnSaleOrderPaid|OnSaleOrderPayment/i',
         'STATUS_EVENT' => '/OnSaleStatusOrder|OnSaleOrderStatus/i',
         'EVENT_REGISTRATION' => '/AddEventHandler|RegisterModuleDependences|addEventHandler/i',
-        'SALE_ORDER_UPDATE' => '/CSaleOrder|b_sale_order|OrderTable|\\Sale\\Order/i',
+        'SALE_ORDER_UPDATE' => '/CSaleOrder|b_sale_order|OrderTable|orderCreatedEvent|Sale\\\\Order/i',
         'RESTIS_CALL' => '/CRestis|CRests|restis/i',
     ];
     $found = [];
