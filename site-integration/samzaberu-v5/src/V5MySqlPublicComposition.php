@@ -78,7 +78,9 @@ final class V5MySqlPublicComposition
      * TOTP and email path without enabling paid SMS issuance, resend or
      * SMS grant consumption. Existing full-lifecycle consumers retain
      * their original attestation. Manual SMS requires a separately
-     * verified full native lifecycle AND website recovery provider.
+     * independently attested website recovery provider; the ordinary
+     * SMS issuance/resend lifecycle remains CLOSED to preserve email-first
+     * authorization and avoid another SMS transport/rate limiter.
      *
      * No database/table is created by this factory.
      * A missing email challenge ledger fails closed in the issuer.
@@ -117,7 +119,6 @@ final class V5MySqlPublicComposition
             ->mayDispatch($db, $server)) {
             throw new InvalidArgumentException('V5 public native release unavailable');
         }
-        $fullSmsAttested = false;
         try {
             if (!method_exists($existingWebsiteRedis, 'eval')) {
                 throw new InvalidArgumentException('V5 website Redis unavailable');
@@ -129,20 +130,19 @@ final class V5MySqlPublicComposition
             } elseif ($fullChallengeLifecycle->verifiedPublicSmsAndTotpLifecycle($db) !== true) {
                 // Do not relax existing full-lifecycle consumers.
                 throw new InvalidArgumentException('V5 native factors unavailable');
-            } else {
-                $fullSmsAttested = true;
             }
         } catch (Throwable) {
             throw new InvalidArgumentException('V5 public native dependencies unavailable');
         }
         if ($manualSmsRecovery !== null) {
             try {
-                // Manual paid SMS needs independently attested BOTH
-                // full native SMS/TOTP and the live website recovery policy.
-                if (!$fullChallengeLifecycle instanceof V5PublicVerifiedFactorLifecyclePort
-                    || (!$fullSmsAttested
-                        && $fullChallengeLifecycle->verifiedPublicSmsAndTotpLifecycle($db) !== true)
-                    || $manualSmsRecovery->verifiedExistingSiteRecovery($db) !== true) {
+                // The website SMS recovery is a DISTINCT, password-proven
+                // email->SMS transition. It never requires the generic V5
+                // SMS issuer/resend. Its own provider MUST attest that native
+                // SMS grant verification, site anti-abuse and accepted-send
+                // receipt are installed. A TOTP-only native lifecycle still
+                // needs independent TOTP attestation above.
+                if ($manualSmsRecovery->verifiedExistingSiteRecovery($db) !== true) {
                     throw new InvalidArgumentException('V5 SMS recovery not verified');
                 }
             } catch (Throwable) {
@@ -163,9 +163,10 @@ final class V5MySqlPublicComposition
         );
         $lifecycle = new V5SeparatedFactorLifecycle(
             new V5PublicFactorKindAdapter($fullChallengeLifecycle, ChallengeKind::TOTP),
-            $manualSmsRecovery === null
-                ? new V5UnavailableSmsLifecycle()
-                : new V5PublicFactorKindAdapter($fullChallengeLifecycle, ChallengeKind::SMS),
+            // Manual recovery only enters through use-sms on an existing,
+            // accepted email challenge; it NEVER grants a direct SMS begin
+            // or resend even if a generic SMS lifecycle happens to exist.
+            new V5UnavailableSmsLifecycle(),
             $email
         );
         $coverage = new V5StrictNativeSecurityHookCoverage($nativeEvidence);
