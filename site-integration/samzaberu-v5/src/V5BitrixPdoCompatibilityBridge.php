@@ -95,6 +95,29 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
             && $this->native === \Bitrix\Main\Application::getConnection();
     }
 
+    /**
+     * Checkout-only strict transaction proof. Unlike inTransaction(), this
+     * verifies the exact native Bitrix application connection, live SQL
+     * savepoint continuity and exclusive HTTP V5 ingress. Staging CLI and
+     * non-strict adapters must never delete real checkout cart contents.
+     */
+    public function assertOwnedCheckoutTransactionContinuity(): void
+    {
+        if (PHP_SAPI !== 'fpm-fcgi'
+            || !$this->verifiedHttpIngressAtConstruction
+            || !$this->requireNativeContinuity
+            || !$this->opened || $this->poisoned
+            || !$this->ownsCurrentNativeTransaction($this->native)
+        ) {
+            throw new RuntimeException('v5_checkout_shared_transaction_unverified');
+        }
+        $this->assertCurrentApplicationConnection();
+        $this->assertStrictStatementContinuity();
+        if (!$this->ownsCurrentNativeTransaction($this->native)) {
+            throw new RuntimeException('v5_checkout_shared_transaction_lost');
+        }
+    }
+
     public function getAttribute(int $attribute): mixed
     {
         return match ($attribute) {
@@ -473,6 +496,27 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
     private const CART_OWNER_SQL = 'SELECT ID, USER_ID FROM b_sale_fuser '
         . 'WHERE USER_ID = ? ORDER BY ID ASC LIMIT 2 FOR UPDATE';
 
+    /** Exact checkout V5 ledger and V4-verified cart cleanup templates.
+     * No other basket table may be deleted by the compatibility bridge.
+     * All writes require the bridge-owned native transaction.
+     * Live checkout still has an independent strict-HTTP continuity gate.
+     */
+    private const PICKUP_CHECKOUT_SQL = [
+        'INSERT INTO ev_v5_pickup_checkout_requests '
+            . '(USER_ID, REQUEST_ID, INPUT_SHA256, STATE, CREATED_AT) '
+            . "VALUES (?, UNHEX(?), UNHEX(?), 'pending', UTC_TIMESTAMP()) "
+            . 'ON DUPLICATE KEY UPDATE USER_ID=USER_ID',
+        'SELECT HEX(INPUT_SHA256) AS HASH_HEX, STATE, ORDER_ID, '
+            . 'ORDER_NUMBER, ORDER_STATUS FROM ev_v5_pickup_checkout_requests '
+            . 'WHERE USER_ID = ? AND REQUEST_ID = UNHEX(?) FOR UPDATE',
+        'UPDATE ev_v5_pickup_checkout_requests SET '
+            . "STATE='saved', ORDER_ID=?, ORDER_NUMBER=?, ORDER_STATUS=?, "
+            . 'COMPLETED_AT=UTC_TIMESTAMP() '
+            . "WHERE USER_ID=? AND REQUEST_ID=UNHEX(?) AND STATE='pending'",
+        'DELETE FROM B_API_BASKET WHERE FUSER_ID = ?',
+        'DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?',
+    ];
+
     private static function assertStatementAllowed(string $sql): void
     {
         if ($sql === '' || strlen($sql) > 8000
@@ -489,6 +533,9 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         // Ownership proof is a single, fixed indexed-row read. A FOR UPDATE
         // statement still requires an owned native V5 transaction in runStatement.
         if ($sql === self::CART_OWNER_SQL) {
+            return;
+        }
+        if (in_array($sql, self::PICKUP_CHECKOUT_SQL, true)) {
             return;
         }
         // Fixed transaction continuity guards, including four exact
