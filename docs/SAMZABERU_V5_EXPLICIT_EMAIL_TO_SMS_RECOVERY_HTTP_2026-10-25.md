@@ -1,5 +1,15 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — installed CSms transport, fail-closed post-send gate
+
+Latest operator production READ-ONLY inspector: `local/php_interface/lib/CSms.php`, sha256 `94a05ecbfad09340f2c07f432ebb047d0b5f928ed8a51198873ac43eb2f7c455`, exactly one `CSms::send` method. It calls cURL and includes a provider-success check and explicit `return true`; **no explicit `return false`**, no HTTP-status check and no provider message ID detected by source scan. The site's `issuePilotSmsCode` assigns its result then checks `=== false`. This does NOT prove delivery to handset, or even that all failures return false (PHP may implicitly return null). Do not normalize `NULL`, `false` or an unknown transport state to success; no automatic repeat send after unknown outcome.
+
+**Source-only security fix:** `V5PinnedWebsiteSmsSourceProof` now pins the installed **fifth** source file `CSms.php` in addition to the existing site signin, email-first rate/resend guards and session bridge. `V5ExistingWebsiteSmsNativeTransitionPort` now requires a **read-only**, post-commit `confirmedCurrentSmsSend(PDO $db, emailChallengeId, smsChallengeId, deviceId, platform): ?bool`. The public `V5ExistingWebsiteSmsRecoveryAdapter` returns the mobile SMS ticket **only** for a distinct `ChallengeKind::SMS` ID AND exact `=== true` receipt/factor/binding attestation after native transition. False/null/exception denies. Attestation MUST independently check current password-proven challenge, matching bound device and original one-time email supersession, server-side code HMAC and definitive provider-accepted send state. Queued/claimed/unknown states never count; callback cannot issue/retry an SMS. Existing source-only test checks negative null/false/exceptions and positive explicit true. The actual private installed provider and authoritative receipt path remain **UNIMPLEMENTED**; web SMS continues working independently.
+
+**Do not claim V5 SMS READY:** production `eurasia_new.ev_v5_email_auth_challenges` was confirmed ABSENT; other V5 auth state/challenge/outbox/budget tables are InnoDB, but absence of this email ledger blocks current mobile email→SMS transition. No DDL or production code/HTTP/SMS action was performed. Native security-event hook coverage and real site CSms accepted send semantics still need verification before deployment. No new OTP generator, SMS transport or global limiter should be added.
+
+
+
 ## 25.10.2026 — real native Bitrix FACT PROOFS CONNECTED (GitHub, NOT production)
 
 Owner asked «подключаем». Implemented **`src/V5BitrixEmailSmsStageProof.php`** as the concrete, fail-closed `V5LockedEmailToSmsStageProofPort` for the existing `V5EmailToSmsAtomicStage`. This is **not another paid SMS service or rate limiter**. It reuses:
