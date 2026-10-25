@@ -34,10 +34,13 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
 {
     private bool $opened = false;
     private bool $poisoned = false;
+    private bool $guardedTerminalInProgress = false;
+    private ?V5ProductionNativeTransactionContinuity $continuityGuard = null;
 
     public function __construct(
         private object $native,
         private V5NativeBitrixExclusiveTransactionPermitPort $permit,
+        private bool $requireNativeContinuity = false,
     ) {
         if (!is_a($native, 'Bitrix\\Main\\DB\\MysqliConnection')
             || !method_exists($native, 'getSqlHelper')
