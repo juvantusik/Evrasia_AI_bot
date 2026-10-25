@@ -117,6 +117,14 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
                 throw new RuntimeException('Native begin failed');
             }
             $this->opened = true;
+            if ($this->requireNativeContinuity) {
+                require_once __DIR__ . '/V5ProductionNativeTransactionContinuity.php';
+                $this->continuityGuard =
+                    V5ProductionNativeTransactionContinuity::arm($this->native, $this);
+                if (!$this->continuityGuard instanceof V5ProductionNativeTransactionContinuity) {
+                    throw new RuntimeException('v5_bitrix_native_continuity_unavailable');
+                }
+            }
             return true;
         } catch (Throwable) {
             // Unknown begin outcome: never reuse this connection for V5.
