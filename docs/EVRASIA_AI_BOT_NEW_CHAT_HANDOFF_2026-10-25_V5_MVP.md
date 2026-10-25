@@ -439,3 +439,11 @@ Feature branch changes, still **NOT INSTALLED**:
 3. Site-only verified `NOTES` value, `source`, `happytime`; user-on-pickup policy and existing properties; checkout ledger DDL proposed but NOT installed. Real user E2E only after explicit approval. No synthetic users.
 
 **Do not issue another cart table/source inspection script:** the two predicates and SQL shapes are now confirmed. Focus only on transaction and local Bitrix checkout acceptance readiness; leave V4 independent.
+
+
+### Checkout cleanup operational readiness update (2026-10-25)
+
+- Feature-only `src/V5BitrixNativePickupCartCleanup.php` adds **fail-closed metadata engine checks** for `B_API_BASKET` and `BASKET_CUSTOM_GIFTS` before executing either DELETE: both must be installed InnoDB tables in `eurasia_new`. This prevents assuming custom gifts support rollback. Commit `ad9bdaf0159983d3c3500ee4d658f0847fe2ebe0`.
+- Latest GitHub Actions checkout suite **SUCCESS `40211875189`**. PHP lint and all checkout mock assertions PASS; native bridge 147 assertions PASS. The bridge tests permit only the two exact V4 verified DELETE templates and original 3 V5 ledger templates; wrong FUSER field, unbounded delete, SQL predicate broadening and missing transaction fail; fake native rollback restores both basket and gift rows. The actual cleanup port rejects nonstrict CLI bridge/invalid identity.
+- Updated project-local checkout/call-center boundary document at `docs/SAMZABERU_V5_ORDER_CALL_CENTER_BOUNDARY_2026-10-25.md`, commit `f2db77913d82269569a1d1d7422d9ebf5eba7cfe`, confirms exact two DELETE keys and no need to probe call-center internals.
+- Remaining release gates unchanged: *REAL* Bitrix Sale D7 save + PDO bridge + Bitrix $DB transaction/savepoint continuity, local Bitrix acceptance into existing call-center channel (not downstream delivery), verified configuration values and user-approved restricted live checkout. V5 AUTH OFF, V4 untouched, no real order, no DB DDL nor production changes.
