@@ -68,6 +68,21 @@ Live production read-only source and database checks clarified the path from the
 
 Production code changes: **none**. Database writes during this follow-up: **none**. No user identifiers or actual balance values recorded in this public document.
 
+## Controlled live-update observation: RestIS API vs Bitrix stored balance (2026-10-25)
+
+An operator-approved follow-up changed the verified RestIS balance from a previous round number to another round number. A temporary, production-host monitoring script repeatedly queried the **existing** `CRestis::requestJson('/api/Balance', ['Phone' => ...])` endpoint and compared the result with a separate read-only PDO query of `eurasia_new.b_uts_user.UF_BONUS`. The monitor itself did not issue a balance mutation. Exact account identifiers and balance amounts are intentionally **not** recorded in this public document.
+
+Observed relative timeline (server timestamps, UTC+03:00):
+- **11:51:36:** `BASELINE_READY=YES`; RestIS API and Bitrix stored field agreed at the original value.
+- **11:51:46:** first sampled RestIS API response reflected the new, operator-changed balance, while Bitrix stored field was still at the original value (`EVENT=RESTIS_VALUE_CHANGED`, `VALUES_MATCH=NO`).
+- **11:52:06–11:57:07:** heartbeat samples continued to show new RestIS API value but old Bitrix stored field.
+- **11:57:27:** first sampled Bitrix `UF_BONUS` reflected the new value (`EVENT=BITRIX_FIELD_CHANGED`, `VALUES_MATCH=YES`).
+- **11:57:47:** monitor completed with `CONVERGED_TO_150=YES`, `FINAL_STATUS=PASS`, `WRAPPER_RC=0`; both were stable for 3 samples.
+
+The time between first observing the changed RestIS API value and first observing the changed Bitrix stored field is **5 minutes 41 seconds (341 seconds)**, with ~10-second polling granularity. This is an observation of **lag**, not proof of a particular scheduled refresh interval, cron job, cache TTL, or causal trigger. The operator also reported that the web account transiently displayed another, higher number and after a manual browser refresh showed the new correct value. These browser observations were not captured at exactly the same times as the API and Bitrix probes; the origin of the transient value remains unverified.
+
+**Diagnostic conclusion:** RestIS SQL-to-API freshness succeeded quickly in this experiment. The persistence/update of Bitrix `UF_BONUS` was delayed. The website widget can show a temporarily inconsistent value and later converge. Priorities: identify precise `UF_BONUS` writers and schedules, inspect the widget's rendered source and AJAX flow, and if the anomaly repeats capture synchronized sanitized browser response + API value + DB field. Do not assume the site is simply displaying the old `UF_BONUS` when it shows a value different from *both* sampled sources. No V4/V5 code modifications were made.
+
 ## Safe diagnostic queries (read-only; no guest identifiers in repository)
 
 ```sql
