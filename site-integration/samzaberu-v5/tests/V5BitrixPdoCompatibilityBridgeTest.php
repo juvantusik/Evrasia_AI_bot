@@ -148,6 +148,7 @@ namespace Bitrix\Main {
 namespace {
     require_once __DIR__ . '/../src/V5BitrixPdoCompatibilityBridge.php';
     require_once __DIR__ . '/../src/V5BitrixNativePickupCartCleanup.php';
+    require_once __DIR__ . '/../src/V5BitrixNativePickupSavedOrderProof.php';
     use Bitrix\Main\Application;
     use Bitrix\Main\DB\MysqliConnection;
     use Evrasia\Samzaberu\V5\{V5BitrixPdoCompatibilityBridge,V5NativeBitrixExclusiveTransactionPermitPort};
@@ -418,6 +419,8 @@ namespace {
         'assertStatementAllowed'
     );
     $strictSql=[
+        'SELECT ID, USER_ID, ACCOUNT_NUMBER, STATUS_ID, PAYED, CANCELED '
+            . 'FROM b_sale_order WHERE ID = ? AND USER_ID = ? LIMIT 2 FOR UPDATE',
         'DELETE FROM B_API_BASKET WHERE FUSER_ID = ?',
         'DELETE FROM BASKET_CUSTOM_GIFTS WHERE UF_FUSER_ID = ?',
         'INSERT INTO ev_v5_pickup_checkout_requests (USER_ID, REQUEST_ID, INPUT_SHA256, STATE, CREATED_AT) '
@@ -435,11 +438,13 @@ namespace {
     // SQL emitted by the writer and cleanup class, never a rewritten variant.
     $writerClass=\Evrasia\Samzaberu\V5\V5BitrixLockedPickupOrderWriter::class;
     $cleanupClass=\Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup::class;
-    ok($strictSql[0]===$cleanupClass::DELETE_CART,'V4 cart SQL matches strict bridge policy');
-    ok($strictSql[1]===$cleanupClass::DELETE_GIFTS,'V4 gift SQL matches strict bridge policy');
-    ok($strictSql[2]===$writerClass::INSERT,'pickup ledger insert matches bridge policy');
-    ok($strictSql[3]===$writerClass::LOCK,'pickup ledger lock matches bridge policy');
-    ok($strictSql[4]===$writerClass::COMPLETE,'pickup ledger complete matches bridge policy');
+    $persistedClass=\Evrasia\Samzaberu\V5\V5BitrixNativePickupSavedOrderProof::class;
+    ok($strictSql[0]===$persistedClass::QUERY,'real Sale persisted row SQL matches strict bridge');
+    ok($strictSql[1]===$cleanupClass::DELETE_CART,'V4 cart SQL matches strict bridge policy');
+    ok($strictSql[2]===$cleanupClass::DELETE_GIFTS,'V4 gift SQL matches strict bridge policy');
+    ok($strictSql[3]===$writerClass::INSERT,'pickup ledger insert matches bridge policy');
+    ok($strictSql[4]===$writerClass::LOCK,'pickup ledger lock matches bridge policy');
+    ok($strictSql[5]===$writerClass::COMPLETE,'pickup ledger complete matches bridge policy');
     foreach($strictSql as $sql) {
         ok($reflector->invoke(null,$sql)===null,
             'only exact checkout SQL template statically allowlisted');
@@ -461,6 +466,21 @@ namespace {
     ok($native->deletedCart===[] && $native->deletedGifts===[],
         'diagnostic scope did not mutate either table');
     ok($db->rollBack(),'native diagnostic test transaction rolls back');
+    rejects(fn()=>$db->prepare('SELECT ID, USER_ID, PAYED FROM b_sale_order WHERE ID = ?'),
+        'unscoped Sale order lookups forbidden');
+    rejects(fn()=>$db->prepare('SELECT ID, USER_ID, ACCOUNT_NUMBER, STATUS_ID, PAYED, CANCELED FROM b_sale_order WHERE ID = ? AND USER_ID = ? LIMIT 2'),
+        'Sale proof cannot omit row lock');
+    $persisted=new \Evrasia\Samzaberu\V5\V5BitrixNativePickupSavedOrderProof();
+    $saved=['id'=>901,'number'=>'V5-901','status'=>'N','price'=>105.75,'currency'=>'RUB'];
+    rejects(fn()=>$persisted->assertSavedNativeOrderUnpaid($db,41,$saved),
+        'Sale row proof refuses diagnostic CLI bridge');
+    rejects(fn()=>$persisted->assertSavedNativeOrderUnpaid($db,0,$saved),
+        'Sale row proof refuses invalid guest');
+    rejects(fn()=>$persisted->assertSavedNativeOrderUnpaid($db,41,[...$saved,'id'=>0]),
+        'Sale row proof refuses invalid order');
+    rejects(fn()=>$persisted->assertSavedNativeOrderUnpaid($db,41,[...$saved,'status'=>'F']),
+        'Sale row proof refuses completed order');
+    ok($native->sql===[],'Sale row proof cannot query native DB under CLI');
     rejects(fn()=>$db->prepare('DELETE FROM ev_v5_pickup_checkout_requests WHERE USER_ID = ?'),
         'checkout request identity cannot be deleted');
     $cleanup=new \Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup();
