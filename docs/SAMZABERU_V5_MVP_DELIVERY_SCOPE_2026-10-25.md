@@ -36,3 +36,9 @@ The V5 feature branch now implements `GET /api/v5/profile` end-to-end at source 
 8. `tests/V5IndependentProfileHttpTest.php`: in-memory HTTP contract test without creating any synthetic guest, database, or JWT. SOURCE ONLY; runtime Bitrix read/real mobile JWT not yet accepted.
 
 **NOT LIVE:** public V5 AUTH still OFF, feature only. Profile DTO minimal, not claimed full V4 field parity yet; current V4 source reference can be used to add any required V4 fields without V4 runtime dependency. Next functional tasks: private independent V5 cart ownership/read adapter and V5 orders adapter using native Bitrix business services, then signup and live app acceptance. Do not open a fresh security investigation.
+
+## 2026-10-25 — Independent V5 profile test: first production-off run FAILED
+
+Operator stdout from `run_v5_profile_mvp_readonly.sh` (GitHub commit 9032fbef...): host guard PASS; pinned V5 profile sources PASS; PHP syntax PASS; functional contract FAIL (runner suppressed PHP errors, no specific assertion visible). `INDEPENDENT_PROFILE_MVP_TEST=FAIL`, `FINAL_RC=2`, `WRAPPER_RC=2`. This is NOT a production auth regression: no Bitrix bootstrap/DB/production-code writes; V4 remains unchanged, V5 AUTH OFF. **Do not label the V5 profile endpoint tested or live**.
+
+The test now has an error handler exposing ONLY sanitized `PROFILE_TEST_FAILURE` or PHP class+file+line, never bearer/PII; source pinned at commit `36fe4740721fe43b76aca9eaea73ad2c34e1b63f`. New single clear-screen runner at commit `e41874399572d9cfd778d70d24ec6b40390ad291` blob `a9b94b33e0ceb9b3aabdc2481bd76cd6a2d67d34`. Next: inspect operator's precise failure identifier, apply minimal fix in V5-only feature source, rerun one focused test; do not repeat SQL/security audits.
