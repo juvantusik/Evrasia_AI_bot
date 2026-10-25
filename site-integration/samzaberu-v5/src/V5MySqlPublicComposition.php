@@ -11,6 +11,7 @@ require_once __DIR__ . '/V5MySqlCartRead.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
 require_once __DIR__ . '/V5PublicFactorKindAdapter.php';
+require_once __DIR__ . '/V5UnavailableSmsLifecycle.php';
 require_once __DIR__ . '/V5ExistingWebsiteEmailBudget.php';
 require_once __DIR__ . '/V5BitrixLockedEmailOtpProof.php';
 require_once __DIR__ . '/V5BitrixEmailOtpTransport.php';
@@ -28,6 +29,15 @@ use Throwable;
 interface V5PublicVerifiedFactorLifecyclePort extends V5PasswordBoundChallengeLifecyclePort
 {
     public function verifiedPublicSmsAndTotpLifecycle(PDO $db): ?bool;
+}
+
+/**
+ * Email-first V5 needs native TOTP without activating paid SMS.
+ * This is NOT an SMS issuance, resend or grant-consumption attestation.
+ */
+interface V5PublicVerifiedTotpLifecyclePort extends V5PasswordBoundChallengeLifecyclePort
+{
+    public function verifiedPublicTotpLifecycle(PDO $db): ?bool;
 }
 
 /**
@@ -64,8 +74,11 @@ final class V5MySqlPublicComposition
      * and site's existing Redis handle. Native email proof must be attached
      * to that PDO; release readiness is separately attested by the preflight.
      *
-     * Optional manual SMS recovery is a separate reviewed site-native
-     * provider; its absence fails closed, with no paid SMS dispatched.
+     * An attested native TOTP-only lifecycle can build the trusted-device,
+     * TOTP and email path without enabling paid SMS issuance, resend or
+     * SMS grant consumption. Existing full-lifecycle consumers retain
+     * their original attestation. Manual SMS requires a separately
+     * verified full native lifecycle AND website recovery provider.
      *
      * No database/table is created by this factory.
      * A missing email challenge ledger fails closed in the issuer.
@@ -80,7 +93,7 @@ final class V5MySqlPublicComposition
         V5PasswordProofPort $passwords,
         V5TrustProofPort $trust,
         V5LockedStrongSessionProofPort $lockedTrust,
-        V5PublicVerifiedFactorLifecyclePort $fullChallengeLifecycle,
+        V5PublicVerifiedTotpLifecyclePort|V5PublicVerifiedFactorLifecyclePort $fullChallengeLifecycle,
         V5LockedChallengeNativeFactorPort $factors,
         V5LockedBonusPinReaderPort $pinReader,
         V5TokenValidationPort $tokenValidator,
@@ -104,17 +117,32 @@ final class V5MySqlPublicComposition
             ->mayDispatch($db, $server)) {
             throw new InvalidArgumentException('V5 public native release unavailable');
         }
+        $fullSmsAttested = false;
         try {
-            if ($fullChallengeLifecycle->verifiedPublicSmsAndTotpLifecycle($db) !== true
-                || !method_exists($existingWebsiteRedis, 'eval')) {
-                throw new InvalidArgumentException('V5 public native dependencies unavailable');
+            if (!method_exists($existingWebsiteRedis, 'eval')) {
+                throw new InvalidArgumentException('V5 website Redis unavailable');
+            }
+            if ($fullChallengeLifecycle instanceof V5PublicVerifiedTotpLifecyclePort) {
+                if ($fullChallengeLifecycle->verifiedPublicTotpLifecycle($db) !== true) {
+                    throw new InvalidArgumentException('V5 native TOTP unavailable');
+                }
+            } elseif ($fullChallengeLifecycle->verifiedPublicSmsAndTotpLifecycle($db) !== true) {
+                // Do not relax existing full-lifecycle consumers.
+                throw new InvalidArgumentException('V5 native factors unavailable');
+            } else {
+                $fullSmsAttested = true;
             }
         } catch (Throwable) {
             throw new InvalidArgumentException('V5 public native dependencies unavailable');
         }
         if ($manualSmsRecovery !== null) {
             try {
-                if ($manualSmsRecovery->verifiedExistingSiteRecovery($db) !== true) {
+                // Manual paid SMS needs independently attested BOTH
+                // full native SMS/TOTP and the live website recovery policy.
+                if (!$fullChallengeLifecycle instanceof V5PublicVerifiedFactorLifecyclePort
+                    || (!$fullSmsAttested
+                        && $fullChallengeLifecycle->verifiedPublicSmsAndTotpLifecycle($db) !== true)
+                    || $manualSmsRecovery->verifiedExistingSiteRecovery($db) !== true) {
                     throw new InvalidArgumentException('V5 SMS recovery not verified');
                 }
             } catch (Throwable) {
@@ -135,7 +163,9 @@ final class V5MySqlPublicComposition
         );
         $lifecycle = new V5SeparatedFactorLifecycle(
             new V5PublicFactorKindAdapter($fullChallengeLifecycle, ChallengeKind::TOTP),
-            new V5PublicFactorKindAdapter($fullChallengeLifecycle, ChallengeKind::SMS),
+            $manualSmsRecovery === null
+                ? new V5UnavailableSmsLifecycle()
+                : new V5PublicFactorKindAdapter($fullChallengeLifecycle, ChallengeKind::SMS),
             $email
         );
         $coverage = new V5StrictNativeSecurityHookCoverage($nativeEvidence);
@@ -147,7 +177,10 @@ final class V5MySqlPublicComposition
             $db, $access, $refresh, $grant, $coverage, $bindingKey
         );
         $challenges = new V5MySqlChallengeHttpPort(
-            new V5MySqlChallengeConsumption($db, $factors, $bindingKey, $smsCodeHmacKey),
+            new V5MySqlChallengeConsumption(
+                $db, $factors, $bindingKey, $smsCodeHmacKey,
+                $manualSmsRecovery !== null
+            ),
             $lifecycle, $email, $manualSmsRecovery
         );
         return new V5HttpTransportBoundary(new V5AuthHttpHandler(
