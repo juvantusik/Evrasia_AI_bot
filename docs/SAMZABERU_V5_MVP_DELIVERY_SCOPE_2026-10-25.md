@@ -1,5 +1,14 @@
 # СамЗаберу API V5 — MVP delivery priority, 2026-10-25
 
+> CURRENT HANDOFF / NEW CHAT, 2026-10-25:
+> - Full single-source checkpoint: [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-25_V5_MVP.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-25_V5_MVP.md)
+> - Copy-ready new chat .txt: [EVRASIA_AI_BOT_NEW_CHAT_INSTRUCTION_2026-10-25_V5_MVP.txt](EVRASIA_AI_BOT_NEW_CHAT_INSTRUCTION_2026-10-25_V5_MVP.txt)
+> - Accepted offline profile 12/12, native cart 16/16, order list 18/18. Order-detail initial test failed, FIXED launcher cc085321dbe8b45c64d1620eeab05c9d021b5d3a is awaiting actual operator stdout. Do NOT re-run already accepted tests.
+> - V4 stays independent and operational; V5 AUTH OFF. No customer accounts/DB/production changed in recent offline tests.
+> - EVERY server terminal paste must start with EXACTLY: printf '\033[3J\033[2J\033[H' (screen + scrollback), and clear once more immediately before new result output. This requirement is mandatory, not optional.
+
+
+
 ## Decision
 The user explicitly stopped speculative security hardening/repetitive source audits. Ship a working, independently routed V5 MVP as fast as practical, using the already-running V4 Bitrix business components. Additional security enhancements can follow **after** the MVP. Do not re-investigate previously verified native Bitrix/SQL/TLS/route guards without a concrete failure.
 
