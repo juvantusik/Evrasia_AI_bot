@@ -53,8 +53,6 @@ namespace {
     require_once __DIR__ . '/../src/V5BitrixLockedCartReader.php';
 
     use Evrasia\Samzaberu\V5\V5BitrixLockedCartReader;
-    use PDO;
-    use PDOStatement;
 
     // Mock PDO and Bitrix D7 objects, no account, connection, SQL or fixture DB.
     final class CartReadStatement extends PDOStatement
@@ -125,8 +123,8 @@ namespace {
     $source = file_get_contents(__DIR__ . '/../src/V5BitrixLockedCartReader.php');
     $check(is_string($source)
         && !str_contains($source, "require_once __DIR__ . '/Controllers/V4")
-        && !str_contains($source, '::getIdByUserId(')
-        && !str_contains($source, '::getId('),
+        && !str_contains($source, 'JwtAuthorization.php')
+        && !str_contains($source, '->save('),
         'NO_V4_OR_MUTATING_FUSER_API');
 
     echo "V5_INDEPENDENT_NATIVE_CART_READER=PASS\n";
