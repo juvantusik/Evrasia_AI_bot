@@ -71,12 +71,13 @@ function queryScope(array $tokens):array {
         $upper=strtoupper($sql);
         $operation=preg_match('/^\s*(UPDATE|DELETE|INSERT|REPLACE|SELECT)\b/',$upper,$m)===1
             ? $m[1] : 'OTHER';
-        // Read only the SQL table IDENTIFIER after DELETE FROM.
+        // Read only the SQL table IDENTIFIER after DELETE FROM or UPDATE.
         // Never return SQL, values, quoted arbitrary strings or expressions.
         $tableName='UNRECOGNIZED';
-        if($operation==='DELETE'
-            && preg_match('/\bDELETE\s+FROM\s+`?([A-Z][A-Z0-9_]{0,62})`?/i',
-                $upper,$tableMatch)===1) {
+        if(($operation==='DELETE' && preg_match('/\bDELETE\s+FROM\s+`?([A-Z][A-Z0-9_]{0,62})`?/i',
+                $upper,$tableMatch)===1)
+            || ($operation==='UPDATE' && preg_match('/\bUPDATE\s+`?([A-Z][A-Z0-9_]{0,62})`?/i',
+                $upper,$tableMatch)===1)) {
             $tableName=strtoupper($tableMatch[1]);
         }
         $targets=[];
