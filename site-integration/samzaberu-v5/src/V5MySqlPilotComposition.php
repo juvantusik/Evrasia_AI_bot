@@ -10,6 +10,7 @@ require_once __DIR__ . '/V5MySqlTokenValidation.php';
 require_once __DIR__ . '/V5MySqlSessionLogout.php';
 require_once __DIR__ . '/V5MySqlCartRead.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
+require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -43,6 +44,15 @@ final class V5MySqlPilotComposition
         #[\SensitiveParameter] string $smsCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
     ): V5HttpTransportBoundary {
+        // A pilot key admits the request, not a generic PDO to native V5
+        // transactions. The real HTTP path MUST pass the same strict Bitrix
+        // ingress + continuity as public V5. CLI staging tests stay intact.
+        if (PHP_SAPI !== 'cli'
+            && (PHP_SAPI !== 'fpm-fcgi'
+                || !($db instanceof V5BitrixPdoCompatibilityBridge)
+                || !$db->hasStrictV5HttpIngress())) {
+            throw new InvalidArgumentException('V5 pilot HTTP native connection unavailable');
+        }
         if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'mysql'
             || $db->getAttribute(PDO::ATTR_ERRMODE) !== PDO::ERRMODE_EXCEPTION
             || $db->inTransaction()) {
