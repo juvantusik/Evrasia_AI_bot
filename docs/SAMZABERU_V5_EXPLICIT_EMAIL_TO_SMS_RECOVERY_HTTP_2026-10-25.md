@@ -1,5 +1,17 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## 25.10.2026 — confirmed CSms signature and SMS-only native recovery composition
+
+Operator returned `FINAL_STATUS=PASS, FINAL_RC=0, WRAPPER_RC=0` from exact pinned live source scan. `CSms::send` has **two declared arguments** and the existing website `issuePilotSmsCode` calls it with **exactly two arguments**, uses `getPilotProfilePhone` + `enforcePilotSmsRateLimit`, and checks result with `=== false`. Source/phone/code were NOT printed. No sending, Bitrix bootstrap or DB access occurred. This **does not prove** provider delivery receipt or full success semantics: method has only explicit `return true`, lacks explicit false, no provider message ID or HTTP status check in observed structure. For V5 only **strict positive accepted proof** can qualify; null/ambiguous failures MUST NOT send/issue tokens.
+
+**Minimal GitHub compatibility change:** `V5MySqlPublicComposition::buildEmailFirst` can now use **independently attested native TOTP-only lifecycle** together with separately attested `V5AttestedExplicitSmsRecoveryPort`. It NO LONGER requires a second generic full V5 SMS issue/resend lifecycle in order to mount the site-specific recovery path. `V5SeparatedFactorLifecycle` unconditionally receives `V5UnavailableSmsLifecycle` for ordinary mobile SMS creation and resend, even when manual recovery is mounted; only `POST /api/v5/auth/challenge/use-sms` over an indexed, existing, accepted email challenge can call the separately verified website recovery. SMS code consumption remains gated by the independently verified recovery provider and still requires HMAC + current outbox status + native factor recheck. Unknown/non-attested recovery fails factory assembly; missing email ledger denies before a chargeable send. `build()` legacy factory unchanged. This is an assembly fix ONLY, not live installation.
+
+Source-only test `V5MySqlPublicCompositionTest.php` covers TOTP-only + attested website recovery, denial for unknown/false site attestation, no direct SMS resend, absent email ledger and no Redis/SMS side effects. [V5 targeted offline CI #40186641185](https://github.com/juvantusik/Evrasia_AI_bot/actions/runs/40186641185) **SUCCESS** at `d4827ee4`. General V5 offline safety may separately fail its browser DOM regression.
+
+**Release gate unchanged:** production `eurasia_new.ev_v5_email_auth_challenges` ABSENT, no native recovery provider installed, actual site-native SMS provider result not independently recorded/attested as a unique challenge send, and no real concurrency testing. CSms acceptance is not proof of handset delivery. Do not install public V5 auth routes, perform DDL or modify website V4 by inference.
+
+
+
 ## 25.10.2026 — installed CSms transport, fail-closed post-send gate
 
 Latest operator production READ-ONLY inspector: `local/php_interface/lib/CSms.php`, sha256 `94a05ecbfad09340f2c07f432ebb047d0b5f928ed8a51198873ac43eb2f7c455`, exactly one `CSms::send` method. It calls cURL and includes a provider-success check and explicit `return true`; **no explicit `return false`**, no HTTP-status check and no provider message ID detected by source scan. The site's `issuePilotSmsCode` assigns its result then checks `=== false`. This does NOT prove delivery to handset, or even that all failures return false (PHP may implicitly return null). Do not normalize `NULL`, `false` or an unknown transport state to success; no automatic repeat send after unknown outcome.
