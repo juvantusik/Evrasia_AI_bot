@@ -147,6 +147,7 @@ namespace Bitrix\Main {
 }
 namespace {
     require_once __DIR__ . '/../src/V5BitrixPdoCompatibilityBridge.php';
+    require_once __DIR__ . '/../src/V5BitrixNativePickupCartCleanup.php';
     use Bitrix\Main\Application;
     use Bitrix\Main\DB\MysqliConnection;
     use Evrasia\Samzaberu\V5\{V5BitrixPdoCompatibilityBridge,V5NativeBitrixExclusiveTransactionPermitPort};
@@ -442,6 +443,17 @@ namespace {
     }
     rejects(fn()=>$db->prepare('DELETE FROM ev_v5_pickup_checkout_requests WHERE USER_ID = ?'),
         'checkout request identity cannot be deleted');
+    $cleanup=new \Evrasia\Samzaberu\V5\V5BitrixNativePickupCartCleanup();
+    rejects(fn()=>$cleanup->clearSavedCart($db,41,51,901),
+        'cleanup port does not run in non-strict CLI connection');
+    ok($native->deletedCart===[] && $native->deletedGifts===[],
+        'strict cleanup port fails before touching any API cart or gift');
+    rejects(fn()=>$cleanup->clearSavedCart($db,0,51,901),
+        'cleanup port rejects invalid user identity');
+    rejects(fn()=>$cleanup->clearSavedCart($db,41,0,901),
+        'cleanup port rejects invalid FUSER identity');
+    rejects(fn()=>$cleanup->clearSavedCart($db,41,51,0),
+        'cleanup port rejects invalid order ID');
     // Actual positive class intentionally unavailable under CLI/unstable
     // native scope; all positive SQL above is FAKE-only.
     echo "PASS: V5 Bitrix PDO compatibility bridge ($passed assertions)\n";
