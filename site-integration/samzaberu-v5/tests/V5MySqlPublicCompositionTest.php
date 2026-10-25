@@ -257,8 +257,8 @@ $deniedSms=$enabledRecoveryTransport->dispatch(new V5StagedHttpRequest(
     'POST','/api/v5/auth/challenge/use-sms',true,
     'application/json',$manualRequest,(string)strlen($manualRequest)
 ));
-publicWireCheck($deniedSms->status===503 && $manual->requests===1,
-    'site recovery provider denial never returns SMS ticket or JWT');
+publicWireCheck($deniedSms->status===503 && $manual->requests===0,
+    'missing email ledger denies before site SMS provider or JWT');
 publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
     'manual SMS attestation and denied dispatch never call Redis or legacy SMS');
 
@@ -311,7 +311,7 @@ $deniedResend=$totpOnlyTransport->dispatch(new V5StagedHttpRequest(
 ));
 publicWireCheck($deniedResend->status===401 && $totpOnly->issued===0,
     'SMS resend stays unavailable and cannot invoke TOTP native provider');
-publicWireCheck($manual->requests===1 && $siteRedisNoConnection->calls===0,
+publicWireCheck($manual->requests===0 && $siteRedisNoConnection->calls===0,
     'TOTP-only gates never dispatch paid SMS or connect to site Redis');
 
 printf("PASS: V5 public mobile composition (%d synthetic assertions)\n",$checks);
