@@ -196,6 +196,15 @@ publicWireCheck($emailTransport instanceof V5HttpTransportBoundary,
     'same-PDO email-first providers assemble the existing HTTP boundary');
 publicWireCheck($siteRedisNoConnection->calls===0 && $ports->challengeCalls===0,
     'email-first composition does not send email or SMS or call Redis');
+$beforeEmailHttp=$ports->passwordCalls;
+$emailHttpResponse=$emailTransport->dispatch(new V5StagedHttpRequest(
+    'POST','/api/v5/auth/signin',true,'application/json',$body,(string)strlen($body)
+));
+publicWireCheck($emailHttpResponse->status===401
+    && $ports->passwordCalls===$beforeEmailHttp+1,
+    'email-first HTTP signin routes to existing password provider and denies unknown login');
+publicWireCheck($ports->challengeCalls===0 && $siteRedisNoConnection->calls===0,
+    'bad email-first signin cannot start a factor or reserve Redis email quota');
 
 printf("PASS: V5 public mobile composition (%d synthetic assertions)\n",$checks);
 echo "REAL_NATIVE_PROVIDERS_VERIFIED=NO\n";
