@@ -64,14 +64,14 @@ PARSER="$(mktemp /tmp/ev-v5-save-delegation.XXXXXXXX.php)"
 URL="https://raw.githubusercontent.com/juvantusik/Evrasia_AI_bot/$PARSER_COMMIT/site-integration/samzaberu-v5/tests/diagnostics/V5SaleSaveDelegationTrace.php"
 curl -fLsS --connect-timeout 8 --max-time 30 "$URL" -o "$PARSER" || fail 'parser download'
 [[ "$(git hash-object "$PARSER")" == "$PARSER_BLOB" ]] || fail 'parser integrity'
-/usr/bin/php8.3 -n -l "$PARSER" >/dev/null || fail 'PHP parser syntax'
-timeout 10 /usr/bin/php8.3 -n "$PARSER" --self-test || fail 'parser self-test'
+/usr/bin/php8.3 -d auto_prepend_file= -d auto_append_file= -l "$PARSER" >/dev/null || fail 'PHP parser syntax'
+timeout 10 /usr/bin/php8.3 -d auto_prepend_file= -d auto_append_file= "$PARSER" --self-test || fail 'parser self-test'
 echo 'PASS: only vetted receiver/method names, no arbitrary strings'
 
 echo
 echo '=== 3. DELEGATED SALE SAVE SHAPES ==='
 RESULT='FAIL'
-timeout 20 /usr/bin/php8.3 -n "$PARSER" --read-only \
+timeout 20 /usr/bin/php8.3 -d auto_prepend_file= -d auto_append_file= "$PARSER" --read-only \
     "$ORDER" "$ORDERBASE" || fail 'delegation read-only trace'
 printf '%s  %s\n' "$CART_SHA" "$CART" "$ROUTER_SHA" "$ROUTER" |
     sha256sum -c --status || fail 'V4 changed during scan'
