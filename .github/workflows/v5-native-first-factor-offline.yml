@@ -15,6 +15,7 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php'
       - 'site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php'
+      - 'site-integration/samzaberu-v5/tests/V5UnavailableSmsLifecycleTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php'
       - 'site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php'
       - 'site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php'
@@ -82,6 +83,8 @@ jobs:
             site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php \
             site-integration/samzaberu-v5/src/V5SeparatedFactorLifecycle.php \
             site-integration/samzaberu-v5/src/V5PublicFactorKindAdapter.php \
+            site-integration/samzaberu-v5/src/V5UnavailableSmsLifecycle.php \
+            site-integration/samzaberu-v5/src/V5MySqlChallengeConsumption.php \
             site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
             site-integration/samzaberu-v5/src/V5ExistingWebsiteEmailBudget.php \
             site-integration/samzaberu-v5/deployment/website-mfa/EmailSendBudget.php \
@@ -101,6 +104,7 @@ jobs:
             site-integration/samzaberu-v5/tests/V5FirstFactorAttemptGateTest.php \
             site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php \
+            site-integration/samzaberu-v5/tests/V5UnavailableSmsLifecycleTest.php \
             site-integration/samzaberu-v5/tests/V5SmsDispatchBudgetTest.php \
             site-integration/samzaberu-v5/tests/V5MySqlSmsOutboxTest.php \
             site-integration/samzaberu-v5/tests/V5SeparatedFactorLifecycleTest.php \
@@ -126,6 +130,7 @@ jobs:
           echo '=== 3. TARGETED TESTS ==='
           php site-integration/samzaberu-v5/tests/V5PublicTrafficPreflightTest.php
           php site-integration/samzaberu-v5/tests/V5MySqlPublicCompositionTest.php
+          php site-integration/samzaberu-v5/tests/V5UnavailableSmsLifecycleTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php
