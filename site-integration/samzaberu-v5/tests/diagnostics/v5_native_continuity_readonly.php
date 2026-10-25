@@ -136,6 +136,26 @@ try {
     }
     echo "OWNED_READONLY_COMMIT=PASS\n";
 
+    // Strict bridge mode: a direct commit or rollback must pass the same
+    // one-shot continuity check, not bypass it.
+    $strict = new Bridge($db, $permit, true);
+    if (!$strict->beginTransaction() || !$strict->commit()
+        || $strict->inTransaction()
+        || Depth::read($db) !== 0
+        || (string)$state()['tx'] !== '0') {
+        throw new RuntimeException('STRICT_DIRECT_COMMIT');
+    }
+    echo "STRICT_DIRECT_COMMIT_GUARDED=PASS\n";
+
+    $strict = new Bridge($db, $permit, true);
+    if (!$strict->beginTransaction() || !$strict->rollBack()
+        || $strict->inTransaction()
+        || Depth::read($db) !== 0
+        || (string)$state()['tx'] !== '0') {
+        throw new RuntimeException('STRICT_DIRECT_ROLLBACK');
+    }
+    echo "STRICT_DIRECT_ROLLBACK_GUARDED=PASS\n";
+
     // C. Hidden raw COMMIT+BEGIN: SQL and Bitrix counters can both look
     // active, but the V5 savepoint MUST have vanished. Never COMMIT it.
     $bridge = new Bridge($db, $permit);
