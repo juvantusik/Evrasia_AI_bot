@@ -58,3 +58,15 @@
 Изучен фактический `site-integration/samzaberu-v5/api/v5/router.php`: есть отдельные **анонимные**, не зависящие от AUTH READY маршруты `GET /health`, `GET /legal/consents`, `GET /legal/registration-documents`, `POST /legal/consents/validate`. Они не должны требовать exclusive transaction permit и не должны активироваться/ломаться от V5 AUTH scope. `GET /cart` защищён JWT, но обслуживается отдельным GET путём и **не включён** в этот POST guard.
 
 В `V5ProductionNativeRequestBoundaryGuard` усилено точное сопоставление с неизменённым `V5RouteMap::ROUTES`, разрешены **только восемь** защищённых POST actions: `signin`, `verifyChallenge`, `resendChallenge`, `requestSmsFallback`, `refresh`, `logout`, `validateToken`, `showBonusPin`. `isProtectedPostRoute` — чистый метод без Bitrix/MySQL, отказывает неизвестным/публичным методам, GET, query string, altered-case, encoded и trailing-slash путям. В `V5ProductionNativeRequestBoundaryGuardTest.php` добавлены положительная матрица 8 маршрутов и отрицательная матрица 11 маршрутов. Изменения существуют **только в GitHub-ветке** и ещё **не запускались** на production (потребуется отдельный CLI offline test). Отсутствие HTTP/factory и production exclusive transaction permit остаётся неизменным; не использовать один только ingress/preflight для V5 BEGIN.
+
+## Дополнение: строгий режим уже существующего PDO-моста
+
+В `V5BitrixPdoCompatibilityBridge` добавлен **не включённый по умолчанию** третий аргумент конструктора `requireNativeContinuity`. Он предназначен только для будущего явно аттестованного V5-only factory:
+
+- После разрешённого `BEGIN` сразу вооружается существующий `V5ProductionNativeTransactionContinuity` со случайным savepoint.
+- В строгом режиме даже обычные `$db->commit()` и `$db->rollBack()` проходят обязательный одноразовый continuity guard внутри моста; прямой вызов хранилищем не обходит проверку.
+- При исчезнувшем savepoint (скрытый `COMMIT + BEGIN`) мост не завершает потенциально чужую транзакцию, а помечает своё владение недостоверным.
+- Ранее существовавшие конструкторы с двумя аргументами сохранены для текущих offline/staging тестов и не превращаются в production permit.
+- В `tests/diagnostics/v5_native_continuity_readonly.php` добавлены прямые strict `commit/rollBack` и отказ при скрытом перезапуске через прямой `commit`.
+
+**Состояние:** код находится ТОЛЬКО в GitHub feature-ветке, PHP lint и реальный native SQL smoke для новой версии ожидают запуска. Ранее успешно проверенный компонент `V5ProductionNativeTransactionContinuity` не переписан. Production AUTH V5 OFF; production exclusive permit и родной security-writer coverage НЕ АТТЕСТОВАНЫ. Строгий режим сам по себе не выдаёт permission на `BEGIN`; ему по-прежнему требуется отдельно подтверждённый `V5NativeBitrixExclusiveTransactionPermitPort`.
