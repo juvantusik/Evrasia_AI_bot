@@ -228,3 +228,16 @@ Confirmed production SOURCE-ONLY read, `FINAL_RC=0`, `WRAPPER_RC=0`:
 - **Business decision from user:** SamZaberu places orders only; guests pay in person at the restaurant. V5 must NOT require `payment` or `pay_system_id` from the mobile client, initiate online payment, or mark checkout as paid/completed. Server-owned configured unpaid pickup Sale pay-system may be necessary to record a payment COLLECTION item (not a charge); the real system ID is NOT VERIFIED and must be configured from site, no guessed defaults. No new V5 RestIS status writer.
 
 - V5 feature-only checkout HTTP input and business-rule class updated accordingly, with contract tests; production V4 unchanged, V5 AUTH OFF. Live checkout writer and real Bitrix validation remain **NOT IMPLEMENTED/NOT TESTED**.
+
+
+### Verified CI after no-client-payment correction
+
+- GitHub Actions run `40207248310` **SUCCESS**, source-only, commit `89beb2175db8df9008e652eb14f98be0cdd9b10e`.
+
+- `V5_CHECKOUT_HTTP_ADMISSION=PASS`, **16 assertions**.
+
+- `V5_NATIVE_D7_ORDER_BUILDER=PASS`, **18 assertions** (mock Sale D7 only).
+
+- `V5_CHECKOUT_BUSINESS_RULES=PASS`, **18 assertions** (fake Bitrix / OrderAPI only).
+
+- No Bitrix bootstrap, production database access, payment or real order creation. No positive native checkout writer attached; app remains V5 AUTH OFF.
