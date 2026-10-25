@@ -26,6 +26,8 @@ on:
       - 'site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php'
       - 'site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php'
       - 'site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php'
+      - 'site-integration/samzaberu-v5/tests/WebsiteEmailSendBudgetTest.php'
+      - 'site-integration/samzaberu-v5/deployment/website-mfa/EmailSendBudget.php'
   workflow_dispatch:
 
 permissions:
@@ -79,6 +81,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5PublicFactorKindAdapter.php \
             site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
             site-integration/samzaberu-v5/src/V5ExistingWebsiteEmailBudget.php \
+            site-integration/samzaberu-v5/deployment/website-mfa/EmailSendBudget.php \
             site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php \
             site-integration/samzaberu-v5/src/V5BitrixLockedEmailOtpProof.php \
             site-integration/samzaberu-v5/src/V5BitrixEmailOtpTransport.php \
@@ -105,7 +108,8 @@ jobs:
             site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php \
-            site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php; do
+            site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php \
+            site-integration/samzaberu-v5/tests/WebsiteEmailSendBudgetTest.php; do
             php -l "$file"
           done
           echo 'PHP_LINT=PASS'
@@ -133,6 +137,7 @@ jobs:
           php site-integration/samzaberu-v5/tests/V5EmailNativeSqlAllowlistTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixEmailOtpTransportTest.php
           php site-integration/samzaberu-v5/tests/V5BitrixCurrentEmailLoginTemplateProofTest.php
+          php site-integration/samzaberu-v5/tests/WebsiteEmailSendBudgetTest.php
           php site-integration/samzaberu-v5/tests/V5ExistingWebsiteEmailBudgetTest.php
           # Load the actual native EMAIL class graph, without MySQL,
           # Bitrix bootstrap, synthetic accounts or external mail.
