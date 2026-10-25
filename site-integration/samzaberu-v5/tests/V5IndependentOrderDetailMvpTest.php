@@ -41,7 +41,14 @@ namespace Bitrix\Sale\Internals {
 
 namespace {
     set_exception_handler(static function (\Throwable $e): void {
-        echo 'DETAIL_TEST_EXCEPTION=' . get_class($e) . "\n";
+        // Only output the strictly allowlisted assertion identifier. Neither
+        // exception payloads nor source snippets, tokens, or data are exposed.
+        $message = $e->getMessage();
+        if (preg_match('/\ADETAIL_[A-Z0-9_]{1,80}\z/D', $message) === 1) {
+            echo 'DETAIL_FAILED_ASSERTION=' . $message . "\n";
+        } else {
+            echo 'DETAIL_TEST_EXCEPTION=' . get_class($e) . "\n";
+        }
         echo 'DETAIL_TEST_FILE=' . basename($e->getFile()) . "\n";
         echo 'DETAIL_TEST_LINE=' . $e->getLine() . "\n";
         exit(2);
