@@ -1,10 +1,6 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../src/V5HttpTransportBoundary.php';
-require_once __DIR__ . '/../src/V5ParallelHttpEntry.php';
-require_once __DIR__ . '/../src/V5ProductionNativeRequestBoundaryGuard.php';
-
 use Evrasia\Samzaberu\V5\V5AuthHttpHandler;
 use Evrasia\Samzaberu\V5\V5HttpTransportBoundary;
 use Evrasia\Samzaberu\V5\V5ParallelHttpEntry;
@@ -40,6 +36,11 @@ register_shutdown_function(static function (): void {
         echo 'PROFILE_TEST_FATAL_LINE=' . (int)($fatal['line'] ?? 0) . "\n";
     }
 });
+
+// Ensure a missing dependency is reported by the sanitized handler above.
+require_once __DIR__ . '/../src/V5HttpTransportBoundary.php';
+require_once __DIR__ . '/../src/V5ParallelHttpEntry.php';
+require_once __DIR__ . '/../src/V5ProductionNativeRequestBoundaryGuard.php';
 
 $checks = 0;
 function profileCheck(bool $ok, string $name): void {
