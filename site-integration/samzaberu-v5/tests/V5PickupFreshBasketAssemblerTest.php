@@ -38,7 +38,7 @@ namespace {
     $reject=static function(callable $fn):bool {
         try{$fn();return false;}catch(\RuntimeException){return true;}
     };
-    $native=new V5PickupBasketNativeFieldPolicy('catalog','VerifiedProvider','PRODUCT_PROVIDER_CLASS','Y');
+    $native=new V5PickupBasketNativeFieldPolicy('trusted-notes-fixture');
     $items=[
         ['product_id'=>81,'quantity'=>2],
         ['product_id'=>82,'quantity'=>1],
@@ -66,9 +66,10 @@ namespace {
     $check($first['CURRENCY']==='RUB'&&$first['LID']==='s1','NATIVE_SITE_AND_CURRENCY');
     $check($first['PRICE']===190.0,'CURRENT_RED_PRICE');
     $check($first['BASE_PRICE']===230.0,'CURRENT_CATALOG_BASE_PRICE');
-    $check($first['CUSTOM_PRICE']==='Y','NATIVE_CUSTOM_PRICE_POLICY');
-    $check($first['PRODUCT_PROVIDER_CLASS']==='VerifiedProvider',
-        'NATIVE_TRUSTED_PROVIDER');
+    $check($first['CUSTOM_PRICE']==='Y','V4_CUSTOM_PRICE_POLICY');
+    $check($first['NOTES']==='trusted-notes-fixture','V4_NOTES_FIELD');
+    $check(!isset($first['PRODUCT_PROVIDER_CLASS']),
+        'NO_GUESSED_PROVIDER_FIELD');
     $check($basket->items[1]->fields['PRICE']===350.0,'SECOND_CATALOG_LINE');
     $check(Basket::$saves===0,'NEVER_SAVE_CART_DURING_PREPARATION');
 
