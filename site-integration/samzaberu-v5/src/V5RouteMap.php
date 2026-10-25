@@ -22,6 +22,7 @@ final class V5RouteMap
         'POST /auth/token/validate' => 'validateToken',
         'POST /loyalty/pin' => 'showBonusPin',
         'GET /cart' => 'readCart',
+        'GET /profile' => 'readProfile',
         'GET /legal/consents' => 'publicLegalConsents',
         'GET /legal/registration-documents' => 'publicRegistrationDocuments',
         'POST /legal/consents/validate' => 'validateLegalConsents',
