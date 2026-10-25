@@ -6,7 +6,7 @@ printf '\033[3J\033[2J\033[H'
 SITE='/home/site_evrasia/web/evrasia.spb.ru/public_html'
 CAND='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/candidates/6fa8773746e9a40e22008d67636c896eefeec3ed'
 OFF='/home/site_evrasia/web/evrasia.spb.ru/private/samzaberu-v5/releases/0caa0248c783188939398a71543ba740f064bb90/site-config.json'
-COMMIT='34b3a1543684558069185dadba380f4c299e34a9'
+COMMIT='55eedd7346800b0dc12e72bc484835a67c1ca431'
 BASE="https://raw.githubusercontent.com/juvantusik/Evrasia_AI_bot/$COMMIT/site-integration/samzaberu-v5"
 WORK=''
 TEST='NOT_RUN'
@@ -81,7 +81,7 @@ src/V5RouteMap.php e4ec25713585e0a3f4ef3c22b60a2eb09a04c7f2
 src/V5ProductionNativeRequestBoundaryGuard.php 62fa1abb9b7a9d6689df97e244ee98eba024ccba
 src/V5MySqlPublicComposition.php 515b681d2628b8871fbc85719ef4d33eb8d7742e
 src/V5MySqlPilotComposition.php 750669a2a848ba4a113f5d4e41cfa6880e0ef5a1
-tests/V5IndependentOrderDetailMvpTest.php ca78639c2c8ba5d69fd4f88599cc1079f358127f
+tests/V5IndependentOrderDetailMvpTest.php 58476e73c1367de0cc95a802a68630e279199350
 FILES
 chown -R root:site_evrasia "$WORK"
 chmod 750 "$WORK" "$WORK/src" "$WORK/tests"
