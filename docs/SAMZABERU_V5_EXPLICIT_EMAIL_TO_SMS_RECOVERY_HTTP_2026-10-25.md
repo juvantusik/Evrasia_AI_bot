@@ -33,7 +33,9 @@
 5. Ошибка SMS provider/Redis/Bitrix/базы — fail closed, без автоматического переключения и без вывода внешних ответов, OTP, телефонов, ключей.
 6. До согласования отдельной миграции `eurasia_new.ev_v5_email_auth_challenges`, native-provider, реального E2E и V5 enable — **V5 AUTH OFF**.
 
-**Текущий GitHub-код**: `V5RouteMap.php`, `V5AuthHttpHandler.php`, `V5LoginWorkflow.php`, `V5MySqlChallengeHttpPort.php`, `V5MySqlPublicComposition.php`. `buildEmailFirst()` принимает optional `V5ExplicitSmsRecoveryPort` последним аргументом; при отсутствии provider route отклоняется. Legacy `build()`, существующий `resendSms()`, рабочий сайт, V4 и Restis не изменены.
+**Дополнительный compile-time guard:** optional provider в `buildEmailFirst()` теперь имеет тип `V5AttestedExplicitSmsRecoveryPort`, который расширяет `V5ExplicitSmsRecoveryPort` и обязан положительно пройти `verifiedExistingSiteRecovery(PDO $db) === true` до сборки HTTP boundary. `null`, отрицательный ответ и исключения запрещают привязку; ни один из этих путей не отправляет SMS. Положительная оценка provider всё ещё **не является** реальной Bitrix E2E и требует независимой ревизии установленного кода. Source-only тест `V5MySqlPublicCompositionTest.php` проверяет отказ при отсутствии этой аттестации.
+
+**Текущий GitHub-код**: `V5RouteMap.php`, `V5AuthHttpHandler.php`, `V5LoginWorkflow.php`, `V5MySqlChallengeHttpPort.php`, `V5MySqlPublicComposition.php`. `buildEmailFirst()` принимает optional `V5ExplicitSmsRecoveryPort` последним аргументом; при отсутствии provider route отклоняется. Если он передан, обязательна отдельная positive attestation. Legacy `build()`, существующий `resendSms()`, рабочий сайт, V4 и Restis не изменены.
 
 **Source-only CI:** `tests/V5ManualSmsFallbackHttpTest.php` и `tests/V5MySqlPublicCompositionTest.php` проверяют именно boundary, методы, отсутствие destination override и fail-closed. Их mock pending ticket **не подтверждает фактическую отправку SMS**. Без БД, пользователей, Redis подключения или реальных сообщений.
 
