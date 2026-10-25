@@ -162,11 +162,6 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             || preg_match('/\A[a-zA-Z0-9_]{1,8}\z/D', $siteId) !== 1) {
             throw new RuntimeException('checkout_site_unavailable');
         }
-        $fuserId = $this->owner->verifiedFuserIdWithUserLock($db, $userId);
-        if (!is_int($fuserId) || $fuserId < 1 || !$db->inTransaction()) {
-            throw new RuntimeException('checkout_cart_owner_unavailable');
-        }
-
         $normalizedId = str_replace('-', '', $requestId);
         ksort($checkout, SORT_STRING);
         $encoded = json_encode($checkout, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
@@ -193,6 +188,14 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             || $row['ORDER_ID'] !== null) {
             throw new RuntimeException('checkout_idempotency_pending_invalid');
         }
+        // Replays above must not require an existing basket after the
+        // original checkout cleared it. Only a NEW request needs a
+        // locked, unambiguous USER_ID -> FUSER_ID ownership proof.
+        $fuserId = $this->owner->verifiedFuserIdWithUserLock($db, $userId);
+        if (!is_int($fuserId) || $fuserId < 1 || !$db->inTransaction()) {
+            throw new RuntimeException('checkout_cart_owner_unavailable');
+        }
+
         $basket = $this->materializer->preparedBasket(
             $db, $userId, $fuserId, $siteId
         );
@@ -237,6 +240,10 @@ final readonly class V5BitrixLockedPickupOrderWriter implements V5LockedOrderPla
             $userId, $normalizedId,
         ]);
         if ($stmt->rowCount() !== 1) throw new RuntimeException('checkout_receipt_not_recorded');
+        // The writer does NOT commit. StrongSessionStore's transaction()
+        // checks its savepoint and commits before exposing this receipt.
+        // Recheck continuity after the final ledger write as well.
+        $this->cleanup->assertNativeTransactionContinuity($db);
         return $this->receipt($userId, $requestId, $saved['id'],
             $saved['number'], $saved['status']);
     }
