@@ -1,5 +1,30 @@
 # СамЗаберу API V5: явный переход email OTP → SMS fallback (25.10.2026)
 
+## Реальная production-инвентаризация — 25.10.2026 (READ-ONLY, operator PASS)
+
+Подтверждён действующий **сайт** (не приложение) и версия файла `local/components/eurasia/signin/class.php`: SHA256 `3df2c4d31ecf765a2d0bfcb4d5181aa9f51734d901872bf4ed93a07a6601817f`. Следующие методы обнаружены статически, **это НЕ подтверждение их публичной callable-сигнатуры или отсутствия привязки к браузерной сессии**:
+
+| Existing production site method | Source / line |
+| --- | --- |
+| `emailUseSmsAction` | `local/components/eurasia/signin/class.php:2868` |
+| `evEmailIssueSmsAfterReservation` | `local/components/eurasia/signin/class.php:3179` |
+| `evEmailIssueSmsFromVerifiedContext` | `local/components/eurasia/signin/class.php:3268` |
+| `evEmailIssueSmsFromVerifiedContextNative` | `local/components/eurasia/signin/class.php:3322` |
+| `issuePilotSmsCode` | `local/components/eurasia/signin/class.php:1849` |
+| `enforcePilotSmsRateLimit` | `local/components/eurasia/signin/class.php:1941` |
+| `getPilotProfilePhone` | `local/components/eurasia/signin/class.php:1988` |
+| `EmailFirstSessionBridge::switchToSms` | `local/php_interface/website-mfa/EmailFirstSessionBridge.php:163` |
+| `EmailFirstSmsRatePolicy` | `local/php_interface/website-mfa/EmailFirstSmsRatePolicy.php` |
+| `EmailFirstSmsResendGuard::rate` | `local/php_interface/website-mfa/EmailFirstSmsResendGuard.php:17` |
+
+Additional installed source hashes (no private PHP copied): `EmailFirstSessionBridge.php` SHA256 `c7aa693699afee63ef1a2eab3eaf37d3c02c81acb08e36dd2b507f08f9e7c6e3`; `EmailFirstSmsRatePolicy.php` SHA256 `3ff5575e900dbe1e5fc9209d20d971b74d30b467d05c836f9eb646b00b0c33cb`; `EmailFirstSmsResendGuard.php` SHA256 `8bb27718b0708c3ba024beea1b4b5371ce8a0c55f8b6ab747e9d08c8c7284f99`. Operator reported `FINAL_STATUS=PASS`, `FINAL_RC=0`, no DB/Redis/network, SMS or code writes. Real website SMS acceptance was already confirmed 24.10.2026.
+
+**Important reuse boundary:** `emailUseSmsAction` is a Bitrix AJAX/session action; do **not** call it from mobile V5 using web cookies or infer user ID from an untrusted request. `evEmailIssueSmsFromVerifiedContextNative` is a **candidate** for reuse, not yet proven callable outside that component. Next targeted read-only checkpoint must determine method visibility/signature and references to `$_SESSION`, `$USER`, verified context, confirmed phone and existing rate guards **without exporting private source**. Do not add a duplicate V5 SMS generation/delivery/limiter. In particular, the independent feature-only `V5SmsChallengeFactory`/`V5SmsReservedDispatcher` should not be deployed as a replacement for the already accepted website delivery implementation.
+
+**Production V5 AUTH stays OFF.** `eurasia_new.ev_v5_email_auth_challenges` still requires separate approval for CREATE and is not automatically authorized by the user's «дальше». Parallel Restis bonus diagnostics are a separate workstream.
+
+
+
 **Статус:** source-only HTTP boundary. **Не активировано на production.** Никакая SMS/OTP реализация не дублирована.
 
 ## Зачем нужен отдельный V5 HTTP route
