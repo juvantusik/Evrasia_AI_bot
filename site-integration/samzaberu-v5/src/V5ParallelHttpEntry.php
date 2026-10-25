@@ -52,12 +52,12 @@ final readonly class V5ParallelHttpEntry
             // Current legal and registration-document GETs are anonymous;
             // cart GET still requires V5 JWT BEFORE any site bootstrap.
             if (!in_array($action, [
-                'publicLegalConsents', 'publicRegistrationDocuments', 'readCart'
+                'publicLegalConsents', 'publicRegistrationDocuments', 'readCart', 'readProfile'
             ], true)
                 || ($head->contentLength !== null && $head->contentLength !== '0')) {
                 return self::deny(400, 'invalid_request');
             }
-            if ($action === 'readCart') {
+            if ($action === 'readCart' || $action === 'readProfile') {
                 $authorization = $head->authorizationHeader;
                 if (!is_string($authorization) || strlen($authorization) < 117
                     || strlen($authorization) > 4103
