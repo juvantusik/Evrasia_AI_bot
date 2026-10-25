@@ -16,6 +16,7 @@ require_once __DIR__ . '/V5MySqlOrdersRead.php';
 require_once __DIR__ . '/V5BitrixLockedOrdersReader.php';
 require_once __DIR__ . '/V5MySqlOrderDetailRead.php';
 require_once __DIR__ . '/V5MySqlOrderPlace.php';
+require_once __DIR__ . '/V5MySqlCartMutation.php';
 require_once __DIR__ . '/V5BitrixLockedOrderDetailReader.php';
 require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
 require_once __DIR__ . '/V5HttpTransportBoundary.php';
@@ -118,6 +119,7 @@ final class V5MySqlPublicComposition
         ?V5LockedCartReaderPort $cartReader = null,
         ?V5AttestedExplicitSmsRecoveryPort $manualSmsRecovery = null,
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
+        ?V5LockedCartMutatorPort $cartMutator = null,
     ): V5HttpTransportBoundary {
         self::assertNativeHttpBoundary($db);
         // Validate native proof ownership before any release callback can run.
@@ -206,7 +208,8 @@ final class V5MySqlPublicComposition
             new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
-            $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter)
+            $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
+            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator)
         ));
     }
 
@@ -229,6 +232,7 @@ final class V5MySqlPublicComposition
         #[\SensitiveParameter] string $smsCodeHmacKey,
         ?V5LockedCartReaderPort $cartReader = null,
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
+        ?V5LockedCartMutatorPort $cartMutator = null,
     ): V5HttpTransportBoundary {
         self::assertNativeHttpBoundary($db);
         // No secret, request header or client-provided assertion can bypass
@@ -271,6 +275,7 @@ final class V5MySqlPublicComposition
             new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
             new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
             $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
+            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator),
         ));
     }
     /**
