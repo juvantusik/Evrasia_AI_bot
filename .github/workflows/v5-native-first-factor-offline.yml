@@ -72,6 +72,7 @@ jobs:
             site-integration/samzaberu-v5/src/V5SmsDispatchBudget.php \
             site-integration/samzaberu-v5/src/V5MySqlSmsOutbox.php \
             site-integration/samzaberu-v5/src/V5SeparatedFactorLifecycle.php \
+            site-integration/samzaberu-v5/src/V5MySqlEmailOtp.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeFirstFactorCompositionTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixMfaAdmissionGuardsTest.php \
             site-integration/samzaberu-v5/tests/V5BitrixNativeLoginPolicyLimitsTest.php \
