@@ -271,3 +271,28 @@ Confirmed production SOURCE-ONLY read, `FINAL_RC=0`, `WRAPPER_RC=0`:
 - One focused read-only runner `site-integration/samzaberu-v5/tests/diagnostics/run_v5_pickup_basket_field_readonly.sh`, pinned commit `99c8c62f4d6a043443c2c2f82e1ecbe5fd9ec420`, Git blob `9a2e08025f74a819c8ea6563f35c0daf508feac0`. It internally fetches `V5PickupBasketPropertyShape.php` from commit `7bfc27e9da4c5e32ed9ec7765fa930383812cf86`, blob `8463851978c33c89c4aee6775d0f20edd9fc09cc`; verifies current V4 Cart and router SHA, V5 AUTH OFF, PHP syntax+self-test. Executes no site PHP and makes NO DB connection or changes.
 - GitHub Actions `40207859347` SUCCESS for parser + wrapper (source-only checks; DOES NOT attest live Bitrix business parity).
 - Expected operator fields: `BASKET_FIELDS_*` masked/allowlisted values, `MODE=... SALE_ID=...` current V4 payment-mode map, and `PROPERTY_CODE=...` current order property codes. This is the one missing concrete production business input for V5 native basket/property materializer, not a repeat of previous audits. Send full script stdout; then implement actual V5 native `V5NativePickupOrderMaterializerPort`. No automatic V5 checkout enablement.
+
+
+## 14. Operator-verified V4 basket field map -> independent V5 pickup native materializer (2026-10-25)
+
+**Real operator stdout ACCEPTED** from `run_v5_pickup_basket_field_readonly.sh`:
+
+- `V5_PICKUP_NATIVE_BUSINESS_SHAPE=PASS`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`, V4 source pins unchanged, V5 AUTH OFF.
+
+- V4 `Cart::order` creates basket lines with `QUANTITY = (int)$item['quantity']`, `NAME=$productInfo['NAME']`, `DETAIL_PAGE_URL`, `CURRENCY`, `LID`, `PRICE=$productInfo['PROPERTY_RED_PRICE_VALUE']`, `BASE_PRICE=$productInfo['CATALOG_PRICE_1']`, `CUSTOM_PRICE`, one masked provider field. Source exposes three payment options: `cash=>2`, `card=>5`, `sbp=>2`; only *cash-on-pickup* is the user-approved app flow, and only server selects Bitrix pay-system ID 2 (no app payment selection or gateway).
+
+- V4 known order property codes: `restaurant`, `phone`, `cutlery`, `time`, `address`, `happytime`, `wok_data`, `client_dont_call`, `dispatch`, `source`, `pay_link`, `IGNORE_RESTIS`, `REST_ID`, `pay_expire`. **REST_ID is external RestIS order reference, NOT restaurant ID.** Do not set on initial V5 checkout; `pay_link` / `pay_expire` are for payment flow, not cash pickup. Preserve trusted site source and IGNORE_RESTIS policy; never invent values.
+
+**Actual V5-only sources in GitHub (production not changed):**
+
+- `src/V5BitrixNativePickupMaterializer.php`, commit `ff60db25865bdf35e85bcf7f92b3918da2a28cb6`: verifies installed shared `Evrasia\\Services\\CartApiService` by pinned SHA; uses V4-confirmed flags `useRedPrice(true)`, `useRedSku(false)`, `useGifts(false)`; reads current server FUSER cart and freshly loaded catalog products. Builds unsaved native Sale Basket with verified red/base prices and passes only exact site property codes plus mandatory native payer/phone, with separate trusted policy for `source` and `IGNORE_RESTIS`; never imports Controllers/V4/JWT or client FUSER/product prices.
+
+- `src/V5PickupFreshBasketAssembler.php`, commit `9fa70ea0e0ecc4453b9bc1049196efb61fcb0fa0`: extracted independent testable unsaved basket assembly from already server-read items and current catalog products. No Bitrix save, no payments.
+
+- `src/V5BitrixSaleD7OrderBuilder.php` and both tests updated at `4f5d93c9db9fb1c01c9161bc055c945fda4c5d39`: maps validated buyer's name to Bitrix special `getPayerName()` and phone to `getPhone()`, while ordinary `phone` property also remains compatible; no false REST_ID/restaurant assignment. Native builder verifies unpaid order and payment, and initial order status (not completed).
+
+- **Fresh GitHub Actions SUCCESS**: `40208378744`, CI commit `4f5d93c9db9fb1c01c9161bc055c945fda4c5d39`. Source-only assertions: HTTP **16**, Bitrix D7 builder **24**, business rules **18**, idempotent locked writer **16**, pickup materializer **23**, fresh server-priced basket **23**. Total **120** mock-only assertions. No production DB, real Bitrix sale save, customer/order creation or SMS/payment.
+
+- **Remaining actual integration blockers** before activation: source-mask hid one V4 provider basket-field key+value and CUSTOM_PRICE literal/module value; materializer requires these from verified installed site policy rather than invented defaults. Trusted V4 `source`, `IGNORE_RESTIS` values must be confirmed. Native Sale D7 event/transaction continuity and durable ledger schema are NOT installed/tested; the actual `V5NativePickupOrderMaterializerPort` and writer are **not wired into production composition** and V5 AUTH stays OFF. Do not claim this is a live order checkout.
+
+**Next focused action:** confirm only those 3–4 masked installed V4 constants with a tiny source-only whitelist parser (NOT broad audits), then configure V5-only native provider and do native transaction acceptance before real-account pilot. Do NOT rerun profile/cart/orders/order-detail already accepted 12/16/18/19 checks.
