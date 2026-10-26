@@ -8,6 +8,7 @@ on:
       - site-integration/samzaberu-v5/src/V5TrustedSessionBinding.php
       - site-integration/samzaberu-v5/src/V5MobileTrustReplacementPolicy.php
       - site-integration/samzaberu-v5/src/V5NativeMobileTrustReplacement.php
+      - site-integration/samzaberu-v5/src/V5NativeMobileTrustUserLock.php
       - site-integration/samzaberu-v5/tests/V5NativeMobileTrustReplacementTest.php
       - site-integration/samzaberu-v5/tests/V5MobileTrustReplacementPolicyTest.php
       - site-integration/samzaberu-v5/src/V5MySqlStrongSessionStore.php
@@ -44,6 +45,7 @@ jobs:
             src/V5TrustedSessionBinding.php \
             src/V5MobileTrustReplacementPolicy.php \
             src/V5NativeMobileTrustReplacement.php \
+            src/V5NativeMobileTrustUserLock.php \
             tests/V5NativeMobileTrustReplacementTest.php \
             tests/V5MobileTrustReplacementPolicyTest.php \
             src/V5MySqlStrongSessionStore.php \
