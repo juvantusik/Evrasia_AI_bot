@@ -7,6 +7,7 @@ require_once __DIR__ . '/V5LoginWorkflow.php';
 require_once __DIR__ . '/V5SessionTokens.php';
 require_once __DIR__ . '/V5SessionAssurancePolicy.php';
 require_once __DIR__ . '/V5SecurityEventVersions.php';
+require_once __DIR__ . '/V5TrustedSessionBinding.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -175,7 +176,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 return $this->proof->verifiedTrustWithUserLock(
                     $this->db, $account, $deviceId, $platform, $trustToken
                 ) === true;
-            });
+            }, $trustToken);
     }
 
     public function afterConsumedChallenge(ConsumedLoginChallenge $grant): AuthenticatedV5Session
@@ -214,7 +215,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             $this->requireNativeCoverage($userId);
             $epoch = $this->lockedEpoch($userId);
             $row = $this->lockedSession($sid);
-            $state = self::state($row, $userId, $now);
+            $state = $this->validatedState($row, $userId, $now);
             $generation = self::positive($row['refresh_generation'] ?? null);
             if ($state === null || $generation === null || $generation >= PHP_INT_MAX - 1
                 || $state['auth_epoch'] !== $epoch
@@ -260,7 +261,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)) {
                     return false;
@@ -297,7 +298,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)) {
                     return null;
@@ -335,7 +336,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
                 ) return null;
@@ -379,7 +380,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
                 ) return null;
@@ -426,7 +427,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction(
                         $claims, $state, $now
@@ -469,7 +470,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch=$this->lockedEpoch($userId);
                 $row=$this->lockedSession($claims['sid']);
-                $state=self::state($row,$userId,$now);
+                $state=$this->validatedState($row,$userId,$now);
                 if ($state===null || $epoch!==$state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction(
                         $claims,$state,$now
@@ -510,7 +511,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
                 ) return null;
@@ -546,7 +547,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
                 ) return null;
@@ -584,7 +585,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)
                 ) return null;
@@ -628,7 +629,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 $this->requireNativeCoverage($userId);
                 $epoch = $this->lockedEpoch($userId);
                 $row = $this->lockedSession($claims['sid']);
-                $state = self::state($row, $userId, $now);
+                $state = $this->validatedState($row, $userId, $now);
                 if ($state === null || $epoch !== $state['auth_epoch']
                     || !V5SessionAssurancePolicy::permitsProtectedAction($claims, $state, $now)) {
                     return null;
@@ -661,12 +662,15 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
     private function issue(
         int $userId, string $deviceId, string $platform, string $assurance,
         ?string $grantReference, callable $proof,
+        #[\SensitiveParameter] ?string $trustToken = null,
     ): AuthenticatedV5Session {
         if ($userId < 1 || !V5LoginWorkflow::validInstallation($deviceId, $platform)
             || !in_array($assurance, ['totp','sms','email','trusted'], true)
             || ($grantReference !== null && !V5LoginWorkflow::validChallengeId($grantReference))
             || ($grantReference === null && $assurance !== 'trusted')
-            || ($grantReference !== null && $assurance === 'trusted')) {
+            || ($grantReference !== null && $assurance === 'trusted')
+            || ($assurance === 'trusted' && $trustToken === null)
+            || ($assurance !== 'trusted' && $trustToken !== null)) {
             throw new AuthenticationRejected('authentication_failed');
         }
         $this->assertReady();
@@ -688,8 +692,15 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             $grantDigest = $grantReference === null ? null :
                 hash_hmac('sha256', "evrasia:v5:consumed-grant:v1\0" . $grantReference,
                     $this->bindingKey);
-            $deviceBinding = hash_hmac('sha256', "evrasia:v5:device-binding:v1\0"
-                . $deviceId . "\0" . $platform, $this->bindingKey);
+            $deviceBinding = $assurance === 'trusted'
+                ? $this->lockedPresentedTrustBinding(
+                    $userId, $deviceId, $platform, (string)$trustToken, $now
+                )
+                : hash_hmac('sha256', "evrasia:v5:device-binding:v1\0"
+                    . $deviceId . "\0" . $platform, $this->bindingKey);
+            if ($deviceBinding === null) {
+                throw new AuthenticationRejected('authentication_failed');
+            }
             $q = $this->query('INSERT INTO ev_v5_strong_sessions '
                 . '(sid, user_id, auth_epoch, assurance, device_binding, platform, '
                 . 'assured_at, expires_at, status, refresh_digest, refresh_generation, '
@@ -857,10 +868,73 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
     /** @return array<string,mixed>|null */
     private function lockedSession(string $sid): ?array
     {
-        return $this->unique('SELECT sid, user_id, auth_epoch, assurance, assured_at, '
+        return $this->unique('SELECT sid, user_id, auth_epoch, assurance, device_binding, platform, assured_at, '
             . 'expires_at, status, refresh_digest, refresh_generation '
             . 'FROM ev_v5_strong_sessions WHERE sid = ? FOR UPDATE', [$sid]);
     }
+
+    /**
+     * A trust-derived session must remain bound to the exact CURRENT token
+     * hash/version, not merely to the original successful login. Every
+     * refresh, logout, PIN and protected action passes through this gate
+     * while the V5-owned b_user transaction remains open.
+     */
+    private function validatedState(?array $row, int $userId, int $now): ?array
+    {
+        $state = self::state($row, $userId, $now);
+        if ($state === null || $state['assurance'] !== 'trusted') {
+            return $state;
+        }
+        $platform = $row['platform'] ?? null;
+        $binding = $row['device_binding'] ?? null;
+        if (!is_string($platform) || !in_array($platform, ['ios', 'android'], true)
+            || !is_string($binding)
+            || preg_match('/\\A[a-f0-9]{64}\\z/D', $binding) !== 1) {
+            return null;
+        }
+        // One indexed user-scope read, never a global device scan. FOR UPDATE
+        // serializes V5 validation against concurrent V4 trust rotation/revoke.
+        $q = $this->query(self::TRUST_CURRENT_SQL, [$userId]);
+        $matches = 0;
+        while (($trustRow = $q->fetch(PDO::FETCH_ASSOC)) !== false) {
+            if (!is_array($trustRow)) {
+                throw new RuntimeException('trusted_session_row_unavailable');
+            }
+            $candidate = V5TrustedSessionBinding::current(
+                $trustRow, $userId, $now, $platform, $this->bindingKey
+            );
+            if (is_string($candidate) && hash_equals($binding, $candidate)) {
+                $matches++;
+                if ($matches > 1) {
+                    throw new RuntimeException('trusted_session_ambiguous');
+                }
+            }
+        }
+        return $matches === 1 ? $state : null;
+    }
+
+    /**
+     * Called ONLY after a successful fresh locked device+token proof.
+     * Store the keyed credential-version binding, never the token or hash.
+     */
+    private function lockedPresentedTrustBinding(
+        int $userId, string $deviceId, string $platform,
+        #[\\SensitiveParameter] string $token, int $now
+    ): ?string {
+        $deviceHash = hash('sha256', hash('sha256', $deviceId));
+        $row = $this->unique(self::TRUST_PRESENTED_SQL, [$userId, $deviceHash]);
+        return $row === null ? null : V5TrustedSessionBinding::presented(
+            $deviceId, $platform, $token, $row, $userId, $now, $this->bindingKey
+        );
+    }
+
+    private const TRUST_FIELDS = 'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, '
+        . 'TOKEN_VERSION, STATUS, UNIX_TIMESTAMP(TOKEN_EXPIRES_AT) AS expires_epoch, USER_AGENT '
+        . 'FROM ev_trusted_devices ';
+    private const TRUST_PRESENTED_SQL = self::TRUST_FIELDS
+        . 'WHERE USER_ID = ? AND DEVICE_ID_HASH = ? FOR UPDATE';
+    private const TRUST_CURRENT_SQL = self::TRUST_FIELDS
+        . 'WHERE USER_ID = ? FOR UPDATE';
 
     /** @param array<string,mixed>|null $row @return array<string,mixed>|null */
     private static function state(?array $row, int $userId, int $now): ?array
