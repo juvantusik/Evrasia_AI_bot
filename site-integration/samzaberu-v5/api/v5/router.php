@@ -136,12 +136,19 @@ if (($_SERVER['REQUEST_URI'] ?? null) === '/api/v5/auth/signup'
     $resultStatus = 503;
     $resultBody = ['error' => 'temporarily_unavailable'];
     try {
-        require_once dirname(__DIR__, 4) . '/bitrix/modules/main/include/prolog_before.php';
-        require_once dirname(__DIR__, 2) . '/src/V5PublicSignupEndpoint.php';
+        $site = defined('EVRASIA_SAMZABERU_V5_DOCUMENT_ROOT')
+            ? EVRASIA_SAMZABERU_V5_DOCUMENT_ROOT : null;
+        if (!is_string($site) || $site === ''
+            || realpath($site) !== $site
+            || !is_file($site . '/bitrix/.settings.php')) {
+            throw new \RuntimeException('v5_signup_site_not_bound');
+        }
+        require_once $site . '/bitrix/modules/main/include/prolog_before.php';
+        require_once $site . '/local/samzaberu-v5/src/V5PublicSignupEndpoint.php';
         $raw = file_get_contents('php://input', false, null, 0, 8193);
         if (is_string($raw)) {
             $reply = \Evrasia\Samzaberu\V5\V5PublicSignupEndpoint::handle(
-                $_SERVER, $raw, dirname(__DIR__, 4) . '/bitrix/.settings.php'
+                $_SERVER, $raw, $site . '/bitrix/.settings.php'
             );
             $resultStatus = $reply->status;
             $resultBody = $reply->body;
