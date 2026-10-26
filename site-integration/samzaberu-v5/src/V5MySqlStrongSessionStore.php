@@ -675,7 +675,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         }
         $this->assertReady();
         $committed = $this->transaction(function () use (
-            $userId, $deviceId, $platform, $assurance, $grantReference, $proof
+            $userId, $deviceId, $platform, $assurance, $grantReference, $proof, $trustToken
         ): array {
             $now = $this->dbTime();
             if ($now > PHP_INT_MAX - $this->sessionTtlSeconds) {
