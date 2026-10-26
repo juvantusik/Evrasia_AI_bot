@@ -16,7 +16,9 @@ use Throwable;
  *
  * Native Bitrix mutation and V5 epoch/phone-version update MUST occur inside
  * one already-owned V5 Bitrix mysqli transaction. It never opens or commits
- * one. The caller must roll back the owned transaction on every exception.
+ * one. The caller may roll back on failure ONLY if the original V5
+ * transaction still exists; when its savepoint is lost, this bridge is
+ * poisoned and the native connection must be discarded without rollback.
  * It is not an HTTP route, V4 hook, or ten-path coverage attestation.
  *
  * The callback must be a trusted server-side native writer, never a request
