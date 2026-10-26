@@ -47,6 +47,16 @@ final readonly class V5BitrixOtpNativeMutationPort implements V5ReviewedNativeMu
         return $this->mutationPath;
     }
 
+    /**
+     * Prevent a reviewed native OTP writer bound to a DIFFERENT transaction
+     * bridge from being passed to the production security-event coordinator.
+     * This is object identity, not a request flag, token or database hint.
+     */
+    public function usesSameOwnedBridge(V5BitrixPdoCompatibilityBridge $candidate): bool
+    {
+        return $candidate === $this->bridge;
+    }
+
     public function performOnNativeConnection(object $native, int $userId): ?bool
     {
         if (!$this->bridge->inTransaction()
