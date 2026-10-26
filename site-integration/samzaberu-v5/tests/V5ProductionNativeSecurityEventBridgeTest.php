@@ -66,6 +66,20 @@ try {
 }
 $check($called === 0, 'OTP path did not call generic native writer');
 
+// A native callback may hide COMMIT+BEGIN and leave a different Bitrix
+// transaction active. Verify the coordinator contains the required terminal
+// quarantine rather than allowing a caller to roll back foreign writes.
+$securityBridgeSource = file_get_contents(
+    __DIR__ . '/../src/V5ProductionNativeSecurityEventBridge.php'
+);
+$check(is_string($securityBridgeSource)
+    && substr_count($securityBridgeSource, 'abandonUncertainNativeTransaction()') === 1
+    && str_contains($securityBridgeSource, "v5_native_security_transaction_uncertain")
+    && str_contains($securityBridgeSource, "if (!is_object(\$native))")
+    && str_contains($securityBridgeSource, "assertOwnedNativeAuthMutationContinuity(\$native)"),
+    'unknown native transaction identity requires poisoned bridge, not blind rollback');
+
+
 echo "PASS: V5 native security mutation guard ($assertions assertions)\n";
 echo "MODE=OFFLINE_ONLY\nDATABASE_CONNECTION=NO\nDATABASE_WRITE=NO\n";
 echo "NATIVE_MUTATION_CALLED=NO\nJWT_ISSUED=NO\nV5_AUTH_ENABLED=NO\n";
