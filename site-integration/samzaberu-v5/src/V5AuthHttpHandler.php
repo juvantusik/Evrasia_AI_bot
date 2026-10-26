@@ -568,19 +568,30 @@ final readonly class V5AuthHttpHandler
             || !is_array($body['agreements'])) {
             return new V5HttpReply(400, ['error' => 'invalid_request']);
         }
-        // Registration input is untrusted. No arbitrary USER_ID or token
-        // fields can be relayed as authority to the native Bitrix writer.
+        // The mobile contract retains the actual Bitrix V4 signup fields,
+        // but the user and consent data are written by the independent V5
+        // native writer. Never accept a client-selected user, role or JWT.
+        $allowed = [
+            'name', 'phone', 'email', 'password',
+            'confirm_password', 'bday', 'sex',
+        ];
         foreach ($body['registration'] as $field => $value) {
-            if (!is_string($field)
-                || preg_match('/\A[a-z][a-z0-9_]{0,40}\z/D', $field) !== 1
-                || in_array($field, [
-                    'user_id', 'id', 'access_token', 'refresh_token',
-                    'trust_token', 'role', 'is_admin', 'confirmed',
-                ], true)
-                || (!is_string($value) && !is_bool($value))
-                || (is_string($value) && strlen($value) > 4096)) {
+            if (!is_string($field) || !in_array($field, $allowed, true)
+                || !is_string($value) || strlen($value) > 4096) {
                 return new V5HttpReply(400, ['error' => 'invalid_request']);
             }
+        }
+        $details = $body['registration'];
+        if (!isset($details['phone'],$details['email'],$details['password'],$details['confirm_password'])
+            || preg_match('/\A\+[1-9][0-9]{7,14}\z/D', $details['phone']) !== 1
+            || filter_var($details['email'], FILTER_VALIDATE_EMAIL) === false
+            || strlen($details['password']) < 6
+            || strlen($details['password']) > 4096
+            || !hash_equals($details['password'], $details['confirm_password'])
+            || (isset($details['sex']) && !in_array($details['sex'], ['M','F',''], true))
+            || (isset($details['name']) && strlen($details['name']) > 240)
+            || (isset($details['bday']) && strlen($details['bday']) > 16)) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
         }
         // Re-read the public catalog on EVERY submission; stale revision
         // codes are rejected, never silently accepted from yesterday.
@@ -591,9 +602,20 @@ final readonly class V5AuthHttpHandler
         if ($codes === null) {
             return new V5HttpReply(409, ['error' => 'legal_documents_changed']);
         }
-        $id = $this->signup->createWithNativeConsents(
-            $body['registration'], $codes
-        );
+        // One voluntary marketing consent drives both legacy subscription
+        // preferences, as on the website. The app cannot turn either on
+        // independently of the current versioned marketing agreement.
+        $marketingCode = null;
+        foreach ($current as $document) {
+            if (($document['type'] ?? null) === 'marketing') {
+                $marketingCode = $document['code'];
+            }
+        }
+        $marketingAccepted = is_string($marketingCode)
+            && in_array($marketingCode, $codes, true);
+        $details['sms-subscription'] = $marketingAccepted;
+        $details['email-subscription'] = $marketingAccepted;
+        $id = $this->signup->createWithNativeConsents($details, $codes);
         if (!is_int($id) || $id < 1) {
             return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
         }
