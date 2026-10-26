@@ -135,6 +135,18 @@ interface V5PublicLegalConsentsPort
 }
 
 /**
+ * Native signup writer. Must create the Bitrix USER_ID and persist current
+ * Bitrix consent events BEFORE reporting success. Must recheck accepted
+ * document codes against native agreement rows within its write operation.
+ * Never accepts a caller-supplied user_id, JWT, or trusted device.
+ */
+interface V5NativeSignupHttpPort
+{
+    /** @param array<string,mixed> $registration @param list<string> $codes */
+    public function createWithNativeConsents(array $registration, array $codes): ?int;
+}
+
+/**
  * Offline JSON transport adapter for the V5 login workflow.
  * The actual website /api/v5/router.php remains disabled (503), and no
  * Bitrix/password, OTP, SMS, session or token backend is wired here.
@@ -157,6 +169,7 @@ final readonly class V5AuthHttpHandler
         private ?V5OrderPlaceHttpPort $orderPlace = null,
         private ?V5CartHttpMutationPort $cartMutation = null,
         private ?V5CartHttpAddPort $cartAdd = null,
+        private ?V5NativeSignupHttpPort $signup = null,
     ) {}
 
     /**
@@ -178,6 +191,18 @@ final readonly class V5AuthHttpHandler
                 'signin' => $this->workflow === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->signIn($body),
+                'signup' => $this->signup === null || $this->publicLegalConsents === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->signup($body),
+                'verifyTotp' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->verify($body, ChallengeKind::TOTP),
+                'verifyEmail' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->verify($body, ChallengeKind::EMAIL),
+                'verifySms' => $this->workflow === null
+                    ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
+                    : $this->verify($body, ChallengeKind::SMS),
                 'verifyChallenge' => $this->workflow === null
                     ? new V5HttpReply(503, ['error' => 'v5_unavailable'])
                     : $this->verify($body),
@@ -527,6 +552,58 @@ final readonly class V5AuthHttpHandler
             : new V5HttpReply(401, ['valid' => false]);
     }
 
+    /**
+     * First-time registration. Never creates a JWT or mobile trust token.
+     * The app first GETs /legal/registration-documents, displays current
+     * required and optional agreements, and submits accepted codes here.
+     */
+    private function signup(array $body): V5HttpReply
+    {
+        if (!self::hasOnlyKeys($body, ['registration', 'agreements'])
+            || !isset($body['registration'], $body['agreements'])
+            || !is_array($body['registration'])
+            || array_is_list($body['registration'])
+            || count($body['registration']) < 1
+            || count($body['registration']) > 16
+            || !is_array($body['agreements'])) {
+            return new V5HttpReply(400, ['error' => 'invalid_request']);
+        }
+        // Registration input is untrusted. No arbitrary USER_ID or token
+        // fields can be relayed as authority to the native Bitrix writer.
+        foreach ($body['registration'] as $field => $value) {
+            if (!is_string($field)
+                || preg_match('/\A[a-z][a-z0-9_]{0,40}\z/D', $field) !== 1
+                || in_array($field, [
+                    'user_id', 'id', 'access_token', 'refresh_token',
+                    'trust_token', 'role', 'is_admin', 'confirmed',
+                ], true)
+                || (!is_string($value) && !is_bool($value))
+                || (is_string($value) && strlen($value) > 4096)) {
+                return new V5HttpReply(400, ['error' => 'invalid_request']);
+            }
+        }
+        // Re-read the public catalog on EVERY submission; stale revision
+        // codes are rejected, never silently accepted from yesterday.
+        $current = $this->publicLegalConsents->currentPublicDocuments();
+        $codes = V5LegalConsentContract::acceptedForSignup(
+            $body['agreements'], $current
+        );
+        if ($codes === null) {
+            return new V5HttpReply(409, ['error' => 'legal_documents_changed']);
+        }
+        $id = $this->signup->createWithNativeConsents(
+            $body['registration'], $codes
+        );
+        if (!is_int($id) || $id < 1) {
+            return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
+        }
+        return new V5HttpReply(201, [
+            'status' => 'registered',
+            'user_id' => $id,
+            'next_step' => 'signin',
+        ]);
+    }
+
     private function signIn(array $body): V5HttpReply
     {
         if (!self::hasOnlyKeys($body, ['login','password','device_id','platform','trust_token'])
@@ -557,7 +634,7 @@ final readonly class V5AuthHttpHandler
         return new V5HttpReply(503, ['error' => 'temporarily_unavailable']);
     }
 
-    private function verify(array $body): V5HttpReply
+    private function verify(array $body, ?ChallengeKind $expectedKind = null): V5HttpReply
     {
         if (!self::hasOnlyKeys($body, ['challenge_id','code','device_id','platform'])
             || !self::isString($body, 'challenge_id')
@@ -573,6 +650,7 @@ final readonly class V5AuthHttpHandler
                 $body['code'],
                 $body['device_id'],
                 $body['platform'],
+                $expectedKind,
             )
         );
     }
