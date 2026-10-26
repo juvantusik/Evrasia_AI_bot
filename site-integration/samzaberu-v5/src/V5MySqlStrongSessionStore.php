@@ -210,7 +210,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
                 ChallengeKind::TOTP, ChallengeKind::SMS, ChallengeKind::EMAIL
             ], true)
             || !V5LoginWorkflow::validInstallation($grant->deviceId, $grant->platform)
-            || preg_match('/\\A[a-f0-9]{64}\\z/D', $clientGeneratedTrustToken) !== 1) {
+            || preg_match('/\A[a-f0-9]{64}\z/D', $clientGeneratedTrustToken) !== 1) {
             throw new AuthenticationRejected('authentication_failed');
         }
         return $userLock->withUserLock($this->db, $grant->userId,
