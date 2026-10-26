@@ -70,7 +70,27 @@ jobs:
           COUNT=$(grep -c '^PASS:' /tmp/v5-native-epoch-ci-results.txt)
           test "$COUNT" = 23
           echo "PASS: REAL_INNODB_TRIGGER_ASSERTIONS=$COUNT"
-          echo '=== 4. RESULT ==='
+          echo '=== 4. CONCURRENT NATIVE WRITES ==='
+          # These are two distinct operating-system processes and MariaDB
+          # connections. The existing fixture ends with epoch=3 for user 102.
+          docker exec "$CID" mariadb -u root --batch --skip-column-names \
+            --database=ev_v5_epoch_ci \
+            --execute="START TRANSACTION; UPDATE b_user_phone_auth SET PHONE_NUMBER='+79120000005' WHERE USER_ID=102; DO SLEEP(2); COMMIT;" \
+            > /tmp/v5-epoch-phone-race.log 2>&1 &
+          P1=$!
+          docker exec "$CID" mariadb -u root --batch --skip-column-names \
+            --database=ev_v5_epoch_ci \
+            --execute="START TRANSACTION; UPDATE b_sec_recovery_codes SET USED='Y' WHERE ID=1002; COMMIT;" \
+            > /tmp/v5-epoch-recovery-race.log 2>&1 &
+          P2=$!
+          wait "$P1"
+          wait "$P2"
+          FINAL_EPOCH=$(docker exec "$CID" mariadb -u root -N -B \
+            --database=ev_v5_epoch_ci \
+            --execute="SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state WHERE USER_ID=102")
+          test "$FINAL_EPOCH" = 5
+          echo 'PASS: TWO_INDEPENDENT_MYSQL_PROCESSES_NO_LOST_AUTH_EPOCH_INCREMENT'
+          echo '=== 5. RESULT ==='
           echo 'FINAL_STATUS=PASS'
           echo 'DATABASE_WRITE=DISPOSABLE_MARIADB_ONLY'
           echo 'PRODUCTION_WRITE=NO'
