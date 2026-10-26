@@ -84,6 +84,7 @@ final class V5NativeMobileTrustReplacement
         // This is a single native Bitrix transaction and no standalone BEGIN.
         // V5 caller MUST retain the user lock through native COMMIT/ROLLBACK.
         $ua = 'SamZaberu platform=' . $platform;
+        $nativeAuthMethod = $grant->kind === ChallengeKind::SMS ? 3 : 2;
         $now = new DateTime();
         $expires = DateTime::createFromTimestamp(time() + self::TTL_SECONDS);
 
@@ -145,7 +146,7 @@ final class V5NativeMobileTrustReplacement
             // Existing Bitrix enum: AUTH_PASSWORD=2, AUTH_SMS=3.
             // A TOTP/email grant followed a verified password; the native
             // MFA kind is separately recorded in the V5 session.
-            $fields['CREATED_METHOD'] = 2;
+            $fields['CREATED_METHOD'] = $nativeAuthMethod;
             $fields['CREATED_AT'] = $now;
             $result = TrustedDeviceTable::add($fields);
             $this->assertOrm($result);
@@ -176,7 +177,8 @@ final class V5NativeMobileTrustReplacement
             $revoked++;
         }
 
-        $this->audit($verifiedUserId, $hash, $currentId, $event, $now, $ua);
+        $this->audit($verifiedUserId, $hash, $currentId, $event, $now, $ua,
+            $nativeAuthMethod);
         $db->assertOwnedNativeAuthMutationContinuity($native);
 
         // All V5 tokens for this account are mobile-issued today. Revoke
@@ -213,14 +215,14 @@ final class V5NativeMobileTrustReplacement
 
     private function audit(
         int $userId, string $hash, int $id, int $event,
-        DateTime $now, ?string $userAgent,
+        DateTime $now, ?string $userAgent, ?int $authMethod = null,
     ): void {
         $this->assertOrm(DeviceAuthEventTable::add([
             'USER_ID'=>$userId,
             'DEVICE_ID_HASH'=>$hash,
             'TRUSTED_DEVICE_ID'=>$id,
             'EVENT_TYPE'=>$event,
-            'AUTH_METHOD'=>null,
+            'AUTH_METHOD'=>$authMethod,
             'CREATED_AT'=>$now,
             'IP'=>null,
             'USER_AGENT'=>$userAgent,
