@@ -5,7 +5,6 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 require_once __DIR__ . '/V5SecurityEventVersions.php';
-require_once __DIR__ . '/V5BitrixOtpNativeMutationPort.php';
 
 use Closure;
 use PDO;
