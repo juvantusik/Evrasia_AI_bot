@@ -292,6 +292,18 @@ function consumed(V5MySqlStrongSessionStore $store):AuthenticatedV5Session {
     ));
 }
 
+// No live client-owned mobile enrollment is permitted by an unguarded
+// plain PDO/fake session store, even with a syntactically valid token.
+[$enrollmentDeniedStore,$enrollmentDeniedDb]=environment();
+denies(fn()=>$enrollmentDeniedStore->afterConsumedChallengeAndEnrollMobileTrust(
+    new ConsumedLoginChallenge(41,ID,'ios',ChallengeKind::TOTP,str_repeat('c',64)),
+    str_repeat('b',64),
+    new \Evrasia\Samzaberu\V5\V5NativeMobileTrustReplacement(),
+    new \Evrasia\Samzaberu\V5\V5NativeMobileTrustUserLock()
+), 'unowned native transaction refuses trust enrollment');
+yes($enrollmentDeniedDb->commits===0 && count($enrollmentDeniedDb->sessions)===0,
+    'denied enrollment cannot create strong JWT session');
+
 [$store,$db,$proof,$coverage,$codec,$refresh]=environment();
 $s1=trusted($store);
 yes($s1 instanceof AuthenticatedV5Session,'strong trust opens session');
