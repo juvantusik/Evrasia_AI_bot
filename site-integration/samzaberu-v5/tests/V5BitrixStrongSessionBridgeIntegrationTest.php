@@ -15,6 +15,7 @@ namespace Bitrix\Main\DB {
     class MysqliConnection {
         public array $queries=[];
         public array $sessions=[];
+        public array $trustRows=[];
         public int $commits=0;
         public int $rollbacks=0;
         public bool $active=false;
@@ -91,6 +92,18 @@ namespace Bitrix\Main\DB {
                 ]]);
             if(str_starts_with($sql,'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state'))
                 return new BridgeMockResult([['AUTH_EPOCH'=>$this->epoch]]);
+            if(str_starts_with($sql,'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, ')) {
+                if(!preg_match("/WHERE USER_ID = '([0-9]+)'(?: AND DEVICE_ID_HASH = '([a-f0-9]{64})')? FOR UPDATE$/D",
+                    $sql,$m))
+                    throw new \RuntimeException('wrong synthetic trust lock');
+                $rows=[];
+                foreach($this->trustRows as $r) {
+                    if((string)$r['USER_ID']!==$m[1])continue;
+                    if(isset($m[2]) && $r['DEVICE_ID_HASH']!==$m[2])continue;
+                    $rows[]=$r;
+                }
+                return new BridgeMockResult($rows);
+            }
             if(str_starts_with($sql,'SELECT sid, user_id FROM ev_v5_strong_sessions')) {
                 if(!preg_match("/WHERE refresh_digest = '([a-f0-9]{64})' LIMIT 2$/D",$sql,$m))
                     throw new \RuntimeException('fake refresh hint shape');
@@ -239,7 +252,7 @@ namespace {
             string $deviceId,string $platform,string $trustToken):bool {
             return $db->inTransaction() && $this->accept
                 && $account->userId===41 && $platform==='ios'
-                && $trustToken==='synthetic-trust-strong';
+                && $trustToken==='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
         }
         public function verifiedConsumedGrantWithUserLock(PDO $db,
             \Evrasia\Samzaberu\V5\ConsumedLoginChallenge $grant):bool {
@@ -278,7 +291,7 @@ namespace {
         public function evaluate(int $userId,string $deviceId,string $platform,string $token):MobileTrustAssessment {
             $this->calls++;
             $accepted=$userId===41 && $platform==='ios'
-                && $token==='synthetic-trust-strong';
+                && $token==='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
             return new MobileTrustAssessment($accepted,$accepted);
         }
     }
@@ -308,6 +321,16 @@ namespace {
     }
     function bridgeSetup():array {
         $native=new MysqliConnection();
+        $device='sz_'.str_repeat('a',64);
+        $native->trustRows=[[
+            'USER_ID'=>'41',
+            'DEVICE_ID_HASH'=>hash('sha256',hash('sha256',$device)),
+            'TRUST_TOKEN_HASH'=>hash('sha256',str_repeat('b',64)),
+            'TOKEN_VERSION'=>'1',
+            'STATUS'=>'1',
+            'expires_epoch'=>(string)($native->now+86400),
+            'USER_AGENT'=>'SamZaberu platform=ios',
+        ]];
         Application::$current=$native;
         $permit=new SyntheticPermit();
         $db=new V5BitrixPdoCompatibilityBridge($native,$permit);
@@ -322,7 +345,7 @@ namespace {
     $device='sz_'.str_repeat('a',64);
     [$store,$actions,$native,$permit,$proof,$coverage,$pin,$codec]=bridgeSetup();
     $result=$store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     );
     bridgeCheck($native->commits===1 && !$native->active && !$native->sessionGuardOpen,
         'native Bitrix V5 issuance releases owned savepoint before one commit');
@@ -403,7 +426,7 @@ namespace {
         'native security events prohibit old refresh token rotation');
 
     $fresh=$store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     );
     $freshClaims=$codec->verifyAccess($fresh->accessToken,$native->now);
     bridgeCheck(is_array($freshClaims) && $freshClaims['auth_epoch']===10,
@@ -418,34 +441,34 @@ namespace {
         'revoked native session cannot refresh');
     bridgeCheck($permit->calls>=5,'exclusive-scope permit checked before each native begin');
     foreach($native->queries as $sql)
-        bridgeCheck(!str_contains($sql,'synthetic-trust-strong')
+        bridgeCheck(!str_contains($sql,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
             && !str_contains($sql,$result->refreshToken)
             && !str_contains($sql,'00037'),'no bearer/PIN in native SQL templates');
 
     [$store,$actions,$native,$permit,$proof,$coverage]=bridgeSetup();
     $permit->accept=null;
     bridgeDeny(fn()=>$store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     ),'unattested native transaction ownership denies before session insert');
     bridgeCheck($native->sessions===[] && !$native->active,
         'no live native write after exclusive-scope denial');
     [$store,$actions,$native,$permit,$proof,$coverage]=bridgeSetup();
     $coverage->accept=null;
     bridgeDeny(fn()=>$store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     ),'unknown native MFA/phone hook coverage denies issuance');
     bridgeCheck($native->sessions===[],'native coverage denial rolls back');
     [$store,$actions,$native,$permit,$proof,$coverage]=bridgeSetup();
     $native->failDml=true;
     bridgeDeny(fn()=>$store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     ),'native mysqli write failure denies tokens');
     bridgeCheck($native->sessions===[] && $native->rollbacks===1,
         'native SQL failure performs owned rollback');
     [$store,$actions,$native,$permit,$proof,$coverage]=bridgeSetup();
     $native->failCommit=true;
     bridgeDeny(fn()=>$store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),$device,'ios','synthetic-trust-strong'
+        new PasswordVerifiedAccount(41,true,false),$device,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     ),'native uncertain commit does not return tokens');
     bridgeCheck($native->sessions===[],'uncertain fake commit rolled back local state');
 
@@ -465,7 +488,7 @@ namespace {
     $offlineBody=[
         'login'=>'synthetic.user','password'=>'test-password',
         'device_id'=>$device,'platform'=>'ios',
-        'trust_token'=>'synthetic-trust-strong',
+        'trust_token'=>'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     ];
     $badLogin=$offlineBody;
     $badLogin['password']='incorrect';
@@ -554,7 +577,7 @@ namespace {
     $wireBody=[
         'login'=>'synthetic.user','password'=>'test-password',
         'device_id'=>$device,'platform'=>'ios',
-        'trust_token'=>'synthetic-trust-strong',
+        'trust_token'=>'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     ];
     $guarded=$wire->dispatch($wireRequest('/api/v5/auth/signin',$wireBody,'POST',false));
     bridgeCheck($guarded->status===403 && $wirePassword->calls===0,
