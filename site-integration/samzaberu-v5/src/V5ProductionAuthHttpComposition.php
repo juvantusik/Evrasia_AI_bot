@@ -58,6 +58,7 @@ final class V5ProductionAuthHttpComposition
         ?V5NativeSignupHttpPort $nativeSignup = null,
         ?V5PasswordBoundChallengeLifecyclePort $emailLifecycle = null,
         ?V5PasswordBoundChallengeLifecyclePort $smsLifecycle = null,
+        ?V5BitrixPdoCompatibilityBridge $preopenedBridge = null,
     ): V5HttpTransportBoundary {
         // Pure admission before a Bitrix connection, native callback or write.
         if (PHP_SAPI !== 'fpm-fcgi'
@@ -84,10 +85,18 @@ final class V5ProductionAuthHttpComposition
         // live SHA-pinned triggers and protected Bitrix transaction ingress.
         // The current production evidence provider fails closed until all ten
         // native mutation paths have real tested per-user proof.
-        $native = V5ProductionStrongSessionFactory::buildForProtectedHttp(
-            $nativeEvidence, $grantProof, $accessCodec,
-            $refreshCodec, $bindingKey
-        );
+        // New native HTTP factory opens the bridge BEFORE constructing
+        // transaction-scoped MFA and mobile-trust providers. Preserve the
+        // original entry for existing callers, and never open a second bridge.
+        $native = $preopenedBridge === null
+            ? V5ProductionStrongSessionFactory::buildForProtectedHttp(
+                $nativeEvidence, $grantProof, $accessCodec,
+                $refreshCodec, $bindingKey
+            )
+            : V5ProductionStrongSessionFactory::buildOnNativeBridge(
+                $preopenedBridge, $nativeEvidence, $grantProof, $accessCodec,
+                $refreshCodec, $bindingKey
+            );
 
         // Distinct trusted lifecycle per MFA factor: TOTP is native;
         // EMAIL uses the independently verified V5 email ledger, never
