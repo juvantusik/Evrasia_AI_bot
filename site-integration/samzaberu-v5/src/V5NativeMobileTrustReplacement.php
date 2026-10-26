@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5MobileTrustReplacementPolicy.php';
 require_once __DIR__ . '/V5MySqlStrongSessionStore.php';
+require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Type\DateTime;
@@ -59,6 +60,7 @@ final class V5NativeMobileTrustReplacement
             || !in_array($platform, ['ios','android'], true)
             || $hash === null
             || preg_match('/\A[a-f0-9]{64}\z/D', $clientGeneratedTrustToken) !== 1
+            || !($db instanceof V5BitrixPdoCompatibilityBridge)
             || !$db->inTransaction()
             || $strongGrantProof->verifiedConsumedGrantWithUserLock($db, $grant) !== true
             || !class_exists(Application::class)
@@ -75,6 +77,9 @@ final class V5NativeMobileTrustReplacement
             || !$this->userAdvisoryLockHeld($native, $verifiedUserId)) {
             throw new RuntimeException('v5_mobile_trust_native_scope_unverified');
         }
+
+        // Only the owned V5 protected HTTP Bitrix transaction may mutate.
+        $db->assertOwnedNativeAuthMutationContinuity($native);
 
         // This is a single native Bitrix transaction and no standalone BEGIN.
         // V5 caller MUST retain the user lock through native COMMIT/ROLLBACK.
@@ -172,6 +177,7 @@ final class V5NativeMobileTrustReplacement
         }
 
         $this->audit($verifiedUserId, $hash, $currentId, $event, $now, $ua);
+        $db->assertOwnedNativeAuthMutationContinuity($native);
 
         // All V5 tokens for this account are mobile-issued today. Revoke
         // them in the SAME transaction before the new session is inserted.
@@ -183,6 +189,8 @@ final class V5NativeMobileTrustReplacement
         ) === false) {
             throw new RuntimeException('v5_mobile_session_revocation_unconfirmed');
         }
+
+        $db->assertOwnedNativeAuthMutationContinuity($native);
 
         return [
             'token_version'=>$newVersion,
