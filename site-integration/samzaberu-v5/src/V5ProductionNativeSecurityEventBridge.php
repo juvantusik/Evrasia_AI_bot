@@ -89,6 +89,7 @@ final class V5ProductionNativeSecurityEventBridge
             throw new RuntimeException('v5_native_security_event_scope_denied');
         }
 
+        $native = null;
         try {
             $native = \Bitrix\Main\Application::getConnection();
             $db->assertOwnedNativeAuthMutationContinuity($native);
@@ -151,6 +152,9 @@ final class V5ProductionNativeSecurityEventBridge
             // poison the bridge: caller MUST discard the native connection
             // and MUST NOT roll back what could now belong to Bitrix.
             try {
+                if (!is_object($native)) {
+                    throw new RuntimeException('v5_native_security_connection_not_obtained');
+                }
                 $db->assertOwnedNativeAuthMutationContinuity($native);
             } catch (Throwable) {
                 $db->abandonUncertainNativeTransaction();
