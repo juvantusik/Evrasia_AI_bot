@@ -50,6 +50,10 @@ final class V5ProductionAuthHttpComposition
         ?V5EmailChallengeVerificationPort $emailVerification = null,
         ?V5LockedConsumedEmailGrantProofPort $consumedEmailProof = null,
         ?V5ExplicitSmsRecoveryPort $manualSmsRecovery = null,
+        ?V5LockedCartReaderPort $cartReader = null,
+        ?V5LockedOrderPlacementPort $checkoutWriter = null,
+        ?V5LockedCartMutatorPort $cartMutator = null,
+        ?V5LockedCartAddPort $cartAdder = null,
     ): V5HttpTransportBoundary {
         // Pure admission before a Bitrix connection, native callback or write.
         if (PHP_SAPI !== 'fpm-fcgi'
@@ -97,12 +101,21 @@ final class V5ProductionAuthHttpComposition
             new V5MySqlSessionActions($sessions, $lockedBonusPinReader),
             $native->validation,
             null,
-            new V5MySqlSessionLogout($sessions)
+            new V5MySqlSessionLogout($sessions),
+            // V5 bearer validation and current AUTH_EPOCH are checked inside
+            // the SAME V5MySqlStrongSessionStore transaction, not V4 auth.
+            $cartReader === null ? null : new V5MySqlCartRead($sessions, $cartReader),
+            new V5MySqlProfileRead($sessions, new V5BitrixLockedProfileReader()),
+            new V5MySqlOrdersRead($sessions, new V5BitrixLockedOrdersReader()),
+            new V5MySqlOrderDetailRead($sessions, new V5BitrixLockedOrderDetailReader()),
+            // Writes remain optional: never silently fall back to V4
+            // checkout or a different cart implementation.
+            $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
+            $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator),
+            $cartAdder === null ? null : new V5MySqlCartAdd($sessions, $cartAdder),
         );
 
-        // Business routes (cart, checkout, orders) require their own reviewed
-        // native adapters and remain fail-closed. Public legal continues to
-        // use the separately verified read-only gateway already deployed.
+        // Public legal uses the existing separately deployed gateway.
         return new V5HttpTransportBoundary($handler);
     }
 }
