@@ -56,6 +56,8 @@ final class V5ProductionAuthHttpComposition
         ?V5LockedCartAddPort $cartAdder = null,
         ?V5PublicLegalConsentsPort $currentLegalCatalog = null,
         ?V5NativeSignupHttpPort $nativeSignup = null,
+        ?V5PasswordBoundChallengeLifecyclePort $emailLifecycle = null,
+        ?V5PasswordBoundChallengeLifecyclePort $smsLifecycle = null,
     ): V5HttpTransportBoundary {
         // Pure admission before a Bitrix connection, native callback or write.
         if (PHP_SAPI !== 'fpm-fcgi'
@@ -64,7 +66,10 @@ final class V5ProductionAuthHttpComposition
             || hash_equals($bindingKey, $smsCodeHmacKey)
             || ($emailVerification === null) !== ($consumedEmailProof === null)
             || ($manualSmsRecovery !== null && $emailVerification === null)
-            || ($nativeSignup !== null && $currentLegalCatalog === null)) {
+            || ($nativeSignup !== null && $currentLegalCatalog === null)
+            || ($emailLifecycle === null) !== ($emailVerification === null)
+            || ($emailLifecycle !== null && $emailLifecycle !== $emailVerification)
+            || ($smsLifecycle !== null && $emailLifecycle === null)) {
             throw new InvalidArgumentException('v5_production_auth_http_unavailable');
         }
 
@@ -84,13 +89,22 @@ final class V5ProductionAuthHttpComposition
             $refreshCodec, $bindingKey
         );
 
+        // Distinct trusted lifecycle per MFA factor: TOTP is native;
+        // EMAIL uses the independently verified V5 email ledger, never
+        // the website login session. SMS is disabled unless an explicit
+        // audited V5 provider is supplied; email->SMS is a separate flow.
+        $totpLifecycle = new V5MySqlPasswordBoundTotpIssuer(
+            $native->db, $lockedPasswordTotpProof, $bindingKey
+        );
         $challenge = new V5MySqlChallengeHttpPort(
             new V5MySqlChallengeConsumption(
                 $native->db, $lockedFactorProof, $bindingKey,
-                $smsCodeHmacKey
+                $smsCodeHmacKey, $manualSmsRecovery !== null
             ),
-            new V5MySqlPasswordBoundTotpIssuer(
-                $native->db, $lockedPasswordTotpProof, $bindingKey
+            new V5SeparatedFactorLifecycle(
+                $totpLifecycle,
+                $smsLifecycle ?? new V5UnavailableSmsLifecycle(),
+                $emailLifecycle
             ),
             $emailVerification,
             $manualSmsRecovery
