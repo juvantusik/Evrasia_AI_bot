@@ -32,6 +32,8 @@ $requirements = [
 foreach ($requirements as $required) {
     $ok(str_contains($raw, $required), 'expected production wiring and admission contract');
 }
+$ok(!preg_match('/^require_once\s+__DIR__\s*\./m', $raw),
+    'no conflicting imports across duplicate V5 runtime trees');
 $ok(!str_contains($raw, 'CUser::Login'), 'copied V4 login not called');
 $ok(!str_contains($raw, 'JwtAuthorization'), 'legacy JWT not imported');
 $ok(!str_contains($raw, 'TrustedDeviceMobileService::registerSuccessfulAuthentication'),
