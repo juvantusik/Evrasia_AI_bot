@@ -305,6 +305,7 @@ final readonly class V5LoginWorkflow
         string $code,
         string $deviceId,
         string $platform,
+        ?ChallengeKind $expectedKind = null,
     ): AuthenticatedV5Session {
         self::requireInstallation($deviceId, $platform);
         if (!self::validChallengeId($challengeId)
@@ -319,6 +320,7 @@ final readonly class V5LoginWorkflow
         if ($grant === null
             || $grant->deviceId !== $deviceId
             || $grant->platform !== $platform
+            || ($expectedKind !== null && $grant->kind !== $expectedKind)
         ) {
             throw new AuthenticationRejected('verification_failed');
         }
