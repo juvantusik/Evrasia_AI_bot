@@ -3,13 +3,18 @@ declare(strict_types=1);
 
 namespace Evrasia\Samzaberu\V5;
 
-require_once __DIR__ . '/V5ProductionStrongSessionFactory.php';
-require_once __DIR__ . '/V5MySqlConsumedChallengeProof.php';
-require_once __DIR__ . '/V5MySqlChallengeHttpPort.php';
-require_once __DIR__ . '/V5MySqlPasswordBoundTotpIssuer.php';
-require_once __DIR__ . '/V5MySqlSessionActions.php';
-require_once __DIR__ . '/V5MySqlSessionLogout.php';
-require_once __DIR__ . '/V5HttpTransportBoundary.php';
+/**
+ * No relative require_once here: production V5 has TWO separate installed
+ * trees (Controllers/V5/Runtime and local/samzaberu-v5/src) with overlapping
+ * Evrasia\\Samzaberu\\V5 class names. Loading both copies in one request
+ * would redeclare classes or combine different versions of a session store.
+ *
+ * The reviewed private HTTP ingress must load ONE cohesive package and
+ * supply the typed dependencies. This component itself is inert until then.
+ * In particular, do not copy the Runtime store/factory into src to make
+ * a missing require_once appear satisfied.
+ */
+
 
 use InvalidArgumentException;
 
