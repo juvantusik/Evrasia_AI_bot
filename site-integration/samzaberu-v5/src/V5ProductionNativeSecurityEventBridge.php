@@ -144,6 +144,19 @@ final class V5ProductionNativeSecurityEventBridge
             $db->assertOwnedNativeAuthMutationContinuity($native);
             // No COMMIT here: caller owns native rollback and final commit.
         } catch (Throwable) {
+            // The native writer might have committed and restarted a DIFFERENT
+            // transaction on the same mysqli connection. inTransaction()
+            // alone cannot distinguish that from our original transaction.
+            // If the original V5 savepoint is no longer live, permanently
+            // poison the bridge: caller MUST discard the native connection
+            // and MUST NOT roll back what could now belong to Bitrix.
+            try {
+                $db->assertOwnedNativeAuthMutationContinuity($native);
+            } catch (Throwable) {
+                $db->abandonUncertainNativeTransaction();
+                throw new RuntimeException('v5_native_security_transaction_uncertain');
+            }
+            // Original V5 transaction survives: owner may roll it back.
             throw new RuntimeException('v5_native_security_event_mutation_denied');
         }
     }
