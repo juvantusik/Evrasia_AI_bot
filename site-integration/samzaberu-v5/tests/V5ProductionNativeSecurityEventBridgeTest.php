@@ -53,7 +53,7 @@ $check(
 // SHA-pinned Bitrix OTP port. This is a negative safety test only.
 require_once __DIR__ . '/../src/V5BitrixOtpNativeMutationPort.php';
 $otp = (new ReflectionClass(
-    \\Evrasia\\Samzaberu\\V5\\V5BitrixOtpNativeMutationPort::class
+    \Evrasia\Samzaberu\V5\V5BitrixOtpNativeMutationPort::class
 ))->newInstanceWithoutConstructor();
 try {
     V5ProductionNativeSecurityEventBridge::applyReviewedNativeOtp(
