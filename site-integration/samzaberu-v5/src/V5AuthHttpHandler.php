@@ -622,7 +622,7 @@ final readonly class V5AuthHttpHandler
         return new V5HttpReply(201, [
             'status' => 'registered',
             'user_id' => $id,
-            'next_step' => 'signin',
+            'next_step' => 'email_confirmation',
         ]);
     }
 
