@@ -41,7 +41,6 @@ final class V5ProductionNativeSecurityEventBridge
         if (PHP_SAPI !== 'fpm-fcgi'
             || $userId < 1
             || !$db->inTransaction()
-            || !$db->hasStrictV5HttpIngress()
             || !in_array($event, [
                 self::SECURITY_CHANGED,
                 self::PHONE_CONFIRMED,
