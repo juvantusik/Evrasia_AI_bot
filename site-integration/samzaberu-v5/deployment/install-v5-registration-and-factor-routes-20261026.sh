@@ -180,7 +180,8 @@ while read -r name expected; do
         [[ -f "$SRC/$name" && ! -L "$SRC/$name" ]] || fail "UNSAFE_$name"
         original="$(sha "$SRC/$name")"
         cp -p -- "$SRC/$name" "$BACKUP/$name"
-        chmod 0600 "$BACKUP/$name"
+        # Keep owner/mode for correct PHP-FPM rollback. Backup directory is
+        # private root-only (0700), so files need not be chmod 0600.
         echo "$name $original" >> "$BACKUP/original.sha"
     else
         echo "$name ABSENT" >> "$BACKUP/original.sha"
