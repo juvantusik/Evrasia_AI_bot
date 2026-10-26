@@ -216,8 +216,15 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
 
     private function attestedScope(PDO $db): bool
     {
-        if ($db !== $this->bridge || !($db instanceof V5BitrixPdoCompatibilityBridge)
-            || PHP_SAPI !== 'cli'
+        if ($db !== $this->bridge || !($db instanceof V5BitrixPdoCompatibilityBridge)) {
+            return false;
+        }
+        // Production requests use the real reviewed FPM/Bitrix connection.
+        // The pre-existing staging-only path below remains isolated.
+        if (PHP_SAPI === 'fpm-fcgi') {
+            return $this->productionScope($db);
+        }
+        if (PHP_SAPI !== 'cli'
             || getenv('V5_STAGE_WRITE_ACK') !== 'ISOLATED_STAGING_ONLY'
             || !$this->bridge->ownsCurrentNativeTransaction($this->nativeConnection)
             || !class_exists(\Bitrix\Main\Application::class)
@@ -268,6 +275,60 @@ final class V5BitrixLockedTotpFactor implements V5LockedChallengeNativeFactorPor
                 && !hash_equals($this->nativeSessionId, $id))) {
                 return false;
             }
+            $this->nativeSessionId = $id;
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+
+    /** Exact public V5 HTTPS FPM transaction; no staging ACK or test schema. */
+    private function productionScope(PDO $db): bool
+    {
+        $root = '/home/site_evrasia/web/evrasia.spb.ru/public_html';
+        $requestUri = $_SERVER['REQUEST_URI'] ?? null;
+        if (!$db->inTransaction()
+            || !$this->bridge->ownsCurrentNativeTransaction($this->nativeConnection)
+            || !class_exists(\Bitrix\Main\Application::class)
+            || \Bitrix\Main\Application::getConnection() !== $this->nativeConnection
+            || get_class($this->nativeConnection) !== 'Bitrix\\Main\\DB\\MysqliConnection'
+            || ($_SERVER['HTTP_HOST'] ?? null) !== 'evrasia.rest'
+            || !in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on','1'], true)
+            || ($_SERVER['REQUEST_METHOD'] ?? null) !== 'POST'
+            || !is_string($requestUri)
+            || !in_array($requestUri, [
+                '/api/v5/auth/totp/verify',
+                '/api/v5/auth/challenge/verify'
+            ], true)
+            || !V5ProductionNativeRequestBoundaryGuard::isProtectedPostRoute(
+                'POST', $requestUri
+            )
+            || ($_SERVER['SCRIPT_FILENAME'] ?? null) !== $root . '/api/v5/router.php'
+            || realpath((string)($_SERVER['DOCUMENT_ROOT'] ?? '')) !== $root
+            || $this->nativeDepth->depthFor($this->nativeConnection) !== 1
+            || !$this->sourceMatches(self::OTP_CLASS, self::OTP_FILE, self::OTP_SHA256, $root)
+            || !$this->sourceMatches(
+                self::ALGO_CLASS, self::ALGO_FILE, $this->reviewedAlgorithmSha256, $root
+            )) {
+            return false;
+        }
+        try {
+            $result = $this->nativeConnection->query(
+                'SELECT DATABASE() AS schema_name, CONNECTION_ID() AS connection_id, '
+                . '@@session.in_transaction AS active_transaction'
+            );
+            if (!is_object($result) || !method_exists($result, 'fetch')) return false;
+            $row = $result->fetch();
+            if (!is_array($row) || $result->fetch() !== false
+                || ($row['schema_name'] ?? null) !== 'eurasia_new'
+                || (string)($row['active_transaction'] ?? '') !== '1'
+                || preg_match('/\A[1-9][0-9]{0,18}\z/D',
+                    (string)($row['connection_id'] ?? '')
+                ) !== 1) return false;
+            $id = 'prod:'.(string)$row['connection_id'];
+            if ($this->nativeSessionId !== null
+                && !hash_equals($this->nativeSessionId, $id)) return false;
             $this->nativeSessionId = $id;
             return true;
         } catch (Throwable) {
