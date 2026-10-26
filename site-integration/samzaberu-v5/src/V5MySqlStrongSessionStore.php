@@ -892,25 +892,37 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             || preg_match('/\A[a-f0-9]{64}\z/D', $binding) !== 1) {
             return null;
         }
-        // One indexed user-scope read, never a global device scan. FOR UPDATE
-        // serializes V5 validation against concurrent V4 trust rotation/revoke.
-        $q = $this->query(self::TRUST_CURRENT_SQL, [$userId]);
-        $matches = 0;
-        while (($trustRow = $q->fetch(PDO::FETCH_ASSOC)) !== false) {
-            if (!is_array($trustRow)) {
-                throw new RuntimeException('trusted_session_row_unavailable');
-            }
-            $candidate = V5TrustedSessionBinding::current(
-                $trustRow, $userId, $now, $platform, $this->bindingKey
-            );
-            if (is_string($candidate) && hash_equals($binding, $candidate)) {
-                $matches++;
-                if ($matches > 1) {
-                    throw new RuntimeException('trusted_session_ambiguous');
+        // The native SQL bridge enforces <=2 result rows. A user may own
+        // several browser/mobile devices; never query all their trust rows
+        // at once. Keyset pagination uses (USER_ID, DEVICE_ID_HASH) UNIQUE
+        // and locks each bounded page. An excessive device count denies.
+        $cursor = str_repeat('0', 64);
+        for ($page = 0; $page < 128; $page++) {
+            $q = $this->query(self::TRUST_CURRENT_PAGE_SQL, [$userId, $cursor]);
+            $read = 0;
+            while (($trustRow = $q->fetch(PDO::FETCH_ASSOC)) !== false) {
+                if (!is_array($trustRow)) {
+                    throw new RuntimeException('trusted_session_row_unavailable');
+                }
+                $hash = $trustRow['DEVICE_ID_HASH'] ?? null;
+                if (!is_string($hash)
+                    || preg_match('/\\A[a-f0-9]{64}\\z/D', $hash) !== 1
+                    || strcmp($hash, $cursor) <= 0 || ++$read > 2) {
+                    throw new RuntimeException('trusted_session_page_invalid');
+                }
+                $cursor = $hash;
+                $candidate = V5TrustedSessionBinding::current(
+                    $trustRow, $userId, $now, $platform, $this->bindingKey
+                );
+                if (is_string($candidate) && hash_equals($binding, $candidate)) {
+                    return $state;
                 }
             }
+            if ($read < 2) {
+                return null;
+            }
         }
-        return $matches === 1 ? $state : null;
+        return null;
     }
 
     /**
@@ -933,8 +945,9 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         . 'FROM ev_trusted_devices ';
     private const TRUST_PRESENTED_SQL = self::TRUST_FIELDS
         . 'WHERE USER_ID = ? AND DEVICE_ID_HASH = ? FOR UPDATE';
-    private const TRUST_CURRENT_SQL = self::TRUST_FIELDS
-        . 'WHERE USER_ID = ? FOR UPDATE';
+    private const TRUST_CURRENT_PAGE_SQL = self::TRUST_FIELDS
+        . 'WHERE USER_ID = ? AND DEVICE_ID_HASH > ? '
+        . 'ORDER BY DEVICE_ID_HASH LIMIT 2 FOR UPDATE';
 
     /** @param array<string,mixed>|null $row @return array<string,mixed>|null */
     private static function state(?array $row, int $userId, int $now): ?array
