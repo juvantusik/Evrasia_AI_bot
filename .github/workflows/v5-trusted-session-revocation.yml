@@ -1,0 +1,53 @@
+name: V5 mobile trust revocation safety
+on:
+  push:
+    branches:
+      - feature/v5-production-native-preflight-20261025
+    paths:
+      - .github/workflows/v5-trusted-session-revocation.yml
+      - site-integration/samzaberu-v5/src/V5TrustedSessionBinding.php
+      - site-integration/samzaberu-v5/src/V5MySqlStrongSessionStore.php
+      - site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php
+      - site-integration/samzaberu-v5/tests/V5TrustedSessionBindingTest.php
+      - site-integration/samzaberu-v5/tests/V5MySqlStrongSessionStoreTest.php
+      - site-integration/samzaberu-v5/tests/V5BitrixStrongSessionBridgeIntegrationTest.php
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  revocation-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout source without persisting credentials
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Offline PHP syntax and V5 trust/session tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '=== 1. ENVIRONMENT ==='
+          echo 'MODE=OFFLINE_ONLY'
+          echo 'PRODUCTION_WRITE=NO'
+          echo 'BITRIX_BOOTSTRAP=NO'
+          echo 'DATABASE_CONNECTION=NO'
+          echo '=== 2. PHP SYNTAX AND STRONG TRUST ==='
+          ROOT=site-integration/samzaberu-v5
+          for file in \
+            src/V5TrustedSessionBinding.php \
+            src/V5MySqlStrongSessionStore.php \
+            src/V5BitrixPdoCompatibilityBridge.php \
+            tests/V5TrustedSessionBindingTest.php \
+            tests/V5MySqlStrongSessionStoreTest.php \
+            tests/V5BitrixStrongSessionBridgeIntegrationTest.php; do
+            php -l "$ROOT/$file"
+          done
+          php "$ROOT/tests/V5TrustedSessionBindingTest.php"
+          php "$ROOT/tests/V5MySqlStrongSessionStoreTest.php"
+          php "$ROOT/tests/V5BitrixStrongSessionBridgeIntegrationTest.php"
+          echo '=== 3. RESULT ==='
+          echo 'FINAL_STATUS=PASS'
+          echo 'PRODUCTION_WRITE=NO'
