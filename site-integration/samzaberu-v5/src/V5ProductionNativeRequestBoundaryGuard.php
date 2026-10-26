@@ -31,7 +31,7 @@ final class V5ProductionNativeRequestBoundaryGuard
 
     /** V5-owned POST actions only. Public legal is never in this set. */
     private const PROTECTED_POST_ACTIONS = [
-        'signin', 'verifyChallenge', 'resendChallenge',
+        'signin', 'verifyTotp', 'verifyEmail', 'verifySms', 'verifyChallenge', 'resendChallenge',
         'requestSmsFallback', 'refresh', 'logout',
         'validateToken', 'showBonusPin', 'readOrderDetail', 'placeOrder',
     ];
