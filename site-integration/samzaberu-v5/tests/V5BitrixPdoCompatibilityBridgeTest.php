@@ -238,7 +238,8 @@ namespace {
             . 'FROM ev_trusted_devices WHERE USER_ID = ? AND DEVICE_ID_HASH = ? FOR UPDATE',
         'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, '
             . 'TOKEN_VERSION, STATUS, UNIX_TIMESTAMP(TOKEN_EXPIRES_AT) AS expires_epoch, USER_AGENT '
-            . 'FROM ev_trusted_devices WHERE USER_ID = ? FOR UPDATE',
+            . 'FROM ev_trusted_devices WHERE USER_ID = ? AND DEVICE_ID_HASH > ? '
+            . 'ORDER BY DEVICE_ID_HASH LIMIT 2 FOR UPDATE',
     ];
     foreach($trustedLockTemplates as $template) {
         ok($db->prepare($template) instanceof PDOStatement,
