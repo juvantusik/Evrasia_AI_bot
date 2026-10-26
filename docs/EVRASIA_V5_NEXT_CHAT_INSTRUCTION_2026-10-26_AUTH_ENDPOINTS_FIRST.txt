@@ -1,0 +1,60 @@
+EVRASIA AI BOT / SAMZABERU API V5
+INSTRUCTION FOR A NEW CHAT - 2026-10-26
+
+!!! ГЛАВНОЕ, ОБЯЗАТЕЛЬНОЕ ТРЕБОВАНИЕ ПОЛЬЗОВАТЕЛЯ !!!
+МЫ ПРЯМО СЕЙЧАС ДЕЛАЕМ РЕАЛЬНЫЕ РАБОТАЮЩИЕ HTTP-РУЧКИ API V5 ДЛЯ РАЗРАБОТЧИКА ПРИЛОЖЕНИЯ «САМ ЗАБЕРУ».
+НЕ ЗАНИМАЙСЯ ВМЕСТО ЭТОГО НОВЫМИ ЦИКЛАМИ АУДИТОВ, ПЕРЕПРОВЕРКАМИ, МИКРОУЯЗВИМОСТЯМИ И ПОВТОРНОЙ РЕАЛИЗАЦИЕЙ V4.
+Приоритет: ДОКУМЕНТЫ ПЕРЕД РЕГИСТРАЦИЕЙ -> РЕГИСТРАЦИЯ С СОГЛАСИЯМИ -> SIGNIN -> TRUST/TOTP/EMAIL/SMS -> VERIFY -> REFRESH/LOGOUT -> PIN. Довести до доступных реальных HTTP endpoint, испытать на реальном разрешенном сценарии и передать рабочее ТЗ разработчику.
+Пользователь неоднократно был недоволен тем, что ассистент занимался защитными вспомогательными классами, а не работоспособностью ручек. НЕ ПОВТОРЯТЬ ОШИБКУ.
+
+=== PROJECT / SOURCES ===
+GitHub: juvantusik/Evrasia_AI_bot
+Working branch: feature/v5-production-native-preflight-20261025
+HEAD на момент подготовки: 790765469d1069705408f2450318b953f5e05569 (после создания этой инструкции HEAD будет новее).
+Основная предшествующая история: docs/EVRASIA_V5_STANDALONE_LIVE_HANDOFF_2026-10-25.md, особенно разделы 19-21.
+Production Bitrix: hostname evrasia, сайт evrasia.rest, корень /home/site_evrasia/web/evrasia.spb.ru/public_html, БД eurasia_new.
+V4 рабочий и должен оставаться НЕЗАВИСИМЫМ. Не менять его контроллеры и router.php. Не менять работающий сайт ради V5 без необходимости.
+Не создавать синтетические аккаунты в production. Не выводить токены, пароли, PIN, телефоны и данные клиентов в диагностике.
+
+=== В ЧЕМ СЕЙЧАС ЗАДАЧА ===
+Нужно дать разработчику «Сам Заберу»:
+1. GET /api/v5/legal/registration-documents — актуальные offer / personal_data / optional marketing документы ДО регистрации, без JWT. Документы и коды нельзя хардкодить в приложении.
+2. POST /api/v5/auth/signup — настоящая Bitrix-регистрация с полями phone, email, password, confirm_password, name (и допустимыми необязательными bday, sex), массивом agreements с текущими кодами; сервер повторно проверяет обязательные согласия, создает USER_ID, сохраняет реальные записи Bitrix UserConsent::addByContext, соблюдает необязательный marketing, отправляет подтверждение регистрации. Никаких JWT/траст-токенов при создании пользователя.
+3. POST /api/v5/auth/signin — пароль с использованием существующего Bitrix и реальной MFA-политики. Действующий доверенный мобильный токен имеет ПРИОРИТЕТ над TOTP. Само приложение СОЗДАЕТ токен устройства, API НЕ ГЕНЕРИРУЕТ И НЕ ВОЗВРАЩАЕТ trust_token. Без валидного траста: активный TOTP -> TOTP challenge; без TOTP -> существующий проверенный email challenge и предусмотренный ручной SMS fallback.
+4. POST /api/v5/auth/totp/verify, /auth/email/verify, /auth/sms/verify и общий /auth/challenge/verify — серверная проверка code + challenge_id + device_id + platform. Чужой тип фактора не принимает. 6-значный код, одноразовое погашение, без JWT до успешного MFA.
+5. POST /api/v5/auth/challenge/resend и /auth/challenge/use-sms — повтор/ручной переход email->SMS, без автоматического ухудшения защиты при TOTP. SMS-код для входа НЕ равен бонусному PIN.
+6. POST /api/v5/auth/refresh и /auth/logout — JWT/opaque rotating refresh и отзыв. POST /api/v5/loyalty/pin — только для подтвержденной сильной V5-сессии, прямой показ PIN, без лишнего SMS.
+7. После этого профиль/корзина/заказы/оформление (в основном уже есть V4/V5 реализация), а не вместо перечисленного.
+8. Выдать разработчику готовый контракт методов, поля JSON, responses, codes, сценарии доверенного устройства, TOTP, email, SMS и регистрации.
+
+=== ФАКТИЧЕСКИЙ STATUS (НЕ ПУТАТЬ) ===
+PRODUCTION подтвержден:
+- GET /api/v5/health — 200; GET /api/v5/legal/consents и /legal/registration-documents — ранее проверены 200; публичная legal validate также работала, но для конкретного запроса код зависит от данных.
+- POST /api/v5/auth/signin — остается 503 v5_unavailable, потому что защищенная реальная factory еще не подключена.
+- V5 public router SHA256 a134380714cb2299ee47eb46ab6b248985a863f8aa5b7104290bde14847fa266 на последнем подтвержденном checkpoint. V4 router SHA256 5af13f626a2613626d4f6c21bea0a369391d7259a5b1451b6dd38ad12f29e60d.
+- В production установлен V5ProductionAuthHttpComposition.php старого безопасного базового варианта SHA256 693329cf2594ed957f79c7b846088e4a253d19802c335c57d3f83a82cbf71b74. Новая версия с бизнес-ручками и MFA НЕ подтверждена установленной.
+- Установлены V5ProductionNativeCoverageEvidence.php в Controllers/V5/Runtime и пара V5ProductionNativeSecurityEventBridge.php (SHA 5a3151e46cdc8a1966f4cac095db16b863df7f508a425dfacf22fa8310afc16b) + V5BitrixOtpNativeMutationPort.php (SHA d19767ad4761406a3ad7db4ca2c9f992f42554760d6d30773ec66dbaa09501de) в local/samzaberu-v5/src. Их повторно НЕ устанавливать без причины.
+- Веб-сайт: отключена старая SMS/ВК-отправка бонусного PIN при отсутствии сильной авторизации; pincode.php SHA 3ae1a9a3bf9d570cc032bffdd88cb641d57e7032be37f50d6fc701d7a6686eef, backup /root/ev-web-pin-relogin.tPTGPCCv. Удален текст Google Authenticator, оставлен Яндекс Ключ, template.php SHA 0c8ca7b10b8816b457405660f74a833706bb33e2d1d2dc33cece8426444e0774, backup /root/ev-mfa-ui-copy.IXH56pfI. Это ЗАКРЫТЫЕ сопутствующие задачи.
+
+GITHUB FEATURE (НАПИСАНО, НО НЕ СЛЕДУЕТ СЧИТАТЬ РАБОТАЮЩИМ В PRODUCTION):
+- site-integration/samzaberu-v5/src/V5RouteMap.php — signup, explicit /auth/totp/verify, /auth/email/verify, /auth/sms/verify и стандартные auth endpoints.
+- V5AuthHttpHandler.php — JSON signup с agreements, повторная проверка current codes, 409 legal_documents_changed; отдельные verify actions.
+- V5LoginWorkflow.php — сравнение consumed ChallengeKind с выбранной ручкой; trusted device first.
+- V5ProductionAuthHttpComposition.php — связка strong session, TOTP/email/SMS lifecycle, optional native signup, профиль/заказы/корзина.
+- V5BitrixNativeRegistrationWriter.php — новая реальная попытка записи Bitrix USER_ID/phone auth/native consent events/email confirmation. НОВЫЙ КОД, НЕ ПРОВЕРЕН НА PRODUCTION. Не считать завершенным: надо проверить реальную сигнатуру Bitrix методов и побочные эффекты ровно настолько, насколько нужно для безопасного запуска, не уходить в бесконечные аудиты.
+- V5CurrentWebsiteLegalCatalogPort.php, V5PublicSignupEndpoint.php — код самостоятельного доавторизационного signup endpoint.
+- site-integration/samzaberu-v5/api/v5/router.php на feature ветке УЖЕ содержит регистрацию, но это НЕ тот публичный router, который стоит в production. Не заменять его целиком.
+- tests/V5RegistrationAndFactorRoutesTest.php — офлайн сценарии регистрация/legal/factor kind, нет подтверждения PHP test PASS.
+- deployment/install-v5-registration-and-factor-routes-20261026.sh — подготовленный, НЕ ЗАПУЩЕННЫЙ установщик: commit f77e934f340c12a84e07dace5dab3268e43170dd, SHA256 f5e91cb4c06ba6844526a39e26e522e49297e99032356bb69e1c09f3a345a559. Он устанавливает семь V5 файлов и локально добавляет signup в текущий production router с backup/rollback/invalid-request probe. СНАЧАЛА обеспечить корректность фактического signup writer, затем использовать этот подготовленный путь к живой ручке, не писать еще один псевдо-роутер.
+- deployment/install-v5-business-http-composition-20261026.sh — кандидат для бизнес-композиции, пользователь не подтвердил выполнение. НЕ отвлекаться на него до AUTH.
+- Нет подтвержденного production релиза signup, TOTP/email/SMS verify, refresh или mobile signin.
+
+=== ЧТО ДЕЛАТЬ СРАЗУ В НОВОМ ЧАТЕ ===
+Не начинать с обзора десятков старых исследований. Точки входа выше известны.
+A. Возьми актуальную ветку, открой перечисленные файлы и доведи РЕГИСТРАЦИЮ + agreement persistence + email confirmation до работоспособного HTTP endpoint с минимальными прикладными тестами. Особое внимание — писатель Bitrix CUser::Add / UserPhoneAuthTable / Consent::addByContext; нельзя массово создавать ошибки или дубликаты. Использовать уже подготовленный установщик только когда точная текущая версия совпадает и нет очевидного блокера.
+B. Параллельно не откладывая разработай и подключи защищенную private HTTP factory к /api/v5/auth/signin, /auth/totp/verify, /auth/email/verify, /auth/sms/verify, /auth/challenge/use-sms, /refresh, /logout, /loyalty/pin. Не создавать параллельный новый алгоритм: use V5LoginWorkflow, V5MySqlPublicComposition, V5MySqlEmailOtp, V5MySqlStrongSessionStore, V5ProductionAuthHttpComposition и реальные site-native провайдеры.
+C. Минимально необходимые проверки выполняй только на ПУТИ К РЕАЛЬНОЙ РУЧКЕ. Не требовать очередных глобальных 10-path micro-audit отчётов для того, чтобы писать и подключать HTTP методы. Но НЕ обходить реальные proof MFA, не выдавать JWT после одного пароля и не ломать V4. Не выдавать кодовую заготовку за готовый endpoint.
+D. Для PuTTY/KiTTY давать ОДИН короткий, цельный paste block с первым printf '\033[3J\033[2J\033[H', guard host/root/files SHA, backup+rollback, bash -n и структурированным PASS/FAIL/FINAL_STATUS/FINAL_RC. Большие heredoc пользователь часто вставляет с помехами; лучше короткий verified installer по pinned SHA. Не печатать секреты. Не закрывать SSH. На production любые write операции только с понятной целью и rollback.
+E. ФИНАЛ ЭТАПА — реальные HTTP ответы ручек и новый developer handoff ТЗ СамЗаберу, а не "еще один класс и пять проверок".
+
+ПРИОРИТЕТ СФОРМУЛИРОВАН ПОЛЬЗОВАТЕЛЕМ: "ДЕЛАЙ НУЖНЫЕ РУЧКИ", "РУЧКИ ДЛЯ РАЗРАБОТЧИКА САМ ЗАБЕРУ, А НЕ ПРОВЕРКИ С ПЕРЕПРОВЕРКАМИ".
