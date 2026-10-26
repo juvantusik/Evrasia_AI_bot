@@ -93,14 +93,22 @@ namespace Bitrix\Main\DB {
             if(str_starts_with($sql,'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state'))
                 return new BridgeMockResult([['AUTH_EPOCH'=>$this->epoch]]);
             if(str_starts_with($sql,'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, ')) {
-                if(!preg_match("/WHERE USER_ID = ([0-9]+)(?: AND DEVICE_ID_HASH = '([a-f0-9]{64})')? FOR UPDATE$/D",
+                if(!preg_match("/WHERE USER_ID = ([0-9]+) AND DEVICE_ID_HASH ([=>]) '([a-f0-9]{64})'( ORDER BY DEVICE_ID_HASH LIMIT 2)? FOR UPDATE$/D",
                     $sql,$m))
                     throw new \RuntimeException('wrong synthetic trust lock');
                 $rows=[];
                 foreach($this->trustRows as $r) {
                     if((string)$r['USER_ID']!==$m[1])continue;
-                    if(isset($m[2]) && $r['DEVICE_ID_HASH']!==$m[2])continue;
+                    if($m[2]==='=' && $r['DEVICE_ID_HASH']!==$m[3])continue;
+                    if($m[2]==='>' && strcmp($r['DEVICE_ID_HASH'],$m[3])<=0)continue;
                     $rows[]=$r;
+                }
+                if($m[2]==='>') {
+                    if(($m[4]??'')!==' ORDER BY DEVICE_ID_HASH LIMIT 2')
+                        throw new \RuntimeException('unbounded synthetic trust query');
+                    usort($rows,fn(array $a,array $b):int=>
+                        strcmp($a['DEVICE_ID_HASH'],$b['DEVICE_ID_HASH']));
+                    $rows=array_slice($rows,0,2);
                 }
                 return new BridgeMockResult($rows);
             }
@@ -331,6 +339,12 @@ namespace {
             'expires_epoch'=>(string)($native->now+86400),
             'USER_AGENT'=>'SamZaberu platform=ios',
         ]];
+        for($i=1;$i<=5;$i++) {
+            $other=$native->trustRows[0];
+            $other['DEVICE_ID_HASH']=str_repeat('0',63).(string)$i;
+            $other['TRUST_TOKEN_HASH']=hash('sha256',str_repeat('d',64));
+            $native->trustRows[]=$other;
+        }
         Application::$current=$native;
         $permit=new SyntheticPermit();
         $db=new V5BitrixPdoCompatibilityBridge($native,$permit);
