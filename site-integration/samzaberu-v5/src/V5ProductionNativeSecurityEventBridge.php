@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 require_once __DIR__ . '/V5SecurityEventVersions.php';
+require_once __DIR__ . '/V5BitrixOtpNativeMutationPort.php';
 
 use Closure;
 use PDO;
@@ -29,6 +30,41 @@ final class V5ProductionNativeSecurityEventBridge
     public const SECURITY_CHANGED = 'security_changed';
     public const PHONE_CONFIRMED = 'phone_confirmed';
     public const PHONE_REVOKED = 'phone_revoked';
+
+    /**
+     * Concrete native Bitrix TOTP save/delete integration for a V5-owned
+     * protected request. Uses the existing SHA-pinned Otp adapter; never
+     * accepts a generic callback, user JSON or an unverified Bitrix Otp.
+     *
+     * No route calls this until the authenticated private V5 factory is
+     * reviewed. The separate ten-path release gate remains mandatory.
+     * The caller owns COMMIT/ROLLBACK for BOTH OTP and AUTH_EPOCH.
+     */
+    public static function applyReviewedNativeOtp(
+        V5BitrixPdoCompatibilityBridge $db,
+        V5SecurityEventVersionWriter $versions,
+        int $userId,
+        V5BitrixOtpNativeMutationPort $otp,
+    ): void {
+        if (PHP_SAPI !== 'fpm-fcgi'
+            || $userId < 1
+            || !$db->inTransaction()
+            || !$otp->usesSameOwnedBridge($db)
+            || !in_array($otp->path(), [
+                V5NativeMutationPath::OtpSaveAndEnrollment,
+                V5NativeMutationPath::OtpDeleteAndDisable,
+            ], true)) {
+            throw new RuntimeException('v5_reviewed_native_otp_scope_denied');
+        }
+        self::applyOwnedMutation(
+            $db,
+            $versions,
+            $userId,
+            self::SECURITY_CHANGED,
+            static fn(object $native, int $lockedUserId): bool =>
+                $otp->performOnNativeConnection($native, $lockedUserId) === true
+        );
+    }
 
     public static function applyOwnedMutation(
         V5BitrixPdoCompatibilityBridge $db,
