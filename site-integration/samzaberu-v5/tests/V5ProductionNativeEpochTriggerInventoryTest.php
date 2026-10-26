@@ -39,7 +39,7 @@ foreach ($expected as $i => $value) {
         'missing native trigger denied: ' . $i);
 }
 foreach (['name'=>'ev_v5_forged_trigger','table_name'=>'b_user',
-    'event_name'=>'DELETE','timing'=>'BEFORE',
+    'event_name'=>'UPDATE','timing'=>'BEFORE',
     'statement_sha256'=>str_repeat('0',64)] as $column => $bad) {
     $rows = $expected;
     $rows[0][$column] = $bad;
