@@ -27,10 +27,10 @@ final readonly class V5BitrixLockedMobileTrustProof implements V5LockedStrongSes
     public function __construct(
         private V5BitrixPdoCompatibilityBridge $connection,
         private V5PasswordHashComparatorPort $passwords,
-        #[\SensitiveParameter] private string $enteredPassword,
+        #[\SensitiveParameter] private ?string $enteredPassword,
         #[\SensitiveParameter] private string $bindingKey,
     ) {
-        if ($enteredPassword === '' || strlen($enteredPassword) > 4096
+        if (($enteredPassword !== null && ($enteredPassword === '' || strlen($enteredPassword) > 4096))
             || strlen($bindingKey) < 32 || strlen($bindingKey) > 1024) {
             throw new \InvalidArgumentException('v5_mobile_trust_proof_configuration_unavailable');
         }
@@ -44,8 +44,9 @@ final readonly class V5BitrixLockedMobileTrustProof implements V5LockedStrongSes
         #[\SensitiveParameter] string $trustToken,
     ): bool {
         if ($db !== $this->connection
-            || !$this->connection->hasStrictV5HttpIngress()
+            || PHP_SAPI !== 'fpm-fcgi'
             || !$db->inTransaction()
+            || $this->enteredPassword === null
             || !$account->accountAllowed
             || $account->userId < 1
             || !V5LoginWorkflow::validInstallation($deviceId, $platform)
