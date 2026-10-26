@@ -342,3 +342,14 @@ User required priority switch away from repeatedly building equivalent V4 cart/b
 - The previously prepared BUSINESS HTTP installer `fed2e12c...` was not confirmed run by user; do not assume it is production. Do not run it in place of this auth/registration priority.
 
 Next after operator install result: connect real MFA/TOTP/email/manual SMS providers to private authenticated factory and validate using real app sign-in. Do not return to micro-audit loops or recreate V4 endpoints.
+
+
+## 22. 2026-10-26 Priority handoff: ship SamZaberu auth/signup/MFA endpoints
+
+**Explicit current user instruction: DO NOT repeat security micro-audit/recheck loops; finish real HTTP endpoints for the SamZaberu app developer NOW.** The next chat must begin with registration+current legal agreements, then password signin/trusted device/TOTP/email/SMS challenge verify and issuance, then refresh/logout/bonus PIN; preserve V4. Prefer minimum relevant endpoint tests and an actual integration handoff over speculative security scaffolds.
+
+**Authoritative new-chat documents** (use instead of reopening the entire old timeline):
+- `docs/EVRASIA_V5_NEXT_CHAT_INSTRUCTION_2026-10-26_AUTH_ENDPOINTS_FIRST.txt` — self-contained copy/paste instruction, created commit `4f872d4564895f408e629c3d54fca16f3acca116`.
+- `docs/EVRASIA_V5_NEW_CHAT_HANDOFF_2026-10-26_AUTH_ENDPOINTS_FIRST.md` — concise facts, route status matrix, source references, prepared-but-NOT-executed production installer and remaining work, created commit `c709934b12ac605465bac61a2b94387b02588bbc`.
+
+**Critical unambiguous state:** Public V5 legal documents are available, `/api/v5/auth/signin` remains HTTP 503, and the new `/api/v5/auth/signup` Bitrix writer and explicit TOTP/email/SMS verify handlers are **feature source only, not confirmed deployed or E2E working**. One targeted production installer has been prepared at `site-integration/samzaberu-v5/deployment/install-v5-registration-and-factor-routes-20261026.sh` (commit `f77e934f340c12a84e07dace5dab3268e43170dd`), but **operator has NOT run it**. Do not present new routes as production-ready until proven. Preserve already accepted live website PIN/SMS-VK fix and Google Authenticator UI copy fix.
