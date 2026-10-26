@@ -82,7 +82,7 @@ paths:
                   required: [phone, email, password, confirm_password]
                   properties:
                     name: {type: string, maxLength: 240}
-                    phone: {type: string, pattern: '^\+[1-9][0-9]{7,14}}
+                    phone: {type: string, pattern: '^\+[1-9][0-9]{7,14}$'}
                     email: {type: string, format: email}
                     password: {type: string, minLength: 6, writeOnly: true}
                     confirm_password: {type: string, minLength: 6, writeOnly: true}
