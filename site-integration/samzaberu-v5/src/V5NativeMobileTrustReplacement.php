@@ -40,22 +40,27 @@ final class V5NativeMobileTrustReplacement
     private const EVENT_REVOKED = 12;
 
     /**
-     * @return array{device_hash:string,token_version:int,old_mobile_revoked:int}
+     * @return array{token_version:int,old_mobile_revoked:int}
      * @throws RuntimeException On any unverified native state or failed write.
      * @internal Must be called only from locked and covered V5 MFA issuance.
      */
     public function replaceInsideVerifiedMfaTransaction(
         PDO $db,
-        int $verifiedUserId,
-        string $deviceId,
-        string $platform,
+        ConsumedLoginChallenge $grant,
+        V5LockedStrongSessionProofPort $strongGrantProof,
         #[\SensitiveParameter] string $clientGeneratedTrustToken,
     ): array {
-        $hash = V5MobileTrustReplacementPolicy::coreDeviceHash($deviceId);
-        if ($verifiedUserId < 1 || !in_array($platform, ['ios','android'], true)
+        $verifiedUserId = $grant->userId;
+        $platform = $grant->platform;
+        $hash = V5MobileTrustReplacementPolicy::coreDeviceHash($grant->deviceId);
+        if ($verifiedUserId < 1 || !in_array($grant->kind, [
+                ChallengeKind::TOTP, ChallengeKind::SMS, ChallengeKind::EMAIL
+            ], true)
+            || !in_array($platform, ['ios','android'], true)
             || $hash === null
             || preg_match('/\A[a-f0-9]{64}\z/D', $clientGeneratedTrustToken) !== 1
             || !$db->inTransaction()
+            || $strongGrantProof->verifiedConsumedGrantWithUserLock($db, $grant) !== true
             || !class_exists(Application::class)
             || !class_exists(TrustedDeviceTable::class)
             || !class_exists(DeviceAuthEventTable::class)) {
@@ -171,14 +176,15 @@ final class V5NativeMobileTrustReplacement
         // All V5 tokens for this account are mobile-issued today. Revoke
         // them in the SAME transaction before the new session is inserted.
         // No V4 JWT or Bitrix web session is altered by this statement.
-        $native->queryExecute(
+        if ($native->queryExecute(
             'UPDATE ev_v5_strong_sessions SET status = \'revoked\', '
             . 'updated_at = UNIX_TIMESTAMP() WHERE user_id = '
             . $verifiedUserId . " AND status = 'active'"
-        );
+        ) === false) {
+            throw new RuntimeException('v5_mobile_session_revocation_unconfirmed');
+        }
 
         return [
-            'device_hash'=>$hash,
             'token_version'=>$newVersion,
             'old_mobile_revoked'=>$revoked,
         ];
