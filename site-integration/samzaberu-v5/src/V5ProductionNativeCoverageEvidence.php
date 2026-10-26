@@ -20,18 +20,14 @@ use Throwable;
  */
 final class V5ProductionNativeCoverageEvidence implements V5TrustedInstalledNativeCoveragePort
 {
-    private const UNATTESTED = [
-        'password_change_or_reset',
-        'user_block_and_activation',
-        'logout_and_session_revocation',
-        'otp_save_and_enrollment',
-        'otp_delete_and_disable',
-        'otp_automatic_reactivation',
-        'otp_recovery_and_reset',
-        'mandatory_mfa_policy_change',
-        'phone_confirmation_and_reconfirmation',
-        'phone_revocation_and_replacement',
-    ];
+    /** Never copy the enum into an independent list: new native paths must deny. */
+    private static function allRequiredPaths(): array
+    {
+        return array_map(
+            static fn(V5NativeMutationPath $p): string => $p->value,
+            V5NativeMutationPath::cases()
+        );
+    }
 
     /** Exact source-pinned live trigger identities, not ten-path coverage. */
     public static function installedEpochTriggersMatch(): bool
@@ -54,7 +50,7 @@ final class V5ProductionNativeCoverageEvidence implements V5TrustedInstalledNati
         return [
             'epoch_trigger_identity' => self::installedEpochTriggersMatch(),
             'covered_paths' => 0,
-            'required_paths' => count(self::UNATTESTED),
+            'required_paths' => count(self::allRequiredPaths()),
             'release_ready' => false,
         ];
     }
@@ -62,7 +58,7 @@ final class V5ProductionNativeCoverageEvidence implements V5TrustedInstalledNati
     /** @return list<string> Native paths without independently accepted proof. */
     public static function unverifiedPaths(): array
     {
-        return self::UNATTESTED;
+        return self::allRequiredPaths();
     }
 
     public function releaseVerifiedOnThisServer(PDO $db): ?bool
