@@ -1,0 +1,310 @@
+openapi: 3.1.0
+info:
+  title: Evrasia Sam Zabеру API V5 — Auth and Legal
+  version: 0.1.0-20261026
+  description: |
+    Contract extracted from V5RouteMap / V5AuthHttpHandler.
+    DEPLOYMENT STATUS: legal endpoints are live; signup installed (negative test passed).
+    Protected auth/MFA/JWT/PIN are NOT YET LIVE (signin last verified HTTP 503).
+    A contract is not a claim of successful production deployment.
+servers:
+  - url: https://evrasia.rest/api/v5
+tags:
+  - name: Legal
+  - name: Registration
+  - name: Auth
+  - name: Loyalty
+paths:
+  /health:
+    get:
+      tags: [Legal]
+      summary: Public health, confirmed HTTP 200
+      responses:
+        '200':
+          description: Online (auth_ready may be false)
+  /legal/registration-documents:
+    get:
+      tags: [Legal]
+      summary: Current documents before registration, confirmed HTTP 200
+      responses:
+        '200':
+          description: Documents from current Bitrix agreement catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentsResponse'
+  /legal/consents:
+    get:
+      tags: [Legal]
+      summary: Current Bitrix legal agreements, confirmed HTTP 200
+      responses:
+        '200':
+          description: Current documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentsResponse'
+  /legal/consents/validate:
+    post:
+      tags: [Legal]
+      summary: Validate agreement codes, does not persist consents
+      requestBody:
+        $ref: '#/components/requestBodies/Agreements'
+      responses:
+        '200':
+          description: Current revisions accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: {type: boolean, const: true}
+                  agreements: {type: array, items: {type: string}}
+                required: [valid, agreements]
+        '409':
+          description: Current legal document codes differ
+  /auth/signup:
+    post:
+      tags: [Registration]
+      summary: Bitrix signup with required consents; installed, success unverified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [registration, agreements]
+              properties:
+                registration:
+                  type: object
+                  additionalProperties: false
+                  required: [phone, email, password, confirm_password]
+                  properties:
+                    name: {type: string, maxLength: 240}
+                    phone: {type: string, pattern: '^\\+[1-9][0-9]{7,14}$'}
+                    email: {type: string, format: email}
+                    password: {type: string, minLength: 6, writeOnly: true}
+                    confirm_password: {type: string, minLength: 6, writeOnly: true}
+                    bday: {type: string}
+                    sex: {type: string, enum: [M, F, '']}
+                agreements: {$ref: '#/components/schemas/Agreements'}
+      responses:
+        '201':
+          description: Registration committed. No JWT/trust token issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, user_id, next_step]
+                properties:
+                  status: {type: string, const: registered}
+                  user_id: {type: integer, minimum: 1}
+                  next_step: {type: string, const: email_confirmation}
+        '400':
+          description: Invalid input (HTTP negative test confirmed)
+        '409':
+          description: legal_documents_changed
+        '503':
+          description: temporarily_unavailable
+  /auth/signin:
+    post:
+      tags: [Auth]
+      summary: Password + trusted mobile token or MFA challenge (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/Signin'}
+      responses:
+        '200':
+          description: Authenticated with already verified trusted device
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Authenticated'}
+        '202':
+          description: Additional factor required
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PendingChallenge'}
+        '401': {description: authentication_failed}
+        '503': {description: v5_unavailable (current live result)}
+  /auth/totp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify Bitrix-native six-digit TOTP (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/Verify'}
+      responses: {'200': {description: Authenticated, content: {application/json: {schema: {$ref: '#/components/schemas/Authenticated'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/email/verify:
+    post:
+      tags: [Auth]
+      summary: Verify email OTP (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/Verify'}
+      responses: {'200': {description: Authenticated, content: {application/json: {schema: {$ref: '#/components/schemas/Authenticated'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/sms/verify:
+    post:
+      tags: [Auth]
+      summary: Verify login SMS challenge (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/Verify'}
+      responses: {'200': {description: Authenticated, content: {application/json: {schema: {$ref: '#/components/schemas/Authenticated'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/challenge/verify:
+    post:
+      tags: [Auth]
+      summary: Verify matching kind of challenge (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/Verify'}
+      responses: {'200': {description: Authenticated, content: {application/json: {schema: {$ref: '#/components/schemas/Authenticated'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/challenge/resend:
+    post:
+      tags: [Auth]
+      summary: SMS resend with server-owned rate limits (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/ChallengeAction'}
+      responses: {'202': {description: Challenge still pending, content: {application/json: {schema: {$ref: '#/components/schemas/PendingChallenge'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/challenge/use-sms:
+    post:
+      tags: [Auth]
+      summary: Explicit email-to-SMS fallback, not TOTP downgrade (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/ChallengeAction'}
+      responses: {'202': {description: New SMS challenge ID, content: {application/json: {schema: {$ref: '#/components/schemas/PendingChallenge'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate V5 refresh credentials (NOT LIVE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refresh_token]
+              properties:
+                refresh_token: {type: string, pattern: '^v5r_[a-f0-9]{64}$', writeOnly: true}
+      responses: {'200': {description: Rotated credentials, content: {application/json: {schema: {$ref: '#/components/schemas/Authenticated'}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke V5 session (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/AccessToken'}
+      responses: {'200': {description: Logged out, content: {application/json: {schema: {type: object, properties: {status: {const: logged_out}}}}}}, '401': {description: authentication_failed}, '503': {description: unavailable}}
+  /auth/token/validate:
+    post:
+      tags: [Auth]
+      summary: Verify V5 access token and server session (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/AccessToken'}
+      responses: {'200': {description: Valid, content: {application/json: {schema: {type: object, properties: {valid: {const: true}}}}}}, '401': {description: Invalid or revoked}, '503': {description: unavailable}}
+  /loyalty/pin:
+    post:
+      tags: [Loyalty]
+      summary: Read PIN after strong V5 auth, no extra SMS (NOT LIVE)
+      requestBody: {$ref: '#/components/requestBodies/AccessToken'}
+      responses:
+        '200':
+          description: PIN including leading zeros
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, pin]
+                properties:
+                  status: {type: string, const: revealed}
+                  pin: {type: string}
+        '401': {description: authentication_failed}
+        '503': {description: unavailable}
+components:
+  schemas:
+    Agreements:
+      type: array
+      minItems: 2
+      maxItems: 3
+      items: {type: string}
+      description: Current required offer and personal_data codes, optional marketing.
+    DocumentsResponse:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          minItems: 2
+          maxItems: 3
+          items:
+            type: object
+            required: [code, type, title, required, format, content, url]
+            properties:
+              code: {type: string}
+              type: {type: string, enum: [offer, personal_data, marketing]}
+              title: {type: string}
+              required: {type: boolean}
+              format: {type: string, enum: [url, text, html]}
+              content: {type: [string, 'null']}
+              url: {type: string, format: uri}
+    PendingChallenge:
+      type: object
+      required: [status, challenge_id, challenge_type, expires_in]
+      properties:
+        status: {type: string, enum: [challenge_required, challenge_pending]}
+        challenge_id: {type: string, pattern: '^[a-f0-9]{64}$'}
+        challenge_type: {type: string, enum: [totp, email, sms]}
+        expires_in: {type: integer, minimum: 1, maximum: 300}
+    Authenticated:
+      type: object
+      required: [status, access_token, refresh_token]
+      properties:
+        status: {type: string, const: authenticated}
+        access_token: {type: string, writeOnly: true}
+        refresh_token: {type: string, writeOnly: true}
+  requestBodies:
+    Agreements:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [agreements]
+            properties:
+              agreements: {$ref: '#/components/schemas/Agreements'}
+    Signin:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [login, password, device_id, platform]
+            properties:
+              login: {type: string}
+              password: {type: string, writeOnly: true}
+              device_id: {type: string, pattern: '^sz_[a-f0-9]{64}$'}
+              platform: {type: string, enum: [ios, android]}
+              trust_token: {type: [string, 'null'], pattern: '^[a-f0-9]{64}$', writeOnly: true}
+    Verify:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [challenge_id, code, device_id, platform]
+            properties:
+              challenge_id: {type: string, pattern: '^[a-f0-9]{64}$'}
+              code: {type: string, pattern: '^[0-9]{6}$'}
+              device_id: {type: string, pattern: '^sz_[a-f0-9]{64}$'}
+              platform: {type: string, enum: [ios, android]}
+    ChallengeAction:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [challenge_id, device_id, platform]
+            properties:
+              challenge_id: {type: string, pattern: '^[a-f0-9]{64}$'}
+              device_id: {type: string, pattern: '^sz_[a-f0-9]{64}$'}
+              platform: {type: string, enum: [ios, android]}
+    AccessToken:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [access_token]
+            properties:
+              access_token: {type: string, writeOnly: true}
