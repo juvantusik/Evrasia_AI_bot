@@ -7,6 +7,7 @@ require_once __DIR__ . '/V5MySqlChallengeConsumption.php';
 require_once __DIR__ . '/V5BitrixPdoCompatibilityBridge.php';
 require_once __DIR__ . '/V5VerifiedBitrixNativeTransactionDepth.php';
 require_once __DIR__ . '/V5NativeTotpStagingIdentity.php';
+require_once __DIR__ . '/V5BitrixLockedTotpEligibility.php';
 
 use PDO;
 use ReflectionClass;
