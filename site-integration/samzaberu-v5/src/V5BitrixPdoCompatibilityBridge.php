@@ -395,11 +395,25 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         }
     }
 
+    /**
+     * Only the two exact, user-scoped, row-locked V5 mobile trust reads.
+     * All arbitrary queries against shared V4 trust data remain forbidden.
+     * SQL parameters use Bitrix's existing constrained escaping.
+     */
+    private const V5_TRUST_LOCK_SQL = [
+        'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, '
+            . 'TOKEN_VERSION, STATUS, UNIX_TIMESTAMP(TOKEN_EXPIRES_AT) AS expires_epoch, USER_AGENT '
+            . 'FROM ev_trusted_devices WHERE USER_ID = ? AND DEVICE_ID_HASH = ? FOR UPDATE',
+        'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, '
+            . 'TOKEN_VERSION, STATUS, UNIX_TIMESTAMP(TOKEN_EXPIRES_AT) AS expires_epoch, USER_AGENT '
+            . 'FROM ev_trusted_devices WHERE USER_ID = ? FOR UPDATE',
+    ];
+
     /** @var list<string> */
     private const STRONG_SESSION_SQL = [
         'SELECT sid, user_id FROM ev_v5_strong_sessions '
             . 'WHERE refresh_digest = ? LIMIT 2',
-        'SELECT sid, user_id, auth_epoch, assurance, assured_at, '
+        'SELECT sid, user_id, auth_epoch, assurance, device_binding, platform, assured_at, '
             . 'expires_at, status, refresh_digest, refresh_generation '
             . 'FROM ev_v5_strong_sessions WHERE sid = ? FOR UPDATE',
         'INSERT INTO ev_v5_strong_sessions '
@@ -618,6 +632,12 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
         }
         if (str_contains($sql, 'b_event_message')) {
             throw new RuntimeException('v5_bitrix_mail_registry_sql_forbidden');
+        }
+        if (str_contains($sql, 'ev_trusted_devices')) {
+            if (!in_array($sql, self::V5_TRUST_LOCK_SQL, true)) {
+                throw new RuntimeException('v5_bitrix_mobile_trust_sql_forbidden');
+            }
+            return;
         }
         // Only the EXACT statements emitted by V5MySqlStrongSessionStore.
         // Never add the sessions table to the generic SELECT/UPDATE regex:
