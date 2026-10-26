@@ -15,6 +15,10 @@ final class V5RouteMap
     public const ROUTES = [
         'POST /auth/signin' => 'signin',
         'POST /auth/challenge/verify' => 'verifyChallenge',
+        'POST /auth/totp/verify' => 'verifyTotp',
+        'POST /auth/email/verify' => 'verifyEmail',
+        'POST /auth/sms/verify' => 'verifySms',
+        'POST /auth/signup' => 'signup',
         'POST /auth/challenge/resend' => 'resendChallenge',
         'POST /auth/challenge/use-sms' => 'requestSmsFallback',
         'POST /auth/refresh' => 'refresh',
