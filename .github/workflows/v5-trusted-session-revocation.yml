@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/v5-trusted-session-revocation.yml
       - site-integration/samzaberu-v5/src/V5TrustedSessionBinding.php
+      - site-integration/samzaberu-v5/src/V5MobileTrustReplacementPolicy.php
+      - site-integration/samzaberu-v5/tests/V5MobileTrustReplacementPolicyTest.php
       - site-integration/samzaberu-v5/src/V5MySqlStrongSessionStore.php
       - site-integration/samzaberu-v5/src/V5BitrixPdoCompatibilityBridge.php
       - site-integration/samzaberu-v5/tests/V5TrustedSessionBindingTest.php
@@ -38,6 +40,8 @@ jobs:
           ROOT=site-integration/samzaberu-v5
           for file in \
             src/V5TrustedSessionBinding.php \
+            src/V5MobileTrustReplacementPolicy.php \
+            tests/V5MobileTrustReplacementPolicyTest.php \
             src/V5MySqlStrongSessionStore.php \
             src/V5BitrixPdoCompatibilityBridge.php \
             tests/V5TrustedSessionBindingTest.php \
@@ -46,6 +50,7 @@ jobs:
             php -l "$ROOT/$file"
           done
           php "$ROOT/tests/V5TrustedSessionBindingTest.php"
+          php "$ROOT/tests/V5MobileTrustReplacementPolicyTest.php"
           php "$ROOT/tests/V5MySqlStrongSessionStoreTest.php"
           php "$ROOT/tests/V5BitrixStrongSessionBridgeIntegrationTest.php"
           echo '=== 3. RESULT ==='
