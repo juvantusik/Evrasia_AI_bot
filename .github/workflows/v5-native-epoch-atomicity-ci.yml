@@ -1,0 +1,77 @@
+name: V5 native phone/recovery epoch atomicity
+on:
+  push:
+    branches:
+      - feature/v5-production-native-preflight-20261025
+    paths:
+      - .github/workflows/v5-native-epoch-atomicity-ci.yml
+      - site-integration/samzaberu-v5/schema/PROPOSED_native_phone_recovery_epoch_triggers.sql
+      - site-integration/samzaberu-v5/tests/integration/V5NativePhoneRecoveryEpochSchema.sql
+      - site-integration/samzaberu-v5/tests/integration/V5NativePhoneRecoveryEpochTriggerFixture.sql
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-mariadb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -u root"
+          --health-interval=5s --health-timeout=3s --health-retries=15
+    steps:
+      - name: Checkout without saved credentials
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Verify isolated database and run real InnoDB trigger tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          echo '=== 1. GUARDS ==='
+          test "$GITHUB_ACTIONS" = true
+          test "$(hostname -s)" != evrasia
+          test "$(hostname -s)" != eur-bot-01
+          CID='${{ job.services.mariadb.id }}'
+          test -n "$CID"
+          docker inspect "$CID" >/dev/null
+          echo 'PASS: GITHUB_EPHEMERAL_MARIADB_ONLY'
+          echo 'PRODUCTION_DATABASE_CONNECTION=NO'
+          echo 'PRODUCTION_CODE_WRITE=NO'
+          echo 'SITE_ACCOUNT_CREATED=NO'
+          ROOT='site-integration/samzaberu-v5'
+          echo '=== 2. DISPOSABLE INNODB SCHEMA ==='
+          docker exec -i "$CID" mariadb -u root \
+            < "$ROOT/tests/integration/V5NativePhoneRecoveryEpochSchema.sql"
+          docker exec -i "$CID" mariadb -u root \
+            --database=ev_v5_epoch_ci \
+            < "$ROOT/schema/PROPOSED_native_phone_recovery_epoch_triggers.sql"
+          ACTUAL=$(docker exec "$CID" mariadb -u root -N -B \
+            --database=ev_v5_epoch_ci \
+            --execute="SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME LIKE 'ev_v5_%_epoch_%'")
+          test "$ACTUAL" = 6
+          echo 'PASS: SIX_DISPOSABLE_NATIVE_TRIGGERS_INSTALLED'
+          echo '=== 3. ROLLBACK AND SECURITY CHANGE ASSERTIONS ==='
+          docker exec -i "$CID" mariadb -u root -N -B \
+            --database=ev_v5_epoch_ci \
+            < "$ROOT/tests/integration/V5NativePhoneRecoveryEpochTriggerFixture.sql" \
+            > /tmp/v5-native-epoch-ci-results.txt
+          if grep -Eq '^FAIL:' /tmp/v5-native-epoch-ci-results.txt; then
+            echo 'FAIL: TRIGGER_ASSERTION_FAILED'
+            exit 1
+          fi
+          COUNT=$(grep -c '^PASS:' /tmp/v5-native-epoch-ci-results.txt)
+          test "$COUNT" = 23
+          echo "PASS: REAL_INNODB_TRIGGER_ASSERTIONS=$COUNT"
+          echo '=== 4. RESULT ==='
+          echo 'FINAL_STATUS=PASS'
+          echo 'DATABASE_WRITE=DISPOSABLE_MARIADB_ONLY'
+          echo 'PRODUCTION_WRITE=NO'
+          echo 'V5_HTTP_ENABLED=NO'
