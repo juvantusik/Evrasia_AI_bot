@@ -8,7 +8,7 @@ CREATE TABLE ev_v5_strong_sessions (
     sid CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     user_id BIGINT UNSIGNED NOT NULL,
     auth_epoch BIGINT UNSIGNED NOT NULL,
-    assurance ENUM('totp','sms','trusted') NOT NULL,
+    assurance ENUM('totp','sms','trusted','email') NOT NULL,
     device_binding CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     platform ENUM('ios','android') NOT NULL,
     assured_at BIGINT UNSIGNED NOT NULL,
