@@ -5,6 +5,7 @@ namespace Evrasia\Samzaberu\V5;
 
 require_once __DIR__ . '/V5ProductionNativeBridgeFactory.php';
 require_once __DIR__ . '/V5NativeMutationCoverage.php';
+require_once __DIR__ . '/V5ProductionNativeEpochTriggerInventory.php';
 require_once __DIR__ . '/V5MySqlStrongSessionStore.php';
 require_once __DIR__ . '/V5MySqlTokenValidation.php';
 
@@ -56,6 +57,8 @@ final class V5ProductionStrongSessionFactory
         try {
             $db = V5ProductionNativeBridgeFactory::openForProtectedHttp();
             if (!$db->hasStrictV5HttpIngress()
+                || !(new V5ProductionNativeEpochTriggerInventory())
+                    ->currentInstalledTriggersMatch(\Bitrix\Main\Application::getConnection())
                 || $trustedNativeEvidence->releaseVerifiedOnThisServer($db) !== true) {
                 throw new RuntimeException('v5_native_strong_release_unverified');
             }
