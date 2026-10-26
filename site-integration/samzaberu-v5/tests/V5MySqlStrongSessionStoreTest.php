@@ -29,6 +29,7 @@ final class SessionFakePdo extends PDO
     public int $commits=0;
     public int $rollbacks=0;
     public array $sessions=[];
+    public array $trustRows=[];
     public array $queries=[];
     public ?array $user=[
         'ID'=>'41','ACTIVE'=>'Y','BLOCKED'=>'N','PASSWORD_EXPIRED'=>'N'
@@ -98,6 +99,13 @@ final class SessionFakeStatement extends PDOStatement
         if(str_starts_with($this->sql,'SELECT AUTH_EPOCH FROM')) {
             if($db->state!==null && ($this->params[0]??null)==41)
                 $this->rows=[$db->state];
+            return true;
+        }
+        if(str_starts_with($this->sql,'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, ')) {
+            $this->rows=array_values(array_filter($db->trustRows,
+                fn(array $r):bool => (int)$r['USER_ID']===(int)($this->params[0]??0)
+                && (count($this->params)<2
+                    || $r['DEVICE_ID_HASH']===$this->params[1])));
             return true;
         }
         if(str_starts_with($this->sql,'SELECT sid, user_id FROM')) {
@@ -181,7 +189,7 @@ final class SessionFakeProof implements V5LockedStrongSessionProofPort
             $db->started=false;$db->savepoint=false;$db->started=true;
         }
         return $this->allow && $account->userId===41 && $platform==='ios'
-            && $token==='synthetic-strong-trust-token';
+            && $token==='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     }
     public function verifiedConsumedGrantWithUserLock(PDO $db,ConsumedLoginChallenge $grant):bool {
         $this->calls++;
@@ -249,6 +257,15 @@ function denies(callable $call,string $why):void {
 }
 function environment():array {
     $db=new SessionFakePdo();
+    $db->trustRows=[[
+        'USER_ID'=>'41',
+        'DEVICE_ID_HASH'=>hash('sha256',hash('sha256',ID)),
+        'TRUST_TOKEN_HASH'=>hash('sha256',str_repeat('b',64)),
+        'TOKEN_VERSION'=>'1',
+        'STATUS'=>'1',
+        'expires_epoch'=>(string)($db->now+86400),
+        'USER_AGENT'=>'SamZaberu platform=ios',
+    ]];
     $proof=new SessionFakeProof();
     $coverage=new SessionFakeCoverage();
     $codec=new V5AccessJwtCodec(['independent_v5'=>str_repeat('K',64)],'independent_v5');
@@ -259,7 +276,7 @@ function environment():array {
 }
 function trusted(V5MySqlStrongSessionStore $store):AuthenticatedV5Session {
     return $store->afterTrustedDevice(
-        new PasswordVerifiedAccount(41,true,false),ID,'ios','synthetic-strong-trust-token'
+        new PasswordVerifiedAccount(41,true,false),ID,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     );
 }
 function consumed(V5MySqlStrongSessionStore $store):AuthenticatedV5Session {
@@ -296,7 +313,7 @@ yes(V5SessionAssurancePolicy::permitsProtectedAction($claims,[
 // locked trust proof and hook coverage before any new JWT is minted.
 [$trustedTotpStore,$trustedTotpDb,$trustedTotpProof,$trustedTotpCoverage]=$state=environment();
 $trustedTotpToken=$trustedTotpStore->afterTrustedDevice(
-    new PasswordVerifiedAccount(41,true,true),ID,'ios','synthetic-strong-trust-token');
+    new PasswordVerifiedAccount(41,true,true),ID,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
 yes($trustedTotpToken instanceof AuthenticatedV5Session,
     'native-TOTP account can use existing strongly enrolled trusted device');
 yes($trustedTotpDb->commits===1 && count($trustedTotpDb->sessions)===1
@@ -305,7 +322,7 @@ yes($trustedTotpDb->commits===1 && count($trustedTotpDb->sessions)===1
 [$deniedTotpStore,$deniedTotpDb,$deniedTotpProof]=environment();
 $deniedTotpProof->allow=false;
 denies(fn()=>$deniedTotpStore->afterTrustedDevice(
-    new PasswordVerifiedAccount(41,true,true),ID,'ios','synthetic-strong-trust-token'),
+    new PasswordVerifiedAccount(41,true,true),ID,'ios','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
     'native-TOTP account with revoked/unverified trust cannot mint JWT');
 yes($deniedTotpDb->sessions===[] && $deniedTotpDb->commits===0,
     'denied trust does not persist session even for active TOTP');
@@ -387,6 +404,38 @@ denies(fn()=>$store->rotateRefresh($rotation->refreshToken),'revoked refresh can
 yes(!$store->revokeAccess($rotation->accessToken),'repeated revoke does not succeed');
 yes(!$store->revokeAccess('v4.old.jwt'),'V4 JWT cannot revoke V5');
 yes($store->currentAssuranceSnapshot('v4.old.jwt')===null,'V4 cannot read V5 assurance');
+
+// The old valid JWT/refresh must immediately stop working when V4 revokes,
+// rotates or expires the backing mobile device; no AUTH_EPOCH trigger needed.
+[$revocationStore,$revocationDb] = environment();
+$revocationSession=trusted($revocationStore);
+yes($revocationStore->currentAssuranceSnapshot($revocationSession->accessToken)!==null,
+    'current trust enables access');
+$revocationDb->trustRows[0]['STATUS']='0';
+yes($revocationStore->currentAssuranceSnapshot($revocationSession->accessToken)===null,
+    'revoked trust instantly blocks existing access JWT');
+denies(fn()=>$revocationStore->rotateRefresh($revocationSession->refreshToken),
+    'revoked trust instantly blocks existing refresh');
+
+[$tokenStore,$tokenDb]=environment();
+$tokenSession=trusted($tokenStore);
+$tokenDb->trustRows[0]['TRUST_TOKEN_HASH']=hash('sha256',str_repeat('c',64));
+yes($tokenStore->currentAssuranceSnapshot($tokenSession->accessToken)===null,
+    'trust token rotation denies old access JWT');
+
+[$expiryStore,$expiryDb]=environment();
+$expirySession=trusted($expiryStore);
+$expiryDb->trustRows[0]['expires_epoch']=(string)($expiryDb->now-1);
+yes($expiryStore->currentAssuranceSnapshot($expirySession->accessToken)===null,
+    'trust expiry denies old access JWT');
+
+[$versionStore,$versionDb]=environment();
+$versionSession=trusted($versionStore);
+$versionDb->trustRows[0]['TOKEN_VERSION']='2';
+yes($versionStore->currentAssuranceSnapshot($versionSession->accessToken)===null,
+    'trust version change denies old access JWT');
+
+
 yes(count(array_filter($db->queries,fn(string $q):bool=>str_contains($q,'FOR UPDATE')))>=4,
     'DB uses row-level locks');
 yes(count(array_filter($db->queries,fn(string $q):bool=>str_contains($q,'information_schema.TABLES')))>=1,
@@ -408,7 +457,7 @@ yes(count(array_filter($db->queries,fn(string $q):bool=>str_contains($q,'refresh
     'refresh compare-and-swap uses generation');
 foreach($db->queries as $query) {
     yes(!str_contains($query,$s1->refreshToken)
-        && !str_contains($query,'synthetic-strong-trust-token'),'no bearer in SQL templates');
+        && !str_contains($query,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),'no bearer in SQL templates');
 }
 
 [$store,$db]=$env=environment();
