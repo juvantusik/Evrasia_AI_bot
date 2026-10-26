@@ -102,10 +102,17 @@ final class SessionFakeStatement extends PDOStatement
             return true;
         }
         if(str_starts_with($this->sql,'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, ')) {
+            $paged=str_contains($this->sql,
+                'DEVICE_ID_HASH > ? ORDER BY DEVICE_ID_HASH LIMIT 2 FOR UPDATE');
             $this->rows=array_values(array_filter($db->trustRows,
                 fn(array $r):bool => (int)$r['USER_ID']===(int)($this->params[0]??0)
-                && (count($this->params)<2
-                    || $r['DEVICE_ID_HASH']===$this->params[1])));
+                && ($paged ? strcmp($r['DEVICE_ID_HASH'],(string)$this->params[1])>0
+                    : $r['DEVICE_ID_HASH']===$this->params[1])));
+            if ($paged) {
+                usort($this->rows,
+                    fn(array $a,array $b):int=>strcmp($a['DEVICE_ID_HASH'],$b['DEVICE_ID_HASH']));
+                $this->rows=array_slice($this->rows,0,2);
+            }
             return true;
         }
         if(str_starts_with($this->sql,'SELECT sid, user_id FROM')) {
@@ -416,6 +423,22 @@ yes($revocationStore->currentAssuranceSnapshot($revocationSession->accessToken)=
     'revoked trust instantly blocks existing access JWT');
 denies(fn()=>$revocationStore->rotateRefresh($revocationSession->refreshToken),
     'revoked trust instantly blocks existing refresh');
+
+// More than two devices for one account must not trip native bridge's
+// strict two-row SQL cap. The valid device is intentionally on the last page.
+[$manyStore,$manyDb]=environment();
+for ($i=1;$i<=5;$i++) {
+    $other=$manyDb->trustRows[0];
+    $other['DEVICE_ID_HASH']=str_repeat('0',63).(string)$i;
+    $other['TRUST_TOKEN_HASH']=hash('sha256',str_repeat('d',64));
+    $manyDb->trustRows[]=$other;
+}
+$manySession=trusted($manyStore);
+yes($manyStore->currentAssuranceSnapshot($manySession->accessToken)!==null,
+    'valid trusted device found after three bounded native pages');
+yes(count(array_filter($manyDb->queries,fn(string $q):bool=>
+    str_contains($q,'ORDER BY DEVICE_ID_HASH LIMIT 2 FOR UPDATE')))>=3,
+    'all trust recheck reads are index-paged at at most two rows');
 
 [$tokenStore,$tokenDb]=environment();
 $tokenSession=trusted($tokenStore);
