@@ -218,7 +218,7 @@ namespace {
     // arbitrary table name/WHERE substring. V4/native tables remain forbidden.
     $sessionTemplates=[
         'SELECT sid, user_id FROM ev_v5_strong_sessions WHERE refresh_digest = ? LIMIT 2',
-        'SELECT sid, user_id, auth_epoch, assurance, assured_at, '
+        'SELECT sid, user_id, auth_epoch, assurance, device_binding, platform, assured_at, '
             . 'expires_at, status, refresh_digest, refresh_generation '
             . 'FROM ev_v5_strong_sessions WHERE sid = ? FOR UPDATE',
         'INSERT INTO ev_v5_strong_sessions '
@@ -232,6 +232,27 @@ namespace {
         'UPDATE ev_v5_strong_sessions SET status = ?, updated_at = ? '
             . 'WHERE sid = ? AND status = ? AND auth_epoch = ?',
     ];
+    $trustedLockTemplates=[
+        'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, '
+            . 'TOKEN_VERSION, STATUS, UNIX_TIMESTAMP(TOKEN_EXPIRES_AT) AS expires_epoch, USER_AGENT '
+            . 'FROM ev_trusted_devices WHERE USER_ID = ? AND DEVICE_ID_HASH = ? FOR UPDATE',
+        'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, '
+            . 'TOKEN_VERSION, STATUS, UNIX_TIMESTAMP(TOKEN_EXPIRES_AT) AS expires_epoch, USER_AGENT '
+            . 'FROM ev_trusted_devices WHERE USER_ID = ? FOR UPDATE',
+    ];
+    foreach($trustedLockTemplates as $template) {
+        ok($db->prepare($template) instanceof PDOStatement,
+            'exact native mobile trust row lock allowed');
+    }
+    foreach([
+        'SELECT * FROM ev_trusted_devices WHERE USER_ID = ?',
+        'SELECT TRUST_TOKEN_HASH FROM ev_trusted_devices WHERE USER_ID = ?',
+        'UPDATE ev_trusted_devices SET STATUS = ? WHERE USER_ID = ?',
+    ] as $unsafeTrustSql) {
+        rejects(fn()=>$db->prepare($unsafeTrustSql),
+            'unapproved shared trust SQL rejected');
+    }
+
     foreach($sessionTemplates as $template) {
         ok($db->prepare($template) instanceof PDOStatement,
             'one exact strong-session statement accepted');
