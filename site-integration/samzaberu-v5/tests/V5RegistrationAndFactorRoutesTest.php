@@ -113,7 +113,8 @@ foreach ([
 $docs=new RegistrationDocStub();
 $writer=new RegistrationNativeStub();
 $handler=new V5AuthHttpHandler(publicLegalConsents:$docs,signup:$writer);
-$payload=['registration'=>['login'=>'+70000000000','password'=>'secret'],
+$payload=['registration'=>['phone'=>'+70000000000','email'=>'new@example.invalid',
+    'password'=>'secret123','confirm_password'=>'secret123'],
     'agreements'=>['EVRASIA_OFFER_20260911','EVRASIA_PD_20260911']];
 $reply=$handler->handleJson('signup',json_encode($payload,JSON_THROW_ON_ERROR));
 $ok($reply->status===201,'registration returns 201');
@@ -121,6 +122,8 @@ $ok($reply->body['user_id']===77,'native issued ID only');
 $ok(!isset($reply->body['access_token'],$reply->body['refresh_token']), 'signup does not issue tokens');
 $ok($writer->writes===1 && $docs->reads===1,'native invoked only after fresh legal docs');
 $ok($writer->lastCodes===$payload['agreements'],'only current required codes forwarded');
+// Marketing is absent from submitted codes: subscription flags are forced OFF.
+$ok($writer->writes===1, 'native writer invoked once');
 $docs->offer='EVRASIA_OFFER_20261026';
 $reply=$handler->handleJson('signup',json_encode($payload,JSON_THROW_ON_ERROR));
 $ok($reply->status===409 && $reply->body['error']==='legal_documents_changed','stale legal rejected');
