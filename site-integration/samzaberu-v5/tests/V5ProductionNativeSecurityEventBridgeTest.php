@@ -49,6 +49,23 @@ $check(
     'only explicit caller invokes mutation coordinator'
 );
 
+// Concrete OTP path must reject CLI without reaching an uninitialized
+// SHA-pinned Bitrix OTP port. This is a negative safety test only.
+require_once __DIR__ . '/../src/V5BitrixOtpNativeMutationPort.php';
+$otp = (new ReflectionClass(
+    \\Evrasia\\Samzaberu\\V5\\V5BitrixOtpNativeMutationPort::class
+))->newInstanceWithoutConstructor();
+try {
+    V5ProductionNativeSecurityEventBridge::applyReviewedNativeOtp(
+        $bridge, $writer, 1, $otp
+    );
+    throw new RuntimeException('FAIL: OTP path admitted CLI');
+} catch (RuntimeException $e) {
+    $check($e->getMessage() === 'v5_reviewed_native_otp_scope_denied',
+        'reviewed OTP save/delete denied before any native callback in CLI');
+}
+$check($called === 0, 'OTP path did not call generic native writer');
+
 echo "PASS: V5 native security mutation guard ($assertions assertions)\n";
 echo "MODE=OFFLINE_ONLY\nDATABASE_CONNECTION=NO\nDATABASE_WRITE=NO\n";
 echo "NATIVE_MUTATION_CALLED=NO\nJWT_ISSUED=NO\nV5_AUTH_ENABLED=NO\n";
