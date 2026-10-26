@@ -889,7 +889,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
         $binding = $row['device_binding'] ?? null;
         if (!is_string($platform) || !in_array($platform, ['ios', 'android'], true)
             || !is_string($binding)
-            || preg_match('/\\A[a-f0-9]{64}\\z/D', $binding) !== 1) {
+            || preg_match('/\A[a-f0-9]{64}\z/D', $binding) !== 1) {
             return null;
         }
         // One indexed user-scope read, never a global device scan. FOR UPDATE
@@ -919,7 +919,7 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
      */
     private function lockedPresentedTrustBinding(
         int $userId, string $deviceId, string $platform,
-        #[\\SensitiveParameter] string $token, int $now
+        #[\SensitiveParameter] string $token, int $now
     ): ?string {
         $deviceHash = hash('sha256', hash('sha256', $deviceId));
         $row = $this->unique(self::TRUST_PRESENTED_SQL, [$userId, $deviceHash]);
