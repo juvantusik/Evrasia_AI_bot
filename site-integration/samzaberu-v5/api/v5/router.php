@@ -124,6 +124,55 @@ if (in_array($_SERVER['REQUEST_URI'] ?? null, [
     exit;
 }
 
+// Anonymous V5 registration with CURRENT Bitrix legal consent documents.
+// Separate from the disabled mobile JWT factory: signup never issues JWT.
+// No V4 route/controller or client-selected USER_ID is imported.
+if (($_SERVER['REQUEST_URI'] ?? null) === '/api/v5/auth/signup'
+    && ($_SERVER['REQUEST_METHOD'] ?? null) === 'POST'
+    && in_array(strtolower((string)($_SERVER['HTTPS'] ?? '')), ['on', '1'], true)
+) {
+    $outer = ob_get_level();
+    ob_start();
+    $resultStatus = 503;
+    $resultBody = ['error' => 'temporarily_unavailable'];
+    try {
+        require_once dirname(__DIR__, 4) . '/bitrix/modules/main/include/prolog_before.php';
+        require_once dirname(__DIR__, 2) . '/src/V5PublicSignupEndpoint.php';
+        $raw = file_get_contents('php://input', false, null, 0, 8193);
+        if (is_string($raw)) {
+            $reply = \Evrasia\Samzaberu\V5\V5PublicSignupEndpoint::handle(
+                $_SERVER, $raw, dirname(__DIR__, 4) . '/bitrix/.settings.php'
+            );
+            $resultStatus = $reply->status;
+            $resultBody = $reply->body;
+        }
+    } catch (\Throwable) {
+        $resultStatus = 503;
+        $resultBody = ['error' => 'temporarily_unavailable'];
+    }
+    $unexpectedOutput = false;
+    while (ob_get_level() > $outer) {
+        $unexpectedOutput = $unexpectedOutput || (ob_get_length() > 0);
+        ob_end_clean();
+    }
+    if ($unexpectedOutput) {
+        $resultStatus = 503;
+        $resultBody = ['error' => 'temporarily_unavailable'];
+    }
+    if (headers_sent()) exit;
+    header_remove('Set-Cookie');
+    header_remove('Location');
+    header_remove('Access-Control-Allow-Origin');
+    http_response_code($resultStatus);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, max-age=0');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+    echo json_encode($resultBody, JSON_UNESCAPED_SLASHES
+        | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    exit;
+}
+
 require_once dirname(__DIR__, 2) . '/src/V5ParallelHttpEntry.php';
 
 use Evrasia\Samzaberu\V5\V5ParallelHttpEntry;
