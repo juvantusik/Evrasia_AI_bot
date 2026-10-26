@@ -74,3 +74,22 @@
 ## 6. ЧТО НОВЫЙ ЧАТ ДОЛЖЕН СДЕЛАТЬ, А НЕ ОБСУЖДАТЬ
 
 **Развернуть и проверить сначала signup+consents, затем собрать private V5 auth factory для signin + TOTP + email + SMS + refresh/logout/PIN и получить реальные HTTP ответы.** После этого написать интеграционное ТЗ разработчику «Сам Заберу» с примерами JSON. Не выполнять повторный аудит всей системы и не возвращаться к V4-корзине вместо MFA.
+
+## 7. Подтверждено оператором в новом чате 2026-10-26 — signup подключён
+
+Production установщик регистрации завершился `FINAL_STATUS=PASS`, `FINAL_RC=0`, 7 PASS/0 FAIL. 15 файлов V5 установлены, `POST /api/v5/auth/signup` подключён в public router, некорректный запрос отвергнут без создания пользователя. Резервная копия: `/root/ev-v5-signup-20261026.Kzisc3k8`; public router SHA256: `c49746548517b4783c4234b3ee140a529fb12ecba937215e3d3b545413ad8659`. V4 не изменялся. Положительный тест создания реального Bitrix пользователя/consents **ещё не выполнялся**. `signin` по-прежнему 503.
+
+Оператор прочитал installed `Controllers/V5/Runtime/V5StrongSessionGate.php`, SHA256 `e29b987d1a76d22b0d39cb9b16dcb67c08dc0881d33f30b4c7c26bf28b97612f`: `bindVerifiedStore(V5MySqlStrongSessionStore)` выполняется один раз, `verifiedStrongUserId()` проверяет текущую сильную V5-сессию через `currentAssuranceSnapshot`, без binding всегда возвращает null. **Повторно запрашивать этот файл не надо**.
+
+## 8. 2026-10-26 — новые кодовые изменения для реального private HTTP auth
+
+В feature-ветке выполнены следующие изменения **только в GitHub; на production НЕ развёрнуты**:
+
+- `2c3791a0` — добавлен `V5BitrixLockedMobileTrustProof.php` для locked live mobile trust после проверки пароля.
+- `0b07a15b` — исправлена реальная логическая ошибка: `hasStrictV5HttpIngress()` возвращает false во время уже начатой транзакции и не должна проверяться внутри `verifiedTrustWithUserLock`; пароль допускает null для не-signin маршрутов, но тогда trust-подтверждение отказывает.
+- `13006e9b` — `V5ProductionStrongSessionFactory::buildOnNativeBridge()` собирает сессию на уже открытом единственном физическом Bitrix bridge; прежний метод совместим.
+- `0d284af7` — `V5ProductionAuthHttpComposition` поддерживает `preopenedBridge` без второго соединения; остальные проверки/контракты сохранены.
+- `e8220b99` — `V5BitrixLoginInternalFirstFactor.php`: существующий Bitrix `CUser::LoginInternal()` без `Authorize`/JWT/регистрации mobile trust.
+- `033775fa` — выбор фактора первой проверки вынесен в уже существующие `V5NativeTotpStatus`, `V5NativeTotpEnabledGate`, `V5PinnedBitrixGlobalOtpConfig` и `V5PinnedBitrixMandatoryRightsProbe`; настроенная, но отключённая/повреждённая TOTP-запись не превращается в email/SMS downgrade.
+
+**Незакрытая задача именно интеграционная:** собрать один согласованный protected V5 class tree, приватный request-scoped factory и реальные server-side ключи/сопутствующие native factors; получить рабочие HTTP `signin`, `totp/email/sms verify`, `refresh`, `logout`, `loyalty/pin`. Текущая `V5ProductionNativeCoverageEvidence` возвращает null и не допускает выпуск V5-сессий. Не подменять её фиктивными доказательствами, не включать V4 JWT и не переписывать рабочую регистрацию. Новый код требует PHP lint и реального site-bound integration перед production запуском; не считать исходники автоматически рабочими HTTP ручками.
