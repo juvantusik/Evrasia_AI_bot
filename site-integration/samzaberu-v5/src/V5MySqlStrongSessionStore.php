@@ -8,6 +8,8 @@ require_once __DIR__ . '/V5SessionTokens.php';
 require_once __DIR__ . '/V5SessionAssurancePolicy.php';
 require_once __DIR__ . '/V5SecurityEventVersions.php';
 require_once __DIR__ . '/V5TrustedSessionBinding.php';
+require_once __DIR__ . '/V5NativeMobileTrustReplacement.php';
+require_once __DIR__ . '/V5NativeMobileTrustUserLock.php';
 
 use InvalidArgumentException;
 use PDO;
@@ -186,6 +188,51 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             fn(): bool => $this->proof->verifiedConsumedGrantWithUserLock(
                 $this->db, $grant
             ) === true);
+    }
+
+    /**
+     * Strong MFA verified on the same locked native connection, client-owned
+     * trust enrollment, previous mobile trust/session revocation and ONE new
+     * V5 session are committed as a single transaction. The existing shared
+     * user advisory lock is held outside issue() through its commit/rollback.
+     * This is NOT called by the public V5 router; native HTTP factory and
+     * hook coverage remain separately required.
+     */
+    public function afterConsumedChallengeAndEnrollMobileTrust(
+        ConsumedLoginChallenge $grant,
+        #[\SensitiveParameter] string $clientGeneratedTrustToken,
+        V5NativeMobileTrustReplacement $replacement,
+        V5NativeMobileTrustUserLock $userLock,
+    ): AuthenticatedV5Session {
+        if (!($this->db instanceof V5BitrixPdoCompatibilityBridge)
+            || $grant->userId < 1
+            || !in_array($grant->kind, [
+                ChallengeKind::TOTP, ChallengeKind::SMS, ChallengeKind::EMAIL
+            ], true)
+            || !V5LoginWorkflow::validInstallation($grant->deviceId, $grant->platform)
+            || preg_match('/\\A[a-f0-9]{64}\\z/D', $clientGeneratedTrustToken) !== 1) {
+            throw new AuthenticationRejected('authentication_failed');
+        }
+        return $userLock->withUserLock($this->db, $grant->userId,
+            function () use ($grant, $clientGeneratedTrustToken, $replacement):
+                AuthenticatedV5Session {
+                return $this->issue(
+                    $grant->userId, $grant->deviceId, $grant->platform,
+                    $grant->kind->value, $grant->grantReference,
+                    function () use ($grant, $clientGeneratedTrustToken, $replacement): bool {
+                        if ($this->proof->verifiedConsumedGrantWithUserLock(
+                            $this->db, $grant
+                        ) !== true) {
+                            return false;
+                        }
+                        $replacement->replaceInsideVerifiedMfaTransaction(
+                            $this->db, $grant, $this->proof, $clientGeneratedTrustToken
+                        );
+                        return true;
+                    }
+                );
+            }
+        );
     }
 
     /**
