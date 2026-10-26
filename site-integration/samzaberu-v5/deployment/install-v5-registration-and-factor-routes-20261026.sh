@@ -86,7 +86,7 @@ exec 9>/run/ev-v5-signup-20261026.lock
 flock -n 9 || fail CONCURRENT_INSTALL
 pass EXACT_PRODUCTION_V4_V5_ROUTER
 
-echo '=== 2. DOWNLOAD AND PHP LINT ==='
+echo '=== 2. DOWNLOAD COMPLETE V5 SIGNUP DEPENDENCIES AND PHP LINT ==='
 STAGE="$(mktemp -d "$SRC/.v5-signup-20261026.XXXXXXXX")"
 cat > "$STAGE/manifest" <<'FILES'
 V5AuthHttpHandler.php 0983b64af91215e978c03b80d2d325a7e12ca8d52973746c9ba0d8bc0e7e2228
@@ -96,6 +96,14 @@ V5ProductionAuthHttpComposition.php e052798caa8b997182e849224ce451d88ac184dca495
 V5BitrixNativeRegistrationWriter.php 7c1da314fa44574023565c2b0b369a82da4f0c85891d55922c0fdfe29e7475a3
 V5CurrentWebsiteLegalCatalogPort.php d04de45bce2a40ee4ab554b860c81319ac6edb2b19406c19e22c3b71b672320a
 V5PublicSignupEndpoint.php 3cbfd08ba6351d1c860d15741a15296e2659ac8071f13c8e8dea5601ce02029a
+AuthDecision.php f947e35476ad6191482989dec1d0444407c2199f88d1443f2017e46d42eb474b
+V5LegalConsentContract.php dce2310763e014d541f940e68e5646079f32ccef73027c0fc9d357ad53eaddcf
+V5PublicLegalCodeValidation.php c77d891b5f84605cbb9714be834b397027d2192c4d79b83ae8d3817f36f9d3be
+V5CheckoutRequest.php 5b6cbc58294974582c450826e7a78e01137d9ad9170ae4f4e585b865ca1600bc
+V5CartMutationRequest.php 1a01fcd4daefd42218608a617145d3a35a424efb324bcdf012039905abe64ef6
+V5BitrixPublicLegalCatalog.php 674fc81060828cf51c7068e51938b3f81fbde6bbff48ea0231f20a5c23c88489
+V5SignupNativeConsentPlan.php c63f19d946cce77578259dd123a2b549ab6759bddaf160e8ed46020ee353fc9c
+V5BitrixCurrentLegalCatalog.php 1017930000142e151a54e768fb0512f3b8ba05d537a9b418522762cae74684de
 FILES
 
 while read -r name expected; do
@@ -105,7 +113,7 @@ while read -r name expected; do
     [[ "$(sha "$STAGE/$name")" == "$expected" ]] || fail "SHA_$name"
     php8.3 -l "$STAGE/$name" >/dev/null || fail "LINT_$name"
 done < "$STAGE/manifest"
-pass SEVEN_EXACT_V5_SOURCES_LINTED
+pass FIFTEEN_EXACT_V5_SOURCES_LINTED
 
 echo '=== 3. PREPARE V5 ROUTER GUARD ==='
 python3 - "$ROUTER" "$STAGE/router.new.php" "$MARKER" <<'PY'
