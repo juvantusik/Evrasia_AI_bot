@@ -44,8 +44,8 @@ $check($called === 0, 'no native mutation executed');
 $check(!class_exists('Bitrix\\Main\\Application', false),
     'no Bitrix application bootstrap');
 $check(
-    !(new ReflectionMethod(V5ProductionNativeSecurityEventBridge::class,
-        'applyOwnedMutation'))->isStatic() === false,
+    (new ReflectionMethod(V5ProductionNativeSecurityEventBridge::class,
+        'applyOwnedMutation'))->isStatic() === true,
     'only explicit caller invokes mutation coordinator'
 );
 
