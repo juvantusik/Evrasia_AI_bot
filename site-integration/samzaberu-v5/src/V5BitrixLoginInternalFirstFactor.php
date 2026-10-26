@@ -3,10 +3,14 @@ declare(strict_types=1);
 
 namespace Evrasia\Samzaberu\V5;
 
+require_once __DIR__ . '/V5LoginWorkflow.php';
+require_once __DIR__ . '/V5NativeTotpStatus.php';
+require_once __DIR__ . '/V5PinnedBitrixMfaPolicies.php';
+require_once __DIR__ . '/V5BitrixMfaAdmissionGuards.php';
+
 use Bitrix\Main\Authentication\Context;
 use Bitrix\Main\Authentication\Method;
 use Bitrix\Main\UserTable;
-use Bitrix\Security\Mfa\UserTable as MfaUserTable;
 use Throwable;
 
 /**
@@ -32,7 +36,6 @@ final class V5BitrixLoginInternalFirstFactor implements V5PasswordProofPort
             || !class_exists(\CUser::class)
             || !is_callable([\CUser::class, 'LoginInternal'])
             || !class_exists(UserTable::class)
-            || !class_exists(MfaUserTable::class)
             || !class_exists(Context::class)
         ) {
             return null;
@@ -92,26 +95,30 @@ final class V5BitrixLoginInternalFirstFactor implements V5PasswordProofPort
                 return null;
             }
 
-            // The native MFA ORM is the authority for the current enrolled
-            // TOTP state. Unknown/malformed MFA state is NOT "TOTP disabled".
-            $mfaRows = MfaUserTable::getList([
-                'select' => ['USER_ID','ACTIVE','TYPE','DEACTIVATE_UNTIL'],
-                'filter' => ['=USER_ID' => $userId],
-                'limit' => 2,
-            ]);
-            $mfa = $mfaRows->fetch();
-            if ($mfaRows->fetch() !== false) {
-                return null;
-            }
-            if ($mfa === false) {
-                $hasTotp = false;
-            } elseif (is_array($mfa)
-                && (int)($mfa['USER_ID'] ?? 0) === $userId
-                && ($mfa['TYPE'] ?? null) === 'totp'
-                && in_array($mfa['ACTIVE'] ?? null, ['Y','N'], true)) {
-                $hasTotp = ($mfa['ACTIVE'] === 'Y'
-                    && ($mfa['DEACTIVATE_UNTIL'] ?? null) === null);
-            } else {
+            // Preserve the already implemented V5 policy: an inactive,
+            // deactivated or corrupt native OTP record is UNKNOWN, never an
+            // opportunity to downgrade to email/SMS.
+            $noMfa = new class implements V5NoMfaFallbackPolicyPort {
+                public function permitsPasswordPlusSms(int $userId): ?bool
+                {
+                    $global = (new V5PinnedBitrixGlobalOtpConfig())->read();
+                    $targeted = (new V5PinnedBitrixMandatoryRightsProbe())
+                        ->userTargeted($userId);
+                    if (!$global instanceof V5GlobalOtpConfig
+                        || $targeted === null) {
+                        return null;
+                    }
+                    return $global->mandatory === false
+                        && $targeted === false;
+                }
+            };
+            $hasTotp = (new V5NativeTotpEnabledGate(
+                new V5NativeTotpStatus(
+                    new V5NativeBitrixMfaRowSource(), $noMfa
+                ),
+                new V5PinnedBitrixGlobalOtpConfig()
+            ))->isTotpActive($userId);
+            if ($hasTotp === null) {
                 return null;
             }
 
