@@ -54,6 +54,8 @@ final class V5ProductionAuthHttpComposition
         ?V5LockedOrderPlacementPort $checkoutWriter = null,
         ?V5LockedCartMutatorPort $cartMutator = null,
         ?V5LockedCartAddPort $cartAdder = null,
+        ?V5PublicLegalConsentsPort $currentLegalCatalog = null,
+        ?V5NativeSignupHttpPort $nativeSignup = null,
     ): V5HttpTransportBoundary {
         // Pure admission before a Bitrix connection, native callback or write.
         if (PHP_SAPI !== 'fpm-fcgi'
@@ -61,7 +63,8 @@ final class V5ProductionAuthHttpComposition
             || strlen($smsCodeHmacKey) < 32 || strlen($smsCodeHmacKey) > 1024
             || hash_equals($bindingKey, $smsCodeHmacKey)
             || ($emailVerification === null) !== ($consumedEmailProof === null)
-            || ($manualSmsRecovery !== null && $emailVerification === null)) {
+            || ($manualSmsRecovery !== null && $emailVerification === null)
+            || ($nativeSignup !== null && $currentLegalCatalog === null)) {
             throw new InvalidArgumentException('v5_production_auth_http_unavailable');
         }
 
@@ -100,7 +103,7 @@ final class V5ProductionAuthHttpComposition
             ),
             new V5MySqlSessionActions($sessions, $lockedBonusPinReader),
             $native->validation,
-            null,
+            $currentLegalCatalog,
             new V5MySqlSessionLogout($sessions),
             // V5 bearer validation and current AUTH_EPOCH are checked inside
             // the SAME V5MySqlStrongSessionStore transaction, not V4 auth.
@@ -113,6 +116,7 @@ final class V5ProductionAuthHttpComposition
             $checkoutWriter === null ? null : new V5MySqlOrderPlace($sessions, $checkoutWriter),
             $cartMutator === null ? null : new V5MySqlCartMutation($sessions, $cartMutator),
             $cartAdder === null ? null : new V5MySqlCartAdd($sessions, $cartAdder),
+            $nativeSignup,
         );
 
         // Public legal uses the existing separately deployed gateway.
