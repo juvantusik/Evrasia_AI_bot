@@ -149,6 +149,26 @@ final class V5BitrixPdoCompatibilityBridge extends PDO
     }
 
     /**
+     * Explicit native Bitrix ORM mutation gate for V5-only post-MFA
+     * trusted-device enrollment. Direct native ORM calls are forbidden
+     * unless this very bridge owns the strict protected V5 HTTP transaction
+     * and its continuity savepoint is still live.
+     *
+     * This is NOT a production transaction permit or MFA proof by itself.
+     */
+    public function assertOwnedNativeAuthMutationContinuity(object $candidate): void
+    {
+        if (PHP_SAPI !== 'fpm-fcgi'
+            || !$this->verifiedHttpIngressAtConstruction
+            || !$this->requireNativeContinuity
+            || !$this->ownsCurrentNativeTransaction($candidate)
+            || !$this->continuityGuard instanceof V5ProductionNativeTransactionContinuity
+            || !$this->continuityGuard->confirmBeforeStatement()) {
+            throw new RuntimeException('v5_native_auth_mutation_scope_denied');
+        }
+    }
+
+    /**
      * Terminal quarantine after a native callback lost its V5-owned SQL
      * savepoint. A hidden native COMMIT+BEGIN may now own this connection:
      * never let V5 roll back, commit or reuse that possibly FOREIGN scope.
