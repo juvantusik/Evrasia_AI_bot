@@ -39,6 +39,10 @@ final readonly class V5ProductionStrongSessionContext
 
 final class V5ProductionStrongSessionFactory
 {
+    /**
+     * Backward-compatible entry for a caller which does not own the bridge.
+     * Opens exactly one V5-native transaction-capable Bitrix connection.
+     */
     public static function buildForProtectedHttp(
         V5TrustedInstalledNativeCoveragePort $trustedNativeEvidence,
         V5LockedStrongSessionProofPort $lockedStrongProof,
@@ -46,16 +50,41 @@ final class V5ProductionStrongSessionFactory
         V5OpaqueRefreshTokens $refreshTokens,
         #[\SensitiveParameter] string $bindingKey,
     ): V5ProductionStrongSessionContext {
-        // Never call a supplied native callback outside the canonical
-        // protected V5 FPM ingress, even if it claims to be attested.
         if (PHP_SAPI !== 'fpm-fcgi'
-            || strlen($bindingKey) < 32
-            || strlen($bindingKey) > 1024) {
+            || strlen($bindingKey) < 32 || strlen($bindingKey) > 1024) {
             throw new InvalidArgumentException('v5_native_strong_factory_unavailable');
         }
-
         try {
             $db = V5ProductionNativeBridgeFactory::openForProtectedHttp();
+            return self::buildOnNativeBridge(
+                $db, $trustedNativeEvidence, $lockedStrongProof,
+                $accessJwtCodec, $refreshTokens, $bindingKey
+            );
+        } catch (Throwable) {
+            throw new RuntimeException('v5_native_strong_factory_denied');
+        }
+    }
+
+    /**
+     * For the real per-request HTTP composition: create the Bitrix bridge
+     * FIRST, then use that exact object when building locked trust, MFA and
+     * challenge providers. No second bridge and no mixed PDO connection.
+     *
+     * Keep the same source-pinned epoch and per-user native release gates.
+     */
+    public static function buildOnNativeBridge(
+        V5BitrixPdoCompatibilityBridge $db,
+        V5TrustedInstalledNativeCoveragePort $trustedNativeEvidence,
+        V5LockedStrongSessionProofPort $lockedStrongProof,
+        V5AccessJwtCodec $accessJwtCodec,
+        V5OpaqueRefreshTokens $refreshTokens,
+        #[\SensitiveParameter] string $bindingKey,
+    ): V5ProductionStrongSessionContext {
+        if (PHP_SAPI !== 'fpm-fcgi'
+            || strlen($bindingKey) < 32 || strlen($bindingKey) > 1024) {
+            throw new InvalidArgumentException('v5_native_strong_factory_unavailable');
+        }
+        try {
             if (!$db->hasStrictV5HttpIngress()
                 || !(new V5ProductionNativeEpochTriggerInventory())
                     ->currentInstalledTriggersMatch(\Bitrix\Main\Application::getConnection())
@@ -63,8 +92,6 @@ final class V5ProductionStrongSessionFactory
                 throw new RuntimeException('v5_native_strong_release_unverified');
             }
 
-            // This coverage port rechecks every user's independently proven
-            // installed native mutation paths on issuance and authorization.
             $coverage = new V5StrictNativeSecurityHookCoverage(
                 $trustedNativeEvidence
             );
