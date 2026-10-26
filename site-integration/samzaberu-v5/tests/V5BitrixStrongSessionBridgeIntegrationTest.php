@@ -93,7 +93,7 @@ namespace Bitrix\Main\DB {
             if(str_starts_with($sql,'SELECT AUTH_EPOCH FROM ev_samzaberu_auth_state'))
                 return new BridgeMockResult([['AUTH_EPOCH'=>$this->epoch]]);
             if(str_starts_with($sql,'SELECT USER_ID, DEVICE_ID_HASH, TRUST_TOKEN_HASH, ')) {
-                if(!preg_match("/WHERE USER_ID = '([0-9]+)'(?: AND DEVICE_ID_HASH = '([a-f0-9]{64})')? FOR UPDATE$/D",
+                if(!preg_match("/WHERE USER_ID = ([0-9]+)(?: AND DEVICE_ID_HASH = '([a-f0-9]{64})')? FOR UPDATE$/D",
                     $sql,$m))
                     throw new \RuntimeException('wrong synthetic trust lock');
                 $rows=[];
