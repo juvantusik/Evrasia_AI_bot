@@ -1,0 +1,89 @@
+ПРОДОЛЖАЕМ EVRASIA AI BOT — RESTIS → BITRIX BONUS EVENT SYNC
+Дата handoff: 25.10.2026.
+
+Это продолжение того же проекта, НЕ начало разработки заново. Сначала прочитай и используй весь актуальный checkpoint:
+docs/EVRASIA_BONUS_EVENT_SYNC_HANDOFF_2026-10-25.md
+GitHub: juvantusik/Evrasia_AI_bot
+Docs branch: docs/bonus-event-sync-checkpoint-20261025
+Основа docs branch: feature/samzaberu-api-v5-auth-contract @ 6fa8773746e9a40e22008d67636c896eefeec3ed
+Перед изменением кода/серверов ОБЯЗАТЕЛЬНО проверь актуальные GitHub HEAD/production/staging; не предполагай, что документация равна живому состоянию.
+
+БИЗНЕС-ЦЕЛЬ
+Сделать автоматическую событийную синхронизацию текущего бонусного баланса: EUR-CRM (MS SQL Server 2014) / RESTISBONUS / dbo.Cards.CardTotalSum -> SQL AFTER UPDATE trigger и outbox на EUR-CRM -> worker на сервере Bitrix evrasia -> b_uts_user.UF_BONUS в MariaDB eurasia_new. Округление floor согласовано. Не возобновлять спор об отличии на 1 бонус SQL и RestIS API. Синхронизируем существующих активных зарегистрированных пользователей сайта, а не все карты RestIS. Нужны первоначальная загрузка существующих и обработка новой регистрации; LID не доказывает источник регистрации.
+
+ПОСЛЕДНИЙ ФАКТИЧЕСКИЙ РЕЗУЛЬТАТ
+Оператор выполнил READ_ONLY SQL-admin review действующего dbo.Cards UPDATE trigger: FINAL_STATUS=PASS, FINAL_RC=0.
+SESSION_SYSADMIN=YES; SESSION_DB_OWNER=YES.
+CARDS_VIEW_DEFINITION_PERMISSION=YES; CARDS_ALTER_PERMISSION=YES.
+TRIGGER_DEFINITION_VISIBLE=YES; TRIGGER_SOURCE_REVIEW=AVAILABLE.
+USES_INSERTED=YES; USES_DELETED=YES.
+REFERENCES_CARDTOTALSUM=NO.
+HAS_ROLLBACK_MARKER=NO; HAS_RAISERROR_MARKER=NO; HAS_THROW_MARKER=NO;
+HAS_TRANSACTION_MARKER=NO; HAS_CARDS_SELF_UPDATE_MARKER=NO.
+AUTOMATED_MARKERS_ARE_HEURISTIC=YES; MANUAL_COMPATIBILITY_REVIEW_REQUIRED=YES.
+DATABASE_WRITE=NO; SQL_PERMISSIONS_CHANGED=NO; EXISTING_TRIGGERS_MODIFIED=NO; NEW_TRIGGER_INSTALLED=NO; BONUS_DATA_CHANGED=NO.
+NEXT_STEP=REVIEW_AND_TEST_EVENT_OUTBOX.
+Ранее попытка GRANT VIEW DEFINITION пользователю ev_bonus_sync_ro завершилась FAIL с SQL_ERROR_NUMBER=15151. НЕ приписывай 15151 непроверенную причину и НЕ повторяй GRANT автоматически. Админ-сессия уже видит исходник. Исторически в Cards 3 триггера: включённые UPDATE + DELETE, отключённый UPDATE; 0 INSTEAD OF, рекурсивные триггеры OFF; очередь/роль worker отсутствовали.
+
+BITRIX: ПОСЛЕДНИЕ ПРОВЕРЕННЫЕ ФАКТЫ
+В b_user среди ACTIVE=Y с записью b_user_phone_auth на момент последнего просмотра 61 800:
+61 717 с LID=NULL, 83 с LID=s1. Если выбрать только LID=s1, исключим почти всех. При этом LID=NULL НЕ доказательство регистрации через сайт. Проверка b_lang/site метаданных PASS; evrasia.rest — публичный домен.
+Ранее 10 реальных соответствующих записей source→Bitrix были проверены READ_ONLY: 8 кандидатов на изменение, 2 уже равны, 10 UF_BONUS строк обнаружены, payload CAS validation 10/10 PASS; настоящий CAS НЕ выполнялся.
+В предыдущем глобальном аудите было 0 совпавших normalized phone collision keys, около 250 некорректных phone mapping строк; при реальной записи ambiguous / invalid mapping должен быть отклонён.
+
+СТЕЙДЖИНГ НА evrasia
+/root/ev-bonus-sync-staging/
+ cas_writer.php
+ bonus_cache_policy.php
+ bonus_transaction_executor.php
+ backfill_audit_page.php
+ backfill_audit_state.json
+ event_sync/install_restis_outbox_v2.sql
+ event_sync/event_worker.py
+ event_sync/event_bridge.php
+ event_sync/event_sync_v2_manifest.json
+ event_sync/grant_trigger_definition_review.sql
+ event_sync/revoke_trigger_definition_review.sql
+ event_sync/executor-backups/
+
+Исполнитель bonus_transaction_executor.php ИСПРАВЛЕН ТОЛЬКО В PRIVATE STAGING:
+прямой require .settings.php заменён на штатный \Bitrix\Main\Config\Configuration::getValue('connections'); создана и проверена резервная копия; PHP lint PASS; штатный D7 PASS; независимое PDO соединение PASS; staging-config test PASS; всё это подтверждено FINAL_STATUS=PASS, WRAPPER_RC=0.
+CAS writer, cache policy НЕ менялись. Все три gates ОТКЛЮЧЕНЫ. РЕАЛЬНЫЙ CAS НЕ ПРОВЕРЕН.
+Этот исправленный PHP файл НЕ был отправлен в GitHub при создании docs-only handoff.
+Файл v2 SQL ещё НЕ установлен и не проверен на настоящей SQL Server очереди. Worker selftest PASS offline, worker production OFF. Секреты worker не provisioned.
+
+ОГРАНИЧЕНИЯ
+PRODUCTION_READINESS=DENIED
+SQL_TRIGGER_INSTALLED=NO
+RESTIS_OUTBOX_CREATED=NO
+EVENT_WORKER_ENABLED=NO
+CAS_EXECUTED=NO
+BONUS_CACHE_CLEARED=NO
+GIFTS_CHANGED=NO
+API_V4_CHANGED=NO
+API_V5_AUTH_ENABLED_BY_BONUS_SYNC=NO
+Не трогать подарки, кэш подарков, V4, V5 AUTH, PIN, TOTP, email, SMS, Trusted Device и работающую website MFA. Не создавать синтетических пользователей, не выводить телефоны, ID, балансы, пароли, токены, определения триггеров или secret files.
+
+ЧТО ДЕЛАТЬ СЛЕДУЮЩИМ
+1. Завершить ручную проверку совместимости уже доступного админ-сессии действующего UPDATE-триггера dbo.Cards (эвристическая проверка НЕ заменяет source review).
+2. Взять существующий /root/ev-bonus-sync-staging/event_sync/install_restis_outbox_v2.sql, проверить фактический SQL текст и контракт writer/worker. Не устанавливать v2 вслепую: исследовать стабильный ключ Cards, PHONE-change, многострочный UPDATE, NULL/float, duplicate/lease, транзакционную целостность и поведение 3 существующих триггеров.
+3. Сначала выполнить изолированный SQL Server 2014-compatible тест на отдельной scratch DB без реальных customer updates; после PASS спланировать backup, permissions, rollback и применить только outbox/trigger на EUR-CRM.
+4. Настроить отдельную учётную запись queue worker с минимумом прав; сохранить ev_bonus_sync_ro read-only. Подключить подготовленный PHP CAS без изменения бизнес-логики, выполнить контролируемый real existing-user тест, затем включить worker поэтапно. Принятие events только после успешного CAS и адресного очищения кэша bonus.
+5. Уточнить только бизнес-фильтр действительных зарегистрированных аккаунтов сайта, если нельзя вывести его из реального потока регистрации, не фильтровать по LID. Отдельно подготовить одноразовый backfill и initial-fill при регистрации.
+6. Доказать end-to-end PASS до расширения. Не путать staging, test, production, или успешное подключение PDO с реальной записью бонусов.
+
+ТЕХНИЧЕСКИЕ ПРАВИЛА
+Пиши по-русски. Не предлагай дополнительных улучшений безопасности вместо скорого завершения выбранного механизма; обязательные guard, backup и rollback оставить.
+Для каждой серверной операции выдавай ОДИН цельный copy-paste Bash wrapper с проверкой синтаксиса, hostname, root/sudo, путей, DB, единственного lock; секции:
+=== 1. HOST / ENVIRONMENT ===
+=== 2. CHECKS ===
+=== 3. ACTION ===
+=== 4. VERIFY ===
+=== 5. RESULT ===
+Вывод PASS/FAIL, FINAL_STATUS=PASS/FAIL, FINAL_RC, WRAPPER_RC; credentials не выводить; SSH не закрывать.
+Работай последовательно: исследование актуального состояния -> минимальная правка -> тест -> следующий шаг.
+Не проси повторять уже подтверждённые LID, PDO или триггерные marker audit. НЕ обещай, что всё уже в production.
+
+ВАЖНО ДЛЯ НОВОГО ЧАТА
+Последний операторский SQL output уже получен и разобран. Следующий ожидаемый результат — выход точечной ручной source/compatibility проверки существующего UPDATE-триггера и изолированного теста очереди; НЕ вывод прошлого скрипта, НЕ повторная проверка прав и НЕ общий аудит.
+Если надо обращаться к EUR-CRM, команды для SQL admin в SSMS должны быть отдельными, проверенными и без live UPDATE Cards до независимой проверки и разрешения.
