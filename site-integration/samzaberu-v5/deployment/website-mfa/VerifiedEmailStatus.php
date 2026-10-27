@@ -10,6 +10,8 @@ namespace Evrasia\WebMfa;
  * IMPORTANT: a filled b_user.EMAIL, ACTIVE=Y or empty CONFIRM_CODE does NOT
  * prove ownership of the CURRENT email. Only an explicit, durable proof of a
  * successfully entered email challenge for the same current address qualifies.
+ * Once verified, this address stays verified across profile updates and logins;
+ * the current-email MAC (not b_user.TIMESTAMP_X) enforces address identity.
  *
  * The future DB adapter MUST read its own ownership-proof record and pass it
  * here. This code cannot be used to "bootstrap" confirmation for old emails.
@@ -19,6 +21,8 @@ final class VerifiedEmailStatus
     public const SOURCE_OTP = 'email_ownership_otp';
 
     /**
+     * The final profile-stamp argument remains for caller compatibility but is
+     * not a verification or revocation criterion.
      * @param array<string,mixed>|null $proof Trusted, DB-backed ownership record
      *   user_id, current_email_mac, verified_at, email_changed_at, source, revoked,
      *   profile_updated_at: exact last Bitrix profile update timestamp of
@@ -50,9 +54,6 @@ final class VerifiedEmailStatus
             || filter_var($canonical, FILTER_VALIDATE_EMAIL) === false
             || strlen($siteSecret) < 32
             || $clock <= 0
-            || !is_int($currentProfileUpdatedAt)
-            || $currentProfileUpdatedAt <= 0
-            || $currentProfileUpdatedAt > $clock
             || !is_array($proof)) {
             return $unverified;
         }
@@ -63,8 +64,7 @@ final class VerifiedEmailStatus
             || !is_int($proof['verified_at'] ?? null)
             || !is_int($proof['email_changed_at'] ?? null)
             || !is_int($proof['profile_updated_at'] ?? null)
-            || $proof['profile_updated_at'] !== $currentProfileUpdatedAt
-            || $proof['email_changed_at'] !== $currentProfileUpdatedAt
+            || $proof['email_changed_at'] !== $proof['profile_updated_at']
             || $proof['verified_at'] <= 0
             || $proof['verified_at'] > $clock
             || $proof['email_changed_at'] > $proof['verified_at']
