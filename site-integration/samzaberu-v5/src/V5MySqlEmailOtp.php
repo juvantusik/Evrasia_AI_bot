@@ -131,8 +131,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
         }
 
         $this->ready();
-        $started=false; $guard=false; $releaseAttempted=false;
-        $activeGuard='v5_email_issue_guard';
+        $started=false;
         $challengeId=''; $email=''; $code='';
         try {
             if (!$this->db->beginTransaction()) throw new RuntimeException('email_begin');
@@ -140,29 +139,24 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             $now=$this->now();
             $this->lockedAccount($account->userId);
             $epoch=$this->lockedEpoch($account->userId);
-            $this->q('SAVEPOINT v5_email_issue_guard',[]);
-            $guard=true;
+            // The strict V5 bridge already owns an independent continuity guard.
+            // Nested named savepoints are invalidated when that older guard is released.
+            $this->assertCallbackContinuity();
             $identity=$this->native->verifyPasswordAndCurrentEmailWithLocks(
                 $this->db,$account,$login,$password,$epoch
             );
-            $releaseAttempted=true;
-            $this->q('RELEASE SAVEPOINT v5_email_issue_guard',[]);
-            $guard=false;
+            $this->assertCallbackContinuity();
             if (!$this->db->inTransaction() || !$identity instanceof V5LockedVerifiedEmail) {
                 throw new RuntimeException('email_identity_or_scope_invalid');
             }
             // Rate callbacks are site-specific, and may use native Bitrix.
             // An implicit COMMIT+BEGIN would lose the original b_user/epoch
             // locks while PDO could still report inTransaction()===true.
-            $activeGuard='v5_email_rate_guard';
-            $this->q('SAVEPOINT v5_email_rate_guard',[]);
-            $guard=true; $releaseAttempted=false;
+            $this->assertCallbackContinuity();
             $rateAllowed=$this->rates->reserveWithLocks(
                 $this->db,$account->userId,$deviceId,$identity->address
             ) === true;
-            $releaseAttempted=true;
-            $this->q('RELEASE SAVEPOINT v5_email_rate_guard',[]);
-            $guard=false;
+            $this->assertCallbackContinuity();
             if (!$this->db->inTransaction() || !$rateAllowed) {
                 throw new RuntimeException('email_rate_denied');
             }
@@ -208,15 +202,12 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             $started=true;
             $this->lockedAccount($account->userId);
             $current=$this->lockedEpoch($account->userId);
-            $guard=false; $releaseAttempted=false;
-            $activeGuard='v5_email_ack_guard';
-            $this->q('SAVEPOINT v5_email_ack_guard',[]); $guard=true;
+            $this->assertCallbackContinuity();
             $still=$current === $epoch
                 && $this->native->stillCurrentWithLocks(
                     $this->db,$account->userId,$epoch,$identity->stamp
                 );
-            $releaseAttempted=true;
-            $this->q('RELEASE SAVEPOINT v5_email_ack_guard',[]);$guard=false;
+            $this->assertCallbackContinuity();
             if (!$still || !$this->db->inTransaction()) throw new RuntimeException('email_changed');
             $write=$this->q(
                 'UPDATE ev_v5_email_auth_challenges SET status = ? '
@@ -232,7 +223,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             $started=false;
             return new PendingLoginChallenge($challengeId,ChallengeKind::EMAIL,$this->ttl);
         } catch (Throwable) {
-            $this->rollbackIfOwned($started,$guard,$releaseAttempted,$activeGuard);
+            $this->rollbackIfOwned($started);
             throw new AuthenticationRejected('challenge_unavailable');
         } finally {
             // No code/recipient is written to the challenge table or log.
@@ -263,8 +254,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
             return null;
         }
         $this->ready();
-        $started=false; $guard=false; $releaseAttempted=false;
-        $activeGuard='v5_email_verify_guard';
+        $started=false;
         try {
             // Indexed point lookup before the transaction only identifies
             // which b_user row to lock FIRST; it is never authorization.
@@ -304,12 +294,11 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
                 $this->db->rollBack();$started=false;
                 return null;
             }
-            $this->q('SAVEPOINT v5_email_verify_guard',[]);$guard=true;
+            $this->assertCallbackContinuity();
             $current=$this->native->stillCurrentWithLocks(
                 $this->db,$uid,$epoch,$r['email_stamp']
             );
-            $releaseAttempted=true;
-            $this->q('RELEASE SAVEPOINT v5_email_verify_guard',[]);$guard=false;
+            $this->assertCallbackContinuity();
             if (!$this->db->inTransaction() || !$current) {
                 throw new RuntimeException('email_native_eligibility');
             }
@@ -338,7 +327,7 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
                     ChallengeKind::EMAIL,$challengeId)
                 : null;
         } catch (Throwable) {
-            $this->rollbackIfOwned($started,$guard,$releaseAttempted,$activeGuard);
+            $this->rollbackIfOwned($started);
             return null;
         }
     }
@@ -407,29 +396,26 @@ final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecycl
     }
 
     /**
-     * An unknown native COMMIT+BEGIN destroys our SAVEPOINT. Never roll back
-     * a possibly foreign transaction; quarantine the V5 Bitrix bridge.
+     * The bridge's original random savepoint is the sole continuity authority.
+     * Releasing it destroys all newer nested savepoints in MySQL; a second
+     * named guard here caused SQL error 1305 on email challenge issuance.
+     * Verify this same guard before and after every native callback instead.
      */
-    private function rollbackIfOwned(
-        bool $started,bool $guard,bool $releaseAttempted,string $activeGuard
-    ): void {
-        if (!$started) return;
-        if ($guard) {
-            if (!$releaseAttempted) {
-                try {
-                    // Only the active native savepoint name is valid.
-                    $this->q('RELEASE SAVEPOINT '.$activeGuard,[]);
-                    $guard=false;
-                } catch (Throwable) {}
-            }
-            if ($guard) {
-                if ($this->db instanceof V5BitrixPdoCompatibilityBridge)
-                    $this->db->abandonUncertainNativeTransaction();
-                return;
-            }
+    private function assertCallbackContinuity(): void
+    {
+        if ($this->db instanceof V5BitrixPdoCompatibilityBridge) {
+            $this->db->assertOwnedNativeAuthMutationContinuity(
+                \Bitrix\Main\Application::getConnection()
+            );
+        } elseif (!$this->db->inTransaction()) {
+            throw new RuntimeException('email_callback_transaction_lost');
         }
-        if ($this->db->inTransaction()) {
-            try { $this->db->rollBack(); } catch (Throwable) {}
-        }
+    }
+
+    private function rollbackIfOwned(bool $started): void
+    {
+        if (!$started || !$this->db->inTransaction()) return;
+        // The strict bridge itself refuses to roll back an uncertain owner.
+        try { $this->db->rollBack(); } catch (Throwable) {}
     }
 }
