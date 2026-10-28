@@ -13,18 +13,20 @@ use Throwable;
  * AUTH_EPOCH release-coverage or public-traffic approval.
  *
  * The caller MUST use V5ProductionNativeBridgeFactory for this permit.
- * A fresh one-shot permit cannot authorize a second BEGIN or a new native
- * connection. Before BEGIN, the same pinned Bitrix master connection must
- * pass the exact protected V5 HTTPS router, native depth=0 and MariaDB
+ * Allow at most two sequential BEGIN attempts on the same verified native
+ * connection per protected HTTP request. Email OTP needs an issue transaction,
+ * then a delivery-ack transaction; verification can likewise commit the code
+ * before minting a strong session. Every BEGIN must independently pass the
+ * exact protected V5 HTTPS router, native depth=0 and MariaDB
  * @@in_transaction=0 checks. The bridge separately arms unpredictable
- * savepoint continuity immediately after BEGIN.
+ * savepoint continuity immediately after each BEGIN.
  *
  * No env toggle, HTTP header, request body or client ID can grant admission.
  */
 final class V5ProductionNativeExclusiveTransactionPermit
     implements V5NativeBitrixExclusiveTransactionPermitPort
 {
-    private bool $consumed = false;
+    private int $beginAttempts = 0;
 
     public function __construct(
         private readonly object $native,
@@ -33,12 +35,13 @@ final class V5ProductionNativeExclusiveTransactionPermit
 
     public function safeToBeginOn(object $nativeBitrixConnection): ?bool
     {
-        // Consume first, including on errors. A failed/unknown transaction
-        // start must never authorize a retry on the same request scope.
-        if ($this->consumed) {
+        // Each attempt is consumed before evaluating its preflight, including
+        // on errors. The bridge permanently poisons itself on a failed BEGIN;
+        // this allowance is only for a clean, completed first transaction.
+        if ($this->beginAttempts >= 2) {
             return null;
         }
-        $this->consumed = true;
+        ++$this->beginAttempts;
 
         try {
             return $nativeBitrixConnection === $this->native
