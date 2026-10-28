@@ -14,9 +14,9 @@ use RuntimeException;
 use Throwable;
 
 /**
- * A VERIFIED email address, not b_user.EMAIL, a client parameter, a cookie
- * or a mail transport response. The opaque stamp must be tied to the site's
- * current email-ownership proof and profile version.
+ * The current b_user.EMAIL after a native password sign-in, never a client
+ * parameter or cookie. Website ownership verification is not a prerequisite.
+ * A keyed stamp binds it to the current email, password and AUTH_EPOCH.
  */
 final readonly class V5LockedVerifiedEmail
 {
@@ -69,19 +69,19 @@ interface V5EmailOtpTransportPort
 /**
  * Feature-only MySQL/InnoDB mobile email OTP. Never calls Bitrix Login(),
  * changes website login, or grants JWT. It requires a separately verified
- * native account/password/email proof and a mandatory transactional rate port.
+ * native account/password/current-profile-email recheck and rate port.
  * No production installation or migration is performed by this source.
  *
  * Issuance: lock b_user -> AUTH_EPOCH -> native source proof/savepoint ->
  * reserve budget -> insert pending -> COMMIT -> mail transport ->
- * lock b_user/epoch/challenge -> current email proof -> mark accepted.
+ * lock b_user/epoch/challenge -> current profile email -> mark accepted.
  * The code cannot verify while the mail operation is unresolved.
  */
 final readonly class V5MySqlEmailOtp implements V5PasswordBoundChallengeLifecyclePort, V5EmailChallengeVerificationPort
 {
     private const TABLES = [
         'b_user', 'ev_samzaberu_auth_state',
-        'ev_web_email_ownership_proof', 'ev_v5_email_auth_challenges',
+        'ev_v5_email_auth_challenges',
     ];
     private const MAX_PENDING = 5;
     private const MAX_FAILED = 3;
