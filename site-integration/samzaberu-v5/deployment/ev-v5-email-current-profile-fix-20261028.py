@@ -49,10 +49,12 @@ def fix_nested_savepoints(source):
     for old,new,count in replacements:
         need(source.count(old)==count,'EMAIL_CONTINUITY_ANCHOR_CHANGED')
         source=source.replace(old,new)
-    head='    /**\n     * An unknown native COMMIT+BEGIN destroys our SAVEPOINT.'
-    start=source.find(head)
+    signature='    private function rollbackIfOwned('
+    method=source.find(signature)
+    start=source.rfind('    /**',0,method) if method>=0 else -1
     end=source.rfind('\n}\n')
-    need(start>0 and end>start,'EMAIL_ROLLBACK_HELPER_CHANGED')
+    need(method>0 and start>0 and method-start<450 and end>method,
+         'EMAIL_ROLLBACK_HELPER_CHANGED')
     helper=r"""    /**
      * Use the original V5 bridge randomized savepoint; do not nest a second
      * named savepoint. The bridge independently detects a lost transaction.
