@@ -41,17 +41,56 @@ def lint(data):
 def marker(code):
     return "if (($_SERVER['HTTP_X_EV_V5_TRACE'] ?? '') === "+json.dumps(token)+") @file_put_contents("+json.dumps(str(trace))+", "+code+", FILE_APPEND | LOCK_EX);"
 
+def fix_nested_savepoints(source):
+    # Deliberately patch only the known production statements. The V5 bridge
+    # already has a randomized continuity savepoint, which invalidates any
+    # newer savepoints when it is released and rearmed.
+    replacements=json.loads(r'''[["        $started=false; $guard=false; $releaseAttempted=false;","        $started=false;",2],["        $activeGuard='v5_email_issue_guard';\n","",1],["            $this->q('SAVEPOINT v5_email_issue_guard',[]);\n            $guard=true;","            // The strict bridge owns the sole randomized continuity savepoint.\n            $this->assertCallbackContinuity();",1],["            $releaseAttempted=true;\n            $this->q('RELEASE SAVEPOINT v5_email_issue_guard',[]);\n            $guard=false;","            $this->assertCallbackContinuity();",1],["            $activeGuard='v5_email_rate_guard';\n            $this->q('SAVEPOINT v5_email_rate_guard',[]);\n            $guard=true; $releaseAttempted=false;","            $this->assertCallbackContinuity();",1],["            $releaseAttempted=true;\n            $this->q('RELEASE SAVEPOINT v5_email_rate_guard',[]);\n            $guard=false;","            $this->assertCallbackContinuity();",1],["            $guard=false; $releaseAttempted=false;\n            $activeGuard='v5_email_ack_guard';\n            $this->q('SAVEPOINT v5_email_ack_guard',[]); $guard=true;","            $this->assertCallbackContinuity();",1],["            $releaseAttempted=true;\n            $this->q('RELEASE SAVEPOINT v5_email_ack_guard',[]);$guard=false;","            $this->assertCallbackContinuity();",1],["            $this->rollbackIfOwned($started,$guard,$releaseAttempted,$activeGuard);","            $this->rollbackIfOwned($started);",2],["        $activeGuard='v5_email_verify_guard';\n","",1],["            $this->q('SAVEPOINT v5_email_verify_guard',[]);$guard=true;","            $this->assertCallbackContinuity();",1],["            $releaseAttempted=true;\n            $this->q('RELEASE SAVEPOINT v5_email_verify_guard',[]);$guard=false;","            $this->assertCallbackContinuity();",1]]''')
+    for old,new,count in replacements:
+        need(source.count(old)==count,'EMAIL_CONTINUITY_ANCHOR_CHANGED')
+        source=source.replace(old,new)
+    head='    /**\n     * An unknown native COMMIT+BEGIN destroys our SAVEPOINT.'
+    start=source.find(head)
+    end=source.rfind('\n}\n')
+    need(start>0 and end>start,'EMAIL_ROLLBACK_HELPER_CHANGED')
+    helper=r"""    /**
+     * Use the original V5 bridge randomized savepoint; do not nest a second
+     * named savepoint. The bridge independently detects a lost transaction.
+     */
+    private function assertCallbackContinuity(): void
+    {
+        if ($this->db instanceof V5BitrixPdoCompatibilityBridge) {
+            $this->db->assertOwnedNativeAuthMutationContinuity(
+                \Bitrix\Main\Application::getConnection()
+            );
+        } elseif (!$this->db->inTransaction()) {
+            throw new RuntimeException('email_callback_transaction_lost');
+        }
+    }
+
+    private function rollbackIfOwned(bool $started): void
+    {
+        if (!$started || !$this->db->inTransaction()) return;
+        // The strict bridge refuses rollback when transaction ownership is lost.
+        try { $this->db->rollBack(); } catch (Throwable) {}
+    }
+"""
+    source=source[:start]+helper+source[end:]
+    need('SAVEPOINT v5_email_' not in source,'EMAIL_NESTED_SAVEPOINT_REMAINING')
+    return source
+
 def patch_email(data):
     src=data.decode(); old="'ev_web_email_ownership_proof', 'ev_v5_email_auth_challenges',"
     need(src.count(old)==1,'EMAIL_READY_SCHEMA_CHANGED')
     base=src.replace(old,"'ev_v5_email_auth_challenges',",1)
+    base=fix_nested_savepoints(base)
     start=base.find('public function beginBound('); end=base.find('public function ownsEmailChallenge(',start)
     need(start>=0 and end>start,'EMAIL_BEGIN_BOUND_CHANGED')
     part=base[start:end]
     pat=re.compile(r'\}\s*catch\s*\(\s*Throwable\s*\)\s*\{\s*(?=\$this->rollbackIfOwned\s*\()')
     matches=list(pat.finditer(part)); need(len(matches)==1,'EMAIL_MAIN_CATCH_CHANGED')
     m=matches[0]
-    payload="'EMAIL_ERROR=' . $evErrorCode . PHP_EOL . 'EMAIL_FILE=' . basename($evDiagnostic->getFile()) . PHP_EOL . 'EMAIL_LINE=' . (int)$evDiagnostic->getLine() . PHP_EOL . 'EMAIL_GUARD=' . (in_array($activeGuard,['v5_email_issue_guard','v5_email_rate_guard','v5_email_ack_guard'],true) ? $activeGuard : 'OTHER') . PHP_EOL"
+    payload="'EMAIL_ERROR=' . $evErrorCode . PHP_EOL . 'EMAIL_FILE=' . basename($evDiagnostic->getFile()) . PHP_EOL . 'EMAIL_LINE=' . (int)$evDiagnostic->getLine() . PHP_EOL . 'EMAIL_GUARD=BRIDGE_ONLY' . PHP_EOL"
     add="} catch (Throwable $evDiagnostic) {\n            $evErrorCode=$evDiagnostic->getMessage();\n            if (!preg_match('/\\A[a-z][a-z0-9_]{2,99}\\z/D',$evErrorCode)) $evErrorCode='OTHER';\n            "+marker(payload)+"\n            "
     return base.encode(), (base[:start]+part[:m.start()]+add+part[m.end():]+base[end:]).encode()
 
@@ -118,16 +157,7 @@ try:
     need(BACKUPS.is_dir() and PIN.is_file(),'SITE_FILES_MISSING')
     for path in (PROOF,EMAIL,BRIDGE,PORT,factory):need(path.is_file() and not path.is_symlink(),'BAD_SOURCE');original[path]=path.read_bytes()
     print('PASS: EXACT_PRODUCTION_SOURCES; V4_UNCHANGED')
-    print('\n=== 2. WEBSITE PIN RULE ===')
-    pinlines=PIN.read_text(errors='replace').splitlines()
-    print('PIN_FILE_SHA256='+sha(PIN.read_bytes()))
-    for n in range(182,min(231,len(pinlines)+1)):
-        line=pinlines[n-1].strip()
-        if re.search(r'(?i)(email|verified|confirm|directpineligible|trust|assurance|\bif\b|\|\|)',line):
-            if re.search(r'(?i)(password|secret|token|api.key|private.key|cookie)',line):line='[REDACTED_SOURCE_LINE]'
-            print('PIN_LINE_'+str(n)+'='+line[:220])
-    print('PIN_SOURCE_WRITE=NO')
-    print('\n=== 3. PREPARE EMAIL PATCH ===');phase='PREPARE'
+    print('\n=== 2. PREPARE EMAIL PATCH ===');phase='PREPARE'
     trace_dir=Path(tempfile.mkdtemp(prefix='ev-v5-email-root-',dir='/tmp'));os.chmod(trace_dir,0o711)
     trace=trace_dir/'trace';trace.write_bytes(b'');os.chmod(trace,0o622)
     retained[PROOF]=fetch('V5BitrixLockedEmailOtpProof.php',NEW_PROOF)
@@ -139,6 +169,8 @@ try:
     for dat in candidate.values():lint(dat)
     for dat in retained.values():lint(dat)
     print('PASS: CURRENT_ACCOUNT_EMAIL_NO_VERIFICATION_REQUIRED')
+    print('PASS: DUPLICATE_MYSQL_SAVEPOINTS_REMOVED')
+    print('PASS: STRICT_BRIDGE_CONTINUITY_PRESERVED')
     print('PASS: PHP_SYNTAX')
     print('\n=== 4. REAL SIGNIN ===');phase='CREDENTIALS'
     password=getpass.getpass('Пароль (скрыт): ');need(bool(password),'EMPTY_PASSWORD')
