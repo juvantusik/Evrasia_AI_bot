@@ -814,12 +814,29 @@ final readonly class V5MySqlStrongSessionStore implements V5StrongSessionPort
             $started=true;
             // A savepoint is destroyed by an implicit COMMIT, including when
             // native code immediately starts another transaction afterwards.
-            $this->query('SAVEPOINT v5_strong_session_guard', []);
-            $nativeGuardOpen=true;
+            // The production bridge already owns a randomized continuity
+            // savepoint. Its refresh deletes newer MySQL savepoints, so
+            // never create an additional nested session guard in HTTP V5.
+            $strictBridge = PHP_SAPI === 'fpm-fcgi'
+                && $this->db instanceof V5BitrixPdoCompatibilityBridge;
+            if ($strictBridge) {
+                $this->db->assertOwnedNativeAuthMutationContinuity(
+                    \Bitrix\Main\Application::getConnection()
+                );
+            } else {
+                $this->query('SAVEPOINT v5_strong_session_guard', []);
+                $nativeGuardOpen=true;
+            }
             $result=$operation();
-            $nativeGuardReleaseStarted=true;
-            $this->query('RELEASE SAVEPOINT v5_strong_session_guard', []);
-            $nativeGuardOpen=false;
+            if ($strictBridge) {
+                $this->db->assertOwnedNativeAuthMutationContinuity(
+                    \Bitrix\Main\Application::getConnection()
+                );
+            } else {
+                $nativeGuardReleaseStarted=true;
+                $this->query('RELEASE SAVEPOINT v5_strong_session_guard', []);
+                $nativeGuardOpen=false;
+            }
             // A native proof/read callback may not close our transaction.
             // Never sign JWTs or expose a PIN after that boundary is lost.
             if (!$this->db->inTransaction()) {
