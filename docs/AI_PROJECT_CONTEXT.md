@@ -1,5 +1,8 @@
 # Evrasia AI Bot — AI Project Context
 
+> **ПРИОРИТЕТНОЕ ОБНОВЛЕНИЕ САМЗАБЕРУ API V5 — 02.11.2026:** [Production checkpoint](SAMZABERU_V5_PRODUCTION_STATUS_2026-11-02.md) и [полная спецификация API V5](SAMZABERU_API_V5_FULL_SPECIFICATION_2026-11-02.txt). В отличие от исторического состояния 12–15 октября, API V5 теперь реально доступен на production; есть успешные сценарии регистрации, MFA, Mobile ID, legal, публичных маршрутов, бонусных кодов и заказов. Ряд изменяющих POST-операций остался без positive E2E; GET /orders/{id}/push — заглушка. Продолжать интеграцию с разработчиком СамЗаберу, НЕ повторять старые read-only проверки и НЕ менять V4. Далее ниже — исторические снимки различных workstreams, их «V5 503/off» считать устаревшими для СамЗаберу.
+
+
 > **НОВЕЙШАЯ ТОЧКА ПРОДОЛЖЕНИЯ ВСЕГО PROJECT — 2026-10-14:** [EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md](EVRASIA_AI_BOT_NEW_CHAT_HANDOFF_2026-10-14.md). Последний **фактический** операторский V5 source-only скрипт `v5_phone_check_masked_control_flow_readonly.sh` на `evrasia` уже завершился **5/5 PASS**; в отдельном активном `Controllers/V4/Auth.php` прямых `PhoneAuth::check/sendCode` caller sites **0** (только этот файл). Новый **неисполненный** CI-tested шаг — `v5_phone_check_active_caller_discovery_readonly.sh` в feature (CI 38571136784 SUCCESS). Исторические указания ниже о recovery/native depth и предыдущих скриптах **НЕ являются текущим следующим шагом**. Production/V4/DB/SMS не изменялись; V5 и isolated Bitrix/MySQL staging не развернуты.
 
 
