@@ -216,15 +216,20 @@ JWT: «Да» — требуется действительный access_token; 
 	Проверка токена (не требуется клиенту)
 	— Клиенту СамЗаберу не требуется
 
+	POST /auth/trust/enroll
+	Да
+	Зарегистрировать trust после Mobile ID
+	✓ 200 enrolled=true; E2E с реальным Mobile ID JWT
+
 	POST /auth/trust/validate
 	Да
 	Проверка trust
-	◐ 400 JSON; DTO по коду, успешный вызов не проверен
+	✓ 200 trusted=true с V5 JWT; E2E подтверждён
 
 	POST /auth/trust/revoke
 	Да
 	Отзыв trust
-	◐ 400 JSON; DTO по коду, успешный вызов не проверен
+	✓ 200 revoked=true с V5 JWT; E2E подтверждён
 
 	POST /signin/mobileid
 	Нет
@@ -738,11 +743,56 @@ POST  /auth/logout
 POST  /auth/token/validate
 — Проверка токена  |  JWT: —  |  Проверка: Не требуется приложению СамЗаберу
 Метод проверки токена присутствует в маршрутизации, но не нужен для стандартного сценария приложения. Не использовать вместо проверки V5-сессии защищёнными методами.
+POST  /auth/trust/enroll
+✓ Зарегистрировать доверенное устройство после Mobile ID  |  JWT: Да  |  Проверка: 200, enrolled=true с реальным Mobile ID JWT, 03.11.2026
+	POST /api/v5/auth/trust/enroll
+Authorization: Bearer <V5_ACCESS_JWT>
+Content-Type: application/json
+
+{
+  "device_id": "sz_<64_lowercase_hex>",
+  "platform": "ios",
+  "trust_token": "<64_lowercase_hex>"
+}
+
+	{
+  "enrolled": true
+}
+
+Передавайте device_id и platform того же устройства, что использовалось при успешном Mobile ID и выдаче JWT. Сервер сверяет привязку устройства, V5-сессию и assurance=mobileid, включая короткое окно свежести подтверждения. trust_token — криптографически случайные 32 байта, кодированные как 64 lowercase hex, генерируется и хранится клиентом; сервер хранит хэш, не генерирует и не возвращает trust_token. Регистрировать после успешного AUTH без промедления. Новый trust может отозвать предыдущие мобильные trust и старые V5-сессии пользователя.
+
 POST  /auth/trust/validate
-◐ Проверка доверенного устройства  |  JWT: Да  |  Проверка: 400 JSON; DTO по коду, успех не проверен
+✓ Проверить доверенное устройство  |  JWT: Да  |  Проверка: 200, trusted=true с реальным V5 JWT, 03.11.2026
+	POST /api/v5/auth/trust/validate
+Authorization: Bearer <V5_ACCESS_JWT>
+Content-Type: application/json
+
+{
+  "device_id": "sz_<те_же_64_lowercase_hex>",
+  "platform": "ios",
+  "trust_token": "<тот_же_64_lowercase_hex>"
+}
+
+	{
+  "trusted": true
+}
+
 POST  /auth/trust/revoke
-◐ Отзыв доверенного устройства  |  JWT: Да  |  Проверка: 400 JSON; DTO по коду, успех не проверен
-Оба trust-метода требуют V5 JWT и application/json. Validate: device_id, platform, trust_token → trusted (boolean). Revoke: device_id, platform → revoked (boolean). Поля установлены по действующему коду; успешный HTTP-вызов не проводился. trust_token генерирует и хранит приложение.
+✓ Отозвать доверенное устройство  |  JWT: Да  |  Проверка: 200, revoked=true с реальным V5 JWT, 03.11.2026
+	POST /api/v5/auth/trust/revoke
+Authorization: Bearer <V5_ACCESS_JWT>
+Content-Type: application/json
+
+{
+  "device_id": "sz_<те_же_64_lowercase_hex>",
+  "platform": "ios"
+}
+
+	{
+  "revoked": true
+}
+
+Все три trust-метода требуют V5 access JWT и application/json. Успешный тест выполнен на production HTTPS origin с реальным аккаунтом/Mobile ID JWT, но скриптовым клиентом, не выпущенной версией приложения. JSON-обёртка ответа может содержать эти поля во вложенном объекте API. Примерные успешные поля подтверждены тестом; внешняя доступность и UI СамЗаберу проверяются отдельно.
 5. Профиль и рассылки
 Операции профиля используют V5 access JWT. Для форм изменения данных применяйте application/x-www-form-urlencoded в соответствии с описанием конкретного метода.
 GET  /profile
@@ -1254,4 +1304,8 @@ V5 использует V5HistoryBridge и существующий UserControll
 •  Для списания бонусов POST /loyalty/pin возвращает pin_code; для предъявления карты в выбранном ресторане POST /restaurant-discount с REST_ID возвращает checkin. Не заменять один другим.
 •  Не считать непроверенные заказы и платёжные операции готовыми E2E. Trust validate/revoke: известны параметры и DTO по коду, успешный вызов не проверен. Подтверждение регистрационного email выполняется в браузере.
 •  Не отправлять тестовые DELETE /profile, POST /cart/order, pay/cancel или изменение реальных пользовательских данных без отдельного безопасного сценария.
-САМЗАБЕРУ  /  API V5   •   Техническая спецификация                                                       Стр. 
+САМЗАБЕРУ  /  API V5   •   Техническая спецификация                                                       Стр.
+
+
+АКТУАЛИЗАЦИЯ 03.11.2026 — MOBILE ID TRUST
+Состояние production после исправления точного SQL allowlist native V5 bridge: реальный Mobile ID AUTH + V5 JWT → POST /auth/trust/enroll 200 enrolled=true → POST /auth/trust/validate 200 trusted=true → POST /auth/trust/revoke 200 revoked=true. Все вызовы выполнены на HTTPS origin реальным пользователем через скриптовый тестовый клиент; V4/Bitrix core не менялись. При выпуске приложения проверить интеграцию на мобильном клиенте отдельно. Не использовать POST /auth/token/validate вместо trust/validate.
