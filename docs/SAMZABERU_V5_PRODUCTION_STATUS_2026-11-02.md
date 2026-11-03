@@ -1,5 +1,8 @@
 # СамЗаберу / API V5 — production checkpoint на 02.11.2026
 
+> **АКТУАЛЬНЫЙ ИТОГ 03.11.2026 — Mobile ID + trust + повторный вход: POSITIVE_REAL_E2E_PASS.** Полная схема, DTO и подтверждение `SECOND_MOBILEID_ATTEMPT=FALSE` зафиксированы в [SAMZABERU_V5_MOBILEID_TRUST_FINAL_2026-11-03.md](SAMZABERU_V5_MOBILEID_TRUST_FINAL_2026-11-03.md). Прежние negative-статусы Mobile ID trust ниже — история промежуточных этапов.
+
+
 **Статус:** фактические операторские результаты production до 02.11.2026.  
 **API:** https://evrasia.rest/api/v5  
 **Сервер:** evrasia; сайт: /home/site_evrasia/web/evrasia.spb.ru/public_html.  
