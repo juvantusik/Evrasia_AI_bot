@@ -118,3 +118,20 @@ HTTP 400/401/405, PHP lint, наличие маршрута и копии V4 **�
 1. Добавлен **ровно** `POST /api/v5/auth/trust/enroll` в `V5ProductionNativeRequestBoundaryGuard::isProtectedRequestRoute()` — до этого `V5_DEPENDENCIES / v5_route_denied`. Резервная копия: `/home/site_evrasia/web/evrasia.spb.ru/backups/v5-trust-guard.uDUkER9K`.
 2. Повторный отказ `BITRIX_NATIVE_BRIDGE / v5_native_http_factory_denied` оказался preflight с неактуальной привязкой SHA Bitrix `mysqlcommonconnection.php`; **ядро Bitrix не редактировали**. В `V5ProductionNativeTransactionPreflight.php` изменён только старый pin `2a43ad5a5ae90982b52dbea5980bfae469e23aa024c371687696f25aed280893` на проверенный фактический SHA `86db3f7f1695cdb49c5eb3261d2c54987946f78fe28a3da12d17d580d52b57e2`. Остальные два pin совпадают. Резервная копия: `/home/site_evrasia/web/evrasia.spb.ru/backups/v5-preflight-pin.yMQGOYPC`.
 3. После `php8.3-fpm` reload оба маршрута прошли тест отказа без JWT. **Код установлен, HTTP/JWT-gate negative test подтверждён. Успешная запись доверенного устройства с реальным Mobile ID JWT и последующая валидация trust НЕ тестировались; статус `POSITIVE_REAL_E2E_PASS` пока не достигнут.** Применять [обязательный чеклист](SAMZABERU_V5_ENDPOINT_RELEASE_CHECKLIST.md) при каждой новой ручке.
+
+
+## Итог 03.11.2026 — Mobile ID trust: положительный production E2E
+
+**Статус: `POSITIVE_REAL_E2E_PASS` (тест на production origin).** Оператор подтвердил на реальном собственном аккаунте и реальном V5 access JWT следующую цепочку:
+
+- `POST /api/v5/signin/mobileid` → HTTP 200; `/signin/mobileid/status` → `NEW → SENT → NEED_SMS_CODE → AUTH`; `/signin/mobileid/code` → 200. Получен настоящий V5 JWT.
+- `POST /api/v5/auth/trust/enroll` (JSON: `device_id`, `platform`, клиентский `trust_token`; Authorization: Bearer V5 JWT) → **HTTP 200, `enrolled=true`**.
+- `POST /api/v5/auth/trust/validate` (тот же device/platform/trust_token, V5 JWT) → **HTTP 200, `trusted=true`**.
+- `POST /api/v5/auth/trust/revoke` (тот же device/platform, V5 JWT) → **HTTP 200, `revoked=true`**. Тестовый trust отозван.
+- `INTERNAL_ERROR_CAPTURED=NO`, `ORIGINAL_PHP_RESTORED=YES`, `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`. Временная диагностика удалена; production V4 и Bitrix core не изменялись.
+
+**Фактическое исправление после negative HTTP test:** первоначальный реальный enroll выдавал 503 `temporarily_unavailable`; одноразовая диагностика обнаружила `v5_bitrix_strong_session_sql_forbidden` в `V5BitrixPdoCompatibilityBridge.php`, потому что новые запросы `enroll` к `ev_v5_strong_sessions` отсутствовали в точном `STRONG_SESSION_SQL` allowlist. 03.11.2026 добавлены только две точные команды: чтение `device_binding/platform` по `sid FOR UPDATE` и отзыв прочих активных V5-сессий этого пользователя с исключением `sid` текущей; общий SQL-допуск не расширен. Резервная копия bridge: `/home/site_evrasia/web/evrasia.spb.ru/backups/v5-trust-sql.PCfzDr29`. PHP lint и FPM после установки PASS. Изменение SQL allowlist осталось в production.
+
+**Границы подтверждения:** положительный тест выполнялся интерактивным скриптом против HTTPS origin `evrasia.rest` через `192.168.103.141`, а не выпущенным мобильным клиентом; внешняя доступность и UI-поведение приложения этим тестом не подтверждены. Устройство и trust_token были сгенерированы тестовым клиентом, сервер выдаёт только результат и не возвращает `trust_token`. Отзыв test trust подтверждён; старые ранее доверенные мобильные устройства могли быть отозваны при enroll (это ожидаемая бизнес-логика), их восстановление не проверялось. Приватный файл для восстановления тестовых client-side реквизитов всё ещё на сервере: `/root/ev-v5-trust-recovery-5dfe61f1e00a.json` (0600); удалять отдельным безопасным действием после закрытия тестирования.
+
+Ранее написанное в разделе `Обновление 03.11.2026 — Mobile ID trust enrollment (HTTP negative test)` о том, что positive E2E не проведён, **относится к промежуточному этапу и заменено текущим результатом**. Для разработчика СамЗаберу ручки `enroll/validate/revoke` готовы к интеграции; реальную работу на стороне приложения следует проверять отдельно.
