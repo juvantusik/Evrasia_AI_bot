@@ -5,6 +5,7 @@
 **Сервер:** evrasia; сайт: /home/site_evrasia/web/evrasia.spb.ru/public_html.  
 **Исходники GitHub:** feature/samzaberu-api-v5-auth-contract; HEAD проверен на 02.11.2026: 3153ce9218fa653a139c2308e66b53a98a9bc67c.  
 **Полная спецификация для разработчика:** [SAMZABERU_API_V5_FULL_SPECIFICATION_2026-11-02.txt](SAMZABERU_API_V5_FULL_SPECIFICATION_2026-11-02.txt).
+**Обязательный чеклист каждой новой ручки V5:** [SAMZABERU_V5_ENDPOINT_RELEASE_CHECKLIST.md](SAMZABERU_V5_ENDPOINT_RELEASE_CHECKLIST.md) — router, карта маршрутов, native guard/allowlist, bridge, приватная фабрика, transport, handler, JWT, backup/rollback и HTTP-проверка. **Случай 03.11.2026:** `/auth/trust/enroll` был добавлен в RouteMap/handler, но не в `V5ProductionNativeRequestBoundaryGuard::isProtectedRequestRoute()`; корректный POST без JWT получил `503 v5_unavailable`, свежая ошибка фабрики `v5_route_denied`. Положительный тест пока не подтверждён.
 
 > **Это новый приоритетный checkpoint для СамЗаберу.** Старые GitHub-документы от 12–27 октября описывают предшествующие стадии (в том числе «V5 выключен»/HTTP 503). Они не описывают состояние production на 02.11.2026. Production-код меняли операторскими скриптами; наличие файла в feature GitHub само по себе НЕ доказывает идентичности актуальному production-файлу.
 
