@@ -108,3 +108,13 @@ HTTP 400/401/405, PHP lint, наличие маршрута и копии V4 **�
 Решение пользователя: **БЫЛО** — строить альтернативные V5 бизнес-сервисы/изолированные контракты; **СТАЛО (27.10)** — сначала переносить проверенную V4 бизнес-логику, подключая независимую авторизацию V5. **Причина** — своевременно предоставить работающий API разработчику СамЗаберу. Последующий production-роллаут включает исправление V5 rewrite (30.10), public catalog, legal, real signup, Mobile ID, loyalty/checkin, auth and order handlers. Новых production правок в рамках текущей публикации docs нет.
 
 **Источники:** фактические operator stdout и чтение production PHP, предоставленные в чатах проекта до 02.11.2026; полная спецификация (текстовая версия) по ссылке в начале этого документа.
+
+
+## Обновление 03.11.2026 — Mobile ID trust enrollment (HTTP negative test)
+
+**Новый подтверждённый результат production (не ретроспективная правка checkpoint 02.11):** после установки отдельного `POST /api/v5/auth/trust/enroll` для Mobile ID на production origin тест с корректным JSON и **без JWT** возвращает **HTTP 401, `authentication_failed`**. Существующий `POST /api/v5/auth/trust/validate` на таком же запросе возвращает **401, `authentication_failed`**. Для обоих запросов новых ошибок `http-factory-errors.log` нет. Результат оператора: `FINAL_STATUS=PASS`, `FINAL_RC=0` (03.11.2026).
+
+Путь устранения `503 v5_unavailable`:
+1. Добавлен **ровно** `POST /api/v5/auth/trust/enroll` в `V5ProductionNativeRequestBoundaryGuard::isProtectedRequestRoute()` — до этого `V5_DEPENDENCIES / v5_route_denied`. Резервная копия: `/home/site_evrasia/web/evrasia.spb.ru/backups/v5-trust-guard.uDUkER9K`.
+2. Повторный отказ `BITRIX_NATIVE_BRIDGE / v5_native_http_factory_denied` оказался preflight с неактуальной привязкой SHA Bitrix `mysqlcommonconnection.php`; **ядро Bitrix не редактировали**. В `V5ProductionNativeTransactionPreflight.php` изменён только старый pin `2a43ad5a5ae90982b52dbea5980bfae469e23aa024c371687696f25aed280893` на проверенный фактический SHA `86db3f7f1695cdb49c5eb3261d2c54987946f78fe28a3da12d17d580d52b57e2`. Остальные два pin совпадают. Резервная копия: `/home/site_evrasia/web/evrasia.spb.ru/backups/v5-preflight-pin.yMQGOYPC`.
+3. После `php8.3-fpm` reload оба маршрута прошли тест отказа без JWT. **Код установлен, HTTP/JWT-gate negative test подтверждён. Успешная запись доверенного устройства с реальным Mobile ID JWT и последующая валидация trust НЕ тестировались; статус `POSITIVE_REAL_E2E_PASS` пока не достигнут.** Применять [обязательный чеклист](SAMZABERU_V5_ENDPOINT_RELEASE_CHECKLIST.md) при каждой новой ручке.
