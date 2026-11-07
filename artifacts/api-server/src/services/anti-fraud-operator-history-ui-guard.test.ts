@@ -35,3 +35,23 @@ test("operator physical-history metrics remain rendered from account snapshot fi
   assert.match(source, /account\.historyVisitDays \?\? 0/);
   assert.match(source, /account\.historyRestaurantCount \?\? 0/);
 });
+
+
+test("known account bonus remains visible when loyalty card metadata is not loaded", async () => {
+  const source = await loadAntiFraudPageSource();
+
+  const match = source.match(
+    /const loyaltyText = \(account: Account\): string => \{([\s\S]*?)\n\};/,
+  );
+
+  assert.ok(match, "loyaltyText helper must exist");
+
+  const helper = match[1];
+
+  assert.match(helper, /if \(count == null\) \{/);
+  assert.match(helper, /account\.bonusBalance == null/);
+  assert.match(
+    helper,
+    /Карты: не загружено · Бонусы: \$\{formatPoints\(account\.bonusBalance\)\}/,
+  );
+});
