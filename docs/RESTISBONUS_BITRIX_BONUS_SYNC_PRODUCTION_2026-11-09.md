@@ -191,3 +191,17 @@ Timing log contained **1701** parsed entries: `UPDATED=1604`, `ALREADY_EQUAL=10`
 - No changes to API V4/V5, SQL Server RESTISBONUS, or direct bonus balances. This cleanup does not independently explain or resolve historical `BITRIX_BRIDGE_RETRY` events. **Do not re-run completed deletion/consolidation.**
 
 **Implementation note:** Since production Bitrix maintains derived `b_sale_buyer_stat` records, future account consolidation must inspect those references instead of assuming an order-only user transfer is sufficient. Keep all other sale tables guarded and verify production code/API before reuse.
+
+## 11. Consolidation preserving historic order-change audit (2026-11-09)
+
+**Confirmed operator result:** `FINAL_STATUS=PASS`, `FINAL_RC=0`, `OPERATION_STATUS=COMPLETED`. This separate customer-account consolidation is complete on production. Omit personally identifying phone/account numbers and private backup contents from this public note.
+
+- One of the two proposed source Bitrix users was already absent; preflight verified it had no current orders. The remaining source account was `ACTIVE=N`, with `UF_BONUS=571` and **one** live `b_sale_order` order. The designated retained account was `ACTIVE=Y`, with `UF_BONUS=1158` and zero current orders.
+- Initial attempt stopped with `USER_STATE_OR_PHONE` when it incorrectly required the absent account to exist. Follow-up read-only checks established that account's absence. A second guarded attempt stopped before changes because `b_sale_order_change.USER_ID` had **20** references to the source; follow-up schema/reference audit verified they were historical order-change audit entries, **not 20 additional orders**.
+- The successful operation explicitly **preserved all 20 audit entries unchanged** (pre/post full-row SHA comparison) and guarded all other direct sale `USER_ID` references: **12** other sale tables inspected, none blocking. Only one source live order and one stale source `b_sale_buyer_stat` record needed handling.
+- Before any data write, a private targeted snapshot of source/destination account rows, profile fields, groups, phone-auth data, current orders, buyer statistics, and all 20 audit entries was written and verified. The backup is inside the private production website backup directory; it is not a full DB backup.
+- In a transactional update, the one source order's `b_sale_order.USER_ID` was reassigned to the destination, target buyer statistics recalculated with `Bitrix\\Sale\\BuyerStatistic::calculate()`, and obsolete source `b_sale_buyer_stat` row cleared. Order-change audit rows were not rewritten or deleted.
+- `CUser::Delete()` deleted the single remaining source account; final checks verified its absence, the other source's continued absence, the retained account active, the transferred order present under the retained user, the audit entries unchanged, and the retained `UF_BONUS=1158` unchanged. `ORDERS_MOVED=1`, `USERS_DELETED_THIS_RUN=1`, `ORDERS_DELETED=0`.
+- **No bonus transfer**: the deleted account's 571 Bitrix bonus value was captured in the private snapshot, not credited to the retained account. No direct RESTISBONUS / SQL Server writes were made. Do not assume the source's SQL Server state was cleared or that the historical `BITRIX_BRIDGE_RETRY` investigation is resolved.
+- **Do not rerun** the completed script. For future consolidations, distinguish `b_sale_order_change.USER_ID` audit actors from mutable sale-order owners, and keep audit rows immutable while preserving/restating buyer statistics.
+
