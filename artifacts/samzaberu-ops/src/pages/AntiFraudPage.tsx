@@ -154,8 +154,7 @@ type OperationProximityCase = {
   bill2: number;
   operation2: string;
   gapSeconds: number;
-  ownerStatus: 'resolved' | 'unresolved' | 'ambiguous' | 'not_loaded';
-  bitrixUserId: number | null;
+  ownerStatus: 'restis_card' | 'unresolved' | 'ambiguous' | 'not_loaded';
   ownerName: string | null;
   ownerPhone: string | null;
   cardLast4: string | null;
@@ -660,7 +659,7 @@ export default function AntiFraudPage() {
             <Utensils />
             <div>
               <h2>Операции одной карты в разных ресторанах</h2>
-              <p>Разница между положительными бонусными операциями по двум счетам — до 30 минут.</p>
+              <p>Одна бонусная карта на двух счетах в разных ресторанах с интервалом операций до 30 минут. Контакты — из RESTISBONUS, не подтверждённая личность пользователя Bitrix.</p>
             </div>
           </div>
 
@@ -691,16 +690,14 @@ export default function AntiFraudPage() {
               </div>
               {operations.cases.map((item) => <div className="simple-row" key={item.id}>
                 <div className="af-operation-owner">
-                  <strong>{item.ownerStatus === 'resolved'
-                    ? (item.ownerName || `Пользователь Bitrix ID ${item.bitrixUserId}`)
-                    : item.ownerStatus === 'ambiguous' ? 'Несколько возможных владельцев'
-                    : item.ownerStatus === 'not_loaded' ? 'Данные владельца ещё не загружены'
-                    : 'Владелец не найден в Bitrix'}</strong>
-                  <span>{item.ownerPhone
-                    ? <a href={`tel:${item.ownerPhone.replace(/[^+\d]/g, '')}`}>{item.ownerPhone}</a>
-                    : 'Телефон не указан'}</span>
-                  <small>{item.cardLast4 ? `Карта ···· ${item.cardLast4}` : 'Карта не идентифицирована'}
-                    {item.bitrixUserId ? ` · Bitrix ID ${item.bitrixUserId}` : ''}
+                  <strong>{item.ownerStatus === 'restis_card'
+                    ? item.ownerName
+                    : item.ownerStatus === 'ambiguous' ? 'Неоднозначная карточка'
+                    : item.ownerStatus === 'not_loaded' ? 'Контакт ещё не загружен'
+                    : 'Контакт в карточке не найден'}</strong>
+                  <span>{item.ownerPhone || 'Телефон не указан'}</span>
+                  <small>{item.ownerStatus === 'restis_card' ? 'По данным RESTISBONUS' : 'Контакт не подтверждён'}
+                    {item.cardLast4 ? ` · Карта ···· ${item.cardLast4}` : ''}
                     {` · ${item.id}`}</small>
                 </div>
                 <span>Ресторан ID {item.restaurant1} · счёт {item.bill1}<small>Операция {formatDate(item.operation1)}</small></span>
