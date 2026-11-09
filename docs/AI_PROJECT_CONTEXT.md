@@ -1,5 +1,8 @@
 # Evrasia AI Bot — AI Project Context
 
+> **RESTISBONUS -> BITRIX BONUS OUTBOX — фактическая схема production 09.11.2026:** [RESTISBONUS_BITRIX_BONUS_SYNC_PRODUCTION_2026-11-09.md](RESTISBONUS_BITRIX_BONUS_SYNC_PRODUCTION_2026-11-09.md). Полная подтверждённая цепочка `ev-bonus-sync.timer` -> `event_runner.py` -> `event_worker.py` -> `event_bridge.php` -> CAS/Bitrix, пути и SHA, SQL Server `RESTISBONUS` outbox, статусы ошибок и предел 10 попыток. Подтверждена причина остановки `bridge-timings.log`: ограничение `filesize < 131072`; последняя запись 08.11, размер 131114 байт. Причины 1055 `BITRIX_BRIDGE_RETRY` пока не установлены, ручной повтор запрещён до проверки. Обновление MariaDB отдельно приостановлено. **Не повторять поиск runtime файлов в `site/local` и аудит цепочки запуска.**
+
+
 > **ПРИОРИТЕТНОЕ ОБНОВЛЕНИЕ САМЗАБЕРУ API V5 — 02.11.2026:** [Production checkpoint](SAMZABERU_V5_PRODUCTION_STATUS_2026-11-02.md) и [полная спецификация API V5](SAMZABERU_API_V5_FULL_SPECIFICATION_2026-11-02.txt). В отличие от исторического состояния 12–15 октября, API V5 теперь реально доступен на production; есть успешные сценарии регистрации, MFA, Mobile ID, legal, публичных маршрутов, бонусных кодов и заказов. Ряд изменяющих POST-операций остался без positive E2E; GET /orders/{id}/push — заглушка. Продолжать интеграцию с разработчиком СамЗаберу, НЕ повторять старые read-only проверки и НЕ менять V4. Далее ниже — исторические снимки различных workstreams, их «V5 503/off» считать устаревшими для СамЗаберу.
 
 
