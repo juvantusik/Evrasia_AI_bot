@@ -92,10 +92,11 @@ export const detectCrossRestaurantCardOperationProximity = (
         if (delta > limitMs) break;
         if (first.restaurantKey === second.restaurantKey) continue;
         // Receipt IDs may repeat between restaurants, so include restaurant in identity.
-        const identity = JSON.stringify([
-          first.restaurantKey, first.receiptKey,
-          second.restaurantKey, second.receiptKey,
-        ]);
+        const receipts = [
+          JSON.stringify([first.restaurantKey, first.receiptKey]),
+          JSON.stringify([second.restaurantKey, second.receiptKey]),
+        ].sort();
+        const identity = JSON.stringify(receipts);
         const candidate: AntiFraudCrossRestaurantOperationProximity = {
           cardKey,
           firstOperationKey: first.operationKey,
