@@ -289,3 +289,19 @@ Timing log contained **1701** parsed entries: `UPDATED=1604`, `ALREADY_EQUAL=10`
 - The export contains personal customer phone numbers; **do not commit or publish it**. A self-contained private `ev-bonus-audit-837.sh` diagnostic artifact was prepared outside the repository for operator transfer to `evrasia`; it embeds the data compressed and Base64-encoded, which **is not encryption**, and uses root-only temporary files. The artifact passes local Bash and PHP syntax checks and a round-trip payload SHA check; **no production invocation has been reported yet**.
 - The diagnostic is read-only and matches the Bridge's Russian 4-variant `b_user_phone_auth.PHONE_NUMBER` path, including distinct-user-count = 0 / 1 / >1, then current `b_user.ACTIVE` / `b_uts_user.UF_BONUS` state. The separate `EV_BONUS_*_NORM` fallback applies only when all four variants are identical, not to these Russian-format values. It will report aggregate values only, with no raw phones, user IDs or balances.
 - Historical diagnosis remains uncertain: this compares **current Bitrix state** to **historical failed SQL Server events**; a missing account today would yield `NO_SITE_USER` and acknowledgement now, not necessarily explain an old RETRY. The audit does not call CAS or `applyVerified()`, nor reset any status-3 event.
+
+## 20. Read-only 837-phone correlation against current Bitrix MariaDB (2026-11-09)
+
+**Operator-confirmed on `evrasia`: final `FINAL_STATUS=PASS`, `FINAL_RC=0`, `MODE=READ_ONLY`**. A self-contained private input for **837** unique failed `SourcePhone` values was verified; the exported sum of exhausted `BITRIX_BRIDGE_RETRY` events was **1065** (one higher than the preceding 1064-event snapshot, not yet corroborated by event-level SQL). A direct root-only `mysqli` connection using existing Bitrix `.settings.php` succeeded in a MariaDB `READ ONLY` transaction on `eurasia_new`, avoiding Bitrix CLI prolog. No SQL Server replay, bonus write or source edit.
+
+- Queries compared four assumed Russian phone variants (`10-digit national`, `7+national`, `8+national`, `+7+national`) against indexed `b_user_phone_auth.PHONE_NUMBER`, then assessed current `b_user.ACTIVE` and `b_uts_user.UF_BONUS`; **21** auth lookup batches, **65** auth rows, **65** distinct matched user IDs.
+- `ZERO_MATCH`: **772 phones / 926 failed events**.
+- `MULTIPLE_MATCHES`: **0 / 0**.
+- `ONE_USER_MISSING`: **0 / 0**.
+- `ONE_USER_INACTIVE`: **13 / 25**.
+- `ONE_USER_BONUS_ROW_MISSING`: **3 / 3**.
+- `ONE_USER_BONUS_NONFINITE`: **0 / 0**.
+- `ONE_USER_REACHES_EXECUTOR` (according to simplified audit, executor **not called**): **49 / 111**. Additionally, 3 of this bucket had `UF_BONUS=NULL`, zero empty and zero nonnumeric. `MAX_MATCHED_USER_IDS_PER_PHONE=1`. All 837 phones and 1065 events reconcile.
+- **Interpret with care:** Bridge is known to return accepted `NO_SITE_USER` for zero matches; those 772 **current** zero matches by themselves **cannot account for historical exhausted `BITRIX_BRIDGE_RETRY`**. Before attributing failures to missing users or duplicate users, check exact production Bridge phone variant order, matching SQL, any fallback branch, and the worker's PHP subprocess contract. The simplified audit's four variants are assumptions, **not proven identical to the exact Bridge logic**. Current account state can differ from the failure-time state. No account changes or blanket retries authorized.
+- Earlier full Bitrix CLI `prolog_before.php` diagnostic failed during session bootstrap (`RuntimeException` in `Session.php:143`); direct `mysqli` read-only audit succeeded, so that CLI issue was limited to the diagnostic path and does not prove the running PHP Bridge is broken.
+
