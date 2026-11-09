@@ -154,6 +154,11 @@ type OperationProximityCase = {
   bill2: number;
   operation2: string;
   gapSeconds: number;
+  ownerStatus: 'resolved' | 'unresolved' | 'ambiguous' | 'not_loaded';
+  bitrixUserId: number | null;
+  ownerName: string | null;
+  ownerPhone: string | null;
+  cardLast4: string | null;
 };
 
 type OperationProximitySnapshot = {
@@ -682,10 +687,22 @@ export default function AntiFraudPage() {
             </div>
             <div className="simple-table af-operation-table">
               <div className="simple-head">
-                <span>Кандидат</span><span>Первый счёт</span><span>Второй счёт</span><span>Интервал</span>
+                <span>Владелец карты</span><span>Первый счёт</span><span>Второй счёт</span><span>Интервал</span>
               </div>
               {operations.cases.map((item) => <div className="simple-row" key={item.id}>
-                <strong>{item.id}</strong>
+                <div className="af-operation-owner">
+                  <strong>{item.ownerStatus === 'resolved'
+                    ? (item.ownerName || `Пользователь Bitrix ID ${item.bitrixUserId}`)
+                    : item.ownerStatus === 'ambiguous' ? 'Несколько возможных владельцев'
+                    : item.ownerStatus === 'not_loaded' ? 'Данные владельца ещё не загружены'
+                    : 'Владелец не найден в Bitrix'}</strong>
+                  <span>{item.ownerPhone
+                    ? <a href={`tel:${item.ownerPhone.replace(/[^+\d]/g, '')}`}>{item.ownerPhone}</a>
+                    : 'Телефон не указан'}</span>
+                  <small>{item.cardLast4 ? `Карта ···· ${item.cardLast4}` : 'Карта не идентифицирована'}
+                    {item.bitrixUserId ? ` · Bitrix ID ${item.bitrixUserId}` : ''}
+                    {` · ${item.id}`}</small>
+                </div>
                 <span>Ресторан ID {item.restaurant1} · счёт {item.bill1}<small>Операция {formatDate(item.operation1)}</small></span>
                 <span>Ресторан ID {item.restaurant2} · счёт {item.bill2}<small>Операция {formatDate(item.operation2)}</small></span>
                 <strong>{Math.floor(item.gapSeconds / 60)} мин {String(item.gapSeconds % 60).padStart(2, '0')} сек</strong>
