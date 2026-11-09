@@ -97,3 +97,58 @@ test("HTTP failures do not include response body or token", async () => {
     !err.message.includes("s".repeat(40)),
   );
 });
+
+test("accepts RESTISBONUS card contact without claiming Bitrix identity", () => {
+  const source = example();
+  const enriched = {
+    ...source,
+    cases: [{
+      ...source.cases[0],
+      owner_status: "restis_card",
+      owner_source: "restis_cards",
+      owner_name: "Тестовая запись RESTIS",
+      owner_phone: "+7 (999) 000-11-22",
+      card_last4: "2211",
+      CardNumber: "9999000011112211",
+    }],
+  };
+  const data = parseAntiFraudOperationProximitySnapshot(enriched);
+  assert.deepEqual({
+    status: data.cases[0].ownerStatus,
+    name: data.cases[0].ownerName,
+    phone: data.cases[0].ownerPhone,
+    last4: data.cases[0].cardLast4,
+  }, {
+    status: "restis_card", name: "Тестовая запись RESTIS",
+    phone: "+7 (999) 000-11-22", last4: "2211",
+  });
+  assert.equal(JSON.stringify(data).includes("9999000011112211"), false);
+});
+
+test("rejects RESTIS owner contact without explicit source or phone", () => {
+  const source = example();
+  assert.throws(() => parseAntiFraudOperationProximitySnapshot({
+    ...source, cases: [{ ...source.cases[0], owner_status: "restis_card", owner_name: "Test", owner_phone: "+79990001122", card_last4: "2211" }],
+  }), /restis_owner_fields/);
+  assert.throws(() => parseAntiFraudOperationProximitySnapshot({
+    ...source, cases: [{ ...source.cases[0], owner_status: "restis_card", owner_source: "restis_cards", owner_name: "Test", card_last4: "2211" }],
+  }), /restis_owner_fields/);
+});
+
+test("rejects personal identity in unresolved cases", () => {
+  const source = example();
+  assert.throws(() => parseAntiFraudOperationProximitySnapshot({
+    ...source, cases: [{ ...source.cases[0], owner_status: "unresolved", owner_name: "Unsupported" }],
+  }), /unverified_owner/);
+});
+
+test("unresolved owner remains explicit without inventing name and phone", () => {
+  const source = example();
+  const actual = parseAntiFraudOperationProximitySnapshot({
+    ...source, cases: [{ ...source.cases[0], owner_status: "unresolved", card_last4: "1234" }],
+  });
+  assert.equal(actual.cases[0].ownerStatus, "unresolved");
+  assert.equal(actual.cases[0].ownerName, null);
+  assert.equal(actual.cases[0].ownerPhone, null);
+  assert.equal(actual.cases[0].cardLast4, "1234");
+});

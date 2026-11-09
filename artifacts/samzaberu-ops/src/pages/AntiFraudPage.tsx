@@ -154,6 +154,10 @@ type OperationProximityCase = {
   bill2: number;
   operation2: string;
   gapSeconds: number;
+  ownerStatus: 'restis_card' | 'unresolved' | 'ambiguous' | 'not_loaded';
+  ownerName: string | null;
+  ownerPhone: string | null;
+  cardLast4: string | null;
 };
 
 type OperationProximitySnapshot = {
@@ -655,7 +659,7 @@ export default function AntiFraudPage() {
             <Utensils />
             <div>
               <h2>Операции одной карты в разных ресторанах</h2>
-              <p>Разница между положительными бонусными операциями по двум счетам — до 30 минут.</p>
+              <p>Одна бонусная карта на двух счетах в разных ресторанах с интервалом операций до 30 минут. Контакты — из RESTISBONUS, не подтверждённая личность пользователя Bitrix.</p>
             </div>
           </div>
 
@@ -682,10 +686,20 @@ export default function AntiFraudPage() {
             </div>
             <div className="simple-table af-operation-table">
               <div className="simple-head">
-                <span>Кандидат</span><span>Первый счёт</span><span>Второй счёт</span><span>Интервал</span>
+                <span>Владелец карты</span><span>Первый счёт</span><span>Второй счёт</span><span>Интервал</span>
               </div>
               {operations.cases.map((item) => <div className="simple-row" key={item.id}>
-                <strong>{item.id}</strong>
+                <div className="af-operation-owner">
+                  <strong>{item.ownerStatus === 'restis_card'
+                    ? item.ownerName
+                    : item.ownerStatus === 'ambiguous' ? 'Неоднозначная карточка'
+                    : item.ownerStatus === 'not_loaded' ? 'Контакт ещё не загружен'
+                    : 'Контакт в карточке не найден'}</strong>
+                  <span>{item.ownerPhone || 'Телефон не указан'}</span>
+                  <small>{item.ownerStatus === 'restis_card' ? 'По данным RESTISBONUS' : 'Контакт не подтверждён'}
+                    {item.cardLast4 ? ` · Карта ···· ${item.cardLast4}` : ''}
+                    {` · ${item.id}`}</small>
+                </div>
                 <span>Ресторан ID {item.restaurant1} · счёт {item.bill1}<small>Операция {formatDate(item.operation1)}</small></span>
                 <span>Ресторан ID {item.restaurant2} · счёт {item.bill2}<small>Операция {formatDate(item.operation2)}</small></span>
                 <strong>{Math.floor(item.gapSeconds / 60)} мин {String(item.gapSeconds % 60).padStart(2, '0')} сек</strong>
