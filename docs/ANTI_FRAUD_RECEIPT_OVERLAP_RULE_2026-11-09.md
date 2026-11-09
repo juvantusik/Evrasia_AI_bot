@@ -123,3 +123,10 @@ Next implementation should expose candidates separately from confirmed receipt c
 - Скрипт и offline fixtures сохранены в GitHub; фактический запуск на production и результаты unit-тестов пока **не подтверждены**. Ни сайт, ни bot app, ни cron/timer ещё не изменены.
 
 Сейчас корректный ближайший этап — однократный read-only smoke test этого CLI на хосте `evrasia`, затем отдельно согласованный защищенный transport → API → UI. Не выдавать наличие Python файла в репозитории за production интеграцию.
+
+
+## Первый production smoke test SQL reader
+
+Оператор выполнил **read-only** Python smoke test `event_worker.connect_source()` с уже добавленными тремя SELECT column permissions. Подтверждено `DB_NAME=RESTISBONUS`, `ORIGINAL_LOGIN=ev_bonus_sync_ro`; за **одни полные сутки 2026-11-08** прочитаны **6781** положительных, неотклоненных событий из `dbo.RB_CARD_LOG` (по `DateWrite`), **6381** различных карт. Cross-restaurant operation-proximity candidates (<=30 minutes): **0**. `FINAL_STATUS=PASS`, никакой записи/worker execution/site change. Это ожидаемо относительно предыдущих 15 cross-restaurant receipt-overlap пар: все 7 пар с `DateWrite` gap <=30 min в предыдущей выборке пришлись на **2–5 ноября**, а не 8 ноября.
+
+**Следующий контроль**: однократный **7-day DateWrite window (2026-11-02 .. 2026-11-09 exclusive)** с тем же Python источником для подтверждения известных пар, включая объекты 167/62, счета 961405/742989, ~665 s. Результаты `DateWrite`-based proximity не следует сравнивать напрямую с 1368 `OPEN_DATE_TIME .. DateWrite`-based candidate intervals: это разные правила.
