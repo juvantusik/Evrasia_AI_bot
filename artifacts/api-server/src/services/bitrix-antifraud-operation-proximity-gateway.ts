@@ -15,8 +15,7 @@ export type AntiFraudOperationProximityCase = {
   bill2: number;
   operation2: string;
   gapSeconds: number;
-  ownerStatus: "resolved" | "unresolved" | "ambiguous" | "not_loaded";
-  bitrixUserId: number | null;
+  ownerStatus: "restis_card" | "unresolved" | "ambiguous" | "not_loaded";
   ownerName: string | null;
   ownerPhone: string | null;
   cardLast4: string | null;
@@ -110,29 +109,33 @@ export const parseAntiFraudOperationProximitySnapshot = (
       return invalid("proximity");
     }
 
-    // Site resolves ownership before serving this protected response; never expose raw CardNumber.
-    const allowedStatus = ["resolved", "unresolved", "ambiguous"] as const;
+    // The authoritative record is a RESTISBONUS dbo.Cards contact record, not a proven Bitrix identity.
+    // Only allowlisted owner display fields enter the bot/UI. Raw CardNumber is never returned.
+    const allowedStatus = ["restis_card", "unresolved", "ambiguous"] as const;
     const ownerStatus = item.owner_status === undefined
       ? "not_loaded"
       : allowedStatus.find((status) => status === item.owner_status);
     if (!ownerStatus) return invalid("owner_status");
-    const bitrixUserId = item.bitrix_user_id === undefined || item.bitrix_user_id === null
-      ? null : natural(item.bitrix_user_id, "bitrix_user_id", 1);
     const ownerName = item.owner_name === undefined || item.owner_name === null
       ? null : (typeof item.owner_name === "string" && item.owner_name.trim().length > 0 &&
-        item.owner_name.length <= 255 ? item.owner_name.trim() : invalid("owner_name"));
+        item.owner_name.trim().length <= 255 && !/[\u0000-\u001f\u007f]/.test(item.owner_name)
+        ? item.owner_name.trim() : invalid("owner_name"));
     const ownerPhone = item.owner_phone === undefined || item.owner_phone === null
-      ? null : (typeof item.owner_phone === "string" && /^\\+?[0-9()\\s-]{7,32}$/.test(item.owner_phone)
-        ? item.owner_phone : invalid("owner_phone"));
+      ? null : (typeof item.owner_phone === "string" && item.owner_phone.trim().length > 0 &&
+        item.owner_phone.trim().length <= 64 && !/[\u0000-\u001f\u007f]/.test(item.owner_phone)
+        ? item.owner_phone.trim() : invalid("owner_phone"));
     const cardLast4 = item.card_last4 === undefined || item.card_last4 === null
-      ? null : (typeof item.card_last4 === "string" && /^\\d{4}$/.test(item.card_last4)
+      ? null : (typeof item.card_last4 === "string" && /^\d{4}$/.test(item.card_last4)
         ? item.card_last4 : invalid("card_last4"));
-    if (ownerStatus === "resolved" && bitrixUserId === null) return invalid("resolved_owner");
-    if (ownerStatus !== "resolved" && bitrixUserId !== null) return invalid("unresolved_owner");
-
+    if (ownerStatus === "restis_card" && (
+      item.owner_source !== "restis_cards" || !ownerName || !ownerPhone || !cardLast4
+    )) return invalid("restis_owner_fields");
+    if (ownerStatus !== "restis_card" && (ownerName !== null || ownerPhone !== null)) {
+      return invalid("unverified_owner");
+    }
     return {
       id: item.id, restaurant1, bill1, operation1, restaurant2, bill2, operation2, gapSeconds,
-      ownerStatus, bitrixUserId, ownerName, ownerPhone, cardLast4,
+      ownerStatus, ownerName, ownerPhone, cardLast4,
     };
   });
 
