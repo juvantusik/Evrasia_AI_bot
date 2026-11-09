@@ -130,3 +130,27 @@ Next implementation should expose candidates separately from confirmed receipt c
 Оператор выполнил **read-only** Python smoke test `event_worker.connect_source()` с уже добавленными тремя SELECT column permissions. Подтверждено `DB_NAME=RESTISBONUS`, `ORIGINAL_LOGIN=ev_bonus_sync_ro`; за **одни полные сутки 2026-11-08** прочитаны **6781** положительных, неотклоненных событий из `dbo.RB_CARD_LOG` (по `DateWrite`), **6381** различных карт. Cross-restaurant operation-proximity candidates (<=30 minutes): **0**. `FINAL_STATUS=PASS`, никакой записи/worker execution/site change. Это ожидаемо относительно предыдущих 15 cross-restaurant receipt-overlap пар: все 7 пар с `DateWrite` gap <=30 min в предыдущей выборке пришлись на **2–5 ноября**, а не 8 ноября.
 
 **Следующий контроль**: однократный **7-day DateWrite window (2026-11-02 .. 2026-11-09 exclusive)** с тем же Python источником для подтверждения известных пар, включая объекты 167/62, счета 961405/742989, ~665 s. Результаты `DateWrite`-based proximity не следует сравнивать напрямую с 1368 `OPEN_DATE_TIME .. DateWrite`-based candidate intervals: это разные правила.
+
+
+## Контрольное подтверждение семи суток: PASS
+
+2026-11-09 оператор выполнил **дополнительный независимый production read-only SQL/Python аудит** на host `evrasia` под `ev_bonus_sync_ro` за **2026-11-02 00:00:00 – 2026-11-09 00:00:00 (exclusive)**, фильтр по `DateWrite`, `Bill_Sum>0`, `REJECT=0/NULL`, ID и CardNumber не пустые. Результат:
+- `SOURCE_OPERATION_ROWS=44903`, `CARDS_IN_SOURCE=35622`;
+- `CANDIDATE_RECEIPT_PAIRS=7`, `CANDIDATE_CARDS=7`;
+- `PAIRS_WITHIN_5_MIN=0`, `PAIRS_WITHIN_15_MIN=1`, `PAIRS_WITHIN_30_MIN=7`;
+- `KNOWN_REFERENCE_PAIR_FOUND=YES`, `KNOWN_REFERENCE_GAP_SECONDS=665`;
+- все семь пар совпали с ранее извлеченными семью случаями из SSMS;
+- `FINAL_STATUS=PASS`, `DATABASE_WRITE=NO`, `SITE_WRITE=NO`, `API_WRITE=NO`, `BONUS_WORKER_EXECUTION=NO`.
+
+Точная семерка (парные `ID_OBJECT/ID_BILL`, не персональные данные):
+1. `167/961405` и `62/742989` — 665 с.
+2. `143/784590` и `167/961853` — 1151 с.
+3. `41/1327256` и `44/649426` — 1311 с.
+4. `122/789729` и `166/412322` — 1506 с.
+5. `154/578775` и `70/696192` — 1509 с.
+6. `6/523046` и `153/843494` — 1555 с.
+7. `38/1055992` и `67/678789` — 1732 с.
+
+**Что подтверждено:** реальный SQL Server source readable с минимальными column grants, и автономная логика proximity воспроизводит результат SSMS для семи суток. **Что НЕ подтверждено:** принадлежность карты клиенту/официанту, момент предъявления, физическое присутствие, реальный конец чека.
+
+**Дальше:** защищённый source-to-bot feed на базе действующей website Anti-Fraud авторизации; не подключать к существующему скорингу, автоблокировкам или `VIP_HISTORY`. Production website `AntiFraudLoyaltyService.php` имеет `authorized()`, `response()` и существующий route `POST /api/internal/anti-fraud/loyalty`; **сам SQL reader пока не интегрирован в PHP endpoint**.
