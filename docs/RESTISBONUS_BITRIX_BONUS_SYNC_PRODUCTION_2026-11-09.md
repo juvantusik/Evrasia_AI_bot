@@ -179,3 +179,15 @@ Timing log contained **1701** parsed entries: `UPDATED=1604`, `ALREADY_EQUAL=10`
 - The historical `BITRIX_BRIDGE_RETRY` status-3 failures **remain open**; do not equate removal of duplicate accounts with verified resolution of all past events. **Do not rerun the deletion scripts** on completed targets.
 
 **Checkpoint boundary:** The last operator output confirms account deletion and preservation checks, not a fresh full count of all users or a proof that every duplicate phone group is resolved.
+
+## 10. Targeted consolidation of three active Bitrix accounts (2026-11-09)
+
+**Production result confirmed by the operator:** `FINAL_STATUS=PASS`, `FINAL_RC=0`, `OPERATION_STATUS=COMPLETED`. A separately selected group of three **active** Bitrix accounts shared a phone-number fallback mapping. The operator designated one account to retain and two to delete. Phone number, exact customer user IDs, and backup contents are intentionally omitted from this repository.
+
+- Initial preflight verified the exact phone-owner set, all three `ACTIVE=Y`, and zero/NULL `UF_BONUS` for the two source accounts. Each source had exactly **one live `b_sale_order` order**. The first attempt halted **before writes** because `b_sale_buyer_stat` had user references; this is derived buyer statistics, not an additional order.
+- Revised guarded procedure identified **2 old buyer-stat rows** across the two source users, **1 site/currency group** to recalculate, and checked **13 other sale tables** having direct `USER_ID` fields. No other blocking sale references were found.
+- Verified private snapshot was written before changes (customer data retained only under restricted production backup storage). Then two source orders were re-owned by the retained user using an exact-row, transactional update to `b_sale_order.USER_ID`; `Bitrix\\Sale\\BuyerStatistic::calculate()` recalculated target statistics for the verified site/currency group, and obsolete source buyer-stat rows were cleared in the same transaction.
+- After committing the order/statistic changes, `CUser::Delete()` successfully deleted **both** source accounts; final checks verified both source users absent, retained user present and active, **both transferred orders preserved**, and retained `UF_BONUS` unchanged. Results: `ORDERS_MOVED=2`, `USERS_DELETED=2`, `ORDERS_DELETED=0`.
+- No changes to API V4/V5, SQL Server RESTISBONUS, or direct bonus balances. This cleanup does not independently explain or resolve historical `BITRIX_BRIDGE_RETRY` events. **Do not re-run completed deletion/consolidation.**
+
+**Implementation note:** Since production Bitrix maintains derived `b_sale_buyer_stat` records, future account consolidation must inspect those references instead of assuming an order-only user transfer is sufficient. Keep all other sale tables guarded and verify production code/API before reuse.
