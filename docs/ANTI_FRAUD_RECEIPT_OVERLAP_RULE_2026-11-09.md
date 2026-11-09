@@ -208,3 +208,13 @@ Cause of **authorized 503** is NOT YET established. The PHP method returns 503 f
 - новые тесты `bitrix-antifraud-operation-proximity-gateway.test.ts` (парсинг, privacy, неверные признаки, counts, HTTP failure). **Результат выполнения тестов и CI проверить отдельно.** Production бот `eur-bot-01` не изменялся.
 
 **Ограничение MVP:** snapshot снимается **однократно** при site deploy и автоматически становится недоступным после 48 часов, поскольку site-side PHP endpoint проверяет `generated_at >= now-172800`. В интерфейсе есть кнопка **«Перечитать снимок»**, которая только перечитывает API и **не запускает RESTISBONUS query**. Для постоянного мониторинга потребуется отдельное одобренное расписание минимального site-side refresh (без изменения bonus worker). До настройки refresh нельзя считать эту реализацию непрерывно работающим контролем. ID `OP-001` нестабилен между снимками, это локальный ordinal, а не постоянный identity кейса.
+
+
+## 2026-11-09 — operator contact enrichment for operation-proximity cases (PR #80)
+
+- **Было:** released PR #79 renders 7 cross-restaurant operation candidates only as opaque OP IDs and receipt IDs. Site snapshot contains no card identity to resolve a contact. Existing Bitrix protected `card-map` was verified in production: 7/7 exact RESTIS source cards were `unresolved`, 0 were matched or ambiguous.
+- **Источник:** SSMS read-only checks found 7/7 exact records in `RESTISBONUS.dbo.Cards`, each with populated `NAME` and `PHONE`; `MPHONE` was empty for all 7. These are **details recorded on the RESTIS card**, not proven physical presence or verified identity of a Bitrix account.
+- **Стало (proposed PR #80, not yet deployed):** targeted read-only recovery of exactly 14 operation source rows and the 7 cards; fetch `NAME` and `PHONE` from `dbo.Cards` using the existing site-side read-only SQL Server connector; enrich only the private operation-proximity snapshot, return allowlisted name/phone/card last 4 via existing protected site endpoint, display those fields in the existing Anti-Fraud «Операции карт» tab. No raw `CardNumber` in HTTP UI, app log, or persisted enriched snapshot.
+- **Guards:** the site SQL credential `ev_bonus_sync_ro` has not yet been verified to have `SELECT` on `dbo.Cards.NAME/PHONE` (the operator used SSMS credentials). Installer must fail before site modification if those columns cannot be queried. No changes to bonus worker, RESTIS/Bitrix DB, V4/V5, Risk Score or automatic blocks.
+- **Current status:** source data existence `7/7` verified by operator; proposed backend/UI in PR #80, **not deployed or production-tested**. Snapshot freshness remains 48 hours with no automatic SQL source refresh.
+
