@@ -108,3 +108,18 @@ Next implementation should expose candidates separately from confirmed receipt c
 На той же feature-ветке добавлен `anti-fraud-card-operation-proximity.ts`: отдельно от детектора подтверждённых интервалов закрытия чеков он распознаёт **положительные бонусные операции одной конкретной карты в разных ресторанах с разницей до 30 минут**. Он принимает только заранее отфильтрованные source rows, дедуплицирует повторные операции, выбирает ближайшую по времени пару операций для каждой пары **реальных счетов**, маркирует результат `positive_bonus_operations_not_receipt_closure`. Никаких writes/blocks/scoring. Добавлено 7 unit-тестов; факт исполнения unit-тестов и CI пока не подтверждён.
 
 **Остаток для боевого запуска:** предоставить защищённый backend source с `cardKey` (не raw `CardNumber` в UI), `ID_OBJECT`, `ID_BILL`, уникальным ID операции, и `DateWrite` из `RESTISBONUS`; существующий `ev_bonus_sync_ro` **не имеет SELECT** на нужные идентификаторы счета и объекта. Это требует отдельного решения для read-only прав и site-side API. Нельзя заменять `cardKey` на Bitrix `USER_ID` или выдавать неподтверждённый close за факт.
+
+
+## SQL Server доступ и автономный reader: 2026-11-09
+
+Оператор в **SSMS на `EUR-CRM`** выполнил успешную транзакцию `GRANT SELECT ON OBJECT::dbo.RB_CARD_LOG (ID_OBJECT, ID_BILL, Bill_Sum) TO [ev_bonus_sync_ro]` с `EXECUTE AS LOGIN` и `SELECT TOP (0)`. Подтвержденный вывод: `EXISTING_COLUMN_GRANTS=0`, `PASS: THREE_COLUMN_SELECT_GRANTED`, `PASS: EFFECTIVE_READ_ACCESS`, `FINAL_STATUS=PASS`. Исходные данные БД, схемы и bonus worker не менялись. Старые права `CardNumber`, `ID`, `DateWrite`, `REJECT` сохранились; `OPEN_DATE_TIME` и `Waiter` не выдавались.
+
+Создан отдельный read-only Python CLI `scripts/anti-fraud/restis-card-operation-reader.py` и offline fixtures `test_restis_card_operation_reader.py`, **только в feature-ветке**. Алгоритм:
+- использует уже существующий `event_worker.connect_source()` для SQL Server, НЕ вызывает `event_runner.py` и НЕ запускает worker;
+- проверяет `DB_NAME()`, `ORIGINAL_LOGIN()`, host и root; запрашивает последние максимум 7 полных дней по **`DateWrite`** с `Bill_Sum>0`, `REJECT=0/NULL`, предел 200 000 строк;
+- только для **точно той же карты**, двух **разных ресторанов**, выбирает минимальный разрыв до 1800 секунд между **реальными положительными бонусными операциями** разных физических счетов `(ID_OBJECT, ID_BILL)`;
+- выводит агрегаты и максимум 20 примеров без номера карты, токенов, персональных данных; не делает writes/score/block;
+- отмечает, что это **не** `closed_at`, и не факт личного предъявления карты владельцем.
+- Скрипт и offline fixtures сохранены в GitHub; фактический запуск на production и результаты unit-тестов пока **не подтверждены**. Ни сайт, ни bot app, ни cron/timer ещё не изменены.
+
+Сейчас корректный ближайший этап — однократный read-only smoke test этого CLI на хосте `evrasia`, затем отдельно согласованный защищенный transport → API → UI. Не выдавать наличие Python файла в репозитории за production интеграцию.
