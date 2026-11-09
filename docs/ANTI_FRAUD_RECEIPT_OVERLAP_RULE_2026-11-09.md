@@ -71,3 +71,19 @@ Read-only SSMS result for one previously confirmed card, 2026-11-09: **29 candid
 This strengthens the fact of different bills for the same card, including events involving multiple waiters; it does **not** prove different physical tables or that one of the waiters owns the card. The `Waiter` value is the operational field recorded for the bonus transaction and its semantics must not be overstated. End time remains a **proxy via last positive DateWrite**, not a verified POS check close. The 29 candidate pairs must not be scored as 29 confirmed parallel open tables.
 
 Next implementation should expose candidates separately from confirmed receipt close evidence, with `same_restaurant`/`different_restaurants`, `same_waiter`/`different_waiter`, and a source/evidence-quality marker. No automatic blocking.
+
+
+## Пробный сетевой срез за семь полных суток
+
+Оператор выполнил ограниченный read-only срез `dbo.RB_CARD_LOG` за **7 полных суток** (фильтр по дате открытия, положительная `Bill_Sum`, `REJECT=0/NULL`, `DateWrite > OPEN_DATE_TIME`, последняя положительная операция не позже восьми часов с открытия):
+
+- **1 368** candidate overlap pairs (не уникальные мошеннические события).
+- **1 130** разных карт с хотя бы одной кандидатной парой.
+- **15** candidate pairs в **разных ресторанах**, на **15 разных картах** (верхние 15 строк по приоритету; у каждой одна cross-restaurant пара).
+- **1 353** pairs в одном ресторане.
+- **1 047** candidate pairs с одним значением `Waiter`; **321** с разными; unknown = 0 в этом наборе.
+- Наиболее выраженные систематические совпадения **в одном ресторане**: без раскрытия card numbers, rank #16 — 28 пар в 7 дней, #17 — 12 пар в 4 дня, #18 — 10 пар за один день, #19 — 8 пар в 6 дней, #20 — 8 пар за два дня. Количество пар может включать несколько комбинаций одних и тех же чеков при тройных пересечениях, поэтому оно не равно числу отдельных чеков.
+
+**Интерпретация:** 15 пар в разных ресторанах приоритизировать для анализа времен **положительных бонусных операций на каждом отдельном счете**, поскольку интервал открытия счета + last positive DateWrite может преувеличивать фактическую одновременность присутствия гостя. Сравнить наименьшую разницу между реальными `DateWrite` на двух счетах; не утверждать, что это момент прикладывания карты/закрытие, пока семантика не установлена. Затем проверить выраженные recurring same-restaurant cases. Не запускать второй массовый source scan без необходимости: известны точные пары `(ID_OBJECT, ID_BILL)` для этих 15 примеров и доступны локальные точечные индексированные чтения.
+
+**Пока НЕ сделано:** автоматическое выявление на production, protected source API для фактических чеков, подтвержденное `closed_at`, operator UI/risk integration. SQL Server остается read-only; сайт, бот, права и баллы не менялись.
