@@ -190,3 +190,21 @@ Cause of **authorized 503** is NOT YET established. The PHP method returns 503 f
 Попытка передать фиксированный установочный скрипт через inline base64/gzip heredoc 2026-11-09 завершилась `gzip: stdin: invalid compressed data--crc error`, `WRAPPER_RC=1`. Bash wrapper вышел во время декомпрессии **до** проверки SHA и **до** запуска install-script; никаких операций на production этим запуском не сделано. Локальный исходный файл `deploy_open_basedir_fixed.sh` с SHA-256 `7e9ef25ca0cdc6aad62e3d1f9c9cf6221c8b498692d3bf5471be6e1216c92c7c` цел и проходит `bash -n`.
 
 Чтобы не передавать 8К+ символов в терминале, проверенный **читаемый** (не сжатый) скрипт добавлен в **feature branch** по `scripts/anti-fraud/deploy-operation-proximity-site-20261109.sh`, commit `ea1ca499166a9dfb16ef4a21a4fb13d96452ea3e`, blob `79b953f62e24268aa6af315b7adf1d30ac352291`. GitHub file content was compared byte-for-byte against saved installer source: 20669 bytes/characters, exact match. Следующий шаг — из production скачать этот **пинованный коммит** по HTTPS, сверить SHA-256, проверить `bash -n` и только затем запускать под root. Нет автоматического deployment. Нельзя угадывать URL из текущего feature head: используем commit immutable.
+
+
+## Production protected source API PASS и отдельная вкладка бота
+
+**Факт production 2026-11-09, полученный от оператора:** site deployment `scripts/anti-fraud/deploy-operation-proximity-site-20261109.sh` из SHA-пинованного коммита завершился `FINAL_STATUS=PASS`, `FINAL_RC=0`, `WRAPPER_RC=0`:
+- `BACKUP_DIRECTORY=/home/site_evrasia/web/evrasia.spb.ru/backups/af-operation-proximity.3nRhh1EX`;
+- `SOURCE_OPERATIONS=44903`, `CARDS_IN_SOURCE=35622`, `CANDIDATE_CARDS=7`, `CANDIDATE_PAIRS=7`, `REFERENCE_PAIR_FOUND=YES`;
+- новый **`GET https://evrasia.rest/api/internal/anti-fraud/operation-proximity`** успешно установлен в существующих `AntiFraudLoyaltyService.php` / `local/routes/api.php`: `UNAUTHENTICATED_HTTP=401`, `AUTHORIZED_HTTP=200`, `PASS: AUTHENTICATED_JSON_AND_CASES`;
+- приватный снимок `/home/site_evrasia/tmp/anti-fraud-private/operation-proximity.json` вне `public_html`, доступен только нужному PHP user;
+- `ROLLBACK_STATUS=NOT_NEEDED`; RESTISBONUS data, Bitrix DB, V4/V5, bonus worker, Risk Score и block actions не менялись.
+
+**Ветка PR #79 (ещё НЕ bot production):**
+- `artifacts/api-server/src/services/bitrix-antifraud-operation-proximity-gateway.ts`: HTTPS GET из node backend с **существующим** `BITRIX_ANTI_FRAUD_TOKEN` / `BITRIX_ANTI_FRAUD_TOKEN_FILE`, strict allowlist полей и проверка contract;
+- `artifacts/api-server/src/routes/anti-fraud-web.ts`: отдельный read-only `GET /api/anti-fraud/operation-proximity` с no-store и нераскрывающими error messages; не участвует в обычном `/api/anti-fraud/summary`;
+- `artifacts/samzaberu-ops/src/pages/AntiFraudPage.tsx`: существующий UI, дополнительная вкладка **«Операции карт»**, загрузка только при открытии вкладки, 7 отдельных пар с ID ресторана/счёта и разницей операций; отсутствие данных не ломает `Риски`, `Устройства`, `Аккаунты`;
+- новые тесты `bitrix-antifraud-operation-proximity-gateway.test.ts` (парсинг, privacy, неверные признаки, counts, HTTP failure). **Результат выполнения тестов и CI проверить отдельно.** Production бот `eur-bot-01` не изменялся.
+
+**Ограничение MVP:** snapshot снимается **однократно** при site deploy и автоматически становится недоступным после 48 часов, поскольку site-side PHP endpoint проверяет `generated_at >= now-172800`. В интерфейсе есть кнопка **«Перечитать снимок»**, которая только перечитывает API и **не запускает RESTISBONUS query**. Для постоянного мониторинга потребуется отдельное одобренное расписание минимального site-side refresh (без изменения bonus worker). До настройки refresh нельзя считать эту реализацию непрерывно работающим контролем. ID `OP-001` нестабилен между снимками, это локальный ordinal, а не постоянный identity кейса.
