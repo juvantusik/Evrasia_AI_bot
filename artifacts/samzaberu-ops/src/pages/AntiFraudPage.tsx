@@ -145,6 +145,30 @@ type SchedulerStatus = {
   nextRunAt: string | null;
 };
 
+type OperationProximityCase = {
+  id: string;
+  restaurant1: number;
+  bill1: number;
+  operation1: string;
+  restaurant2: number;
+  bill2: number;
+  operation2: string;
+  gapSeconds: number;
+};
+
+type OperationProximitySnapshot = {
+  evidence: 'positive_bonus_operations_not_receipt_closure';
+  generatedAt: string;
+  windowFrom: string;
+  windowUntil: string;
+  sourceOperations: number;
+  candidateCards: number;
+  candidatePairs: number;
+  receiptCloseConfirmed: false;
+  riskScoreChanged: false;
+  cases: OperationProximityCase[];
+};
+
 type SimilarGroup = {
   matchType: 'phone' | 'email';
   accountCount: number;
@@ -415,7 +439,10 @@ export default function AntiFraudPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [similar, setSimilar] = useState<SimilarGroup[]>([]);
-  const [tab, setTab] = useState<'cases' | 'devices' | 'accounts' | 'recommendations'>('cases');
+  const [operations, setOperations] = useState<OperationProximitySnapshot | null>(null);
+  const [operationLoading, setOperationLoading] = useState(false);
+  const [operationError, setOperationError] = useState('');
+  const [tab, setTab] = useState<'cases' | 'devices' | 'accounts' | 'operations' | 'recommendations'>('cases');
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState<'all' | RiskLevel>('all');
   const [signal, setSignal] = useState<'all' | CaseSignal>('all');
@@ -443,6 +470,20 @@ export default function AntiFraudPage() {
       setSummary(summaryData); setCases(normalizedCases); setAccounts(accountData.records); setDevices(deviceData.records); setSimilar(similarData.records);
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить Anti-Fraud.'); }
     finally { setLoading(false); }
+  };
+
+  const loadOperations = async () => {
+    setOperationLoading(true);
+    setOperationError('');
+    try {
+      const snapshot = await fetchJson<OperationProximitySnapshot>('/api/anti-fraud/operation-proximity');
+      setOperations(snapshot);
+    } catch (loadError) {
+      setOperations(null);
+      setOperationError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить операции карт.');
+    } finally {
+      setOperationLoading(false);
+    }
   };
 
   const refreshNow = async () => {
@@ -476,6 +517,8 @@ export default function AntiFraudPage() {
   };
 
   useEffect(() => { void load(); }, []);
+  // Операции карт загружаются отдельно: ошибки источника не затрагивают Risk и кейсы.
+  useEffect(() => { if (tab === 'operations') void loadOperations(); }, [tab]);
 
   const filteredCases = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ru-RU');
@@ -520,6 +563,7 @@ export default function AntiFraudPage() {
           <button className={tab === 'cases' ? 'active' : ''} onClick={() => setTab('cases')}>Риски <span>{filteredCases.length}</span></button>
           <button className={tab === 'devices' ? 'active' : ''} onClick={() => setTab('devices')}>Устройства <span>{devices.length}</span></button>
           <button className={tab === 'accounts' ? 'active' : ''} onClick={() => setTab('accounts')}>Аккаунты <span>{riskAccounts.length}</span></button>
+          <button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}>Операции карт{operations ? <span>{operations.candidatePairs}</span> : null}</button>
           <button className={tab === 'recommendations' ? 'active' : ''} onClick={() => setTab('recommendations')}>Рекомендации</button>
         </nav>
 
@@ -605,6 +649,55 @@ export default function AntiFraudPage() {
         {tab === 'devices' ? <section className="af-panel"><div className="panel-title"><Smartphone /><div><h2>Общие устройства</h2><p>Только устройства с двумя и более активными незаблокированными аккаунтами.</p></div></div><div className="simple-table"><div className="simple-head"><span>Устройство</span><span>Аккаунты</span><span>Тип</span><span>Последняя активность</span></div>{devices.map((device) => <div className="simple-row" key={device.devicePrefix}><strong>{device.devicePrefix}…</strong><span>{device.userIds.join(', ')}</span><span>{device.clientTypes.join(', ') || '—'}</span><span>{formatDate(device.lastSeenAt)}</span></div>)}</div></section> : null}
 
         {tab === 'accounts' ? <section className="af-panel"><div className="panel-title"><Fingerprint /><div><h2>Аккаунты с риском и наблюдением</h2><p>{showBlocked ? 'Показаны также заблокированные и неактивные аккаунты.' : 'Наблюдаемые аккаунты показываются даже при Risk 0; заблокированные и неактивные скрыты.'}</p></div></div><div className="simple-table accounts-table"><div className="simple-head"><span>Аккаунт</span><span>Risk</span><span>Устройства</span><span>Связи</span><span>Контакты</span><span>Посещения</span></div>{riskAccounts.map((account) => <div className="simple-row" key={account.bitrixUserId}><strong><span className="account-name-line"><span>{account.displayName || `ID ${account.bitrixUserId}`}{account.operatorInvestigationId ? <em className="operator-watch-badge">Проверка{account.operatorSource ? `: ${account.operatorSource}` : ''}</em> : account.operatorWatched ? <em className="operator-watch-badge">Наблюдение</em> : null}</span><ConsentSnapshot account={account} /></span><small>ID {account.bitrixUserId} · {accountStatus(account)} · {account.phoneMasked ?? 'телефон —'} · {account.emailMasked ?? 'email —'} · {loyaltyText(account)}</small></strong><span className={`score-text ${account.riskLevel}`}>{account.overallRisk}</span><span>{account.deviceRisk}</span><span>{account.linkedAccountRisk}</span><span>{account.identitySimilarityRisk}</span><span>{account.visitBehaviorRisk}</span></div>)}</div></section> : null}
+
+        {tab === 'operations' ? <section className="af-panel">
+          <div className="panel-title">
+            <Utensils />
+            <div>
+              <h2>Операции одной карты в разных ресторанах</h2>
+              <p>Разница между положительными бонусными операциями по двум счетам — до 30 минут.</p>
+            </div>
+          </div>
+
+          <div className="af-operation-controls">
+            <span>Сигнал для ручной проверки, не подтверждённое нарушение.</span>
+            <button className="af-refresh" type="button" onClick={() => void loadOperations()} disabled={operationLoading}>
+              <RefreshCw size={16} className={operationLoading ? 'spin' : ''} />
+              {operationLoading ? 'Загрузка…' : 'Перечитать снимок'}
+            </button>
+          </div>
+
+          {operationError ? <div className="af-error"><AlertTriangle size={18} />{operationError}</div> : null}
+          {!operations && operationLoading ? <div className="af-empty">Получаем данные источника…</div> : null}
+
+          {operations ? <>
+            <div className="af-operation-metrics">
+              <span><strong>{operations.candidatePairs}</strong><small>пар счетов</small></span>
+              <span><strong>{operations.candidateCards}</strong><small>разных карт</small></span>
+              <span><strong>{operations.sourceOperations}</strong><small>бонусных операций просмотрено</small></span>
+            </div>
+            <div className="af-operation-period">
+              Период операций: {formatDate(operations.windowFrom)} — {formatDate(operations.windowUntil)}
+              {' · '}снимок сформирован {formatDate(operations.generatedAt)}
+            </div>
+            <div className="simple-table af-operation-table">
+              <div className="simple-head">
+                <span>Кандидат</span><span>Первый счёт</span><span>Второй счёт</span><span>Интервал</span>
+              </div>
+              {operations.cases.map((item) => <div className="simple-row" key={item.id}>
+                <strong>{item.id}</strong>
+                <span>Ресторан ID {item.restaurant1} · счёт {item.bill1}<small>Операция {formatDate(item.operation1)}</small></span>
+                <span>Ресторан ID {item.restaurant2} · счёт {item.bill2}<small>Операция {formatDate(item.operation2)}</small></span>
+                <strong>{Math.floor(item.gapSeconds / 60)} мин {String(item.gapSeconds % 60).padStart(2, '0')} сек</strong>
+              </div>)}
+            </div>
+            {!operations.cases.length ? <div className="af-empty">Совпадений в снимке нет.</div> : null}
+            <div className="af-operation-disclaimer">
+              <AlertTriangle size={18} />
+              <span>Это время бонусных операций, а не подтверждённое время закрытия счетов или присутствие владельца карты. Результаты не добавляют баллы Risk и не приводят к автоматическим блокировкам. Снимок обновляется на сервере отдельно.</span>
+            </div>
+          </> : null}
+        </section> : null}
 
         {tab === 'recommendations' ? <section className="af-panel recommendation-panel"><div className="panel-title"><ShieldAlert /><div><h2>Рекомендации</h2><p>Risk остаётся advisory: блокировка выполняется только вручную после проверки кейса.</p></div></div><div className="recommendation-grid"><article><strong>{summary?.historyGateAccounts ?? 0}</strong><span>активных незаблокированных аккаунтов достигли history gate</span></article><article><strong>{summary?.historyEnrichedAccounts ?? 0}</strong><span>обогащены 60-дневной историей</span></article><article><strong>{similarPhone}</strong><span>групп с совпадающим телефоном</span></article><article><strong>{similarEmail}</strong><span>групп с совпадающим email</span></article></div><div className="recommendation-note"><AlertTriangle size={20} /><div><strong>Ручное решение</strong><p>Перед блокировкой откройте кейс и проверьте связующие признаки, контакты, бонусы и поведенческие причины. Заблокированные и неактивные аккаунты по умолчанию скрыты, но доступны через переключатель.</p></div></div></section> : null}
       </main>

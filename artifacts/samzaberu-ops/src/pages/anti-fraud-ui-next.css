@@ -291,3 +291,67 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Anti-Fraud operation-proximity — отдельная read-only вкладка.
+   Сохраняем существующий дизайн af-panel / simple-table и мобильный горизонтальный скролл. */
+.af-operation-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: #6d7582;
+}
+
+.af-operation-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.af-operation-metrics > span {
+  display: flex;
+  flex-direction: column;
+  padding: 13px;
+  background: #fbfdff;
+  border: 1px solid #e3e8ef;
+  border-radius: 12px;
+}
+
+.af-operation-metrics strong { font-size: 22px; color: #202736; }
+.af-operation-metrics small { font-size: 11px; color: #747c8b; }
+.af-operation-period { margin: 12px 0; font-size: 12px; color: #747c8b; }
+
+.af-operation-table .simple-head,
+.af-operation-table .simple-row {
+  grid-template-columns: 95px minmax(0, 1fr) minmax(0, 1fr) 110px;
+}
+
+.af-operation-table .simple-row span small {
+  display: block;
+  color: #9299a4;
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.af-operation-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  color: #767e89;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.af-operation-disclaimer svg { flex: none; margin-top: 1px; }
+
+@media (max-width: 640px) {
+  .af-operation-metrics { grid-template-columns: 1fr 1fr; }
+  .af-operation-metrics > span:last-child { grid-column: 1 / -1; }
+  .af-operation-table .simple-head,
+  .af-operation-table .simple-row { min-width: 690px; }
+}
