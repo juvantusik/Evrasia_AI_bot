@@ -5,14 +5,10 @@ umask 077
 
 ROOT='/home/site_evrasia/web/evrasia.spb.ru/public_html'
 SERVICE="$ROOT/local/php_interface/lib/Services/AntiFraudLoyaltyService.php"
-CARDMAP="$ROOT/local/php_interface/lib/Services/AntiFraudCardMapService.php"
-ACCOUNTMAP="$ROOT/local/php_interface/lib/Services/AntiFraudAccountMapService.php"
 ROUTES="$ROOT/local/routes/api.php"
 SNAPSHOT='/home/site_evrasia/tmp/anti-fraud-private/operation-proximity.json'
 BACKUPS='/home/site_evrasia/web/evrasia.spb.ru/backups'
 EXPECTED_SNAPSHOT='a02ca15a5c3c752acde1e1b8aff1264655172e65a4820193f2138e94d8822255'
-EXPECTED_CARDMAP='78bd38665d6710d15b40bbdc54eb2baab80ce265f477334e896d73781bd62e32'
-EXPECTED_ACCOUNTMAP='5705d7586c35ced55975a3d228ed2acc148fff7bc9fbc7c217b7337368141a77'
 MARKER='EV_AF_OPERATION_OWNER_20261109'
 WORK=''
 BACKUP=''
@@ -52,7 +48,7 @@ finish() {
     [[ -n "$STAGE_SERVICE" && -f "$STAGE_SERVICE" ]] && rm -f -- "$STAGE_SERVICE"
     if [[ -n "$WORK" && -d "$WORK" ]]; then
         rm -f -- "$WORK/card-map.json" "$WORK/enriched.json" "$WORK/source.py" \
-          "$WORK/lookup.php" "$WORK/patch.py" "$WORK/new-service.php" \
+          "$WORK/lookup.py" "$WORK/lookup.out" "$WORK/lookup.err" "$WORK/patch.py" "$WORK/new-service.php" \
           "$WORK/curl.cfg" "$WORK/authorized.json"
         rmdir -- "$WORK" 2>/dev/null || true
     fi
@@ -81,17 +77,15 @@ trap 'exit 130' INT TERM
 printf '\033[3J\033[2J\033[H'
 echo '=== 1. EXACT SITE PRODUCTION GUARDS ==='
 [[ "$(hostname -s)" == evrasia && "$(id -u)" == 0 ]] || { echo 'FAIL: HOST'; exit 2; }
-[[ -f "$SERVICE" && -f "$CARDMAP" && -f "$ACCOUNTMAP" && -f "$ROUTES" && -f "$SNAPSHOT" ]] || { echo 'FAIL: PATHS'; exit 3; }
+[[ -f "$SERVICE" && -f "$ROUTES" && -f "$SNAPSHOT" ]] || { echo 'FAIL: PATHS'; exit 3; }
 [[ ! -L "$SERVICE" && ! -L "$SNAPSHOT" ]] || { echo 'FAIL: SYMLINK'; exit 4; }
-[[ "$(sha256sum "$CARDMAP" | awk '{print $1}')" == "$EXPECTED_CARDMAP" &&
-   "$(sha256sum "$ACCOUNTMAP" | awk '{print $1}')" == "$EXPECTED_ACCOUNTMAP" ]] || { echo 'FAIL: BITRIX_MAPPING_SOURCE_CHANGED'; exit 5; }
 [[ "$(sha256sum "$SNAPSHOT" | awk '{print $1}')" == "$EXPECTED_SNAPSHOT" ]] || { echo 'FAIL: SNAPSHOT_CHANGED'; exit 6; }
 grep -Fq 'EV_AF_OPERATION_PROXIMITY_20261109' "$SERVICE" || { echo 'FAIL: ORIGINAL_ENDPOINT_MISSING'; exit 7; }
 if grep -Fq "$MARKER" "$SERVICE"; then echo 'ALREADY_APPLIED=YES'; exit 0; fi
 php -l "$SERVICE" >/dev/null || { echo 'FAIL: PHP_SYNTAX'; exit 8; }
 [[ -r '/root/ev-bonus-sync-runtime/event_sync/event_worker.py' &&
    -r '/root/ev-bonus-secrets/freetds.conf' ]] || { echo 'FAIL: SOURCE_CONNECTOR'; exit 9; }
-echo 'PASS: EXACT_CARD_AND_ACCOUNT_SERVICES'
+echo 'PASS: EXACT_SITE_SOURCE_AND_PROTECTED_ENDPOINT'
 echo 'PASS: SNAPSHOT_SHA_PINNED'
 WORK="$(mktemp -d /tmp/ev-af-owner.XXXXXXXX)"
 BACKUP="$(mktemp -d "$BACKUPS/af-owner-XXXXXXXX")"
@@ -175,121 +169,100 @@ PY
 python3 -B "$WORK/source.py" "$SNAPSHOT" "$WORK/card-map.json"
 
 echo
-echo '=== 3. RESOLVE BITRIX CARD OWNERS WITHOUT WRITES ==='
-cat > "$WORK/lookup.php" <<'PHP'
-<?php
-error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
-define('NO_KEEP_STATISTIC', true);
-define('NOT_CHECK_PERMISSIONS', true);
-$_SERVER['DOCUMENT_ROOT'] = '/home/site_evrasia/web/evrasia.spb.ru/public_html';
-$_SERVER['HTTP_HOST'] = 'evrasia.rest';
-require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php';
-if (!\Bitrix\Main\Loader::includeModule('iblock')) {
-    throw new \RuntimeException('IBLOCK_UNAVAILABLE');
-}
-$map = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
-$source = json_decode(file_get_contents($argv[2]), true, 512, JSON_THROW_ON_ERROR);
-if (!is_array($map) || count($map)!==7 || !isset($source['cases']) ||
-    count($source['cases'])!==7) throw new \RuntimeException('MAPPING_CONTRACT');
-$cards = array_values(array_unique(array_values($map)));
-$match = [];
-$res = \CIBlockElement::GetList([], [
-    'IBLOCK_ID'=>14, 'PROPERTY_RESTIS_NO'=>$cards,
-], false, false, [
-    'ID','IBLOCK_ID','PROPERTY_RESTIS_NO','PROPERTY_OWNER',
-]);
-while ($row=$res->Fetch()) {
-    $card=trim((string)($row['PROPERTY_RESTIS_NO_VALUE']??''));
-    $owner=(int)($row['PROPERTY_OWNER_VALUE']??0);
-    if (in_array($card,$cards,true) && $owner>0) $match[$card][$owner]=true;
-}
-$ownerIds=[];
-foreach ($cards as $card) {
-    if (count($match[$card]??[])===1) {
-        $ownerIds[]= (int)array_key_first($match[$card]);
-    }
-}
-$ownerIds=array_values(array_unique($ownerIds));
-$users=[];
-if ($ownerIds) {
-    $result=\Bitrix\Main\UserTable::getList([
-        'filter'=>['@ID'=>$ownerIds],
-        'select'=>['ID','NAME','LAST_NAME','SECOND_NAME','PERSONAL_PHONE'],
-    ]);
-    while ($u=$result->fetch()) $users[(int)$u['ID']]=$u;
-}
-$phoneAuth=[];
-if ($ownerIds) {
-    $ids=implode(',',array_map('intval',$ownerIds));
-    $db=\Bitrix\Main\Application::getConnection();
-    $result=$db->query('SELECT USER_ID, PHONE_NUMBER FROM b_user_phone_auth WHERE USER_ID IN ('.$ids.')');
-    while ($row=$result->fetch()) {
-        $id=(int)($row['USER_ID']??0);
-        if ($id>0 && !empty($row['PHONE_NUMBER'])) $phoneAuth[$id]=(string)$row['PHONE_NUMBER'];
-    }
-}
-$phoneNormalize=static function($input): ?string {
-    $digits=preg_replace('/\D+/', '', (string)$input);
-    if (strlen($digits)===10) $digits='7'.$digits;
-    if (strlen($digits)===11 && $digits[0]==='8') $digits='7'.substr($digits,1);
-    if (strlen($digits)<10 || strlen($digits)>15) return null;
-    return '+'.$digits;
-};
-$statuses=['resolved'=>0,'ambiguous'=>0,'unresolved'=>0];
-$phones=0;
-$enriched=[];
-foreach ($source['cases'] as $case) {
-    $caseId=$case['id']??'';
-    $card=$map[$caseId]??null;
-    if (!is_string($card)) throw new \RuntimeException('CASE_NOT_RECOVERED');
-    $matches=$match[$card]??[];
-    $status=count($matches)===1 ? 'resolved' : (count($matches)>1?'ambiguous':'unresolved');
-    $ownerId=count($matches)===1 ? (int)array_key_first($matches) : null;
-    $user=$ownerId!==null ? ($users[$ownerId]??null) : null;
-    if ($user===null) {
-        $status='unresolved';
-        $ownerId=null;
-    }
-    $name=null;
-    $phone=null;
-    if ($status==='resolved') {
-        $parts=array_filter([
-            trim((string)($user['LAST_NAME']??'')),
-            trim((string)($user['NAME']??'')),
-            trim((string)($user['SECOND_NAME']??'')),
-        ],static fn($v)=>$v!=='');
-        $name=trim(implode(' ',$parts)) ?: null;
-        $name=$name===null ? null : mb_substr($name,0,255);
-        $phone=$phoneNormalize($user['PERSONAL_PHONE']??'') ??
-               $phoneNormalize($phoneAuth[$ownerId]??'');
-    }
-    $case['owner_status']=$status;
-    $case['bitrix_user_id']=$ownerId;
-    $case['owner_name']=$name;
-    $case['owner_phone']=$phone;
-    $case['card_last4']=substr($card,-4);
-    $statuses[$status]++;
-    if ($phone!==null) $phones++;
-    $enriched[]=$case;
-}
-if ($statuses['resolved']===0) throw new \RuntimeException('NO_BITRIX_OWNERS_RESOLVED');
-$source['cases']=$enriched;
-$encoded=json_encode($source,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-if (strlen($encoded)>131072) throw new \RuntimeException('ENRICHED_SNAPSHOT_TOO_LARGE');
-if (file_put_contents($argv[3],$encoded."\n",LOCK_EX)===false) throw new \RuntimeException('SNAPSHOT_STAGE_WRITE');
-chmod($argv[3],0600);
-echo 'PASS: EXISTING_BITRIX_CARD_AND_ACCOUNT_LOOKUP'."\n";
-echo 'OWNERS_RESOLVED='.$statuses['resolved']."\n";
-echo 'OWNERS_AMBIGUOUS='.$statuses['ambiguous']."\n";
-echo 'OWNERS_UNRESOLVED='.$statuses['unresolved']."\n";
-echo 'OWNERS_WITH_PHONE='.$phones."\n";
-echo 'CARD_NUMBERS_PRINTED=NO'."\n";
-echo 'OWNER_IDENTITIES_PRINTED=NO'."\n";
-PHP
-php -l "$WORK/lookup.php" >/dev/null || { echo 'FAIL: PHP_LOOKUP_SYNTAX'; exit 11; }
-timeout 45 php "$WORK/lookup.php" "$WORK/card-map.json" "$SNAPSHOT" "$WORK/enriched.json"
-
+echo '=== 3. READ RESTISBONUS dbo.Cards NAME AND PHONE (READ ONLY) ==='
+cat > "$WORK/lookup.py" <<'PY'
+import contextlib
+import io
+import json
+import os
+import sys
+from pathlib import Path
+os.environ['FREETDSCONF'] = '/root/ev-bonus-secrets/freetds.conf'
+sys.path.insert(0, '/root/ev-bonus-sync-runtime/event_sync')
+mapping = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+source = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+if not isinstance(mapping, dict) or len(mapping) != 7 or len(source.get('cases', [])) != 7:
+    raise RuntimeError('SOURCE_CARD_COUNT')
+cards = sorted(set(mapping.values()))
+if len(cards) != 7 or not all(isinstance(c, str) and c.isdecimal() and 4 <= len(c) <= 32 for c in cards):
+    raise RuntimeError('SOURCE_CARD_FORMAT')
+connection = None
+try:
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        import event_worker
+        connection = event_worker.connect_source()
+    cursor = connection.cursor()
+    cursor.execute('SET LOCK_TIMEOUT 3000')
+    cursor.execute('SELECT DB_NAME(), ORIGINAL_LOGIN()')
+    if tuple(cursor.fetchone()) != ('RESTISBONUS', 'ev_bonus_sync_ro'):
+        raise RuntimeError('SQL_SOURCE_IDENTITY')
+    placeholders = ','.join('%s' for _ in cards)
+    cursor.execute(
+        'SELECT TOP (101) CardNumber, NAME, PHONE FROM dbo.Cards '
+        'WHERE CardNumber IN (' + placeholders + ') OPTION (MAXDOP 1)',
+        tuple(cards)
+    )
+    rows = cursor.fetchall()
+    if len(rows) != 7:
+        raise RuntimeError('RESTIS_CARD_ROWS_NOT_SEVEN')
+    records = {}
+    for card_number, raw_name, raw_phone in rows:
+        card = str(card_number or '').strip()
+        if card not in cards or card in records:
+            raise RuntimeError('RESTIS_CARD_IDENTITY_CONFLICT')
+        name = str(raw_name or '').strip()
+        phone = str(raw_phone or '').strip()
+        if not name or not phone:
+            raise RuntimeError('RESTIS_NAME_OR_PHONE_EMPTY')
+        if len(name) > 255 or len(phone) > 64:
+            raise RuntimeError('RESTIS_CONTACT_TOO_LONG')
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in name + phone):
+            raise RuntimeError('RESTIS_CONTACT_CONTROL_CHARACTER')
+        records[card] = (name, phone)
+    enriched = []
+    for case in source['cases']:
+        case_id = case.get('id')
+        if case_id not in mapping:
+            raise RuntimeError('RESTIS_CASE_NOT_IN_MAPPING')
+        card = mapping[case_id]
+        name, phone = records[card]
+        expected = {'id', 'restaurant_1', 'bill_1', 'operation_1',
+                    'restaurant_2', 'bill_2', 'operation_2', 'gap_seconds'}
+        if set(case) != expected:
+            raise RuntimeError('ORIGINAL_SNAPSHOT_CASE_FIELDS_CHANGED')
+        enriched.append({
+            **case,
+            'owner_status': 'restis_card',
+            'owner_source': 'restis_cards',
+            'owner_name': name,
+            'owner_phone': phone,
+            'card_last4': card[-4:],
+        })
+    source['cases'] = enriched
+    serialized = json.dumps(source, ensure_ascii=True, separators=(',', ':'))
+    if len(serialized.encode('utf-8')) > 131072:
+        raise RuntimeError('ENRICHED_SNAPSHOT_TOO_LARGE')
+    Path(sys.argv[3]).write_text(serialized + '\n', encoding='utf-8')
+    print('PASS: SEVEN_RESTIS_CARD_CONTACT_RECORDS')
+    print('CONTACTS_WITH_NAME=7')
+    print('CONTACTS_WITH_PHONE=7')
+    print('FULL_CARD_NUMBERS_IN_SNAPSHOT=NO')
+finally:
+    if connection is not None:
+        try: connection.rollback()
+        except Exception: pass
+        connection.close()
+PY
+if ! timeout 80 python3 -B "$WORK/lookup.py" "$WORK/card-map.json" "$SNAPSHOT" "$WORK/enriched.json" \
+     > "$WORK/lookup.out" 2> "$WORK/lookup.err"; then
+    echo 'FAIL: RESTIS_CARDS_CONTACT_LOOKUP'
+    echo 'NOTE: Read-only SQL login may not have SELECT permission on Cards.NAME/PHONE'
+    exit 11
+fi
+[[ -s "$WORK/enriched.json" ]] || { echo 'FAIL: CONTACT_RESULT_MISSING'; exit 11; }
+grep -E '^(PASS: SEVEN_RESTIS_CARD_CONTACT_RECORDS|CONTACTS_WITH_NAME=|CONTACTS_WITH_PHONE=|FULL_CARD_NUMBERS_IN_SNAPSHOT=)' "$WORK/lookup.out"
 echo
+
 echo '=== 4. STAGE PATCH AND VERIFY HTTP ==='
 cat > "$WORK/patch.py" <<'PY'
 from pathlib import Path
@@ -301,27 +274,26 @@ if start<0 or end<0 or start>=end: raise RuntimeError('SOURCE_STRUCTURE')
 segment=src[start:end]
 old="'operation_2' => $case['operation_2'], 'gap_seconds' => $case['gap_seconds'],"
 if segment.count(old)!=1: raise RuntimeError('RETURN_CASE_ANCHOR')
-check="""                // EV_AF_OPERATION_OWNER_20261109: operator-only owner evidence.
+check=r"""                // EV_AF_OPERATION_OWNER_20261109: RESTISBONUS card contact record, NOT Bitrix account identity.
                 $ownerStatus = $case['owner_status'] ?? null;
-                $ownerId = $case['bitrix_user_id'] ?? null;
+                $ownerSource = $case['owner_source'] ?? null;
                 $ownerName = $case['owner_name'] ?? null;
                 $ownerPhone = $case['owner_phone'] ?? null;
                 $cardLast4 = $case['card_last4'] ?? null;
-                if (!in_array($ownerStatus, ['resolved','unresolved','ambiguous'], true) ||
+                if ($ownerStatus !== 'restis_card' || $ownerSource !== 'restis_cards' ||
                     !is_string($cardLast4) || !preg_match('/^[0-9]{4}$/', $cardLast4) ||
-                    ($ownerStatus === 'resolved' && (!is_int($ownerId) || $ownerId <= 0)) ||
-                    ($ownerStatus !== 'resolved' && $ownerId !== null) ||
-                    ($ownerName !== null && (!is_string($ownerName) || strlen($ownerName) > 1024)) ||
-                    ($ownerPhone !== null && (!is_string($ownerPhone) ||
-                       !preg_match('/^[+][0-9]{10,15}$/', $ownerPhone)))) {
+                    !is_string($ownerName) || trim($ownerName) === '' || strlen($ownerName) > 1024 ||
+                    preg_match('/[\x00-\x1F\x7F]/', $ownerName) ||
+                    !is_string($ownerPhone) || trim($ownerPhone) === '' || strlen($ownerPhone) > 64 ||
+                    preg_match('/[\x00-\x1F\x7F]/', $ownerPhone)) {
                     return self::response(['ok' => false, 'error' => 'snapshot_invalid'], '503 Service Unavailable');
                 }
 """
 segment=segment.replace('                $items[] = [',check+'                $items[] = [',1)
 new=old+"""
-                    'owner_status' => $ownerStatus,
-                    'bitrix_user_id' => $ownerId, 'owner_name' => $ownerName,
-                    'owner_phone' => $ownerPhone, 'card_last4' => $cardLast4,"""
+                    'owner_status' => $ownerStatus, 'owner_source' => $ownerSource,
+                    'owner_name' => $ownerName, 'owner_phone' => $ownerPhone,
+                    'card_last4' => $cardLast4,"""
 segment=segment.replace(old,new,1)
 updated=src[:start]+segment+src[end:]
 if updated.count('EV_AF_OPERATION_OWNER_20261109')!=1: raise RuntimeError('OWNER_MARKER_COUNT')
@@ -337,10 +309,10 @@ d=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 cases=d['cases']
 assert len(cases)==d['candidate_pairs']==7
 allowed={'id','restaurant_1','restaurant_2','bill_1','bill_2','operation_1','operation_2','gap_seconds',
-         'owner_status','bitrix_user_id','owner_name','owner_phone','card_last4'}
+         'owner_status','owner_source','owner_name','owner_phone','card_last4'}
 assert all(set(x)==allowed for x in cases)
-assert all(x['owner_status'] in ('resolved','ambiguous','unresolved') for x in cases)
-assert all(len(x['card_last4'])==4 for x in cases)
+assert all(x['owner_status']=='restis_card' and x['owner_source']=='restis_cards' for x in cases)
+assert all(len(x['card_last4'])==4 and x['owner_name'] and x['owner_phone'] for x in cases)
 assert all('card_number' not in x and 'CardNumber' not in x for x in cases)
 print('PASS: NO_RAW_CARD_NUMBERS_IN_ENRICHED_API_SNAPSHOT')
 PY
@@ -383,11 +355,11 @@ import json,sys
 data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 cases=data['cases']
 assert data['ok'] is True and len(cases)==data['candidate_pairs']==7
-assert all(c['owner_status'] in ('resolved','unresolved','ambiguous') for c in cases)
+assert all(c['owner_status']=='restis_card' and c['owner_source']=='restis_cards' for c in cases)
 assert all(isinstance(c['card_last4'],str) and len(c['card_last4'])==4 for c in cases)
 assert all('CardNumber' not in c and 'card_number' not in c for c in cases)
 print('PASS: SEVEN_CASES_WITH_OWNER_FIELDS_PROTECTED')
-print('RESOLVED_OWNER_COUNT='+str(sum(c['owner_status']=='resolved' for c in cases)))
+print('RESTIS_CONTACT_ROWS='+str(sum(c['owner_status']=='restis_card' for c in cases)))
 PY
 CODE_CHANGED=NO
 SNAPSHOT_CHANGED=NO
