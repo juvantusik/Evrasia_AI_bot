@@ -97,3 +97,49 @@ test("HTTP failures do not include response body or token", async () => {
     !err.message.includes("s".repeat(40)),
   );
 });
+
+test("accepts resolved owner details but never returns a raw card number", () => {
+  const source = example();
+  const enriched = {
+    ...source,
+    cases: [{
+      ...source.cases[0],
+      owner_status: "resolved",
+      bitrix_user_id: 123456,
+      owner_name: "Тестовый Владелец",
+      owner_phone: "+79990001122",
+      card_last4: "2211",
+      CardNumber: "9999000011112211",
+    }],
+  };
+  const data = parseAntiFraudOperationProximitySnapshot(enriched);
+  assert.deepEqual({
+    status: data.cases[0].ownerStatus,
+    userId: data.cases[0].bitrixUserId,
+    name: data.cases[0].ownerName,
+    phone: data.cases[0].ownerPhone,
+    last4: data.cases[0].cardLast4,
+  }, {
+    status: "resolved", userId: 123456, name: "Тестовый Владелец",
+    phone: "+79990001122", last4: "2211",
+  });
+  assert.equal(JSON.stringify(data).includes("9999000011112211"), false);
+});
+
+test("rejects fabricated resolved ownership without a Bitrix user id", () => {
+  const source = example();
+  assert.throws(() => parseAntiFraudOperationProximitySnapshot({
+    ...source, cases: [{ ...source.cases[0], owner_status: "resolved" }],
+  }), /resolved_owner/);
+});
+
+test("unresolved owner remains explicit without inventing a name or phone", () => {
+  const source = example();
+  const actual = parseAntiFraudOperationProximitySnapshot({
+    ...source, cases: [{ ...source.cases[0], owner_status: "unresolved", card_last4: "1234" }],
+  });
+  assert.equal(actual.cases[0].ownerStatus, "unresolved");
+  assert.equal(actual.cases[0].ownerName, null);
+  assert.equal(actual.cases[0].ownerPhone, null);
+  assert.equal(actual.cases[0].cardLast4, "1234");
+});
