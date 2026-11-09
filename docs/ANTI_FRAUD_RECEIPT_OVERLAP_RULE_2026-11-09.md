@@ -52,3 +52,13 @@
 ## Текущий статус
 
 `ALGORITHM_CODED`, `UNIT_TESTS_ADDED`, `SOURCE_CLOSE_CONTRACT=NOT_VERIFIED`, `PRODUCTION_DEPLOYED=NO`, `DB_CHANGED=NO`, `RISK_SCORING_CHANGED=NO`.
+
+
+## Подтверждено оператором в RESTISBONUS, 2026-11-09
+
+- Production SQL Server 2014, database `RESTISBONUS`; `dbo.RB_CARD_LOG` содержит `CardNumber`, `ID_OBJECT`, `ID_BILL`, `Pre_BillNumber`, `OPEN_DATE_TIME`, `DateWrite`, `Waiter`, `Bill_Sum`, `PayedBonus`, `AddBonus`, `REJECT`. Отдельная колонка закрытия счета не обнаружена при поиске metadata.
+- Существующий учетный логин `ev_bonus_sync_ro` имеет SELECT на `CardNumber`, `DateWrite`, `PayedBonus`, `AddBonus`, `ID`, `REJECT`, но **не имеет** SELECT на `Bill_Sum`, `ID_BILL`, `ID_OBJECT`, `OPEN_DATE_TIME`, `Waiter`, `Pre_BillNumber`, `ID_TERMINAL_BONUS`. Исходный код SQL Server error 230 был вызван этими column permissions. Права логина не менялись.
+- Административный read-only SSMS запрос на `EUR-CRM` подтвердил по анонимизированным данным одну карту, ресторан `ID_OBJECT=41`, два разных счета: `ID_BILL=1326752`, открыт `2026-11-03 18:09:42`, положительная операция `19:02:01.190`, сумма `1240`; `ID_BILL=1326766`, открыт `18:38:16`, положительная операция `20:21:52.330`, сумма `1825`. `Waiter` положительных операций совпал. По второму счету на следующий день была еще операция `Bill_Sum=0`, `DateWrite=05:01:22.010`, с другим `Waiter`; поэтому `DateWrite` всё ещё **не** подтвержден как close timestamp.
+- Адресный 60-дневный запрос для **этой одной карты** с границами `OPEN_DATE_TIME .. MAX(DateWrite) по операциям Bill_Sum>0` обнаружил **29 пар пересечений в 23 разных дня**; 28 пар в ресторане 41, одна в ресторане 38, **0 пар в разных ресторанах**, 0 пар с ненулевым `REJECT` (только в охваченных положительных строках). Это **candidate overlap**, а не 29 доказанных одновременно открытых столов: пары могут делить счета при тройных пересечениях. Пример 03.11 — прокси-пересечение 1425 секунд (23:45).
+- **Следующий этап:** проверить для этих 29 пар `Waiter` каждого отдельного положительного чека, совпадения `Pre_BillNumber`, число счетов/дней; затем выяснить authoritative close time в системе ресторанных заказов (возможно, вне RESTISBONUS). Не менять бизнес-логику и риск-скоринг без подтвержденного timestamp.
+- Production Anti-Fraud код, Bitrix, RESTIS, базы и права **не менялись**.
