@@ -169,3 +169,17 @@ Next implementation should expose candidates separately from confirmed receipt c
 - no DB changes, no V4/V5 changes, bonus worker not executed, score/block unchanged.
 
 Cause of **authorized 503** is NOT YET established. The PHP method returns 503 for snapshot access failures, invalid/stale snapshot and exceptions. One plausible cause is PHP-FPM `open_basedir` disallowing `/home/site_evrasia/web/evrasia.spb.ru/anti-fraud-private` even when Unix `site_evrasia` can read it; **verify actual site pool configuration before claiming that as cause**. Do NOT blindly re-run the write script or issue a new SQL Server scan; use targeted read-only FPM/config diagnostics. The failed installer deleted temporary `authorized.json` with response body during rollback, so exact 503 symbolic error was not reported.
+
+
+## Причина 503 доказана: PHP-FPM open_basedir
+
+После неуспешной установки авторизованного `GET /api/internal/anti-fraud/operation-proximity` оператор выполнил read-only проверку production php-fpm pool configurations и SHA rollback. **Точно подтверждено**:
+- исходные PHP source+route восстановлены `PASS: ORIGINAL_PHP_FILES_RESTORED`;
+- `PRIVATE_SNAPSHOT_REMAINS=NO`;
+- 3 действующих site-user FPM pool declarations имеют `open_basedir`;
+- старое место `/home/site_evrasia/web/evrasia.spb.ru/anti-fraud-private` **НЕ** входит в allowed roots: `ORIGINAL_PRIVATE_PATH_ALLOWED=NO` (3/3);
+- `/home/site_evrasia/tmp/anti-fraud-private` **РАЗРЕШЁН**: `HOME_TMP_PATH_ALLOWED=YES` (3/3);
+- `SITE_TMP_DIRECTORY_EXISTS=YES`, у `public_html/.user.ini` нет отдельного `open_basedir` override.
+- `FINAL_STATUS=PASS`, `DATABASE_WRITE=NO`, `SITE_WRITE=NO`, `API_WRITE=NO`.
+
+**Исправление**: менять исключительно location приватного `operation-proximity.json` и PHP reader's absolute path на `/home/site_evrasia/tmp/anti-fraud-private/operation-proximity.json` (не под webroot); оставить прежнюю API auth, JSON validation, PHP SHA preflight, backup и rollback. **Не менять** server-wide `open_basedir`. В repository prior script был создан как ChatGPT downloadable artifact, не частью GitHub release. Исправленный файл локально проверен `bash -n` и AST обоих embedded Python files, затем требует guarded live `401/200` acceptance. Повторный 7-day source read при установке необходим, так как предыдущий приватный снимок после rollback отсутствует; ещё одна диагностическая SQL проверка не нужна. После PASS API останется вручную обновляемым, пока не согласован cron/worker для регулярной актуализации.
