@@ -62,3 +62,12 @@
 - Адресный 60-дневный запрос для **этой одной карты** с границами `OPEN_DATE_TIME .. MAX(DateWrite) по операциям Bill_Sum>0` обнаружил **29 пар пересечений в 23 разных дня**; 28 пар в ресторане 41, одна в ресторане 38, **0 пар в разных ресторанах**, 0 пар с ненулевым `REJECT` (только в охваченных положительных строках). Это **candidate overlap**, а не 29 доказанных одновременно открытых столов: пары могут делить счета при тройных пересечениях. Пример 03.11 — прокси-пересечение 1425 секунд (23:45).
 - **Следующий этап:** проверить для этих 29 пар `Waiter` каждого отдельного положительного чека, совпадения `Pre_BillNumber`, число счетов/дней; затем выяснить authoritative close time в системе ресторанных заказов (возможно, вне RESTISBONUS). Не менять бизнес-логику и риск-скоринг без подтвержденного timestamp.
 - Production Anti-Fraud код, Bitrix, RESTIS, базы и права **не менялись**.
+
+
+## Проверка Waiter и Pre_BillNumber
+
+Read-only SSMS result for one previously confirmed card, 2026-11-09: **29 candidate overlap pairs on 23 days**, all pairs within the same restaurant, no cross-restaurant pairs; **14/29 with the same single Waiter on both bills**, **15/29 with different Waiter**, **0 unknown**. All **29/29 have different `Pre_BillNumber`** (no unknown). No nonzero REJECT in filtered positive bill rows.
+
+This strengthens the fact of different bills for the same card, including events involving multiple waiters; it does **not** prove different physical tables or that one of the waiters owns the card. The `Waiter` value is the operational field recorded for the bonus transaction and its semantics must not be overstated. End time remains a **proxy via last positive DateWrite**, not a verified POS check close. The 29 candidate pairs must not be scored as 29 confirmed parallel open tables.
+
+Next implementation should expose candidates separately from confirmed receipt close evidence, with `same_restaurant`/`different_restaurants`, `same_waiter`/`different_waiter`, and a source/evidence-quality marker. No automatic blocking.
