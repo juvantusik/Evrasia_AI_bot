@@ -328,7 +328,7 @@
 
 .af-operation-table .simple-head,
 .af-operation-table .simple-row {
-  grid-template-columns: 95px minmax(0, 1fr) minmax(0, 1fr) 110px;
+  grid-template-columns: minmax(220px, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) 110px;
 }
 
 .af-operation-table .simple-row span small {
@@ -337,6 +337,13 @@
   margin-top: 3px;
   font-size: 10px;
 }
+
+.af-operation-owner { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.af-operation-owner > strong { overflow-wrap: anywhere; }
+.af-operation-owner > span { font-size: 13px; }
+.af-operation-owner > span a { color: #1675e8; text-decoration: none; font-weight: 600; }
+.af-operation-owner > span a:hover { text-decoration: underline; }
+.af-operation-owner > small { display: block; font-size: 11px; color: #9299a4; }
 
 .af-operation-disclaimer {
   display: flex;
@@ -353,5 +360,5 @@
   .af-operation-metrics { grid-template-columns: 1fr 1fr; }
   .af-operation-metrics > span:last-child { grid-column: 1 / -1; }
   .af-operation-table .simple-head,
-  .af-operation-table .simple-row { min-width: 690px; }
+  .af-operation-table .simple-row { min-width: 900px; }
 }
