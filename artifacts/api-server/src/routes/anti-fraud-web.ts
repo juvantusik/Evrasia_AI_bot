@@ -27,6 +27,7 @@ import {
   BitrixAntiFraudPhoneResolverError,
   BitrixAntiFraudPhoneResolverGateway,
 } from "../services/bitrix-antifraud-phone-resolver-gateway";
+import { BitrixAntiFraudOperationProximityGateway } from "../services/bitrix-antifraud-operation-proximity-gateway";
 
 const router: IRouter = Router();
 
@@ -384,6 +385,25 @@ router.get("/anti-fraud/summary", async (req, res): Promise<void> => {
   } catch (error) {
     req.log.error({ error }, "Failed to load Anti-Fraud summary");
     res.status(503).json({ error: errorMessage(error) });
+  }
+});
+
+// Отдельный read-only сигнал: операции карты в разных ресторанах до 30 минут.
+// Не входит в risk calculation, case grouping или блокировки.
+// Данные счётов загружаются только сервером через существующий Bitrix token.
+router.get("/anti-fraud/operation-proximity", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "private, no-store");
+  try {
+    const data = await new BitrixAntiFraudOperationProximityGateway().getSnapshot();
+    res.json(data);
+  } catch (error) {
+    req.log.warn(
+      { errorType: error instanceof Error ? error.name : "Unknown" },
+      "Anti-Fraud operation proximity snapshot unavailable",
+    );
+    res.status(503).json({
+      error: "Снимок бонусных операций недоступен или устарел. Требуется обновить источник на сайте.",
+    });
   }
 });
 
