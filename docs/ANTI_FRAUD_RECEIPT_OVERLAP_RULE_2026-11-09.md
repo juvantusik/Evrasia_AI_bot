@@ -154,3 +154,18 @@ Next implementation should expose candidates separately from confirmed receipt c
 **Что подтверждено:** реальный SQL Server source readable с минимальными column grants, и автономная логика proximity воспроизводит результат SSMS для семи суток. **Что НЕ подтверждено:** принадлежность карты клиенту/официанту, момент предъявления, физическое присутствие, реальный конец чека.
 
 **Дальше:** защищённый source-to-bot feed на базе действующей website Anti-Fraud авторизации; не подключать к существующему скорингу, автоблокировкам или `VIP_HISTORY`. Production website `AntiFraudLoyaltyService.php` имеет `authorized()`, `response()` и существующий route `POST /api/internal/anti-fraud/loyalty`; **сам SQL reader пока не интегрирован в PHP endpoint**.
+
+
+## Production API rollout attempt: 503 and rollback
+
+2026-11-09 operator ran guarded production install script `ev_antifraud_work/deploy.sh` for **a private 7-day positive-bonus-operation snapshot** and an additional protected `GET /api/internal/anti-fraud/operation-proximity` route (existing site-side `AntiFraudLoyaltyService::authorized()`; existing `POST /loyalty` left unchanged). Observed:
+- exact old hashes passed: `AntiFraudLoyaltyService.php=44d14a246ba728c22354639d89ffeb1a20a6894797d34afd9c51200b2e7491c7`, `local/routes/api.php=39abfc79b1cb4291688f48c1cb47ce53f844fb627138267ee3aaf6b3947f792e`;
+- backup exists at `/home/site_evrasia/web/evrasia.spb.ru/backups/af-operation-proximity.1v0cGa9I`;
+- snapshot generator read 44903 positive events / 35622 cards / 7 candidates, reference pair confirmed;
+- PHP staged method and route lint passed;
+- no-token request `401` (auth protection confirmed);
+- token-authenticated request `503`; postinstall guard failed `AUTHENTICATED_ENDPOINT_NOT_200` / `FINAL_RC=20`;
+- automatic rollback `ROLLBACK_STATUS=PHP_RESTORED`, `FINAL_STATUS=FAIL`; new API **NOT DEPLOYED**, local private snapshot may also have been removed by automatic rollback;
+- no DB changes, no V4/V5 changes, bonus worker not executed, score/block unchanged.
+
+Cause of **authorized 503** is NOT YET established. The PHP method returns 503 for snapshot access failures, invalid/stale snapshot and exceptions. One plausible cause is PHP-FPM `open_basedir` disallowing `/home/site_evrasia/web/evrasia.spb.ru/anti-fraud-private` even when Unix `site_evrasia` can read it; **verify actual site pool configuration before claiming that as cause**. Do NOT blindly re-run the write script or issue a new SQL Server scan; use targeted read-only FPM/config diagnostics. The failed installer deleted temporary `authorized.json` with response body during rollback, so exact 503 symbolic error was not reported.
